@@ -1,0 +1,24 @@
+# Data
+data/raw/
+data/processed/
+data/experiments/
+*.h5
+*.npz
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+.env
+
+# OS
+.DS_Store
+
+# IDE
+.idea/
+.vscode/
+
+# Build
+dist/
+build/
+*.egg-info/

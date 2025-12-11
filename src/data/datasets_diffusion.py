@@ -119,7 +119,7 @@ class DiffusionDataset(Dataset):
             # NORM.vel_std is vector std.
             # Let's use vel_std[0] approx.
             # Simple division for now.
-            patch_tensor[2] = patch_tensor[2] / 20.0 # roughly max speed
+            patch_tensor[2] = patch_tensor[2] / self.normalizer.config.nav_max_speed
             
             result["nav_patch"] = patch_tensor # (3, K, K)
             

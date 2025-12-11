@@ -2,3 +2,7 @@ numpy
 torch
 h5py
 pandas
+tqdm
+matplotlib
+seaborn
+scipy

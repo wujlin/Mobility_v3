@@ -1,10 +1,12 @@
 # Data
 data/raw/
-data/processed/
 data/experiments/
 track_data/
-*.h5
 *.npz
+
+# Keep processed data (for sharing)
+!data/processed/
+!data/processed/**
 
 # Python
 __pycache__/

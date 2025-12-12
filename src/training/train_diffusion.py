@@ -97,6 +97,7 @@ def train(args):
             # Strategy: Skip for now, or apply on predicted noise? No, macro is on trajectory stats.
             
             loss.backward()
+            torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
             optimizer.step()
             
             total_loss += loss.item()

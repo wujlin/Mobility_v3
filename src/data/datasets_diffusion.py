@@ -1,11 +1,15 @@
 import torch
 from torch.utils.data import Dataset
 import numpy as np
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+from typing import Optional
 from src.data.trajectories import TrajectoryStorage
 from src.data.preprocess import Normalizer
 from src.features.nav_field import NavField
 from src.config.settings import NORM
+
+TZ_SHANGHAI = timezone(timedelta(hours=8))
 
 class DiffusionDataset(Dataset):
     def __init__(self, 
@@ -15,7 +19,8 @@ class DiffusionDataset(Dataset):
                  step: int = 1,
                  nav_field_file: str = None,
                  nav_patch_size: int = 32,
-                 normalizer: Normalizer = None):
+                 normalizer: Normalizer = None,
+                 traj_ids: Optional[np.ndarray] = None):
         
         self.storage = TrajectoryStorage(data_file, mode='r')
         self.obs_len = obs_len
@@ -24,7 +29,13 @@ class DiffusionDataset(Dataset):
         self.step = step
         self.nav_patch_size = nav_patch_size
         
-        self.normalizer = normalizer if normalizer else Normalizer(NORM)
+        if normalizer is not None:
+            self.normalizer = normalizer
+        else:
+            stats_path = Path(data_file).resolve().parents[1] / "data_stats.json"
+            self.normalizer = Normalizer.from_stats_json(stats_path) if stats_path.exists() else Normalizer(NORM)
+
+        self.traj_ids = traj_ids.astype(np.int64) if traj_ids is not None else None
         
         # Load Nav Field if provided
         self.nav_field = None
@@ -37,7 +48,9 @@ class DiffusionDataset(Dataset):
     def _build_index(self):
         """Scan valid windows."""
         # Reuse logic from SeqDataset or similar
-        for i in range(len(self.storage)):
+        traj_iter = self.traj_ids if self.traj_ids is not None else range(len(self.storage))
+        for i in traj_iter:
+            i = int(i)
             start = self.storage._ptr[i]
             end = self.storage._ptr[i+1]
             length = end - start
@@ -73,9 +86,9 @@ class DiffusionDataset(Dataset):
         
         # Condition (Time + OD)
         t0_ts = ts_window[0]
-        dt = datetime.utcfromtimestamp(t0_ts)
-        hour = dt.hour / 23.0
-        day = dt.weekday() / 6.0
+        dt0 = datetime.fromtimestamp(int(t0_ts), tz=TZ_SHANGHAI)
+        hour = dt0.hour / 23.0
+        day = dt0.weekday() / 6.0
         
         trip_o = self.normalizer.normalize_pos(full_traj['pos'][0])
         trip_d = self.normalizer.normalize_pos(full_traj['pos'][-1])

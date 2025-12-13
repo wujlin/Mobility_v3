@@ -1,10 +1,14 @@
 import torch
 from torch.utils.data import Dataset
 import numpy as np
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+from typing import Optional
 from src.data.trajectories import TrajectoryStorage
 from src.data.preprocess import Normalizer
 from src.config.settings import NORM
+
+TZ_SHANGHAI = timezone(timedelta(hours=8))
 
 class SeqDataset(Dataset):
     def __init__(self, 
@@ -13,6 +17,7 @@ class SeqDataset(Dataset):
                  pred_len: int = 12, 
                  step: int = 1,
                  normalizer: Normalizer = None,
+                 traj_ids: Optional[np.ndarray] = None,
                  mode: str = 'train'):
         
         self.storage = TrajectoryStorage(data_file, mode='r')
@@ -21,8 +26,14 @@ class SeqDataset(Dataset):
         self.window_size = obs_len + pred_len
         self.step = step
         
-        self.normalizer = normalizer if normalizer else Normalizer(NORM)
-        
+        if normalizer is not None:
+            self.normalizer = normalizer
+        else:
+            stats_path = Path(data_file).resolve().parents[1] / "data_stats.json"
+            self.normalizer = Normalizer.from_stats_json(stats_path) if stats_path.exists() else Normalizer(NORM)
+
+        self.traj_ids = traj_ids.astype(np.int64) if traj_ids is not None else None
+
         # Build index of valid windows (traj_idx, start_t)
         self.samples = []
         self._build_index()
@@ -30,7 +41,9 @@ class SeqDataset(Dataset):
     def _build_index(self):
         """Scan all trajectories to find valid windows."""
         # This might be slow for millions of files, can cache it
-        for i in range(len(self.storage)):
+        traj_iter = self.traj_ids if self.traj_ids is not None else range(len(self.storage))
+        for i in traj_iter:
+            i = int(i)
             # We access storage._ptr directly for speed if needed, 
             # but getting length is O(1) in our storage class
             # Wait, we need the length of the trajectory i
@@ -86,9 +99,9 @@ class SeqDataset(Dataset):
         # Conditional Features
         # 1. Time
         t0_ts = ts_window[0]
-        dt = datetime.utcfromtimestamp(t0_ts)
-        hour = dt.hour / 23.0  # Simple norm 0-1
-        day = dt.weekday() / 6.0 # Simple norm 0-1
+        dt0 = datetime.fromtimestamp(int(t0_ts), tz=TZ_SHANGHAI)
+        hour = dt0.hour / 23.0  # Simple norm 0-1
+        day = dt0.weekday() / 6.0 # Simple norm 0-1
         
         # 2. OD (normalized pos)
         # Origin = pos[0], Dest = pos[-1] of the TRIP (not just window)

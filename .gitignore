@@ -12,6 +12,7 @@ track_data/
 __pycache__/
 *.pyc
 .venv/
+.venv-wsl/
 .env
 
 # OS

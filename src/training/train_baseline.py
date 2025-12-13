@@ -5,6 +5,7 @@ from pathlib import Path
 import argparse
 import time
 import os
+import numpy as np
 
 from src.models.seq.seq_baseline import SeqBaseline
 from src.data.datasets_seq import SeqDataset
@@ -16,7 +17,17 @@ def train(args):
     
     # 1. Data
     print("Loading datasets...")
-    train_dataset = SeqDataset(args.data_path, obs_len=args.obs_len, pred_len=args.pred_len, mode='r')
+    traj_ids = None
+    if args.split != 'all':
+        processed_dir = Path(args.data_path).resolve().parents[1]
+        splits_dir = Path(args.splits_dir) if args.splits_dir else (processed_dir / "splits")
+        split_file = splits_dir / f"{args.split}_ids.npy"
+        if not split_file.exists():
+            raise FileNotFoundError(split_file)
+        traj_ids = np.load(split_file).astype(np.int64)
+        print(f"Using split={args.split}: {len(traj_ids)} trajectories ({split_file})")
+
+    train_dataset = SeqDataset(args.data_path, obs_len=args.obs_len, pred_len=args.pred_len, traj_ids=traj_ids)
     train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=4)
     
     # 2. Model
@@ -77,6 +88,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--exp_name', type=str, default='baseline_v1')
     parser.add_argument('--data_path', type=str, required=True)
+    parser.add_argument('--split', type=str, choices=['train', 'val', 'test', 'all'], default='train')
+    parser.add_argument('--splits_dir', type=str, default=None, help="override splits dir (default: <processed_dir>/splits)")
     parser.add_argument('--obs_len', type=int, default=8)
     parser.add_argument('--pred_len', type=int, default=12)
     parser.add_argument('--hidden_dim', type=int, default=128)

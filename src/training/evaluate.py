@@ -11,10 +11,37 @@ from src.models.diffusion.diffusion_model import DiffusionTrajectoryModel
 from src.models.physics.physics_condition_diffusion import PhysicsConditionDiffusion
 from src.data.datasets_seq import SeqDataset
 from src.data.datasets_diffusion import DiffusionDataset
-from src.data.preprocess import Normalizer
-from src.config.settings import NORM, GRID
-from src.evaluation.micro_metrics import compute_micro_metrics
-from src.evaluation.macro_metrics import compute_macro_metrics
+
+
+def _integrate_positions(start_pos: np.ndarray, vel: np.ndarray) -> np.ndarray:
+    """
+    Integrate step displacement into positions.
+
+    Args:
+        start_pos: (B, 2)
+        vel: (B, F, 2)
+    Returns:
+        pos: (B, F, 2)
+    """
+    return start_pos[:, None, :] + np.cumsum(vel, axis=1)
+
+
+def _accumulate_msd(pred_pos: np.ndarray, msd_sum: np.ndarray, msd_count: np.ndarray) -> None:
+    """Accumulate MSD numerator/denominator for streaming average."""
+    B, T, _ = pred_pos.shape
+    for lag in range(1, T):
+        diff = pred_pos[:, lag:] - pred_pos[:, :-lag]  # (B, T-lag, 2)
+        sq = np.sum(diff * diff, axis=-1)  # (B, T-lag)
+        msd_sum[lag - 1] += float(np.sum(sq))
+        msd_count[lag - 1] += sq.size
+
+
+def _accumulate_rog(pred_pos: np.ndarray) -> np.ndarray:
+    """Return per-trajectory Rog: (B,)"""
+    mean_pos = pred_pos.mean(axis=1, keepdims=True)
+    diff = pred_pos - mean_pos
+    sq = np.sum(diff * diff, axis=-1).mean(axis=1)
+    return np.sqrt(sq)
 
 def evaluate(args):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -23,11 +50,19 @@ def evaluate(args):
     # 1. Load Data
     # Evaluation usually on 'test' split via mode='r'? 
     # Or separate file. Assuming args.data_path points to test file.
-    
-    norm = Normalizer(NORM)
-    
+
+    traj_ids = None
+    if args.split != 'all':
+        processed_dir = Path(args.data_path).resolve().parents[1]
+        splits_dir = Path(args.splits_dir) if args.splits_dir else (processed_dir / "splits")
+        split_file = splits_dir / f"{args.split}_ids.npy"
+        if not split_file.exists():
+            raise FileNotFoundError(split_file)
+        traj_ids = np.load(split_file).astype(np.int64)
+        print(f"Using split={args.split}: {len(traj_ids)} trajectories ({split_file})")
+
     if args.model_type == 'baseline':
-        dataset = SeqDataset(args.data_path, obs_len=args.obs_len, pred_len=args.pred_len)
+        dataset = SeqDataset(args.data_path, obs_len=args.obs_len, pred_len=args.pred_len, traj_ids=traj_ids)
     else:
         # Physics or Diffusion
         nav_file = args.nav_file if args.model_type == 'physics' else None
@@ -36,9 +71,12 @@ def evaluate(args):
             obs_len=args.obs_len, 
             pred_len=args.pred_len,
             nav_field_file=nav_file,
-            nav_patch_size=args.patch_size
+            nav_patch_size=args.patch_size,
+            traj_ids=traj_ids,
         )
         
+    # IMPORTANT: denormalization must use the same stats as the dataset.
+    norm = dataset.normalizer
     dataloader = DataLoader(dataset, batch_size=args.batch_size, shuffle=False, num_workers=4)
     
     # 2. Load Model
@@ -71,101 +109,122 @@ def evaluate(args):
     model.to(device)
     model.eval()
     
-    # 3. Inference Loop
-    all_preds_pos = [] # Denormalized predicted positions
-    all_targets_pos = [] # Denormalized GT positions
+    # 3. Inference Loop (streaming aggregation to avoid OOM)
+    K = 1 if args.model_type == "baseline" else int(args.num_samples_per_condition)
+
+    total_n = 0
+    ade_mean_sum = 0.0
+    ade_std_sum = 0.0
+    ade_best_sum = 0.0
+    fde_mean_sum = 0.0
+    fde_std_sum = 0.0
+    fde_best_sum = 0.0
+
+    msd_sum = np.zeros((args.pred_len - 1,), dtype=np.float64)
+    msd_count = np.zeros((args.pred_len - 1,), dtype=np.int64)
+    rog_sum = 0.0
+    rog_count = 0
+
+    save_preds = []
+    save_targets = []
     
     print("Running Inference...")
     with torch.no_grad():
-        for batch in tqdm(dataloader):
+        for batch_idx, batch in enumerate(tqdm(dataloader)):
+            if args.max_batches is not None and batch_idx >= int(args.max_batches):
+                break
+
             obs = batch['obs'].to(device)
             cond = batch['cond'].to(device)
-            
-            # Ground Truth Feature
-            if args.model_type == 'baseline':
-                target_pos_norm = batch['target_pos'].to(device)
-            else:
-                # Diffusion dataset doesn't return target_pos explicitly in 'action' (it's vel).
-                # But it has it in raw storage?
-                # Actually DiffusionDataset __getitem__ returns 'action'=vel.
-                # We need GT Position for evaluation.
-                # We can either:
-                # A) Integrate GT Vel from Last Obs Pos.
-                # B) Modify Dataset to return GT Pos.
-                # Let's use Integration for consistency.
-                
-                # Get integration start point
-                # Obs: (B, H, 4) -> [pos, vel]
-                start_pos_norm = obs[:, -1, :2] 
-                
-                # GT Vel (Action) not used for inference but for GT reconstruction
-                gt_vel_norm = batch['action'].to(device)
-                
-                # Reconstruct GT Pos Norm? No, easier to just use integration logic logic.
-                # Wait, integration in normalized space is invalid (as noted before).
-                # We need to DENORMALIZE start_pos, DENORMALIZE gt_vel, then integrate.
-                pass
-                
-            # Model Sample
-            # Returns: (B, F, 2) - Velocity (for all our models currently)
-            # Wait, SeqBaseline predicts Vel. Diffusion predicts Vel.
+
             nav_patch = batch['nav_patch'].to(device) if args.model_type == 'physics' else None
-            
-            if args.model_type == 'physics':
-                pred_vel_norm = model.sample_trajectory(obs, cond, args.pred_len, nav_patch=nav_patch)
-            else:
-                pred_vel_norm = model.sample_trajectory(obs, cond, args.pred_len)
-                
-            # 4. Denormalize & Integrate
-            # Need start pos (denormalized)
+
             start_pos_norm = obs[:, -1, :2]
             start_pos = norm.denormalize_pos(start_pos_norm.cpu().numpy())
-            
-            pred_vel = norm.denormalize_vel(pred_vel_norm.cpu().numpy())
-            
-            # Get GT Vel to check against
+
+            # GT future velocities
             if args.model_type == 'baseline':
                 gt_vel_norm = batch['target_vel'].cpu().numpy()
             else:
                 gt_vel_norm = batch['action'].cpu().numpy()
-                
             gt_vel = norm.denormalize_vel(gt_vel_norm)
-            
-            # Integrate to Position
-            # pred_pos[t] = pred_pos[t-1] + pred_vel[t]
-            B_size = pred_vel.shape[0]
-            curr_pred_pos = start_pos.copy()
-            curr_gt_pos = start_pos.copy()
-            
-            batch_pred_pos = []
-            batch_gt_pos = []
-            
-            for t in range(args.pred_len):
-                curr_pred_pos = curr_pred_pos + pred_vel[:, t]
-                curr_gt_pos = curr_gt_pos + gt_vel[:, t]
-                
-                batch_pred_pos.append(curr_pred_pos.copy())
-                batch_gt_pos.append(curr_gt_pos.copy())
-                
-            all_preds_pos.append(np.stack(batch_pred_pos, axis=1)) # (B, F, 2)
-            all_targets_pos.append(np.stack(batch_gt_pos, axis=1))
-            
-    # Concatenate
-    preds_pos = np.concatenate(all_preds_pos, axis=0) # (N, F, 2)
-    targets_pos = np.concatenate(all_targets_pos, axis=0)
-    
-    # 5. Compute Metrics
-    print("Computing Metrics...")
-    # Convert to tensor for metric functions
-    preds_t = torch.from_numpy(preds_pos)
-    targets_t = torch.from_numpy(targets_pos)
-    
-    micro = compute_micro_metrics(preds_t, targets_t)
-    macro = compute_macro_metrics(preds_t)
-    
-    # Merge
-    results = {**micro, **macro}
-    print(json.dumps(results, indent=2))
+
+            gt_pos = _integrate_positions(start_pos, gt_vel)  # (B, F, 2)
+
+            ade_list = []
+            fde_list = []
+
+            for k in range(K):
+                if args.model_type == 'physics':
+                    pred_vel_norm = model.sample_trajectory(obs, cond, args.pred_len, nav_patch=nav_patch)
+                else:
+                    pred_vel_norm = model.sample_trajectory(obs, cond, args.pred_len)
+
+                pred_vel = norm.denormalize_vel(pred_vel_norm.cpu().numpy())
+                pred_pos = _integrate_positions(start_pos, pred_vel)
+
+                # micro errors per condition
+                dist = np.linalg.norm(pred_pos - gt_pos, axis=-1)  # (B, F)
+                ade = dist.mean(axis=1)  # (B,)
+                fde = dist[:, -1]  # (B,)
+                ade_list.append(ade.astype(np.float32))
+                fde_list.append(fde.astype(np.float32))
+
+                # macro accumulation over generated samples
+                _accumulate_msd(pred_pos, msd_sum, msd_count)
+                rog = _accumulate_rog(pred_pos)
+                rog_sum += float(np.sum(rog))
+                rog_count += int(rog.shape[0])
+
+                # save a few examples (only k=0)
+                if k == 0 and len(save_preds) < int(args.save_samples):
+                    remaining = int(args.save_samples) - len(save_preds)
+                    take = min(remaining, pred_pos.shape[0])
+                    save_preds.extend(pred_pos[:take])
+                    save_targets.extend(gt_pos[:take])
+
+            ade_k = np.stack(ade_list, axis=0)  # (K, B)
+            fde_k = np.stack(fde_list, axis=0)  # (K, B)
+
+            ade_mean = ade_k.mean(axis=0)
+            ade_std = ade_k.std(axis=0)
+            ade_best = ade_k.min(axis=0)
+            fde_mean = fde_k.mean(axis=0)
+            fde_std = fde_k.std(axis=0)
+            fde_best = fde_k.min(axis=0)
+
+            B = int(ade_mean.shape[0])
+            total_n += B
+            ade_mean_sum += float(np.sum(ade_mean))
+            ade_std_sum += float(np.sum(ade_std))
+            ade_best_sum += float(np.sum(ade_best))
+            fde_mean_sum += float(np.sum(fde_mean))
+            fde_std_sum += float(np.sum(fde_std))
+            fde_best_sum += float(np.sum(fde_best))
+
+    if total_n == 0:
+        raise RuntimeError("No samples were evaluated (empty dataset or too strict filtering).")
+
+    msd_curve = (msd_sum / np.maximum(msd_count, 1)).astype(np.float64)
+
+    results = {
+        "split": args.split,
+        "num_conditions": int(total_n),
+        "K": int(K),
+        "ADE_mean": ade_mean_sum / total_n,
+        "ADE_std": ade_std_sum / total_n,
+        "ADE_best": ade_best_sum / total_n,
+        "FDE_mean": fde_mean_sum / total_n,
+        "FDE_std": fde_std_sum / total_n,
+        "FDE_best": fde_best_sum / total_n,
+        "MSD_1": float(msd_curve[0]) if msd_curve.size > 0 else 0.0,
+        "MSD_5": float(msd_curve[4]) if msd_curve.size > 4 else 0.0,
+        "MSD_10": float(msd_curve[9]) if msd_curve.size > 9 else 0.0,
+        "msd_curve": msd_curve.tolist(),
+        "Rog": (rog_sum / rog_count) if rog_count > 0 else 0.0,
+    }
+
+    print(json.dumps(results, ensure_ascii=False, indent=2))
     
     # 6. Save
     out_dir = Path(f"data/experiments/{args.exp_name}")
@@ -174,10 +233,8 @@ def evaluate(args):
     with open(out_dir / "metrics.json", 'w') as f:
         json.dump(results, f, indent=4)
         
-    # Save Samples (Top 100)
-    np.savez(out_dir / "samples.npz", 
-             preds=preds_pos[:100], 
-             targets=targets_pos[:100])
+    if save_preds:
+        np.savez(out_dir / "samples.npz", preds=np.stack(save_preds, axis=0), targets=np.stack(save_targets, axis=0))
              
     print(f"Results saved to {out_dir}")
 
@@ -187,6 +244,8 @@ if __name__ == "__main__":
     parser.add_argument('--model_type', type=str, choices=['baseline', 'diffusion', 'physics'], required=True)
     parser.add_argument('--data_path', type=str, required=True)
     parser.add_argument('--checkpoint', type=str, required=True)
+    parser.add_argument('--split', type=str, choices=['train', 'val', 'test', 'all'], default='test')
+    parser.add_argument('--splits_dir', type=str, default=None, help="override splits dir (default: <processed_dir>/splits)")
     
     # Physics args
     parser.add_argument('--nav_file', type=str, default=None)
@@ -199,6 +258,9 @@ if __name__ == "__main__":
     parser.add_argument('--diff_steps', type=int, default=100)
     
     parser.add_argument('--batch_size', type=int, default=32)
+    parser.add_argument('--num_samples_per_condition', type=int, default=20, help="K for diffusion/physics (baseline uses 1)")
+    parser.add_argument('--save_samples', type=int, default=100, help="number of (pred,target) pairs to save")
+    parser.add_argument('--max_batches', type=int, default=None, help="limit evaluation batches for quick runs")
     
     args = parser.parse_args()
     evaluate(args)

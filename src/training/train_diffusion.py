@@ -72,6 +72,22 @@ def train(args):
     # 3. Setup Logging
     save_dir = Path(f"data/experiments/{args.exp_name}")
     save_dir.mkdir(parents=True, exist_ok=True)
+
+    run_config = {
+        "model_type": args.model_type,
+        "data_path": args.data_path,
+        "split": args.split,
+        "splits_dir": args.splits_dir,
+        "nav_file": args.nav_file,
+        "patch_size": args.patch_size,
+        "obs_len": args.obs_len,
+        "pred_len": args.pred_len,
+        "hidden_dim": args.hidden_dim,
+        "diff_steps": args.diff_steps,
+        "batch_size": args.batch_size,
+        "epochs": args.epochs,
+        "lr": args.lr,
+    }
     
     model.train()
     
@@ -122,7 +138,16 @@ def train(args):
         duration = time.time() - start_time
         print(f"Epoch {epoch} Done. Loss: {avg_loss:.4f}. Time: {duration:.1f}s")
         
-        torch.save(model.state_dict(), save_dir / "last.pt")
+        torch.save(
+            {
+                "epoch": epoch,
+                "loss": float(avg_loss),
+                "model_state_dict": model.state_dict(),
+                "optimizer_state_dict": optimizer.state_dict(),
+                "config": run_config,
+            },
+            save_dir / "last.pt",
+        )
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

@@ -125,10 +125,12 @@ class TrajectoryStorage:
         meta_vid = []
         meta_start = []
         meta_end = []
-        # origin/dest placeholders for now (TODO: pass them in)
+        origin_idx = []
+        dest_idx = []
         
         for t in trajectories:
             t_len = len(t['positions'])
+            start_idx = acc_ptr
             acc_ptr += t_len
             new_ptrs.append(acc_ptr)
             
@@ -138,12 +140,17 @@ class TrajectoryStorage:
             meta_vid.append(t.get('vehicle_id', -1))
             meta_start.append(t['timestamp'][0])
             meta_end.append(t['timestamp'][-1])
+
+            origin_idx.append(start_idx)
+            dest_idx.append(acc_ptr - 1)
             
         # Bulk write
         f['positions'][current_points_count:] = np.concatenate(all_pos, axis=0)
         f['timestamps'][current_points_count:] = np.concatenate(all_time, axis=0)
         f['traj_ptr'][current_traj_count+1:] = new_ptrs # Fill the new slots
         
+        f['origin_idx'][current_traj_count:] = origin_idx
+        f['dest_idx'][current_traj_count:] = dest_idx
         f['meta/vehicle_id'][current_traj_count:] = meta_vid
         f['meta/start_time'][current_traj_count:] = meta_start
         f['meta/end_time'][current_traj_count:] = meta_end
@@ -159,24 +166,11 @@ class TrajectoryStorage:
         pos = self.file['positions'][start:end]
         ts = self.file['timestamps'][start:end]
         
-        # Online velocity calculation: [vy, vx]
-        # v[t] = pos[t] - pos[t-1] ? No, forward diff usually or central?
-        # Checklist says: vel[t] = pos[t] - pos[t-1] (for t > 0)
-        # Or vel[t] = pos[t+1] - pos[t].
-        # Let's standardize: vel[t] is velocity AT time t.
-        # Usually v[t] = (pos[t] - pos[t-1]) / dt. Assuming dt=1 for now?
-        # Or simple difference.
-        
-        # Simple difference: v[t] = pos[t] - pos[t-1].
-        # So v[0] is 0 or undefined.
-        # Let's compute diff and pad?
-        
-        # NOTE: In DATA_STRUCTURE.md, we said "Online velocity calculation".
-        # Let's implement simple backward diff, padded with first val.
+        # Online vel: step displacement (backward diff), padded at t=0.
         vel = np.zeros_like(pos)
         if len(pos) > 1:
             vel[1:] = pos[1:] - pos[0:-1]
-            vel[0] = vel[1] # Copy first velocity
+            vel[0] = vel[1]  # pad
             
         vehicle_id = self.file['meta/vehicle_id'][idx]
         
@@ -186,4 +180,3 @@ class TrajectoryStorage:
             'timestamp': ts,
             'vehicle_id': vehicle_id
         }
-

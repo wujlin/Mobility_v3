@@ -1,8 +1,11 @@
 # 开发进度追踪
 
+> [!IMPORTANT]
+> 任务定义与实验协议以 `docs/TASK_DEFINITION.md` 为唯一准则；本文件用于进度记录，若与其冲突以其为准。
+
 > **项目**：物理约束扩散模型 - 轨迹生成  
 > **数据**：深圳出租车 GPS（2011/04/18-26）  
-> **更新**：2025-12-11
+> **更新**：2025-12-13
 
 ---
 
@@ -89,14 +92,18 @@ test_model_physics.py   ✅ PhysicsModel Test Passed
 
 **下一步**：全量数据处理完成后，运行训练：
 ```bash
+# 0) 生成 strict(train-only) 数据产物（无泄漏）
+python -m src.data.build_strict_products --processed_dir data/processed
+python -m src.utils.sanity_check --data_path data/processed --strict
+
 # Baseline
-python -m src.training.train_baseline --data_path data/processed/trajectories/shenzhen_trajectories.h5
+python -m src.training.train_baseline --data_path data/processed/trajectories/shenzhen_trajectories.h5 --split train
 
 # Diffusion
-python -m src.training.train_diffusion --model_type diffusion --data_path ...
+python -m src.training.train_diffusion --model_type diffusion --data_path data/processed/trajectories/shenzhen_trajectories.h5 --split train
 
 # Physics
-python -m src.training.train_diffusion --model_type physics --data_path ...
+python -m src.training.train_diffusion --model_type physics --data_path data/processed/trajectories/shenzhen_trajectories.h5 --nav_file data/processed/nav_field.npz --split train
 ```
 
 ---
@@ -110,13 +117,32 @@ python -m src.training.train_diffusion --model_type physics --data_path ...
 
 ---
 
+## Phase B（论文版）：dt=30s 重采样 ✅ 代码就绪
+
+> 论文版必须 dt-fixed（见 `docs/TASK_DEFINITION.md`），并重新生成 train-only 数据产物以避免任何泄漏。
+
+```bash
+# 1) 生成 dt-fixed 数据集（输出到独立目录，避免覆盖 Phase A）
+python -m src.data.build_dt_fixed_dataset \
+  --input_processed_dir data/processed \
+  --output_processed_dir data/processed_dt30 \
+  --dt_fixed 30 \
+  --max_gap 300 \
+  --min_length 10
+
+# 2) 生成 strict(train-only) 数据产物（无泄漏）
+python -m src.data.build_strict_products --processed_dir data/processed_dt30 --backup
+python -m src.utils.sanity_check --data_path data/processed_dt30 --strict --expected_dt 30 --dt_require_constant
+```
+
 ## 输出文件
 
 ```
 data/processed/
 ├── trajectories/shenzhen_trajectories.h5
 ├── splits/{train,val,test}_ids.npy
-└── data_stats.json
+├── data_stats.json
+└── nav_field.npz
 ```
 
 ---
@@ -129,3 +155,4 @@ data/processed/
 | 2025-12-11 | GitHub 仓库创建，代码推送 |
 | 2025-12-11 | Phase 2 全量处理启动 |
 | 2025-12-11 | Phase 3/4 单元测试验证通过（代码就绪）|
+| 2025-12-13 | strict(train-only) 数据产物生成器与 sanity_check 完成；支持 dt-fixed(30s) 论文版数据集生成闭环 |

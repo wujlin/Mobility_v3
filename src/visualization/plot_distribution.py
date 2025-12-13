@@ -3,7 +3,6 @@ import json
 import numpy as np
 import matplotlib.pyplot as plt
 from pathlib import Path
-from scipy.optimize import curve_fit
 from src.visualization.style_config import set_style, get_color
 
 def power_law(t, a, alpha):

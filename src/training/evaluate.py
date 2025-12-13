@@ -4,13 +4,51 @@ from pathlib import Path
 import argparse
 import json
 import numpy as np
-from tqdm import tqdm
+try:
+    from tqdm import tqdm
+except Exception:  # pragma: no cover
+    def tqdm(x, *args, **kwargs):  # type: ignore[no-redef]
+        return x
 
 from src.models.seq.seq_baseline import SeqBaseline
 from src.models.diffusion.diffusion_model import DiffusionTrajectoryModel
 from src.models.physics.physics_condition_diffusion import PhysicsConditionDiffusion
 from src.data.datasets_seq import SeqDataset
 from src.data.datasets_diffusion import DiffusionDataset
+
+
+def _load_state_dict(checkpoint_path: str, device: torch.device) -> dict:
+    ckpt = torch.load(checkpoint_path, map_location=device)
+    if isinstance(ckpt, dict) and "model_state_dict" in ckpt:
+        return ckpt["model_state_dict"]
+    if isinstance(ckpt, dict):
+        # allow direct state_dict saved via torch.save(model.state_dict())
+        return ckpt
+    raise TypeError(f"Unsupported checkpoint format: {type(ckpt)}")
+
+
+def _infer_ckpt_model_type(state_dict: dict) -> str | None:
+    keys = state_dict.keys()
+    if any(str(k).startswith("nav_encoder.") for k in keys):
+        return "physics"
+    if any(str(k).startswith("unet.") for k in keys):
+        return "diffusion"
+    if any(str(k).startswith("encoder.") for k in keys) and any(str(k).startswith("decoder_cell.") for k in keys):
+        return "baseline"
+    return None
+
+
+def _infer_hidden_dim(model_type: str, state_dict: dict) -> int | None:
+    if model_type == "baseline":
+        w = state_dict.get("head.weight")
+        return int(w.shape[1]) if hasattr(w, "shape") and len(w.shape) == 2 else None
+    if model_type == "diffusion":
+        w = state_dict.get("unet.init_conv.weight")
+        return int(w.shape[0]) if hasattr(w, "shape") and len(w.shape) == 3 else None
+    if model_type == "physics":
+        w = state_dict.get("diffusion.unet.init_conv.weight")
+        return int(w.shape[0]) if hasattr(w, "shape") and len(w.shape) == 3 else None
+    return None
 
 
 def _integrate_positions(start_pos: np.ndarray, vel: np.ndarray) -> np.ndarray:
@@ -79,10 +117,18 @@ def evaluate(args):
     norm = dataset.normalizer
     dataloader = DataLoader(dataset, batch_size=args.batch_size, shuffle=False, num_workers=4)
     
-    # 2. Load Model
+    # 2. Load Model (auto-align hyperparams to checkpoint to avoid size mismatch)
     print(f"Loading {args.model_type} model from {args.checkpoint}...")
-    checkpoint = torch.load(args.checkpoint, map_location=device)
-    state_dict = checkpoint['model_state_dict'] if 'model_state_dict' in checkpoint else checkpoint
+    state_dict = _load_state_dict(args.checkpoint, device=device)
+
+    ckpt_type = _infer_ckpt_model_type(state_dict)
+    if ckpt_type is not None and ckpt_type != args.model_type:
+        print(f"[WARN] checkpoint 看起来是 {ckpt_type}，但你指定了 --model_type {args.model_type}，可能会加载失败。")
+
+    ckpt_hidden_dim = _infer_hidden_dim(args.model_type, state_dict)
+    if ckpt_hidden_dim is not None and int(args.hidden_dim) != int(ckpt_hidden_dim):
+        print(f"[WARN] hidden_dim 不匹配：checkpoint={ckpt_hidden_dim}, args={args.hidden_dim}；已自动改为 checkpoint 值以匹配权重。")
+        args.hidden_dim = int(ckpt_hidden_dim)
     
     if args.model_type == 'baseline':
         model = SeqBaseline(

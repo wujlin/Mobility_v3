@@ -1,5 +1,8 @@
 # 数据结构说明（DATA_STRUCTURE）
 
+> [!IMPORTANT]
+> 任务定义与实验协议以 `docs/TASK_DEFINITION.md` 为唯一准则；本文档仅描述数据格式，若与其冲突以其为准。
+
 目标：
 - 统一所有数据文件的格式、路径和坐标约定；
 - 分清 raw / processed / experiment 三个层级；
@@ -27,7 +30,7 @@
 |-----|------|-----|
 | 2D 数组 `field` | `field[y, x]` | 行优先，y 为行索引 |
 | 位置向量 | `[y, x]` | 第一维是 y |
-| 速度向量 | `[vy, vx]` | 与位置一致 |
+| `vel` 向量 | `[vy, vx]` | **步位移**（step displacement），与位置一致，单位 `grid_cell/step` |
 | 导航方向 | `[nav_y, nav_x]` | 单位向量 |
 
 > [!IMPORTANT]
@@ -38,7 +41,7 @@
 | 格式 | 用途 |
 |-----|------|
 | Unix 时间戳（秒，int64） | 数据存储、计算 |
-| UTC ISO 字符串 | 日志、可读性展示 |
+| ISO 字符串（建议带时区） | 日志、可读性展示（例如 `+08:00`） |
 
 **模型输入中的时间特征：**
 
@@ -46,7 +49,7 @@
 time_features = {
     "hour_of_day": int,      # 0-23
     "day_of_week": int,      # 0-6 (Monday=0)
-    "is_weekend": bool,      # 可选
+    "is_weekend": bool,      # 可选（v1 strict 当前未用）
     "is_holiday": bool,      # 可选
 }
 ```
@@ -59,12 +62,15 @@ time_features = {
 | 特征 | 源范围 (Approx) | 目标范围 | 方法 | 统计量存储 |
 |-----|---------------|---------|-----|-----------|
 | **Position** `[y, x]` | `[0, H]`, `[0, W]` | `[-1, 1]` | Min-Max (Linear) | `data_config['pos_bounds']` |
-| **Velocity** `[vy, vx]` | `[-30, 30]` | $\approx [-3, 3]$ | Z-Score | `data_config['vel_mean/std']` |
+| **Vel** `[vy, vx]` | data-dependent | $\approx [-3, 3]$ | Z-Score | `data_config['vel_mean/std']` |
 | **Nav** `[ny, nx]` | `[-1, 1]` | `[-1, 1]` | 缩放 (e.g. $\times 1.0$) | None |
 
 **注意事项**：
 - 训练集/验证集/测试集**必须使用同一套归一化参数**（通常只用训练集统计量）。
 - 评估时必须**反归一化**回到原始物理空间计算指标。
+
+> 若需要物理速度（单位 `grid_cell/second`），在 dt-fixed 数据集上可使用：
+> `physical_velocity = vel / dt_fixed`。
 
 ---
 
@@ -78,12 +84,17 @@ data/
 ├── processed/
 │   ├── map_matched/      # 地图匹配后的轨迹
 │   ├── trajectories/     # 统一格式的 trip 序列
-│   ├── fields/           # 导航场 / 速度场等物理场
 │   ├── splits/           # train/val/test 切分
+│   ├── data_stats.json   # strict: train-only 统计量（含 source）
+│   ├── nav_field.npz     # strict: train-only 导航场（含 metadata）
+│   ├── fields/           # legacy: 导航场 / 速度场等物理场（可选）
 │   └── macro_stats/      # 宏观统计指标（标度律等）
 └── experiments/
     └── {exp_name}/       # 各实验的中间结果与评估输出
 ```
+
+> [!NOTE]
+> Phase B（论文版）推荐使用独立目录 `data/processed_dt30/`（dt_fixed=30s），由 `python -m src.data.build_dt_fixed_dataset` 生成，并在该目录下再生成 strict(train-only) 的 `data_stats.json/nav_field.npz`。
 
 **层级说明：**
 
@@ -179,7 +190,7 @@ with h5py.File("trajectories.h5", "r") as f:
     i = 42
     traj_i_pos = positions[ptr[i]:ptr[i+1]]  # shape: (len_i, 2)
     
-    # 在线计算速度
+    # 在线计算步位移（vel）
     traj_i_vel = np.diff(traj_i_pos, axis=0)  # shape: (len_i-1, 2)
 ```
 
@@ -193,18 +204,18 @@ with h5py.File("trajectories.h5", "r") as f:
 
 ### 4.3 物理场与导航场
 
-#### 4.3.1 基本导航场（无目的地）
+#### 4.3.1 v1 strict 导航场（推荐）
 
-**路径：** `data/processed/fields/nav_field_baseline.npz`
+**路径：** `data/processed/nav_field.npz`
 
 **结构：**
 
 ```text
-nav_field_baseline.npz
-├── nav_y       : (H, W) float32   # 方向 y 分量
-├── nav_x       : (H, W) float32   # 方向 x 分量
-├── speed_mean  : (H, W) float32   # 平均速度大小（可选）
-└── count       : (H, W) int32     # 样本数量（可选，用于置信度）
+nav_field.npz
+├── direction : (2, H, W) float32  # 平均方向单位向量 [dir_y, dir_x]
+├── speed     : (H, W) float32     # 平均步位移模长（step displacement magnitude）
+├── count     : (H, W) float32     # 样本数量（置信度）
+└── metadata  : object (dict)      # 来源/哈希/dt 等（np.load 需 allow_pickle=True）
 ```
 
 **加载示例：**
@@ -212,13 +223,15 @@ nav_field_baseline.npz
 ```python
 import numpy as np
 
-data = np.load("nav_field_baseline.npz")
-nav_field = np.stack([data["nav_y"], data["nav_x"]], axis=0)  # (2, H, W)
-speed_field = data["speed_mean"]  # (H, W)
+data = np.load("nav_field.npz", allow_pickle=True)
+direction = data["direction"]  # (2, H, W)
+speed = data["speed"]          # (H, W)
+count = data["count"]          # (H, W)
+metadata = data["metadata"].item() if "metadata" in data else None
 
 # 获取某位置的导航方向
 y, x = 100, 200
-nav_direction = nav_field[:, y, x]  # [nav_y, nav_x]
+nav_direction = direction[:, y, x]  # [dir_y, dir_x]
 ```
 
 > [!CAUTION]
@@ -226,7 +239,23 @@ nav_direction = nav_field[:, y, x]  # [nav_y, nav_x]
 > 当从 `(lat, lon)` 投影到 `(y, x)` 栅格坐标时，所有**向量特征**（速度、导航方向）必须进行相应的**旋转变换**。
 > **推荐做法**：直接在 `(y, x)` 栅格空间上计算速度和平均流场，避免复杂的投影旋转计算。
 
-#### 4.3.2 目的地相关的导航场（可选）
+#### 4.3.2 legacy/兼容导航场（可选）
+
+> 说明：历史版本可能使用 `nav_y/nav_x/speed_mean` 命名；当前代码加载器兼容两种格式，但以 v1 strict 为准。
+
+**路径：** `data/processed/fields/nav_field_baseline.npz`
+
+**结构：**
+
+```text
+nav_field_baseline.npz
+├── nav_y       : (H, W) float32
+├── nav_x       : (H, W) float32
+├── speed_mean  : (H, W) float32
+└── count       : (H, W) int32
+```
+
+#### 4.3.3 目的地相关的导航场（可选，v2）
 
 **路径：** `data/processed/fields/nav_field_dest_{dest_id}.npz`
 
@@ -312,58 +341,17 @@ splits/
 
 **路径：** `data/experiments/{exp_name}/`
 
-**结构：**
+**当前实现（v1）结构：**
 
 ```text
 data/experiments/{exp_name}/
-├── config.yaml               # 实验配置快照
-├── checkpoints/
-│   ├── best.pt               # 最佳模型
-│   ├── last.pt               # 最后 epoch
-│   └── epoch_50.pt           # 中间 checkpoint（可选）
-├── logs/
-│   ├── train.log             # 训练日志
-│   └── tensorboard/          # TensorBoard 日志
-├── samples/
-│   ├── sample_batch_0.npz    # 生成的轨迹样本
-│   └── ...
-├── metrics_micro.json        # 微观指标结果
-├── metrics_meso.json         # 中观指标结果
-└── metrics_macro.json        # 宏观指标结果
+├── last.pt        # 训练保存的权重（baseline: dict；diffusion/physics: state_dict）
+├── epoch_*.pt     # baseline 可选保存（每 5 epoch）
+├── metrics.json   # evaluate.py 输出（可选）
+└── samples.npz    # evaluate.py 输出（可选）
 ```
 
-**结构：**
-
-```text
-data/experiments/{exp_name}/
-├── config.yaml               # 实验配置快照
-├── checkpoints/
-│   ├── best.pt               # 最佳模型
-│   ├── last.pt               # 最后 epoch
-│   └── epoch_50.pt           # 中间 checkpoint（可选）
-├── logs/
-│   ├── train.log             # 训练日志
-│   └── tensorboard/          # TensorBoard 日志
-├── samples/
-│   ├── sample_batch_0.npz    # 生成的轨迹样本
-│   └── ...
-├── metrics_micro.json        # 微观指标结果
-├── metrics_meso.json         # 中观指标结果
-└── metrics_macro.json        # 宏观指标结果
-```
-
-**metrics 文件格式示例：**
-
-```json
-// metrics_micro.json
-{
-  "1_step_mse": 0.0023,
-  "5_step_mse": 0.0156,
-  "10_step_mse": 0.0412,
-  "frechet_distance": 1.23,
-  "dtw_distance": 2.45
-}
-```
+> 说明：更完整的实验管理（config 快照、checkpoints/logs 子目录、meso 指标等）建议作为后续工程化增强，但不影响 v1 strict 的可复现闭环。
 
 ---
 
@@ -376,11 +364,11 @@ data/experiments/{exp_name}/
 | 原始 GPS | parquet/csv | `data/raw/gps/*.parquet` |
 | 地图匹配结果 | parquet | `data/processed/map_matched/*.parquet` |
 | 统一轨迹 | HDF5 | `data/processed/trajectories/*.h5` |
-| 导航场 | npz | `data/processed/fields/*.npz` |
+| 导航场 | npz | `data/processed/nav_field.npz`（推荐）或 `data/processed/fields/*.npz`（legacy） |
 | 数据切分 | npy | `data/processed/splits/*.npy` |
 | 宏观统计 | json | `data/processed/macro_stats/*.json` |
-| 模型权重 | pt | `data/experiments/*/checkpoints/*.pt` |
-| 评估结果 | json | `data/experiments/*/metrics_*.json` |
+| 模型权重 | pt | `data/experiments/*/*.pt` |
+| 评估结果 | json/npz | `data/experiments/*/metrics.json`、`data/experiments/*/samples.npz` |
 
 ### 6.2 坐标约定速查
 
@@ -403,9 +391,10 @@ field_value = field[x, y]   # 索引顺序错误！
 timestamp = 1672531200  # int64, 秒
 
 # 转换为可读格式（展示用）
-from datetime import datetime
-dt = datetime.utcfromtimestamp(timestamp)
-iso_str = dt.isoformat()  # "2023-01-01T00:00:00"
+from datetime import datetime, timedelta, timezone
+tz = timezone(timedelta(hours=8))  # Asia/Shanghai
+dt = datetime.fromtimestamp(timestamp, tz=tz)
+iso_str = dt.isoformat()  # "2023-01-01T08:00:00+08:00"
 
 # 提取时间特征（模型输入用）
 hour = dt.hour            # 0-23
@@ -418,7 +407,7 @@ day_of_week = dt.weekday()  # 0-6
 
 **保留的设计：**
 1. **统一的坐标约定**：`[y, x]` 和 `(H, W)` 栅格
-2. **导航场结构**：`[nav_y, nav_x]` + `(2, H, W)`
+2. **导航场结构**：`direction` + `(2, H, W)`（内部约定 `[y, x]`）
 3. **三层数据分离**：raw / processed / experiment
 
 **不再保留的设计：**

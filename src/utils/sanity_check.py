@@ -167,8 +167,46 @@ def _compute_dt_summary(
         "top_dt": top,
     }
 
+def _compute_dt_full(timestamps: np.ndarray, traj_ptr: np.ndarray) -> Dict[str, Any]:
+    if timestamps.size < 2:
+        return {"count": 0}
 
-def check_trajectory_dt(data_path: Path, expected_dt: int, sample_traj: int, strict: bool) -> bool:
+    ts = timestamps.astype(np.int64)
+    dt = np.diff(ts)  # (N-1,)
+
+    # mask out cross-trajectory boundaries
+    mask = np.ones(dt.shape[0], dtype=bool)
+    if traj_ptr.size > 2:
+        boundary = traj_ptr[1:-1] - 1
+        boundary = boundary[(boundary >= 0) & (boundary < mask.size)]
+        mask[boundary] = False
+
+    dt = dt[mask]
+    if dt.size == 0:
+        return {"count": 0}
+
+    neg = int(np.sum(dt < 0))
+    zero = int(np.sum(dt == 0))
+    nonneg = dt[dt >= 0]
+    if nonneg.size == 0:
+        return {"count": 0, "neg_count": neg, "zero_count": zero}
+
+    return {
+        "count": int(nonneg.size),
+        "neg_count": neg,
+        "zero_count": zero,
+        "min": int(nonneg.min()),
+        "max": int(nonneg.max()),
+        "mean": float(np.mean(nonneg)),
+    }
+
+def check_trajectory_dt(
+    data_path: Path,
+    expected_dt: int,
+    sample_traj: int,
+    strict: bool,
+    require_constant: bool,
+) -> bool:
     print("\n[4] 检查 timestamps 的 dt 分布...")
     h5_file = data_path / "trajectories" / "shenzhen_trajectories.h5"
     if not h5_file.exists():
@@ -191,12 +229,42 @@ def check_trajectory_dt(data_path: Path, expected_dt: int, sample_traj: int, str
     print(f"    count={summary['count']}, min={summary['min']}, p50={summary['p50']:.1f}, p95={summary['p95']:.1f}, max={summary['max']}")
     print(f"    top_dt={summary['top_dt']}")
 
+    if require_constant:
+        if expected_dt <= 0:
+            print("  ✗ FAIL: --dt_require_constant 需要 expected_dt>0")
+            return False
+
+        full = _compute_dt_full(timestamps, traj_ptr)
+        if full.get("count", 0) == 0:
+            print("  ✗ FAIL: 无有效 dt 样本（无法验证 constant dt）")
+            return False
+
+        dt_expected = int(expected_dt)
+        dt_all = np.diff(timestamps.astype(np.int64))
+        mask = np.ones(dt_all.shape[0], dtype=bool)
+        if traj_ptr.size > 2:
+            boundary = traj_ptr[1:-1] - 1
+            boundary = boundary[(boundary >= 0) & (boundary < mask.size)]
+            mask[boundary] = False
+        dt_all = dt_all[mask]
+        dt_all = dt_all[dt_all >= 0]
+        mismatch = int(np.sum(dt_all != dt_expected))
+
+        print("  ✓ constant dt 检查（全量，跨轨迹边界已剔除）:")
+        print(
+            f"    count={full['count']}, min={full.get('min','N/A')}, max={full.get('max','N/A')}, "
+            f"zero={full.get('zero_count',0)}, neg={full.get('neg_count',0)}, mismatch={mismatch}"
+        )
+
+        if full.get("neg_count", 0) > 0 or mismatch > 0:
+            print(f"  ✗ FAIL: dt 非恒定（expected_dt={dt_expected}）")
+            return False
+
     if expected_dt > 0:
         # 粗略判断：最频繁的 dt 是否等于 expected_dt
         top0 = summary["top_dt"][0][0] if summary["top_dt"] else None
         if top0 != int(expected_dt):
-            print(f"  ⚠ WARN: 最频繁 dt={top0}，不等于 expected_dt={expected_dt}")
-            return not strict
+            print(f"  ⚠ WARN: 最频繁 dt={top0}，不等于 expected_dt={expected_dt}（Phase A 允许；Phase B 请用 --dt_require_constant）")
 
     return True
 
@@ -385,6 +453,7 @@ def main() -> int:
     parser.add_argument("--strict", action="store_true", help="将 WARN 视为 FAIL")
     parser.add_argument("--expected_dt", type=int, default=30, help="期望最频繁的 dt（秒），<=0 表示不检查")
     parser.add_argument("--dt_sample_traj", type=int, default=500, help="dt 统计抽样轨迹数")
+    parser.add_argument("--dt_require_constant", action="store_true", help="要求 dt 全量恒定为 expected_dt（Phase B 论文版）")
 
     parser.add_argument("--align_sample_traj", type=int, default=200, help="alignment 抽样轨迹数")
     parser.add_argument("--align_min_count", type=int, default=10, help="alignment 仅使用 count>=min_count 的格子（无 count 则忽略）")
@@ -404,7 +473,16 @@ def main() -> int:
     results.append(("Split overlap", check_splits_no_overlap(data_path)))
     results.append(("Data stats source", check_data_stats_source(data_path, strict=strict)))
     results.append(("Nav field source", check_nav_field_source(data_path, strict=strict)))
-    results.append(("Trajectory dt", check_trajectory_dt(data_path, expected_dt=args.expected_dt, sample_traj=args.dt_sample_traj, strict=strict)))
+    results.append((
+        "Trajectory dt",
+        check_trajectory_dt(
+            data_path,
+            expected_dt=args.expected_dt,
+            sample_traj=args.dt_sample_traj,
+            strict=strict,
+            require_constant=bool(args.dt_require_constant),
+        ),
+    ))
     results.append(("Coordinate range", check_coordinate_range(data_path, strict=strict)))
     results.append((
         "Nav field alignment",

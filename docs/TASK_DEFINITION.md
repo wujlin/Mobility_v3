@@ -1,4 +1,4 @@
-# 任务定义与实验协议（v1 strict）
+# 任务定义与实验协议（两阶段：fast → paper）
 
 > **适用范围**：本仓库所有训练/评估/数据产物必须遵循本规范  
 > **更新**：2025-12-13  
@@ -6,13 +6,20 @@
 
 ---
 
-## 0. v1 strict 总结（先把口径锁死）
+## 0. 两阶段路线（避免“先做错再重做”）
 
+**Phase A：fast validation（当前实现，1–2 周）**
+- **目的**：验证 pipeline 正确性 + Physics 是否有提升趋势 + 评估闭环是否完整
 - **任务定义**：KnownDestination；推理时 `d` 是合法输入，不属于泄漏
 - **建模对象**：窗口级未来段生成（带观测历史），而非“一次性生成整段 trip”
 - **`vel` 语义**：`step displacement`（步位移），`vel = pos[t] - pos[t-1]`，单位 `grid_cell/step`
-- **数据划分**：`data/processed/splits/{train,val,test}_ids.npy`；训练/评估必须按 split 过滤轨迹
-- **严格数据产物**：`data_stats.json` 与 `nav_field.npz` **仅用 train split** 估计，并写入 `source/metadata`
+- **dt 处理**：不强制重采样；仅记录 dt 分布用于诊断（不能做严格物理时间结论）
+- **无泄漏**：训练/评估按 split 过滤；`data_stats.json/nav_field.npz` 仅用 train split 估计并记录 `source/metadata`
+
+**Phase B：paper strict（论文版，2–4 周，必须重训）**
+- **目的**：方法论严谨 + 实验可复现 + 结论站得住
+- **dt 处理**：必须重采样到固定 `dt_fixed=30s`
+- **其余保持一致**：KnownDestination + step displacement（每一步对应 30s）+ train-only 产物合同 + split-aware 训练/评估
 
 ---
 
@@ -23,7 +30,7 @@
 | **KnownDestination** | 已知 `(o, d, t0)` | 路径生成 / 导航 / 条件生成 | 低（`d` 是输入） |
 | **UnknownDestination** | 只知 `(o, t0)` | 轨迹预测 / 异常检测 | 高（若训练使用了 `d`） |
 
-### 1.1 v1 strict 采用：KnownDestination（带观测历史）
+### 1.1 Phase A/B 共用：KnownDestination（带观测历史）
 
 本仓库当前训练/推理的最小闭环任务是 **窗口级未来段生成**：
 
@@ -60,11 +67,15 @@ $$P(\\mathrm{vel}_{t+1:t+F} \\mid \\mathrm{obs}_{t-H+1:t}, o, d, t_0, env)$$
 
 > 若需要更合理的周期编码（`sin/cos` + `is_weekend`），会改变 `cond_dim`，需要同步修改模型与重训（建议作为 v2 / v1.1）。
 
-### 2.2 `dt` 现状与处理边界
+### 2.2 `dt` 的边界与论文版要求（关键）
 
 - 原始出租车 GPS 采样间隔 **不固定**（常见 10–60s，且存在更大 gap）
-- **v1 strict 不强制重采样**：将每个点视为一个离散 step，并记录 `dt` 分布用于诊断（`data_stats.json.time_stats.dt_stats_sample`）
-- 若后续要做严格物理速度或 MSD 标度律的“物理时间”解释，必须先将轨迹重采样到固定 `dt_fixed`（推荐单独产出新的 trajectories 文件并重训）
+- **Phase A（fast）**：不强制重采样；将每个点视为一个离散 step，并记录 `dt` 分布用于诊断（`data_stats.json.time_stats.dt_stats_sample`）
+  - 可以做 step-based 的 sanity 与趋势验证
+  - 不建议把 MSD 的横轴解释为真实 $\Delta t$，避免审稿质疑
+- **Phase B（paper）**：必须重采样到固定 `dt_fixed`（建议 30s）
+  - 这样 MSD 的 $\Delta t = k \\, dt_{fixed}$ 才有明确物理意义
+  - nav_field 的 speed（位移模长）也才可跨数据集/时间段对比
 
 ### 2.3 `vel` 的唯一语义（决策 B）
 
@@ -162,7 +173,7 @@ data/processed/splits/
 
 ---
 
-## 6. 推荐命令（严格版本）
+## 6. 推荐命令（Phase A：fast validation / strict no-leak）
 
 生成严格数据产物（train-only）：
 
@@ -199,3 +210,84 @@ python -m src.training.evaluate \
   --split test \
   --num_samples_per_condition 20
 ```
+
+---
+
+## 7. Phase B：论文版严格协议（dt=30s 重采样）
+
+> **目标会议**：顶会/子刊（NeurIPS, ICML, KDD, AAAI 等）
+
+### 7.1 为什么需要 dt 重采样？
+
+| 问题 | 不重采样的风险 | 审稿人可能质疑 |
+|-----|--------------|--------------|
+| MSD 标度律 | $\langle \Delta r^2 \rangle \sim \Delta t^\alpha$ 的 $\Delta t$ 含义不明 | "MSD 指数的物理意义？" |
+| 速度场语义 | nav_field 的 "速度" 是位移，不同采样间隔不可比 | "nav_field 如何保证一致性？" |
+| 宏观正则 | 基于 MSD 的 loss 没有物理基础 | "物理约束真的是物理吗？" |
+| 可复现性 | 不同数据源采样间隔不同 | "换数据集还能用吗？" |
+
+### 7.2 严格版本要求（必须写死并进入产物合同）
+
+- **dt_fixed**：30 秒（或其他固定值，但必须写入数据产物合同）
+- **重采样方法**：线性插值（在 grid 空间分别对 y/x 插值）
+- **重复/乱序时间戳**：必须定义可复现处理（例如：同一秒多点取均值；非单调直接丢弃该 trip）
+- **gap 处理**：必须制定可复现规则（例如 `max_gap=300s`，超过则丢弃该 trip 或 split 成多条）
+- **vel 语义保持不变（决策 B）**：仍用 `step displacement`
+  - 只是每一步对应 `dt_fixed`，因此需要物理速度时：`physical_velocity = vel / dt_fixed`
+- **数据产物建议独立目录**（避免覆盖 Phase A）：
+  - `data/processed_dt30/trajectories/shenzhen_trajectories.h5`
+  - `data/processed_dt30/splits/*.npy`
+  - `data/processed_dt30/data_stats.json`（train-only）
+  - `data/processed_dt30/nav_field.npz`（train-only）
+
+### 7.3 工程落地（当前缺口与可复现闭环）
+
+1) **生成 dt-fixed 数据集（已实现）**：输入 Phase A 的 HDF5 + splits，输出新的 HDF5 + splits，并写入可复现合同（`resample_meta.json` + old/new id 映射）：
+
+```bash
+python -m src.data.build_dt_fixed_dataset \
+  --input_processed_dir data/processed \
+  --output_processed_dir data/processed_dt30 \
+  --dt_fixed 30 \
+  --max_gap 300 \
+  --min_length 10
+```
+
+> 当前实现的 gap 策略：**drop 整条轨迹**（超过 `max_gap` 直接丢弃），以保持 trip-level OD 语义一致性（KnownDestination）。
+
+2) **复用现有严格产物生成器（train-only，无泄漏）**：
+
+```bash
+python -m src.data.build_strict_products --processed_dir data/processed_dt30 --backup
+python -m src.utils.sanity_check --data_path data/processed_dt30 --strict --expected_dt 30 --dt_require_constant
+```
+
+- 论文版训练/评估统一指向 `data/processed_dt30/...`，并固定随机种子与配置日志
+
+### 7.4 论文实验设计
+
+**三层模型对比**（核心贡献）：
+
+| 模型 | 描述 | 物理约束 |
+|-----|------|---------|
+| Seq Baseline | RNN/Transformer 序列预测 | 无 |
+| Data-only Diff | 纯数据扩散生成 | 无 |
+| Physics Diff | 物理约束扩散 | nav_field + (可选) macro reg |
+
+**三层评估指标**：
+
+| 层次 | 指标 | 说明 |
+|-----|------|-----|
+| 微观 | ADE, FDE, best-of-K | 单条轨迹误差 |
+| 中观 | (v2) 路径分布, OD 匹配 | 需要 road-level |
+| 宏观 | MSD 曲线, Rog 分布 | 物理是否在帮忙 |
+
+**消融实验**：
+
+| 实验 | 目的 |
+|-----|------|
+| Physics vs Data-only | nav_field 的贡献 |
+| w/ vs w/o destination | KnownDest 的影响 |
+| dt=30s vs step-based | 重采样的影响 |
+| K=5,10,20 | 采样数敏感性 |
+

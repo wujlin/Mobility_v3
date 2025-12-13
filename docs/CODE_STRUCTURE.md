@@ -1,5 +1,8 @@
 # 代码结构说明（CODE_STRUCTURE）
 
+> [!IMPORTANT]
+> 任务定义与实验协议以 `docs/TASK_DEFINITION.md` 为唯一准则；本文档描述代码组织与接口，若与其冲突以其为准。
+
 目标：统一项目的代码组织方式和核心接口，保证：
 - 所有模型共享同一套数据接口；
 - 便于做「序列预测 vs 生成模型 vs 物理约束生成」的对比；
@@ -78,10 +81,11 @@ src/data/
 
 ```python
 {
-    "obs":    Tensor[H, state_dim],   # 历史 H 步状态
-    "target": Tensor[F, state_dim],   # 未来 F 步状态（位置或速度）
-    "cond":   Tensor[cond_dim],       # 条件向量 (o, d, t0, env)
-    "meta":   dict(...)               # 轨迹 ID 等元信息（调试用）
+    "obs":        Tensor[H, 4],   # 历史 H 步 [pos, vel]
+    "target_pos": Tensor[F, 2],   # 未来 F 步位置（归一化）
+    "target_vel": Tensor[F, 2],   # 未来 F 步步位移（归一化）
+    "cond":       Tensor[6],      # 条件向量 [hour, weekday, o_y, o_x, d_y, d_x]
+    "meta":       dict(...)       # 轨迹索引等（调试用）
 }
 ```
 
@@ -89,10 +93,11 @@ src/data/
 
 ```python
 {
-    "obs":        Tensor[H, obs_dim],      # 历史 H 步特征（如 [pos, vel, nav]）
-    "future_vel": Tensor[F, 2],            # 未来 F 步速度序列（生成目标）
-    "cond":       Tensor[cond_dim],        # 条件向量
-    "meta":       dict(...)
+    "obs":    Tensor[H, 4],   # 历史 H 步 [pos, vel]
+    "action": Tensor[F, 2],   # 未来 F 步步位移（生成目标）
+    "cond":   Tensor[6],      # 条件向量
+    # physics 模型额外输入（可选）
+    "nav_patch": Tensor[3, K, K]
 }
 ```
 
@@ -180,10 +185,9 @@ class SeqBaseline(BaseTrajectoryModel):
 ```text
 src/models/diffusion/
 ├── __init__.py
-├── unet1d.py          # 1D UNet 架构（时间维卷积）
-├── scheduler.py       # DDPM/DDIM 调度器
-├── diffusion_model.py # 封装：UNet + scheduler
-└── cfg.py             # Classifier-Free Guidance 实现
+├── unet1d.py          # 1D UNet（时间维卷积）
+├── scheduler.py       # DDPM 调度器
+└── diffusion_model.py # UNet + scheduler（训练/采样）
 ```
 
 **核心类：**
@@ -192,8 +196,8 @@ src/models/diffusion/
 class DiffusionTrajectoryModel(BaseTrajectoryModel):
     """Data-only 轨迹扩散模型"""
     
-    def forward(self, obs, cond, future_vel, noise=None):
-        # 返回噪声预测（用于计算 diffusion loss）
+    def forward(self, obs, cond, target=None):
+        # 返回 diffusion loss（以 future vel 为 target）
         ...
     
     def sample_trajectory(self, obs, cond, horizon, num_steps=50, cfg_scale=1.0):
@@ -206,9 +210,9 @@ class DiffusionTrajectoryModel(BaseTrajectoryModel):
 ```text
 src/models/physics/
 ├── __init__.py
-├── physics_residual_diffusion.py   # PDE residual + diffusion
-├── pde_drift.py                    # PDE drift 计算
-└── macro_regularizer.py            # 宏观统计正则项
+├── cnn_encoder.py                 # nav_patch 编码器
+├── macro_regularizer.py           # 宏观统计正则项（可选）
+└── physics_condition_diffusion.py # 物理条件扩散（nav_patch 作为条件）
 ```
 
 **核心类：**
@@ -226,15 +230,9 @@ class PhysicsConditionDiffusion(BaseTrajectoryModel):
         """从全局导航场中 Crop 出以 current_pos 为中心的 Patch"""
         ...
     
-    def forward(self, obs, cond, future_vel, noise=None):
-        # 1. 提取 Nav Patch 并编码为 embedding
-        nav_feat = self.nav_encoder(self.get_nav_patch(obs['pos'][-1]))
-        
-        # 2. 拼接到 Global Condition
-        full_cond = torch.cat([cond, nav_feat], dim=-1)
-        
-        # 3. 标准 Diffusion 预测
-        return self.diffusion(obs, full_cond, future_vel, noise)
+    def forward(self, obs, cond, target=None, nav_patch=None):
+        # 以 nav_patch 编码后拼接到 cond，再计算 diffusion loss
+        ...
     
     def sample_trajectory(self, obs, cond, horizon, ...):
         # 同样提取 nav patch 作为 condition 进行采样
@@ -244,15 +242,13 @@ class PhysicsConditionDiffusion(BaseTrajectoryModel):
 
 ### 3.4 `src/training/` – 训练入口
 
-**推荐结构：**
+**当前实现：**
 
 ```text
 src/training/
-├── __init__.py
-├── loops.py                    # 通用训练/验证 loop
-├── train_seq.py                # 训练序列预测 baseline
-├── train_diffusion.py          # 训练纯数据轨迹扩散
-└── train_physics_diffusion.py  # 训练物理约束扩散
+├── evaluate.py           # 评估入口（支持 K 采样）
+├── train_baseline.py     # 训练序列预测 baseline
+└── train_diffusion.py    # 训练 diffusion / physics（通过 --model_type）
 ```
 
 **每个脚本的职责：**
@@ -265,42 +261,51 @@ src/training/
 **示例用法：**
 
 ```bash
-python -m src.training.train_seq --config configs/seq_baseline.yaml
-python -m src.training.train_diffusion --config configs/diffusion_dataonly.yaml
-python -m src.training.train_physics_diffusion --config configs/physics_diffusion.yaml
+# Baseline（按 split）
+python -m src.training.train_baseline \
+  --data_path data/processed/trajectories/shenzhen_trajectories.h5 \
+  --split train \
+  --exp_name baseline_v1_strict
+
+# Data-only Diffusion（按 split）
+python -m src.training.train_diffusion \
+  --model_type diffusion \
+  --data_path data/processed/trajectories/shenzhen_trajectories.h5 \
+  --split train \
+  --exp_name diff_v1_strict
+
+# Physics Diffusion（按 split + nav_field）
+python -m src.training.train_diffusion \
+  --model_type physics \
+  --data_path data/processed/trajectories/shenzhen_trajectories.h5 \
+  --nav_file data/processed/nav_field.npz \
+  --split train \
+  --exp_name physics_v1_strict
 ```
 
 ---
 
 ### 3.5 `src/evaluation/` – 评估与可视化
 
-按照三层评估来拆分：
+当前实现：
 
 ```text
 src/evaluation/
-├── __init__.py
-├── micro_metrics.py    # 单步/多步误差、轨迹距离 (DTW, Fréchet)
-├── meso_metrics.py     # OD 分布、路径绕路率、行程时间分布
-├── macro_metrics.py    # 位移分布、MSD scaling 等
-├── plots.py            # 可视化工具（轨迹、热力图、统计曲线）
-└── run_eval.py         # 统一评估入口
+├── micro_metrics.py  # ADE/FDE/MSE_k
+└── macro_metrics.py  # MSD/Rog（step-based；论文版需 dt_fixed）
 ```
 
-**评估调用示例：**
+评估入口使用 `src/training/evaluate.py`（支持 split + K 采样）：
 
-```python
-from src.evaluation import micro_metrics, meso_metrics, macro_metrics
-
-# 加载模型
-model = load_checkpoint("path/to/checkpoint.pt")
-
-# 生成轨迹
-generated = model.sample_trajectory(obs, cond, horizon=20)
-
-# 计算各层指标
-micro_results = micro_metrics.evaluate(generated, ground_truth)
-meso_results = meso_metrics.evaluate(generated, ground_truth, road_network)
-macro_results = macro_metrics.evaluate(generated, ground_truth)
+```bash
+python -m src.training.evaluate \
+  --exp_name physics_v1_strict_eval \
+  --model_type physics \
+  --data_path data/processed/trajectories/shenzhen_trajectories.h5 \
+  --checkpoint data/experiments/physics_v1_strict/last.pt \
+  --nav_file data/processed/nav_field.npz \
+  --split test \
+  --num_samples_per_condition 20
 ```
 
 ---
@@ -346,7 +351,7 @@ experiment:
 
 data:
   trajectory_file: "data/processed/trajectories/city_trajectories.h5"
-  nav_field_file: "data/processed/fields/nav_field_baseline.npz"
+  nav_field_file: "data/processed/nav_field.npz"
   history_len: 4
   future_len: 16
   batch_size: 256

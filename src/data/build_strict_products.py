@@ -278,6 +278,14 @@ def main() -> int:
         raise FileNotFoundError(train_ids_path)
     train_ids = np.load(train_ids_path).astype(np.int64)
 
+    resample_meta_path = processed_dir / "resample_meta.json"
+    resample_meta = None
+    if resample_meta_path.exists():
+        try:
+            resample_meta = json.loads(resample_meta_path.read_text(encoding="utf-8"))
+        except Exception:
+            resample_meta = None
+
     # 1) data_stats.json (train-only)
     print("=" * 60)
     print("BUILD STRICT PRODUCTS")
@@ -318,6 +326,18 @@ def main() -> int:
         "date_range": base_stats["time_stats"]["train_date_range"],
     }
 
+    # Phase B: dt-fixed resampling contract (optional)
+    if resample_meta is not None:
+        source["resample_meta_file"] = str(resample_meta_path.relative_to(processed_dir))
+        source["resample_meta_sha256"] = sha256_file(resample_meta_path)
+        cfg = (resample_meta.get("config") or {}) if isinstance(resample_meta, dict) else {}
+        if isinstance(cfg, dict) and "dt_fixed" in cfg:
+            try:
+                base_stats["time_stats"]["dt_fixed"] = int(cfg["dt_fixed"])
+                base_stats["time_stats"]["resample_config"] = cfg
+            except Exception:
+                pass
+
     out_stats = {
         "created_at": created_at,
         "source": source,
@@ -346,6 +366,13 @@ def main() -> int:
         "direction_shape": list(direction.shape),
         "note": "direction/speed/count are estimated from train split only (step displacement).",
     }
+
+    if "dt_fixed" in base_stats.get("time_stats", {}):
+        nav_meta["dt_fixed_seconds"] = base_stats["time_stats"]["dt_fixed"]
+    if "resample_config" in base_stats.get("time_stats", {}):
+        nav_meta["resample_config"] = base_stats["time_stats"]["resample_config"]
+    if "resample_meta_sha256" in source:
+        nav_meta["resample_meta_sha256"] = source["resample_meta_sha256"]
 
     # metadata 使用 object 存储，需要 allow_pickle=True 加载（NavField 已支持）
     np.savez(

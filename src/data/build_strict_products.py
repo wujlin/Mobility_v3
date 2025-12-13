@@ -21,13 +21,19 @@ import json
 from dataclasses import asdict
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Dict, Tuple
+from typing import Any, Dict, Optional, Tuple
 
 import h5py
 import numpy as np
 
 
 TZ_SHANGHAI = timezone(timedelta(hours=8))
+try:
+    from src.config.settings import NORM as SETTINGS_NORM  # type: ignore
+
+    NAV_MAX_SPEED_DEFAULT = float(SETTINGS_NORM.nav_max_speed)
+except Exception:  # pragma: no cover
+    NAV_MAX_SPEED_DEFAULT = 20.0
 
 
 def sha256_file(path: Path, prefix: int = 16) -> str:
@@ -76,6 +82,42 @@ def resolve_grid_shape(processed_dir: Path, positions: np.ndarray) -> Tuple[int,
     y_max = int(np.ceil(float(np.max(positions[:, 0])))) + 1
     x_max = int(np.ceil(float(np.max(positions[:, 1])))) + 1
     return y_max, x_max
+
+
+def _try_load_grid_config(stats_path: Path) -> Optional[Dict[str, Any]]:
+    if not stats_path.exists():
+        return None
+    try:
+        stats = json.loads(stats_path.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+
+    grid = stats.get("grid_config") or {}
+    if not isinstance(grid, dict):
+        return None
+    if "H" in grid and "W" in grid:
+        return grid
+    return None
+
+
+def _try_load_grid_shape_from_nav(nav_path: Path) -> Optional[Tuple[int, int]]:
+    if not nav_path.exists():
+        return None
+    try:
+        nav = np.load(nav_path, allow_pickle=True)
+    except Exception:
+        return None
+
+    if "direction" not in nav:
+        return None
+    d = nav["direction"]
+    if d.ndim != 3:
+        return None
+    if d.shape[0] == 2:
+        return int(d.shape[1]), int(d.shape[2])
+    if d.shape[-1] == 2:
+        return int(d.shape[0]), int(d.shape[1])
+    return None
 
 
 def build_train_point_mask(traj_ptr: np.ndarray, train_ids: np.ndarray, n_points: int) -> np.ndarray:
@@ -145,6 +187,7 @@ def compute_train_stats(
     processed_dir: Path,
     h5_path: Path,
     train_ids: np.ndarray,
+    grid_shape_override: Optional[Tuple[int, int]] = None,
 ) -> Dict[str, Any]:
     with h5py.File(h5_path, "r") as f:
         positions = f["positions"][:].astype(np.float32)
@@ -154,7 +197,10 @@ def compute_train_stats(
         end_time = f["meta/end_time"][:].astype(np.int64)
 
     n_points = positions.shape[0]
-    grid_h, grid_w = resolve_grid_shape(processed_dir, positions)
+    if grid_shape_override is not None:
+        grid_h, grid_w = int(grid_shape_override[0]), int(grid_shape_override[1])
+    else:
+        grid_h, grid_w = resolve_grid_shape(processed_dir, positions)
 
     point_mask = build_train_point_mask(traj_ptr, train_ids, n_points)
     pos_train = positions[point_mask]
@@ -186,6 +232,7 @@ def compute_train_stats(
             "vel_mean": [float(vel_mean[0]), float(vel_mean[1])],
             "vel_std": [float(vel_std[0]), float(vel_std[1])],
             "nav_scale": 1.0,
+            "nav_max_speed": float(NAV_MAX_SPEED_DEFAULT),
         },
         "trip_length_stats": {
             "min": int(train_lengths.min()),
@@ -298,23 +345,65 @@ def main() -> int:
     stats_out = output_dir / "data_stats.json"
     nav_out = output_dir / "nav_field.npz"
 
+    # IMPORTANT: if output_dir==processed_dir and we enable --backup,
+    # backing up will temporarily remove legacy files needed to infer grid_config.
+    # So we capture overrides BEFORE backup.
+    grid_config_override = None
+    resample_grid_config = None
+    if resample_meta is not None:
+        resample_grid_config = resample_meta.get("grid_config") if isinstance(resample_meta, dict) else None
+        if isinstance(resample_grid_config, dict) and "H" in resample_grid_config and "W" in resample_grid_config:
+            grid_config_override = resample_grid_config
+
+    legacy_grid_config = _try_load_grid_config(stats_out) if grid_config_override is None else None
+    if grid_config_override is None and legacy_grid_config is not None:
+        grid_config_override = legacy_grid_config
+
+    grid_shape_override = None
+    if isinstance(grid_config_override, dict) and "H" in grid_config_override and "W" in grid_config_override:
+        grid_shape_override = (int(grid_config_override["H"]), int(grid_config_override["W"]))
+    else:
+        grid_shape_override = _try_load_grid_shape_from_nav(nav_out)
+
+    # 最终以 settings.GRID 为准（避免 --backup 导致的 fallback 推断形状漂移）
+    # 若你更换了城市/网格，请先更新 src/config/settings.py
+    try:
+        from src.config.settings import GRID  # local import: avoid hard dependency for generic scripts
+
+        settings_shape = (int(GRID.H), int(GRID.W))
+        if grid_shape_override is None:
+            grid_shape_override = settings_shape
+        elif tuple(grid_shape_override) != settings_shape:
+            print(f"[WARN] grid_shape_override={grid_shape_override} 与 settings.GRID={settings_shape} 不一致，已强制使用 settings.GRID。")
+            grid_shape_override = settings_shape
+
+        if grid_config_override is None:
+            grid_config_override = {"H": int(GRID.H), "W": int(GRID.W)}
+        else:
+            grid_config_override["H"] = int(GRID.H)
+            grid_config_override["W"] = int(GRID.W)
+
+        for k in ["min_lat", "max_lat", "min_lon", "max_lon"]:
+            if k not in grid_config_override and hasattr(GRID, k):
+                grid_config_override[k] = float(getattr(GRID, k))
+    except Exception:
+        pass
+
     if args.backup:
         backup_if_exists(stats_out)
         backup_if_exists(nav_out)
 
-    base_stats = compute_train_stats(processed_dir, h5_path, train_ids)
+    base_stats = compute_train_stats(processed_dir, h5_path, train_ids, grid_shape_override=grid_shape_override)
 
-    # 补齐 legacy grid_config 的地理边界（如果存在）
-    legacy_stats_file = processed_dir / "data_stats.json"
-    if legacy_stats_file.exists():
-        try:
-            legacy = json.loads(legacy_stats_file.read_text(encoding="utf-8"))
-            legacy_grid = legacy.get("grid_config") or {}
-            for k in ["min_lat", "max_lat", "min_lon", "max_lon"]:
-                if k in legacy_grid:
-                    base_stats["grid_config"][k] = float(legacy_grid[k])
-        except Exception:
-            pass
+    # 补齐 legacy/resample 的 grid_config 信息（地理边界等）
+    # 注意：H/W 已在 compute_train_stats 中固定为 grid_shape_override（若提供）。
+    if isinstance(grid_config_override, dict):
+        for k in ["min_lat", "max_lat", "min_lon", "max_lon"]:
+            if k in grid_config_override:
+                try:
+                    base_stats["grid_config"][k] = float(grid_config_override[k])
+                except Exception:
+                    pass
 
     created_at = datetime.now(tz=TZ_SHANGHAI).isoformat()
     source = {

@@ -1,60 +1,68 @@
 #!/bin/bash
-# === 服务器 B 最终稳健计算脚本 (PM2自动重启 + 隔离机制) ===
+# === 服务器 B 最终极速脚本 (112核专用版) ===
+# 特性: 并发50 + 12G内存/线程 + PM2集群联动 + 自动隔离
 
 # === 配置区 ===
 BUCKET_DIR="/tmp/buckets_part1_migrated"
 QUARANTINE_DIR="/tmp/buckets_part1_migrated/quarantine"
 
-# 【注意】你的输入路径：请根据你的实际情况确认是 'repo' 还是 '仓库'
-# 既然刚才 migrate_tasks.sh 能跑通，这里沿用 'repo' 路径
+# 假设你的 repo 软连接是存在的，如果不存在请改为 /media/liuzhihang/仓库/...
 INPUT_ROOT="/media/liuzhihang/repo/projects/wellspace/GLAN/PHASE1/spatial_temporal_merge"
 OUTPUT_ROOT="/media/liuzhihang/repo/projects/wellspace/GLAN_processed"
 
-# 【修复】日志文件改用当前目录，避免因目录名不匹配(repo/仓库)导致创建失败
+# 日志存当前目录
 LOG_FILE="./migration_problems.log"
 
-# 显式设置内存
-export NODE_OPTIONS="--max-old-space-size=16384"
+# === 内存设置 (关键) ===
+# 你的服务器有 768GB 内存。
+# 并发 50 * 12GB = 600GB，预留 168GB 给系统和后端，非常安全且高效。
+export NODE_OPTIONS="--max-old-space-size=12288"
 
-# 确保目录存在
+# 准备工作
 mkdir -p "$QUARANTINE_DIR"
 touch "$LOG_FILE"
 
-# === 关键函数：检查后端是否活着 ===
+# === 函数: 检查后端健康 (并发极高时，健康检查很重要) ===
 wait_for_backend() {
-    # 循环检查，直到后端响应
+    local fail_count=0
     while true; do
-        # 5秒超时去戳一下后端
-        if curl -s --max-time 5 "http://localhost:3001/api/weather/current" > /dev/null; then
+        # 3秒超时，检查后端
+        if curl -s --max-time 3 "http://localhost:3001/api/weather/current" > /dev/null; then
             return 0
         else
-            echo "⚠️ [后端无响应] 等待 5秒..."
-            sleep 5
-            # 注意：如果后端长时间没反应，下面的循环主逻辑里有重启机制
+            echo "⚠️ [后端拥堵] 等待 2秒..."
+            sleep 2
+            fail_count=$((fail_count+1))
+            
+            # 如果连续 10 次没反应 (20秒)，尝试重启后端
+            if [ $fail_count -ge 10 ]; then
+                echo "🔄 [自动维护] 后端响应过慢，触发 PM2 重载..."
+                pm2 reload shadow-backend
+                sleep 5
+                fail_count=0
+            fi
         fi
     done
 }
 
-# 读取任务列表
+# 读取任务
 mapfile -t files < <(ls "$BUCKET_DIR"/*_retry.txt 2>/dev/null)
 total=${#files[@]}
 count=0
 
-echo "=== 🚀 启动处理: 共 $total 个任务 (并发=4) ==="
+echo "=== 🚀 核动力模式启动: 处理 $total 个任务 (并发=50, 内存=12G) ==="
 
 for bf in "${files[@]}"; do
     count=$((count+1))
-    
-    # 再次检查文件是否存在（防止被移走）
     if [ ! -f "$bf" ]; then continue; fi
 
-    # 1. 在跑之前，确保后端是通的！
+    # 1. 跑之前测一下后端心跳
     wait_for_backend
 
     stem=$(basename "$bf" "_retry.txt")
     pure_stem=${stem%-sunlight}
     
-    # 寻找源文件
+    # 找源文件
     input_csv=$(find "$INPUT_ROOT" -name "${pure_stem}.csv" -print -quit)
     
     if [ -z "$input_csv" ]; then
@@ -72,43 +80,37 @@ for bf in "${files[@]}"; do
     echo "------------------------------------------------------"
     echo "⚡ [$count/$total] 处理: $pure_stem"
 
-    # 2. 执行计算 (超时30分钟，并发4)
-    # 注意：这里假设你的 .mjs 脚本就在当前目录下，或者请修正绝对路径
+    # 2. 执行计算
+    # 使用 $(pwd) 确保找到脚本
+    # --concurrency 50: 既然后端有 112 个核，前端并发 50 是很安全的
     timeout 1800s node "$(pwd)/batch-mobility-shadow.mjs" \
         --input "$(dirname "$input_csv")" \
         --output "$target_dir" \
         --backend "http://localhost:3001/api/analysis/shadow" \
         --weather "http://localhost:3001/api/weather/current" \
         --canopy "/media/liuzhihang/repo/projects/wellspace/Tree/HKtree_small.tif" \
-        --concurrency 4 \
+        --concurrency 50 \
         --buckets-file "$bf" \
         --target-file "$(basename "$input_csv")"
 
     EXIT_CODE=$?
 
-    # 3. 结果判定
+    # 3. 结果处理
     if [ $EXIT_CODE -eq 0 ]; then
-        # 成功
         rm "$bf"
         echo "✅ [完成] $pure_stem"
     else
-        # 失败/超时 -> 移入隔离区，防止卡死
-        echo "❌ [失败/超时] $pure_stem (Code: $EXIT_CODE) -> 移入隔离区"
+        echo "❌ [失败] $pure_stem (Code: $EXIT_CODE) -> 移入隔离区"
         echo "$pure_stem (Code: $EXIT_CODE)" >> "$LOG_FILE"
         mv "$bf" "$QUARANTINE_DIR/"
         
-        # 强制休息
-        sleep 5
-        
-        # === 核心自愈机制 ===
-        # 如果是超时(124)，说明后端可能死锁了，让 PM2 重启它！
+        # 如果超时(124)，说明后端可能有部分实例死锁，轻轻重启一下
         if [ $EXIT_CODE -eq 124 ]; then
-            echo "🔄 [超时检测] 后端疑似卡死，正在通过 PM2 重启..."
-            pm2 restart shadow-backend
-            sleep 10 # 等待重启完成
+            echo "🔄 [超时重置] 刷新后端集群状态..."
+            pm2 reload shadow-backend
+            sleep 5
         fi
     fi
 done
 
-echo "=== 所有队列处理完毕 ==="
-echo "失败任务已移至: $QUARANTINE_DIR"
+echo "=== 所有任务处理完毕 ==="

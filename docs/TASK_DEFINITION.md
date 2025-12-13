@@ -126,7 +126,7 @@ data/processed/splits/
     "date_range": ["...", "..."]
   },
   "grid_config": {"H": 400, "W": 800, "...": "..."},
-  "normalization": {"pos_min": [...], "pos_max": [...], "vel_mean": [...], "vel_std": [...], "nav_scale": 1.0},
+  "normalization": {"pos_min": [...], "pos_max": [...], "vel_mean": [...], "vel_std": [...], "nav_scale": 1.0, "nav_max_speed": 20.0},
   "time_stats": {"dt_stats_sample": {...}}
 }
 ```
@@ -150,6 +150,8 @@ data/processed/splits/
 
 - ADE：平均位移误差
 - FDE：终点位移误差
+- Fréchet：离散 Fréchet 距离（轨迹形状距离）
+- DTW：Dynamic Time Warping 距离（允许时间对齐的形状距离）
 - 报告口径（生成模型）：`mean / std / best-of-K`
   - `best-of-K`：对每条样本取 K 条生成里误差最小的那条，再在 batch 上取平均
 

@@ -71,6 +71,8 @@ time_features = {
 
 > 若需要物理速度（单位 `grid_cell/second`），在 dt-fixed 数据集上可使用：
 > `physical_velocity = vel / dt_fixed`。
+>
+> `nav_patch` 的 speed 通道会按 `nav_max_speed` 做归一化（见 `data_stats.json.normalization.nav_max_speed`）；若字段缺失则使用默认值（当前为 20.0）。
 
 ---
 

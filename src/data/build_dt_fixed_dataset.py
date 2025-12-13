@@ -211,6 +211,17 @@ def main() -> int:
     print(f"output_h5:            {output_h5}")
     print(f"dt_fixed={cfg.dt_fixed}s, min_length={cfg.min_length}, max_gap={cfg.max_gap}, dedup={cfg.dedup}")
 
+    grid_config = None
+    stats_in = in_dir / "data_stats.json"
+    if stats_in.exists():
+        try:
+            stats_obj = json.loads(stats_in.read_text(encoding="utf-8"))
+            grid = stats_obj.get("grid_config") or {}
+            if isinstance(grid, dict) and "H" in grid and "W" in grid:
+                grid_config = grid
+        except Exception:
+            grid_config = None
+
     # Load input splits (old ids)
     splits_in = in_dir / "splits"
     train_old = np.load(splits_in / "train_ids.npy").astype(np.int64)
@@ -306,6 +317,7 @@ def main() -> int:
         "output_processed_dir": str(out_dir),
         "input_h5": str(input_h5),
         "output_h5": str(output_h5),
+        "grid_config": grid_config,
         "config": asdict(cfg),
         "num_traj_in": int(len(traj_ptr) - 1),
         "num_traj_processed": int(n_traj),

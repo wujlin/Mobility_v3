@@ -15,6 +15,7 @@ from src.models.diffusion.diffusion_model import DiffusionTrajectoryModel
 from src.models.physics.physics_condition_diffusion import PhysicsConditionDiffusion
 from src.data.datasets_seq import SeqDataset
 from src.data.datasets_diffusion import DiffusionDataset
+from src.evaluation.micro_metrics import compute_dtw_per_sample, compute_frechet_per_sample
 
 
 def _load_state_dict(checkpoint_path: str, device: torch.device) -> dict:
@@ -165,6 +166,12 @@ def evaluate(args):
     fde_mean_sum = 0.0
     fde_std_sum = 0.0
     fde_best_sum = 0.0
+    frechet_mean_sum = 0.0
+    frechet_std_sum = 0.0
+    frechet_best_sum = 0.0
+    dtw_mean_sum = 0.0
+    dtw_std_sum = 0.0
+    dtw_best_sum = 0.0
 
     msd_sum = np.zeros((args.pred_len - 1,), dtype=np.float64)
     msd_count = np.zeros((args.pred_len - 1,), dtype=np.int64)
@@ -199,6 +206,8 @@ def evaluate(args):
 
             ade_list = []
             fde_list = []
+            frechet_list = []
+            dtw_list = []
 
             for k in range(K):
                 if args.model_type == 'physics':
@@ -216,6 +225,11 @@ def evaluate(args):
                 ade_list.append(ade.astype(np.float32))
                 fde_list.append(fde.astype(np.float32))
 
+                frechet = compute_frechet_per_sample(pred_pos, gt_pos)  # (B,)
+                dtw = compute_dtw_per_sample(pred_pos, gt_pos)  # (B,)
+                frechet_list.append(frechet.astype(np.float32))
+                dtw_list.append(dtw.astype(np.float32))
+
                 # macro accumulation over generated samples
                 _accumulate_msd(pred_pos, msd_sum, msd_count)
                 rog = _accumulate_rog(pred_pos)
@@ -231,6 +245,8 @@ def evaluate(args):
 
             ade_k = np.stack(ade_list, axis=0)  # (K, B)
             fde_k = np.stack(fde_list, axis=0)  # (K, B)
+            frechet_k = np.stack(frechet_list, axis=0)  # (K, B)
+            dtw_k = np.stack(dtw_list, axis=0)  # (K, B)
 
             ade_mean = ade_k.mean(axis=0)
             ade_std = ade_k.std(axis=0)
@@ -238,6 +254,12 @@ def evaluate(args):
             fde_mean = fde_k.mean(axis=0)
             fde_std = fde_k.std(axis=0)
             fde_best = fde_k.min(axis=0)
+            frechet_mean = frechet_k.mean(axis=0)
+            frechet_std = frechet_k.std(axis=0)
+            frechet_best = frechet_k.min(axis=0)
+            dtw_mean = dtw_k.mean(axis=0)
+            dtw_std = dtw_k.std(axis=0)
+            dtw_best = dtw_k.min(axis=0)
 
             B = int(ade_mean.shape[0])
             total_n += B
@@ -247,6 +269,12 @@ def evaluate(args):
             fde_mean_sum += float(np.sum(fde_mean))
             fde_std_sum += float(np.sum(fde_std))
             fde_best_sum += float(np.sum(fde_best))
+            frechet_mean_sum += float(np.sum(frechet_mean))
+            frechet_std_sum += float(np.sum(frechet_std))
+            frechet_best_sum += float(np.sum(frechet_best))
+            dtw_mean_sum += float(np.sum(dtw_mean))
+            dtw_std_sum += float(np.sum(dtw_std))
+            dtw_best_sum += float(np.sum(dtw_best))
 
     if total_n == 0:
         raise RuntimeError("No samples were evaluated (empty dataset or too strict filtering).")
@@ -263,6 +291,12 @@ def evaluate(args):
         "FDE_mean": fde_mean_sum / total_n,
         "FDE_std": fde_std_sum / total_n,
         "FDE_best": fde_best_sum / total_n,
+        "Frechet_mean": frechet_mean_sum / total_n,
+        "Frechet_std": frechet_std_sum / total_n,
+        "Frechet_best": frechet_best_sum / total_n,
+        "DTW_mean": dtw_mean_sum / total_n,
+        "DTW_std": dtw_std_sum / total_n,
+        "DTW_best": dtw_best_sum / total_n,
         "MSD_1": float(msd_curve[0]) if msd_curve.size > 0 else 0.0,
         "MSD_5": float(msd_curve[4]) if msd_curve.size > 4 else 0.0,
         "MSD_10": float(msd_curve[9]) if msd_curve.size > 9 else 0.0,

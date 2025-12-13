@@ -42,6 +42,7 @@ class Normalizer:
             vel_mean=tuple(norm["vel_mean"]),
             vel_std=tuple(norm["vel_std"]),
             nav_scale=float(norm.get("nav_scale", 1.0)),
+            nav_max_speed=float(norm.get("nav_max_speed", NORM.nav_max_speed)),
         )
         return cls(cfg)
 

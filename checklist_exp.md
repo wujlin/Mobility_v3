@@ -173,6 +173,9 @@
   - [ ] 中观：路径效率（到达率、平均绕路率、平均速度）
   - [ ] 宏观：统计物理指标是否明显更接近真实
 
+> [!NOTE]
+> `src/training/evaluate.py` 会输出 ADE/FDE + Fréchet/DTW（以及 MSD/Rog）；生成模型统一按 `mean/std/best-of-K` 聚合。
+
 ---
 
 ## 5. 统一的对比与消融（核心表格）

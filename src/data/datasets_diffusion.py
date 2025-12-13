@@ -117,7 +117,7 @@ class DiffusionDataset(Dataset):
             patch = self.nav_field.get_patch(center_pos, self.nav_patch_size)
             
             # Nav patch is already normalized?
-            # NavField returns raw directions (unit) and speeds (m/s).
+            # NavField returns raw directions (unit) and speed as step displacement magnitude (grid_cell/step).
             # We should normalize speed. Direction is already mostly 0-1 range (well, -1 to 1).
             # Let's normalize speed channel.
             # patch shape (3, K, K). Channel 2 is speed.

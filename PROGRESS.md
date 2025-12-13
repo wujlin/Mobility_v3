@@ -112,7 +112,7 @@ python -m src.training.train_diffusion --model_type physics --data_path data/pro
 
 | 层次 | 指标 | 实现 |
 |-----|-----|-----|
-| 微观 | ADE, FDE, MSE_k | `micro_metrics.py` ✅ |
+| 微观 | ADE, FDE, Fréchet, DTW, MSE_k | `micro_metrics.py` ✅ |
 | 宏观 | MSD, Rog | `macro_metrics.py` ✅ |
 
 ---

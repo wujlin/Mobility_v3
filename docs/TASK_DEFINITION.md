@@ -280,7 +280,7 @@ python -m src.utils.sanity_check --data_path data/processed_dt30 --strict --expe
 
 | 层次 | 指标 | 说明 |
 |-----|------|-----|
-| 微观 | ADE, FDE, best-of-K | 单条轨迹误差 |
+| 微观 | ADE, FDE, Fréchet, DTW（mean/std/best-of-K） | 单条轨迹误差 |
 | 中观 | (v2) 路径分布, OD 匹配 | 需要 road-level |
 | 宏观 | MSD 曲线, Rog 分布 | 物理是否在帮忙 |
 

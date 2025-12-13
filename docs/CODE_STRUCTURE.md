@@ -291,7 +291,7 @@ python -m src.training.train_diffusion \
 
 ```text
 src/evaluation/
-├── micro_metrics.py  # ADE/FDE/MSE_k
+├── micro_metrics.py  # ADE/FDE/Fréchet/DTW/MSE_k
 └── macro_metrics.py  # MSD/Rog（step-based；论文版需 dt_fixed）
 ```
 

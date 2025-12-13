@@ -1,5 +1,5 @@
 {
-  "created_at": "2025-12-13T11:15:26.003923+08:00",
+  "created_at": "2025-12-13T15:43:42.930498+08:00",
   "source": {
     "split": "train",
     "trajectory_ids_file": "splits/train_ids.npy",
@@ -12,12 +12,8 @@
     ]
   },
   "grid_config": {
-    "H": 400,
-    "W": 800,
-    "min_lat": 22.45,
-    "max_lat": 22.85,
-    "min_lon": 113.75,
-    "max_lon": 114.65
+    "H": 401,
+    "W": 799
   },
   "normalization": {
     "pos_min": [

@@ -4,7 +4,7 @@
 > 1) dt-fixed（30s）下 pipeline 是否严格可复现、无泄漏？  
 > 2) Data-only Diffusion/Physics Diffusion 在 **dt 语义明确** 的条件下，微观/宏观指标是否仍成立？  
 >
-> **重要边界**：本文件只基于仓库内已有的产物做事实总结。当前 Phase B 仍缺少 Diffusion/Physics 的 **320 条 condition quick eval** 与 **全量 test eval**，因此任何结论都必须标注为 *preliminary*（详见第 6 节）。
+> **重要边界**：本文件只基于仓库内已有的产物做事实总结。当前 Phase B 已补齐 **320 条 condition quick eval**，但仍缺少 **更大规模/全量 test eval + 多随机种子复现**，因此任何结论都必须标注为 *preliminary*（详见第 6 节）。
 
 ---
 
@@ -85,48 +85,44 @@ Baseline（从权重推断）：
 
 ### 4.1 评估产物路径
 
-- Baseline quick（320 条 condition）：`data/experiments/baseline_b_dt30_eval_quick/metrics.json`
-- b1 子集（32 条 condition，对齐同一批样本的最小闭环）：
-  - Baseline：`data/experiments/baseline_b_dt30_eval_b1/metrics.json`
-  - Diffusion：`data/experiments/diff_b_dt30_eval_b1/metrics.json`
-  - Physics：`data/experiments/physics_b_dt30_eval_b1/metrics.json`
+- Quick Eval（320 条 condition，K=20）：  
+  - Baseline：`data/experiments/baseline_b_dt30_eval_quick/metrics.json`（+ `samples.npz`）  
+  - Diffusion：`data/experiments/diff_b_dt30_eval_quick/metrics.json`（+ `samples.npz`）  
+  - Physics：`data/experiments/physics_b_dt30_eval_quick/metrics.json`（+ `samples.npz`）
+- b1 子集（32 条 condition，debug 用的最小闭环，避免跑太久）：  
+  - `data/experiments/*_b_dt30_eval_b1/`
 
-### 4.2 微观指标（b1 子集，越小越好）
+### 4.2 微观指标（Quick Eval：320 条 condition，越小越好）
 
-| 模型 | K | ADE_mean | FDE_mean | Fréchet_mean | DTW_mean |
-|---|---:|---:|---:|---:|---:|
-| Baseline | 1 | 5.012 | 6.357 | 6.885 | 44.810 |
-| Diffusion | 20 | 7.945 | 13.907 | 14.313 | 84.483 |
-| Physics | 20 | 7.550 | 12.814 | 13.238 | 79.008 |
+> 说明：Diffusion/Physics 的 `*_std` 是 **每个 condition 内 K 次采样的波动**；`*_best` 为 best-of-K（oracle 上界，用于衡量覆盖潜力）。
+
+| 模型 | K | ADE_mean | ADE_std | ADE_best | FDE_mean | FDE_std | FDE_best | Fréchet_mean | Fréchet_std | Fréchet_best | DTW_mean | DTW_std | DTW_best |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| Baseline | 1 | 5.467 | 0.000 | 5.467 | 8.855 | 0.000 | 8.855 | 9.234 | 0.000 | 9.234 | 54.496 | 0.000 | 54.496 |
+| Diffusion | 20 | 6.741 | 2.651 | 2.836 | 11.636 | 5.025 | 3.950 | 11.838 | 4.956 | 4.433 | 72.064 | 33.670 | 26.194 |
+| Physics | 20 | 6.744 | 2.926 | 2.510 | 11.644 | 5.556 | 3.419 | 11.863 | 5.464 | 4.028 | 71.981 | 36.824 | 22.623 |
 
 **现象（必须正视）**：
 
-- 在该 32 条子集上，Diffusion/Physics 的微观误差 **显著劣于 Baseline**；Physics 相对 Diffusion 有一致的小幅改善，但不足以追平 Baseline。
+- 在该 quick 子集上，Diffusion/Physics 的 **mean 口径**微观误差显著劣于 Baseline（ADE/FDE/Fréchet/DTW 均 ↑约 23–32%）。  
+- Physics 的 **mean** 与 Diffusion 基本持平，但 **best-of-K** 明显更好（四个指标均比 Diffusion 的 best-of-K 低约 9–14%），说明 nav_field 条件更像是在提升“覆盖潜力/上界”，而不是提升“典型样本质量”。
 
-> 这与 Phase A（Physics 在微观指标上优于 Baseline）的趋势不同，提示 Phase B 的训练/采样/容量需要进一步排查与调参（见第 6 节）。
+> 这与 Phase A（Physics 在 mean 口径上优于 Baseline）的趋势不同：Phase B(dt30) 下 Baseline 很强，而 Diffusion/Physics 出现明显的“低位移幅度/偏收缩”问题（见 4.3）。
 
-### 4.3 宏观指标与 GT 对照（b1 子集）
+### 4.3 宏观指标与 GT 对照（Quick Eval：同 320 条 condition）
 
 | 指标 | GT | Baseline | Diffusion | Physics |
 |---|---:|---:|---:|---:|
-| MSD_1 | 5.917 | 2.100 | 2.314 | 3.365 |
-| MSD_5 | 108.282 | 50.899 | 32.701 | 47.083 |
-| MSD_10 | 352.869 | 198.284 | 96.700 | 134.381 |
-| Rog | 6.455 | 4.683 | 3.224 | 4.035 |
+| MSD_1 | 5.345 | 3.322 | 2.136 | 2.578 |
+| MSD_5 | 103.678 | 81.603 | 32.945 | 38.700 |
+| MSD_10 | 349.740 | 304.099 | 100.948 | 116.869 |
+| Rog | 5.247 | 5.494 | 3.056 | 3.435 |
 
 **宏观解读（preliminary）**：
 
-- 三个模型在该子集上整体偏“收缩”（MSD/Rog < GT），其中 Diffusion 最明显。
-- Physics 相对 Diffusion 的 MSD/Rog 更大（更接近 GT），说明 nav_field 条件对“运动幅度”有正向拉回作用；但仍未达到 GT。
-
-### 4.4 Baseline quick（320 条 condition）补充（仅 Baseline）
-
-`baseline_b_dt30_eval_quick` 显示（320 条子集）：
-
-- 微观：ADE_mean=5.466，FDE_mean=8.850
-- 宏观对照：Rog=5.492 vs GT_Rog=5.247（相对误差约 4.7%），但 MSD_1/5/10 仍明显偏低（步位移方差不足）。
-
-> 注意：b1 与 quick 的子集不同，不能直接做跨表格结论；这里只用于展示“Baseline 在不同子集上的稳定性区间”。
+- Baseline 的 Rog 与 GT 很接近（约 4.7% 相对误差），MSD 也相对更接近（尤其 MSD_10）。  
+- Diffusion/Physics 的 MSD 与 Rog 明显偏低，表现为生成轨迹整体“收缩/走不动”，导致微观误差（尤其 FDE）偏大。  
+- Physics 相对 Diffusion 的 MSD/Rog 更大（更接近 GT），说明 nav_field 条件确实在“拉回运动幅度”，但目前仍不足以达到可论文结论的水平。
 
 ---
 
@@ -142,12 +138,15 @@ Phase B 的“论文级图件”建议与 Phase A 保持同一风格，至少包
 
 对应脚本见：`src/visualization/plot_phase_b_report.py`（与 Phase A 脚本保持同风格）。
 
-运行命令（默认读取 b1 子集的三组评估目录，并输出 PDF+PNG）：
+运行命令（读取 quick 320 的三组评估目录，并输出 PDF+PNG）：
 
 ```bash
 MPLCONFIGDIR=/tmp/mplconfig \
   ~/miniconda3/envs/emotion/bin/python -m src.visualization.plot_phase_b_report \
-  --out_dir data/experiments/phase_b_report/figures
+  --baseline_dir data/experiments/baseline_b_dt30_eval_quick \
+  --diff_dir data/experiments/diff_b_dt30_eval_quick \
+  --physics_dir data/experiments/physics_b_dt30_eval_quick \
+  --out_dir data/experiments/phase_b_report/figures_quick
 ```
 
 ---
@@ -160,9 +159,8 @@ MPLCONFIGDIR=/tmp/mplconfig \
 
 必须在 **同一套 dt30 产物** 上完成：
 
-- Diffusion quick（320 条，`K=20, diff_steps=100`）
-- Physics quick（320 条，`K=20, diff_steps=100`）
-- （建议）更稳的中等规模：`max_batches=200`（或全量）
+- （已完成）Diffusion/Physics quick（320 条，`K=20, diff_steps=100`）
+- （下一步）更稳的中等规模：`max_batches=200`（或全量）
 - 多随机种子（至少 3 个）验证趋势是否稳定
 
 ### 6.2 如果 Phase B 仍然“Baseline > Diffusion/Physics”（需要立刻排雷）

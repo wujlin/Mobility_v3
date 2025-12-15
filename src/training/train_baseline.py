@@ -6,14 +6,24 @@ import argparse
 import time
 import os
 import numpy as np
+import random
 
 from src.models.seq.seq_baseline import SeqBaseline
 from src.data.datasets_seq import SeqDataset
 from src.config.settings import GRID, NORM
 
+def _set_seed(seed: int) -> None:
+    random.seed(int(seed))
+    np.random.seed(int(seed))
+    torch.manual_seed(int(seed))
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(int(seed))
+
 def train(args):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print(f"Using device: {device}")
+    _set_seed(int(args.seed))
+    print(f"Using seed: {int(args.seed)}")
     
     # 1. Data
     print("Loading datasets...")
@@ -28,7 +38,15 @@ def train(args):
         print(f"Using split={args.split}: {len(traj_ids)} trajectories ({split_file})")
 
     train_dataset = SeqDataset(args.data_path, obs_len=args.obs_len, pred_len=args.pred_len, traj_ids=traj_ids)
-    train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=4)
+    g = torch.Generator()
+    g.manual_seed(int(args.seed))
+    train_loader = DataLoader(
+        train_dataset,
+        batch_size=args.batch_size,
+        shuffle=True,
+        num_workers=int(args.num_workers),
+        generator=g,
+    )
     
     # 2. Model
     model = SeqBaseline(
@@ -43,6 +61,21 @@ def train(args):
     # 3. Setup Logging
     save_dir = Path(f"data/experiments/{args.exp_name}")
     save_dir.mkdir(parents=True, exist_ok=True)
+
+    run_config = {
+        "model_type": "baseline",
+        "data_path": args.data_path,
+        "split": args.split,
+        "splits_dir": args.splits_dir,
+        "obs_len": args.obs_len,
+        "pred_len": args.pred_len,
+        "hidden_dim": args.hidden_dim,
+        "batch_size": args.batch_size,
+        "epochs": args.epochs,
+        "lr": args.lr,
+        "seed": int(args.seed),
+        "num_workers": int(args.num_workers),
+    }
     
     print(f"Start training {args.exp_name}...")
     model.train()
@@ -79,6 +112,7 @@ def train(args):
             'model_state_dict': model.state_dict(),
             'optimizer_state_dict': optimizer.state_dict(),
             'loss': avg_loss,
+            'config': run_config,
         }, save_dir / "last.pt")
         
         if epoch % 5 == 0:
@@ -96,6 +130,8 @@ if __name__ == "__main__":
     parser.add_argument('--batch_size', type=int, default=32)
     parser.add_argument('--epochs', type=int, default=50)
     parser.add_argument('--lr', type=float, default=1e-3)
+    parser.add_argument('--seed', type=int, default=0)
+    parser.add_argument('--num_workers', type=int, default=4)
     
     args = parser.parse_args()
     train(args)

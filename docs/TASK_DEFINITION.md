@@ -197,7 +197,8 @@ python -m src.training.train_diffusion \
   --model_type physics \
   --nav_file data/processed/nav_field.npz \
   --split train \
-  --exp_name physics_v1_strict
+  --exp_name physics_v1_strict \
+  --seed 0
 ```
 
 评估（按 split，生成模型默认 K=20）：
@@ -210,7 +211,8 @@ python -m src.training.evaluate \
   --checkpoint data/experiments/physics_v1_strict/last.pt \
   --nav_file data/processed/nav_field.npz \
   --split test \
-  --num_samples_per_condition 20
+  --num_samples_per_condition 20 \
+  --seed 0
 ```
 
 ---
@@ -282,7 +284,7 @@ python -m src.utils.sanity_check --data_path data/processed_dt30 --strict --expe
 |-----|------|-----|
 | 微观 | ADE, FDE, Fréchet, DTW（mean/std/best-of-K） | 单条轨迹误差 |
 | 中观 | (v2) 路径分布, OD 匹配 | 需要 road-level |
-| 宏观 | MSD 曲线, Rog 分布 | 物理是否在帮忙 |
+| 宏观 | MSD 曲线, Rog 分布（同时输出 GT 对照） | 物理是否在帮忙 |
 
 **消融实验**：
 

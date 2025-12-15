@@ -4,6 +4,8 @@ from pathlib import Path
 import argparse
 import json
 import numpy as np
+import random
+from typing import Optional
 try:
     from tqdm import tqdm
 except Exception:  # pragma: no cover
@@ -18,6 +20,14 @@ from src.data.datasets_diffusion import DiffusionDataset
 from src.evaluation.micro_metrics import compute_dtw_per_sample, compute_frechet_per_sample
 
 
+def _set_seed(seed: int) -> None:
+    random.seed(int(seed))
+    np.random.seed(int(seed))
+    torch.manual_seed(int(seed))
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(int(seed))
+
+
 def _load_state_dict(checkpoint_path: str, device: torch.device) -> dict:
     ckpt = torch.load(checkpoint_path, map_location=device)
     if isinstance(ckpt, dict) and "model_state_dict" in ckpt:
@@ -28,7 +38,7 @@ def _load_state_dict(checkpoint_path: str, device: torch.device) -> dict:
     raise TypeError(f"Unsupported checkpoint format: {type(ckpt)}")
 
 
-def _infer_ckpt_model_type(state_dict: dict) -> str | None:
+def _infer_ckpt_model_type(state_dict: dict) -> Optional[str]:
     keys = state_dict.keys()
     if any(str(k).startswith("nav_encoder.") for k in keys):
         return "physics"
@@ -39,7 +49,7 @@ def _infer_ckpt_model_type(state_dict: dict) -> str | None:
     return None
 
 
-def _infer_hidden_dim(model_type: str, state_dict: dict) -> int | None:
+def _infer_hidden_dim(model_type: str, state_dict: dict) -> Optional[int]:
     if model_type == "baseline":
         w = state_dict.get("head.weight")
         return int(w.shape[1]) if hasattr(w, "shape") and len(w.shape) == 2 else None
@@ -83,6 +93,9 @@ def _accumulate_rog(pred_pos: np.ndarray) -> np.ndarray:
     return np.sqrt(sq)
 
 def evaluate(args):
+    _set_seed(int(args.seed))
+    print(f"Using seed: {int(args.seed)}")
+
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print(f"Using device: {device}")
     
@@ -116,7 +129,11 @@ def evaluate(args):
         
     # IMPORTANT: denormalization must use the same stats as the dataset.
     norm = dataset.normalizer
-    dataloader = DataLoader(dataset, batch_size=args.batch_size, shuffle=False, num_workers=4)
+    try:
+        dataloader = DataLoader(dataset, batch_size=args.batch_size, shuffle=False, num_workers=int(args.num_workers))
+    except PermissionError:
+        print("[WARN] DataLoader 多进程初始化失败，已自动降级为 num_workers=0（单进程加载）。")
+        dataloader = DataLoader(dataset, batch_size=args.batch_size, shuffle=False, num_workers=0)
     
     # 2. Load Model (auto-align hyperparams to checkpoint to avoid size mismatch)
     print(f"Loading {args.model_type} model from {args.checkpoint}...")
@@ -178,6 +195,11 @@ def evaluate(args):
     rog_sum = 0.0
     rog_count = 0
 
+    gt_msd_sum = np.zeros((args.pred_len - 1,), dtype=np.float64)
+    gt_msd_count = np.zeros((args.pred_len - 1,), dtype=np.int64)
+    gt_rog_sum = 0.0
+    gt_rog_count = 0
+
     save_preds = []
     save_targets = []
     
@@ -203,6 +225,12 @@ def evaluate(args):
             gt_vel = norm.denormalize_vel(gt_vel_norm)
 
             gt_pos = _integrate_positions(start_pos, gt_vel)  # (B, F, 2)
+
+            # GT macro metrics (对照用；每个 condition 只有一条 GT)
+            _accumulate_msd(gt_pos, gt_msd_sum, gt_msd_count)
+            gt_rog = _accumulate_rog(gt_pos)
+            gt_rog_sum += float(np.sum(gt_rog))
+            gt_rog_count += int(gt_rog.shape[0])
 
             ade_list = []
             fde_list = []
@@ -280,8 +308,10 @@ def evaluate(args):
         raise RuntimeError("No samples were evaluated (empty dataset or too strict filtering).")
 
     msd_curve = (msd_sum / np.maximum(msd_count, 1)).astype(np.float64)
+    gt_msd_curve = (gt_msd_sum / np.maximum(gt_msd_count, 1)).astype(np.float64)
 
     results = {
+        "seed": int(args.seed),
         "split": args.split,
         "num_conditions": int(total_n),
         "K": int(K),
@@ -302,6 +332,13 @@ def evaluate(args):
         "MSD_10": float(msd_curve[9]) if msd_curve.size > 9 else 0.0,
         "msd_curve": msd_curve.tolist(),
         "Rog": (rog_sum / rog_count) if rog_count > 0 else 0.0,
+
+        # Ground-truth macro metrics (paper-ready 对照)
+        "GT_MSD_1": float(gt_msd_curve[0]) if gt_msd_curve.size > 0 else 0.0,
+        "GT_MSD_5": float(gt_msd_curve[4]) if gt_msd_curve.size > 4 else 0.0,
+        "GT_MSD_10": float(gt_msd_curve[9]) if gt_msd_curve.size > 9 else 0.0,
+        "GT_msd_curve": gt_msd_curve.tolist(),
+        "GT_Rog": (gt_rog_sum / gt_rog_count) if gt_rog_count > 0 else 0.0,
     }
 
     print(json.dumps(results, ensure_ascii=False, indent=2))
@@ -336,8 +373,11 @@ if __name__ == "__main__":
     parser.add_argument('--pred_len', type=int, default=12)
     parser.add_argument('--hidden_dim', type=int, default=128) # check defaults
     parser.add_argument('--diff_steps', type=int, default=100)
+
+    parser.add_argument('--seed', type=int, default=0)
     
     parser.add_argument('--batch_size', type=int, default=32)
+    parser.add_argument('--num_workers', type=int, default=4, help="DataLoader workers; 0 for single-process (WSL/权限受限环境建议 0)")
     parser.add_argument('--num_samples_per_condition', type=int, default=20, help="K for diffusion/physics (baseline uses 1)")
     parser.add_argument('--save_samples', type=int, default=100, help="number of (pred,target) pairs to save")
     parser.add_argument('--max_batches', type=int, default=None, help="limit evaluation batches for quick runs")

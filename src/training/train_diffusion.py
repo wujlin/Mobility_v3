@@ -6,15 +6,25 @@ import argparse
 import time
 import os
 import numpy as np
+import random
 
 from src.models.diffusion.diffusion_model import DiffusionTrajectoryModel
 from src.models.physics.physics_condition_diffusion import PhysicsConditionDiffusion
 from src.models.physics.macro_regularizer import MacroRegularizer
 from src.data.datasets_diffusion import DiffusionDataset
 
+def _set_seed(seed: int) -> None:
+    random.seed(int(seed))
+    np.random.seed(int(seed))
+    torch.manual_seed(int(seed))
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(int(seed))
+
 def train(args):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print(f"Using device: {device}")
+    _set_seed(int(args.seed))
+    print(f"Using seed: {int(args.seed)}")
     
     # 1. Data
     print("Loading datasets...")
@@ -39,7 +49,15 @@ def train(args):
         nav_patch_size=args.patch_size,
         traj_ids=traj_ids,
     )
-    dataloader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True, num_workers=4)
+    g = torch.Generator()
+    g.manual_seed(int(args.seed))
+    dataloader = DataLoader(
+        dataset,
+        batch_size=args.batch_size,
+        shuffle=True,
+        num_workers=int(args.num_workers),
+        generator=g,
+    )
     
     # 2. Model
     if args.model_type == 'physics':
@@ -87,6 +105,8 @@ def train(args):
         "batch_size": args.batch_size,
         "epochs": args.epochs,
         "lr": args.lr,
+        "seed": int(args.seed),
+        "num_workers": int(args.num_workers),
     }
     
     model.train()
@@ -171,6 +191,8 @@ if __name__ == "__main__":
     parser.add_argument('--batch_size', type=int, default=32)
     parser.add_argument('--epochs', type=int, default=50)
     parser.add_argument('--lr', type=float, default=1e-3)
+    parser.add_argument('--seed', type=int, default=0)
+    parser.add_argument('--num_workers', type=int, default=4)
     
     args = parser.parse_args()
     

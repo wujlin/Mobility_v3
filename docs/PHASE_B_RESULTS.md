@@ -78,6 +78,7 @@ Phase B 的主线很简单：把 Phase A 的“step-based 趋势验证”升级�
 Baseline（从权重推断）：
 
 - `hidden_dim=128`
+- `data/experiments/baseline_b_dt30/last.pt` 为 legacy 产物（缺少 `config` 字段）；论文版建议重训并记录完整训练配置。
 
 ---
 
@@ -123,6 +124,19 @@ Baseline（从权重推断）：
 - Baseline 的 Rog 与 GT 很接近（约 4.7% 相对误差），MSD 也相对更接近（尤其 MSD_10）。  
 - Diffusion/Physics 的 MSD 与 Rog 明显偏低，表现为生成轨迹整体“收缩/走不动”，导致微观误差（尤其 FDE）偏大。  
 - Physics 相对 Diffusion 的 MSD/Rog 更大（更接近 GT），说明 nav_field 条件确实在“拉回运动幅度”，但目前仍不足以达到可论文结论的水平。
+
+### 4.4 诊断证据：收缩/“走不动”不是猜测（基于保存样本）
+
+> 说明：以下统计来自各模型 quick eval 目录下的 `samples.npz`（默认仅保存 `k=0` 的那条生成样本，`N=200`）。
+> 这里的 `path_len` 定义为未来轨迹的累计位移长度 $\sum_t \lVert p_{t}-p_{t-1}\rVert$（单位：grid cell）。
+
+| 模型 | path_len（pred, mean±std） | path_len（GT, mean±std） |
+|---|---:|---:|
+| Baseline | 16.466 ± 6.860 | 16.738 ± 10.885 |
+| Diffusion | 12.135 ± 7.498 | 16.738 ± 10.885 |
+| Physics | 13.190 ± 7.600 | 16.738 ± 10.885 |
+
+结论：Diffusion/Physics 在该子集上确实存在明显“偏短/偏收缩”，Physics 能部分缓解但仍不足以追平 GT 的运动幅度。
 
 ---
 
@@ -171,5 +185,141 @@ MPLCONFIGDIR=/tmp/mplconfig \
 2. **容量/批大小是否导致欠拟合**：`hidden_dim=64 + batch_size=2048` 可能偏欠拟合（建议做 `hidden_dim=128`、`batch_size=512/1024` 的对照）。
 3. **归一化统计量是否正确**：确认 dt30 的 `data_stats.json` 来自 train split，且训练/评估都读取 dt30 目录下的 stats（目前 sanity check 已 PASS）。
 4. **OD 条件是否有效**：检查 cond 编码是否被模型使用（可做 ablation：只用 obs vs obs+OD）。
+
+### 6.3 针对评审建议的快速验证（h=128, batch=512, lr=3e-4, epochs=10）
+
+评审意见见：`docs/PHASE_B_REVIEW.md`，核心假设是：
+- Phase B 下 deterministic Baseline 更容易学到条件均值（strong baseline effect）；
+- Diffusion/Physics 可能因容量不足（`hidden_dim=64`）产生欠拟合与“收缩”。
+
+为验证该假设，我们做了最小成本的扩容快速实验（dt30，train split 训练；test quick 评估，320 条 condition）：
+
+- Diffusion 训练：`data/experiments/diff_b_dt30_h128_b512_lr3e-4_e10/last.pt`
+- Physics 训练：`data/experiments/physics_b_dt30_h128_b512_lr3e-4_e10/last.pt`
+- Diffusion 评估：`data/experiments/diff_b_dt30_h128_b512_lr3e-4_e10_eval_quick/metrics.json`
+- Physics 评估：`data/experiments/physics_b_dt30_h128_b512_lr3e-4_e10_eval_quick/metrics.json`
+
+结果（节选，mean 口径；越小越好）：
+
+| 模型 | hidden_dim | epochs | ADE_mean | FDE_mean | Fréchet_mean | DTW_mean | MSD_10 | Rog |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| Diffusion（原） | 64 | 50 | 6.741 | 11.636 | 11.838 | 72.064 | 100.948 | 3.056 |
+| Physics（原） | 64 | 50 | 6.744 | 11.644 | 11.863 | 71.981 | 116.869 | 3.435 |
+| Diffusion（h128,e10） | 128 | 10 | 7.180 | 12.230 | 12.463 | 77.940 | 110.161 | 3.159 |
+| Physics（h128,e10） | 128 | 10 | 6.862 | 11.798 | 12.009 | 73.941 | 111.111 | 3.147 |
+
+配套可视化（PDF+PNG）：
+
+```bash
+MPLCONFIGDIR=/tmp/mplconfig \
+  ~/miniconda3/envs/emotion/bin/python -m src.visualization.plot_phase_b_report \
+  --baseline_dir data/experiments/baseline_b_dt30_eval_quick \
+  --diff_dir data/experiments/diff_b_dt30_h128_b512_lr3e-4_e10_eval_quick \
+  --physics_dir data/experiments/physics_b_dt30_h128_b512_lr3e-4_e10_eval_quick \
+  --out_dir data/experiments/phase_b_report/figures_h128_e10
+```
+
+**解读（preliminary）**：
+
+- 单看 `epochs=10` 的快速验证，扩容并未显著改善 mean 口径，且宏观“收缩”问题仍存在（例如 `path_len`：Diffusion≈12.392，Physics≈12.153，GT≈16.738；来自各自 `samples.npz` 的 `N=200, k=0` 样本）。  
+- 该结果并不直接否定“容量不足”假设，更可能说明：**扩容 + 降 lr + 少量 epoch 尚未收敛**，需要跑到与原设置同量级的 epoch（例如 50/100）才能公平验证。
+
+### 6.4 下一轮最小“可证伪”实验（建议直接在 dt30 上做，避免重复已有实验）
+
+目标：用**同一套 dt30 产物**，把“容量不足/未收敛”这个最主要的工程假设先证伪或证实，再决定是否需要更大方法改动。
+
+建议只做最少的 2×3 个训练（Diffusion/Physics × seeds=0/1/2），每个训练后跑 quick + 中等规模评估。  
+（走 A 路线时，Baseline 不是主要竞争对手；Baseline 多 seed 重训仅作为 *reference*，可选。）
+
+```bash
+# 0) 强制使用 dt30 数据（单一真相源）
+DATA=data/processed_dt30/trajectories/shenzhen_trajectories.h5
+NAV=data/processed_dt30/nav_field.npz
+
+# 1) 训练：Diffusion / Physics（hidden_dim=128，epochs=100）
+#    说明：num_workers 在 Windows/WSL 建议 0；在 Linux 服务器可用 4/8。
+for SEED in 0 1 2; do
+  # （可选 reference）Baseline 重训（用于检查训练/评估环境是否一致）
+  # python -m src.training.train_baseline \
+  #   --data_path ${DATA} \
+  #   --split train \
+  #   --exp_name baseline_b_dt30_h128_b2048_lr1e-3_e50_s${SEED} \
+  #   --hidden_dim 128 --batch_size 2048 --lr 1e-3 --epochs 50 \
+  #   --num_workers 0 --seed ${SEED}
+
+  python -m src.training.train_diffusion \
+    --model_type diffusion \
+    --data_path ${DATA} \
+    --split train \
+    --exp_name diff_b_dt30_h128_b512_lr1e-3_e100_s${SEED} \
+    --hidden_dim 128 --batch_size 512 --lr 1e-3 --epochs 100 \
+    --num_workers 0 --seed ${SEED}
+
+  python -m src.training.train_diffusion \
+    --model_type physics \
+    --data_path ${DATA} \
+    --nav_file ${NAV} \
+    --split train \
+    --exp_name physics_b_dt30_h128_b512_lr1e-3_e100_s${SEED} \
+    --hidden_dim 128 --batch_size 512 --lr 1e-3 --epochs 100 \
+    --num_workers 0 --seed ${SEED}
+done
+
+# 2) 评估：quick（320 条 condition）+ mid（约 6400 条 condition）
+for SEED in 0 1 2; do
+  # （可选 reference）Baseline 评估（quick/mid）
+  # python -m src.training.evaluate \
+  #   --exp_name baseline_b_dt30_h128_b2048_lr1e-3_e50_s${SEED}_eval_quick \
+  #   --model_type baseline \
+  #   --data_path ${DATA} \
+  #   --checkpoint data/experiments/baseline_b_dt30_h128_b2048_lr1e-3_e50_s${SEED}/last.pt \
+  #   --split test --batch_size 32 --max_batches 10 --num_workers 0 \
+  #   --save_samples 200 --seed ${SEED}
+
+  python -m src.training.evaluate \
+    --exp_name diff_b_dt30_h128_b512_lr1e-3_e100_s${SEED}_eval_quick \
+    --model_type diffusion \
+    --data_path ${DATA} \
+    --checkpoint data/experiments/diff_b_dt30_h128_b512_lr1e-3_e100_s${SEED}/last.pt \
+    --split test --batch_size 32 --max_batches 10 --num_workers 0 \
+    --num_samples_per_condition 20 --diff_steps 100 --save_samples 200 --seed ${SEED}
+
+  python -m src.training.evaluate \
+    --exp_name physics_b_dt30_h128_b512_lr1e-3_e100_s${SEED}_eval_quick \
+    --model_type physics \
+    --data_path ${DATA} \
+    --checkpoint data/experiments/physics_b_dt30_h128_b512_lr1e-3_e100_s${SEED}/last.pt \
+    --nav_file ${NAV} \
+    --split test --batch_size 32 --max_batches 10 --num_workers 0 \
+    --num_samples_per_condition 20 --diff_steps 100 --save_samples 200 --seed ${SEED}
+
+  # python -m src.training.evaluate \
+  #   --exp_name baseline_b_dt30_h128_b2048_lr1e-3_e50_s${SEED}_eval_mid \
+  #   --model_type baseline \
+  #   --data_path ${DATA} \
+  #   --checkpoint data/experiments/baseline_b_dt30_h128_b2048_lr1e-3_e50_s${SEED}/last.pt \
+  #   --split test --batch_size 32 --max_batches 200 --num_workers 0 \
+  #   --save_samples 200 --seed ${SEED}
+
+  python -m src.training.evaluate \
+    --exp_name diff_b_dt30_h128_b512_lr1e-3_e100_s${SEED}_eval_mid \
+    --model_type diffusion \
+    --data_path ${DATA} \
+    --checkpoint data/experiments/diff_b_dt30_h128_b512_lr1e-3_e100_s${SEED}/last.pt \
+    --split test --batch_size 32 --max_batches 200 --num_workers 0 \
+    --num_samples_per_condition 20 --diff_steps 100 --save_samples 200 --seed ${SEED}
+
+  python -m src.training.evaluate \
+    --exp_name physics_b_dt30_h128_b512_lr1e-3_e100_s${SEED}_eval_mid \
+    --model_type physics \
+    --data_path ${DATA} \
+    --checkpoint data/experiments/physics_b_dt30_h128_b512_lr1e-3_e100_s${SEED}/last.pt \
+    --nav_file ${NAV} \
+    --split test --batch_size 32 --max_batches 200 --num_workers 0 \
+    --num_samples_per_condition 20 --diff_steps 100 --save_samples 200 --seed ${SEED}
+done
+```
+
+也可以直接用脚本一键执行（默认只跑 Diffusion/Physics，且会跳过已存在的产物）：`scripts/phase_b_step1_capacity_check.sh`。
 
 ---

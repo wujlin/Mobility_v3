@@ -221,6 +221,18 @@ def main() -> int:
                 grid_config = grid
         except Exception:
             grid_config = None
+    if grid_config is None:
+        # Fallback: keep resample_meta.json self-contained even if strict products are not built yet.
+        # Canonical grid definition lives in src/config/settings.py (docs/DATA_STRUCTURE.md).
+        try:
+            from src.config.settings import GRID
+
+            grid_config = {"H": int(GRID.H), "W": int(GRID.W)}
+            for k in ["min_lat", "max_lat", "min_lon", "max_lon"]:
+                if hasattr(GRID, k):
+                    grid_config[k] = float(getattr(GRID, k))
+        except Exception:
+            grid_config = None
 
     # Load input splits (old ids)
     splits_in = in_dir / "splits"

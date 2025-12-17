@@ -150,6 +150,7 @@ Phase B 的“论文级图件”建议与 Phase A 保持同一风格，至少包
 3. 同一条件下的轨迹叠图（GT + Deterministic L2 + Diffusion + Physics）
 4. ADE/FDE 的 CDF（基于保存样本）
 5. Rog 的分布（箱线图/小提琴图）
+6. 运动幅度诊断（mean step speed / path_len 的箱线图，用于展示“收缩/走不动”）
 
 对应脚本见：`src/visualization/plot_phase_b_report.py`（与 Phase A 脚本保持同风格）。
 
@@ -373,3 +374,68 @@ done
 
 - Physics 相对 Diffusion：在 **mean 口径**与 **best-of-K** 上均稳定更优（quick/mid 一致），且 best-of-K 的跨 seed 方差明显更小（更稳定的“覆盖上界”）。  
 - 但宏观 Rog 明显低于 GT（约 0.57–0.63×），说明 **生成分布仍存在收缩/走不动**；Physics 的 Rog 还略低于 Diffusion，提示 nav_field 可能在“提升上界”的同时把典型样本推向更保守的运动幅度，需要后续用分布指标（Energy Score/CRPS）+ 选样策略/正则进一步解决。
+
+---
+
+### 6.6 收缩问题的修正：Temperature ≠ Scale（必须解耦）
+
+**结论（先写死，避免误用）**：
+
+- **Temperature（采样噪声/随机性）**主要影响 *抖动/多样性*，不应被用来“撑大”轨迹位移幅度；提高 temperature 往往优先增加 high-frequency jitter（曲折、毛刺），会显著改变 `path_len`，但对 `Rog/MSD` 的提升不可控，且常导致 ADE/FDE 变差。
+- **Scale（`vel_scale`）**是对症下药：对 future `vel`（step displacement）做系统性缩放，直接控制物理幅度。它不会引入额外抖动，只改变整体运动尺度：
+  - `path_len` ∝ `vel_scale`
+  - `Rog` ∝ `vel_scale`
+  - `MSD` ∝ `vel_scale^2`
+
+因此，解决收缩必须优先用 `vel_scale`（或训练时的幅度正则），而不是 temperature。
+
+#### 6.6.1 可复现的 `vel_scale` 校准流程（推荐：val→test）
+
+1) **在 val split 上评估（vel_scale=1.0）**：
+
+```bash
+DATA=data/processed_dt30/trajectories/shenzhen_trajectories.h5
+NAV=data/processed_dt30/nav_field.npz
+
+# Diffusion
+python -m src.training.evaluate \
+  --exp_name diff_b_dt30_step1_val_eval \
+  --model_type diffusion \
+  --data_path ${DATA} \
+  --checkpoint data/experiments/diff_b_dt30_h128_b512_lr1e-3_e100_s0/last.pt \
+  --split val --batch_size 32 --max_batches 200 --num_workers 0 \
+  --num_samples_per_condition 20 --diff_steps 100 --save_samples 0 --seed 0
+
+# Physics
+python -m src.training.evaluate \
+  --exp_name physics_b_dt30_step1_val_eval \
+  --model_type physics \
+  --data_path ${DATA} \
+  --checkpoint data/experiments/physics_b_dt30_h128_b512_lr1e-3_e100_s0/last.pt \
+  --nav_file ${NAV} \
+  --split val --batch_size 32 --max_batches 200 --num_workers 0 \
+  --num_samples_per_condition 20 --diff_steps 100 --save_samples 0 --seed 0
+```
+
+2) **用校准工具计算推荐 `vel_scale`（优先 speed/path_len）**：
+
+```bash
+python -m src.utils.calibrate_vel_scale \
+  data/experiments/diff_b_dt30_step1_val_eval/metrics.json \
+  --prefer speed
+```
+
+3) **固定该 `vel_scale`，在 test split 复现评估**（这一步才写进论文主表，避免泄漏）：
+
+```bash
+python -m src.training.evaluate \
+  --exp_name diff_b_dt30_step1_test_eval_scaled \
+  --model_type diffusion \
+  --data_path ${DATA} \
+  --checkpoint data/experiments/diff_b_dt30_h128_b512_lr1e-3_e100_s0/last.pt \
+  --split test --batch_size 32 --max_batches 200 --num_workers 0 \
+  --num_samples_per_condition 20 --diff_steps 100 --save_samples 200 --seed 0 \
+  --vel_scale <FILL_FROM_CALIBRATION>
+```
+
+> 备注：若 `vel_scale` 能明显拉近 `gt_speed_mean/gt_path_len_mean` 但 `Rog/MSD` 仍偏小，则说明问题不止是尺度，还包含“时间相关性/方向持久性”不足；此时应进入训练级修复（例如幅度正则、objective/scheduler 改进）。

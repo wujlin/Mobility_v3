@@ -159,6 +159,10 @@ data/processed/splits/
 > - **确定性 L2 回归（SeqBaseline）**的优化目标是条件均值轨迹，主看 `ADE_mean/FDE_mean`（`K=1`）。  
 > - **生成式模型（Diffusion/Physics/CVAE 等）**主看 `best-of-K`（覆盖潜力上界）以及后续补充的分布指标（如 Energy Score/CRPS），避免把“均值回归器”当作多模态生成的主要竞争对手。
 
+> **收缩问题的处理（重要）**：  
+> 若发现生成轨迹的宏观幅度（`Rog/MSD/path_len`）系统性偏小，必须优先使用 **Scale（`vel_scale`）** 做幅度校准（val→test），而不是用采样 temperature/噪声强度去“撑大位移”（会引入抖动且不可控）。  
+> `src/training/evaluate.py` 支持 `--vel_scale`；若使用，需在论文中明确校准协议与是否对所有模型一致。
+
 > v1 的窗口预测长度通常不足以到达 trip 终点，因此 **Arrival Rate（到达率）不作为 v1 默认指标**；若要做需要定义“到达”与 rollout 策略。
 
 ---

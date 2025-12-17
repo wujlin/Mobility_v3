@@ -5,7 +5,7 @@ import argparse
 import json
 import numpy as np
 import random
-from typing import Optional
+from typing import Optional, Tuple
 try:
     from tqdm import tqdm
 except Exception:  # pragma: no cover
@@ -96,6 +96,33 @@ def _integrate_positions(start_pos: np.ndarray, vel: np.ndarray) -> np.ndarray:
         pos: (B, F, 2)
     """
     return start_pos[:, None, :] + np.cumsum(vel, axis=1)
+
+
+def _speed_sum_and_count_from_vel(vel: np.ndarray) -> Tuple[float, int]:
+    """
+    Compute summed step speed and count.
+
+    Args:
+        vel: (B, F, 2)
+    Returns:
+        (sum_speed, count)
+    """
+    speed = np.linalg.norm(vel, axis=-1)  # (B, F)
+    return float(np.sum(speed)), int(speed.size)
+
+
+def _path_len_sum_and_count_from_vel(vel: np.ndarray) -> Tuple[float, int]:
+    """
+    Compute summed path length (sum of step speeds) and trajectory count.
+
+    Args:
+        vel: (B, F, 2)
+    Returns:
+        (sum_path_len, count_traj)
+    """
+    speed = np.linalg.norm(vel, axis=-1)  # (B, F)
+    path_len = np.sum(speed, axis=1)  # (B,)
+    return float(np.sum(path_len)), int(path_len.shape[0])
 
 
 def _accumulate_msd(pred_pos: np.ndarray, msd_sum: np.ndarray, msd_count: np.ndarray) -> None:
@@ -231,6 +258,15 @@ def evaluate(args):
     rog_sum = 0.0
     rog_count = 0
 
+    pred_speed_sum = 0.0
+    pred_speed_count = 0
+    gt_speed_sum = 0.0
+    gt_speed_count = 0
+    pred_path_len_sum = 0.0
+    pred_path_len_count = 0
+    gt_path_len_sum = 0.0
+    gt_path_len_count = 0
+
     gt_msd_sum = np.zeros((args.pred_len - 1,), dtype=np.float64)
     gt_msd_count = np.zeros((args.pred_len - 1,), dtype=np.int64)
     gt_rog_sum = 0.0
@@ -260,6 +296,14 @@ def evaluate(args):
                 gt_vel_norm = batch['action'].cpu().numpy()
             gt_vel = norm.denormalize_vel(gt_vel_norm)
 
+            # GT step stats (per condition, single trajectory)
+            s_sum, s_cnt = _speed_sum_and_count_from_vel(gt_vel)
+            gt_speed_sum += s_sum
+            gt_speed_count += s_cnt
+            pl_sum, pl_cnt = _path_len_sum_and_count_from_vel(gt_vel)
+            gt_path_len_sum += pl_sum
+            gt_path_len_count += pl_cnt
+
             gt_pos = _integrate_positions(start_pos, gt_vel)  # (B, F, 2)
 
             # GT macro metrics (对照用；每个 condition 只有一条 GT)
@@ -282,6 +326,14 @@ def evaluate(args):
                     pred_vel_norm = model.sample_trajectory(obs, cond, args.pred_len)
 
                 pred_vel = norm.denormalize_vel(pred_vel_norm.cpu().numpy())
+                pred_vel = pred_vel * float(args.vel_scale)
+
+                s_sum, s_cnt = _speed_sum_and_count_from_vel(pred_vel)
+                pred_speed_sum += s_sum
+                pred_speed_count += s_cnt
+                pl_sum, pl_cnt = _path_len_sum_and_count_from_vel(pred_vel)
+                pred_path_len_sum += pl_sum
+                pred_path_len_count += pl_cnt
                 pred_pos = _integrate_positions(start_pos, pred_vel)
 
                 # micro errors per condition
@@ -353,6 +405,7 @@ def evaluate(args):
         "split": args.split,
         "num_conditions": int(total_n),
         "K": int(K),
+        "vel_scale": float(args.vel_scale),
         "ADE_mean": ade_mean_sum / total_n,
         "ADE_std": ade_std_sum / total_n,
         "ADE_best": ade_best_sum / total_n,
@@ -370,6 +423,10 @@ def evaluate(args):
         "MSD_10": float(msd_curve[9]) if msd_curve.size > 9 else 0.0,
         "msd_curve": msd_curve.tolist(),
         "Rog": (rog_sum / rog_count) if rog_count > 0 else 0.0,
+        "pred_speed_mean": (pred_speed_sum / max(pred_speed_count, 1)),
+        "gt_speed_mean": (gt_speed_sum / max(gt_speed_count, 1)),
+        "pred_path_len_mean": (pred_path_len_sum / max(pred_path_len_count, 1)),
+        "gt_path_len_mean": (gt_path_len_sum / max(gt_path_len_count, 1)),
 
         # Ground-truth macro metrics (paper-ready 对照)
         "GT_MSD_1": float(gt_msd_curve[0]) if gt_msd_curve.size > 0 else 0.0,
@@ -421,6 +478,7 @@ if __name__ == "__main__":
     parser.add_argument('--num_samples_per_condition', type=int, default=20, help="K for diffusion/physics (baseline uses 1)")
     parser.add_argument('--save_samples', type=int, default=100, help="number of (pred,target) pairs to save")
     parser.add_argument('--max_batches', type=int, default=None, help="limit evaluation batches for quick runs")
+    parser.add_argument('--vel_scale', type=float, default=1.0, help="对预测 future vel 做整体缩放（用于修正运动幅度偏小；与温度/噪声解耦）")
     
     args = parser.parse_args()
     evaluate(args)

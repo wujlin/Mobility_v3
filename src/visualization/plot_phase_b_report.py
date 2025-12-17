@@ -291,6 +291,75 @@ def plot_traj_overlay(
 
     _save_fig(fig, out_dir, "fig3_traj_overlay")
 
+def _step_speeds_from_pos(pos: np.ndarray) -> np.ndarray:
+    """
+    pos: (N, F, 2) future positions
+    returns: (N, F-1) step speeds computed from successive diffs
+
+    NOTE: samples.npz does not include the start position, so this omits the first step (start->pos[0]).
+    For relative comparisons across models/GT on the same saved samples, this approximation is acceptable.
+    """
+    if pos.ndim != 3 or pos.shape[-1] != 2:
+        raise ValueError(f"invalid pos shape: {pos.shape}")
+    if pos.shape[1] < 2:
+        return np.zeros((pos.shape[0], 0), dtype=np.float64)
+    diff = pos[:, 1:, :] - pos[:, :-1, :]
+    return np.linalg.norm(diff, axis=-1)
+
+
+def plot_amplitude_boxplot(
+    preds_by_model: Dict[str, np.ndarray],
+    target: np.ndarray,
+    out_dir: Path,
+) -> None:
+    set_style(context="paper", font_scale=1.2)
+
+    labels = ["GT"] + list(preds_by_model.keys())
+    colors = [PALETTE["GT"]] + [get_color(n) for n in preds_by_model.keys()]
+
+    gt_speed = _step_speeds_from_pos(target)
+    gt_mean_speed = gt_speed.mean(axis=1) if gt_speed.size else np.zeros((target.shape[0],), dtype=np.float64)
+    gt_path_len = gt_speed.sum(axis=1) if gt_speed.size else np.zeros((target.shape[0],), dtype=np.float64)
+
+    speed_data = [gt_mean_speed]
+    path_data = [gt_path_len]
+
+    for _, pred in preds_by_model.items():
+        sp = _step_speeds_from_pos(pred)
+        mean_sp = sp.mean(axis=1) if sp.size else np.zeros((pred.shape[0],), dtype=np.float64)
+        path = sp.sum(axis=1) if sp.size else np.zeros((pred.shape[0],), dtype=np.float64)
+        speed_data.append(mean_sp)
+        path_data.append(path)
+
+    fig, axes = plt.subplots(1, 2, figsize=(12.5, 4.8), constrained_layout=True)
+    for ax, data, title, ylabel in [
+        (axes[0], speed_data, "Mean step speed (saved samples)", "grid_cell/step (approx)"),
+        (axes[1], path_data, "Path length (saved samples)", "grid_cell (approx)"),
+    ]:
+        bp = ax.boxplot(
+            data,
+            tick_labels=labels,
+            patch_artist=True,
+            showfliers=False,
+            widths=0.55,
+        )
+        for patch, c in zip(bp["boxes"], colors):
+            patch.set_facecolor(c)
+            patch.set_alpha(0.75)
+            patch.set_edgecolor("black")
+            patch.set_linewidth(1.0)
+
+        for k in ["whiskers", "caps", "medians"]:
+            for line in bp[k]:
+                line.set_color("black")
+                line.set_linewidth(1.0)
+
+        ax.set_title(title)
+        ax.set_ylabel(ylabel)
+        ax.grid(True, axis="y", ls="--", alpha=0.35)
+
+    _save_fig(fig, out_dir, "fig6_amplitude_boxplot")
+
 
 def _read_dt_fixed_from_stats(processed_dir: Path) -> Optional[int]:
     stats = processed_dir / "data_stats.json"
@@ -388,6 +457,7 @@ def main() -> int:
     samples_metrics = {name: _compute_ade_fde_from_samples(pred, target) for name, pred in preds_by_model.items()}
     plot_error_cdf(samples=samples_metrics, out_dir=out_dir)
     plot_rog_boxplot(preds_by_model=preds_by_model, target=target, out_dir=out_dir)
+    plot_amplitude_boxplot(preds_by_model=preds_by_model, target=target, out_dir=out_dir)
 
     summary = {
         "dt_fixed_seconds": int(dt_fixed),

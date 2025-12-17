@@ -274,6 +274,7 @@ def evaluate(args):
 
     save_preds = []
     save_targets = []
+    save_start_pos = []
     
     print("Running Inference...")
     with torch.no_grad():
@@ -360,6 +361,7 @@ def evaluate(args):
                     take = min(remaining, pred_pos.shape[0])
                     save_preds.extend(pred_pos[:take])
                     save_targets.extend(gt_pos[:take])
+                    save_start_pos.extend(start_pos[:take])
 
             ade_k = np.stack(ade_list, axis=0)  # (K, B)
             fde_k = np.stack(fde_list, axis=0)  # (K, B)
@@ -446,7 +448,12 @@ def evaluate(args):
         json.dump(results, f, indent=4)
         
     if save_preds:
-        np.savez(out_dir / "samples.npz", preds=np.stack(save_preds, axis=0), targets=np.stack(save_targets, axis=0))
+        np.savez(
+            out_dir / "samples.npz",
+            preds=np.stack(save_preds, axis=0),
+            targets=np.stack(save_targets, axis=0),
+            start_pos=np.stack(save_start_pos, axis=0),
+        )
              
     print(f"Results saved to {out_dir}")
 

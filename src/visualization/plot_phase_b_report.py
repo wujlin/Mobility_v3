@@ -291,16 +291,28 @@ def plot_traj_overlay(
 
     _save_fig(fig, out_dir, "fig3_traj_overlay")
 
-def _step_speeds_from_pos(pos: np.ndarray) -> np.ndarray:
+def _step_speeds_from_pos(pos: np.ndarray, start_pos: Optional[np.ndarray] = None) -> np.ndarray:
     """
     pos: (N, F, 2) future positions
-    returns: (N, F-1) step speeds computed from successive diffs
+    start_pos: (N, 2) optional last observed position
+
+    returns:
+      - if start_pos is provided: (N, F) step speeds including the first step (start_pos -> pos[:,0])
+      - else: (N, F-1) step speeds computed from successive diffs (approx)
 
     NOTE: samples.npz does not include the start position, so this omits the first step (start->pos[0]).
     For relative comparisons across models/GT on the same saved samples, this approximation is acceptable.
     """
     if pos.ndim != 3 or pos.shape[-1] != 2:
         raise ValueError(f"invalid pos shape: {pos.shape}")
+    if start_pos is not None:
+        if start_pos.ndim != 2 or start_pos.shape[-1] != 2 or start_pos.shape[0] != pos.shape[0]:
+            raise ValueError(f"invalid start_pos shape: {start_pos.shape}, expected (N,2) with N={pos.shape[0]}")
+        first = pos[:, :1, :] - start_pos[:, None, :]
+        rest = pos[:, 1:, :] - pos[:, :-1, :] if pos.shape[1] >= 2 else np.zeros((pos.shape[0], 0, 2), dtype=pos.dtype)
+        diff = np.concatenate([first, rest], axis=1)
+        return np.linalg.norm(diff, axis=-1)
+
     if pos.shape[1] < 2:
         return np.zeros((pos.shape[0], 0), dtype=np.float64)
     diff = pos[:, 1:, :] - pos[:, :-1, :]
@@ -310,6 +322,7 @@ def _step_speeds_from_pos(pos: np.ndarray) -> np.ndarray:
 def plot_amplitude_boxplot(
     preds_by_model: Dict[str, np.ndarray],
     target: np.ndarray,
+    start_pos: Optional[np.ndarray],
     out_dir: Path,
 ) -> None:
     set_style(context="paper", font_scale=1.2)
@@ -317,7 +330,7 @@ def plot_amplitude_boxplot(
     labels = ["GT"] + list(preds_by_model.keys())
     colors = [PALETTE["GT"]] + [get_color(n) for n in preds_by_model.keys()]
 
-    gt_speed = _step_speeds_from_pos(target)
+    gt_speed = _step_speeds_from_pos(target, start_pos=start_pos)
     gt_mean_speed = gt_speed.mean(axis=1) if gt_speed.size else np.zeros((target.shape[0],), dtype=np.float64)
     gt_path_len = gt_speed.sum(axis=1) if gt_speed.size else np.zeros((target.shape[0],), dtype=np.float64)
 
@@ -325,7 +338,7 @@ def plot_amplitude_boxplot(
     path_data = [gt_path_len]
 
     for _, pred in preds_by_model.items():
-        sp = _step_speeds_from_pos(pred)
+        sp = _step_speeds_from_pos(pred, start_pos=start_pos)
         mean_sp = sp.mean(axis=1) if sp.size else np.zeros((pred.shape[0],), dtype=np.float64)
         path = sp.sum(axis=1) if sp.size else np.zeros((pred.shape[0],), dtype=np.float64)
         speed_data.append(mean_sp)
@@ -436,17 +449,23 @@ def main() -> int:
     # Load sample trajectories (for qualitative + CDF/boxplot)
     preds_by_model: Dict[str, np.ndarray] = {}
     target = None
+    start_pos = None
     for exp in exps:
         if not exp.samples_path.exists():
             raise FileNotFoundError(exp.samples_path)
         d = np.load(exp.samples_path)
         preds = d["preds"].astype(np.float64)
         tgt = d["targets"].astype(np.float64)
+        sp = d["start_pos"].astype(np.float64) if "start_pos" in d.files else None
         preds_by_model[exp.name] = preds
         target = tgt if target is None else target
         if target is not None:
             if np.max(np.abs(tgt - target)) > 1e-9:
                 raise ValueError(f"targets mismatch between samples files: {exp.samples_path}")
+        if sp is not None:
+            start_pos = sp if start_pos is None else start_pos
+            if start_pos is not None and np.max(np.abs(sp - start_pos)) > 1e-9:
+                raise ValueError(f"start_pos mismatch between samples files: {exp.samples_path}")
 
     assert target is not None
 
@@ -457,7 +476,7 @@ def main() -> int:
     samples_metrics = {name: _compute_ade_fde_from_samples(pred, target) for name, pred in preds_by_model.items()}
     plot_error_cdf(samples=samples_metrics, out_dir=out_dir)
     plot_rog_boxplot(preds_by_model=preds_by_model, target=target, out_dir=out_dir)
-    plot_amplitude_boxplot(preds_by_model=preds_by_model, target=target, out_dir=out_dir)
+    plot_amplitude_boxplot(preds_by_model=preds_by_model, target=target, start_pos=start_pos, out_dir=out_dir)
 
     summary = {
         "dt_fixed_seconds": int(dt_fixed),

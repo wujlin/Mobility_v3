@@ -1,0 +1,166 @@
+nohup: 忽略输入
+Using device: cuda
+Using seed: 0
+Loading datasets...
+Using split=train: 97222 trajectories (/media/liuzhihang/仓库/projects/Mobility_v3/data/processed_dt30/splits/train_ids.npy)
+Initializing Standard DiffusionTrajectoryModel...
+Epoch 0 | Batch 0 | Diff Loss 1.1052
+Epoch 0 | Batch 100 | Diff Loss 0.4349
+Epoch 0 | Batch 200 | Diff Loss 0.4123
+Epoch 0 | Batch 300 | Diff Loss 0.4079
+Epoch 0 | Batch 400 | Diff Loss 0.3988
+Epoch 0 | Batch 500 | Diff Loss 0.3913
+Epoch 0 | Batch 600 | Diff Loss 0.3952
+Epoch 0 Done. Loss: 0.4202. Time: 115.5s
+Epoch 1 | Batch 0 | Diff Loss 0.3889
+Epoch 1 | Batch 100 | Diff Loss 0.3710
+Epoch 1 | Batch 200 | Diff Loss 0.3778
+Epoch 1 | Batch 300 | Diff Loss 0.3741
+Epoch 1 | Batch 400 | Diff Loss 0.3684
+Epoch 1 | Batch 500 | Diff Loss 0.3608
+Epoch 1 | Batch 600 | Diff Loss 0.3748
+Epoch 1 Done. Loss: 0.3726. Time: 112.7s
+Epoch 2 | Batch 0 | Diff Loss 0.3617
+Epoch 2 | Batch 100 | Diff Loss 0.3596
+Epoch 2 | Batch 200 | Diff Loss 0.3533
+Epoch 2 | Batch 300 | Diff Loss 0.3568
+Epoch 2 | Batch 400 | Diff Loss 0.3518
+Epoch 2 | Batch 500 | Diff Loss 0.3445
+Epoch 2 | Batch 600 | Diff Loss 0.3436
+Epoch 2 Done. Loss: 0.3534. Time: 112.8s
+Epoch 3 | Batch 0 | Diff Loss 0.3419
+Epoch 3 | Batch 100 | Diff Loss 0.3502
+Epoch 3 | Batch 200 | Diff Loss 0.3494
+Epoch 3 | Batch 300 | Diff Loss 0.3313
+Epoch 3 | Batch 400 | Diff Loss 0.3371
+Epoch 3 | Batch 500 | Diff Loss 0.3378
+Epoch 3 | Batch 600 | Diff Loss 0.3407
+Epoch 3 Done. Loss: 0.3402. Time: 112.6s
+Epoch 4 | Batch 0 | Diff Loss 0.3359
+Epoch 4 | Batch 100 | Diff Loss 0.3377
+Epoch 4 | Batch 200 | Diff Loss 0.3313
+Epoch 4 | Batch 300 | Diff Loss 0.3353
+Epoch 4 | Batch 400 | Diff Loss 0.3316
+Epoch 4 | Batch 500 | Diff Loss 0.3287
+Epoch 4 | Batch 600 | Diff Loss 0.3278
+Epoch 4 Done. Loss: 0.3308. Time: 112.9s
+Epoch 5 | Batch 0 | Diff Loss 0.3379 | Rog Loss 11841.7881 | lambda_rog=0.05
+Epoch 5 | Batch 100 | Diff Loss 1.0294 | Rog Loss 213945.3750 | lambda_rog=0.05
+Epoch 5 | Batch 200 | Diff Loss 1.0373 | Rog Loss 277211.2812 | lambda_rog=0.05
+Epoch 5 | Batch 300 | Diff Loss 1.0169 | Rog Loss 248958.7812 | lambda_rog=0.05
+Epoch 5 | Batch 400 | Diff Loss 0.9997 | Rog Loss 206186.5938 | lambda_rog=0.05
+Epoch 5 | Batch 500 | Diff Loss 1.0226 | Rog Loss 334907.5000 | lambda_rog=0.05
+Epoch 5 | Batch 600 | Diff Loss 1.0231 | Rog Loss 159743.7031 | lambda_rog=0.05
+Epoch 5 Done. Loss: 10383.9881. Time: 112.6s
+Epoch 6 | Batch 0 | Diff Loss 1.0735 | Rog Loss 122731.9531 | lambda_rog=0.05
+Epoch 6 | Batch 100 | Diff Loss 1.0409 | Rog Loss 104475.7188 | lambda_rog=0.05
+Epoch 6 | Batch 200 | Diff Loss 1.0399 | Rog Loss 51931.3359 | lambda_rog=0.05
+Epoch 6 | Batch 300 | Diff Loss 1.0458 | Rog Loss 113581.3672 | lambda_rog=0.05
+Epoch 6 | Batch 400 | Diff Loss 1.0472 | Rog Loss 156031.2188 | lambda_rog=0.05
+Epoch 6 | Batch 500 | Diff Loss 1.0342 | Rog Loss 138665.5625 | lambda_rog=0.05
+Epoch 6 | Batch 600 | Diff Loss 1.0176 | Rog Loss 124187.1562 | lambda_rog=0.05
+Epoch 6 Done. Loss: 5463.8740. Time: 112.7s
+Epoch 7 | Batch 0 | Diff Loss 1.0225 | Rog Loss 107850.0312 | lambda_rog=0.05
+Epoch 7 | Batch 100 | Diff Loss 1.0151 | Rog Loss 80468.4375 | lambda_rog=0.05
+Epoch 7 | Batch 200 | Diff Loss 1.0181 | Rog Loss 103217.9922 | lambda_rog=0.05
+Epoch 7 | Batch 300 | Diff Loss 1.0339 | Rog Loss 83008.5156 | lambda_rog=0.05
+Epoch 7 | Batch 400 | Diff Loss 1.0284 | Rog Loss 91825.5781 | lambda_rog=0.05
+Epoch 7 | Batch 500 | Diff Loss 1.0171 | Rog Loss 77128.2031 | lambda_rog=0.05
+Epoch 7 | Batch 600 | Diff Loss 1.0220 | Rog Loss 85675.0000 | lambda_rog=0.05
+Epoch 7 Done. Loss: 4981.7750. Time: 113.0s
+Epoch 8 | Batch 0 | Diff Loss 1.0063 | Rog Loss 101198.9219 | lambda_rog=0.05
+Epoch 8 | Batch 100 | Diff Loss 1.0212 | Rog Loss 85419.1562 | lambda_rog=0.05
+Epoch 8 | Batch 200 | Diff Loss 1.0084 | Rog Loss 120397.1875 | lambda_rog=0.05
+Epoch 8 | Batch 300 | Diff Loss 0.9949 | Rog Loss 113209.1328 | lambda_rog=0.05
+Epoch 8 | Batch 400 | Diff Loss 0.9984 | Rog Loss 122828.7422 | lambda_rog=0.05
+Epoch 8 | Batch 500 | Diff Loss 1.0192 | Rog Loss 51822.7383 | lambda_rog=0.05
+Epoch 8 | Batch 600 | Diff Loss 1.0021 | Rog Loss 86526.4453 | lambda_rog=0.05
+Epoch 8 Done. Loss: 4901.3920. Time: 112.4s
+Epoch 9 | Batch 0 | Diff Loss 1.0123 | Rog Loss 56058.8867 | lambda_rog=0.05
+Epoch 9 | Batch 100 | Diff Loss 0.9912 | Rog Loss 72783.6797 | lambda_rog=0.05
+Epoch 9 | Batch 200 | Diff Loss 1.0073 | Rog Loss 130812.1641 | lambda_rog=0.05
+Epoch 9 | Batch 300 | Diff Loss 1.0061 | Rog Loss 90775.2344 | lambda_rog=0.05
+Epoch 9 | Batch 400 | Diff Loss 1.0024 | Rog Loss 98956.7500 | lambda_rog=0.05
+Epoch 9 | Batch 500 | Diff Loss 0.9868 | Rog Loss 134252.7344 | lambda_rog=0.05
+Epoch 9 | Batch 600 | Diff Loss 0.9889 | Rog Loss 87630.7031 | lambda_rog=0.05
+Epoch 9 Done. Loss: 4940.4715. Time: 112.3s
+Epoch 10 | Batch 0 | Diff Loss 1.0119 | Rog Loss 80912.4062 | lambda_rog=0.05
+Epoch 10 | Batch 100 | Diff Loss 1.0122 | Rog Loss 69096.9688 | lambda_rog=0.05
+Epoch 10 | Batch 200 | Diff Loss 1.0088 | Rog Loss 84082.6719 | lambda_rog=0.05
+Epoch 10 | Batch 300 | Diff Loss 1.0219 | Rog Loss 82938.9375 | lambda_rog=0.05
+Epoch 10 | Batch 400 | Diff Loss 1.0118 | Rog Loss 113743.6875 | lambda_rog=0.05
+Epoch 10 | Batch 500 | Diff Loss 0.9941 | Rog Loss 84600.2734 | lambda_rog=0.05
+Epoch 10 | Batch 600 | Diff Loss 1.0064 | Rog Loss 75894.9766 | lambda_rog=0.05
+Epoch 10 Done. Loss: 4902.7532. Time: 112.8s
+Epoch 11 | Batch 0 | Diff Loss 0.9951 | Rog Loss 49146.1250 | lambda_rog=0.05
+Epoch 11 | Batch 100 | Diff Loss 1.0180 | Rog Loss 116286.4219 | lambda_rog=0.05
+Epoch 11 | Batch 200 | Diff Loss 1.0116 | Rog Loss 72872.2969 | lambda_rog=0.05
+Epoch 11 | Batch 300 | Diff Loss 1.0117 | Rog Loss 106160.6094 | lambda_rog=0.05
+Epoch 11 | Batch 400 | Diff Loss 0.9931 | Rog Loss 100291.4219 | lambda_rog=0.05
+Epoch 11 | Batch 500 | Diff Loss 1.0005 | Rog Loss 72406.8438 | lambda_rog=0.05
+Epoch 11 | Batch 600 | Diff Loss 1.0086 | Rog Loss 97379.0469 | lambda_rog=0.05
+Epoch 11 Done. Loss: 4909.2126. Time: 113.1s
+Epoch 12 | Batch 0 | Diff Loss 1.0159 | Rog Loss 75259.8438 | lambda_rog=0.05
+Epoch 12 | Batch 100 | Diff Loss 1.0039 | Rog Loss 89764.2031 | lambda_rog=0.05
+Epoch 12 | Batch 200 | Diff Loss 1.0110 | Rog Loss 132770.4062 | lambda_rog=0.05
+Epoch 12 | Batch 300 | Diff Loss 1.0220 | Rog Loss 63198.4219 | lambda_rog=0.05
+Epoch 12 | Batch 400 | Diff Loss 1.0183 | Rog Loss 115846.2031 | lambda_rog=0.05
+Epoch 12 | Batch 500 | Diff Loss 0.9997 | Rog Loss 110233.4453 | lambda_rog=0.05
+Epoch 12 | Batch 600 | Diff Loss 1.0284 | Rog Loss 134472.0469 | lambda_rog=0.05
+Epoch 12 Done. Loss: 4925.4427. Time: 112.9s
+Epoch 13 | Batch 0 | Diff Loss 1.0098 | Rog Loss 114009.5625 | lambda_rog=0.05
+Epoch 13 | Batch 100 | Diff Loss 0.9983 | Rog Loss 76934.6719 | lambda_rog=0.05
+Epoch 13 | Batch 200 | Diff Loss 0.9919 | Rog Loss 97687.5625 | lambda_rog=0.05
+Epoch 13 | Batch 300 | Diff Loss 0.9976 | Rog Loss 76144.1875 | lambda_rog=0.05
+Epoch 13 | Batch 400 | Diff Loss 0.9975 | Rog Loss 98617.9453 | lambda_rog=0.05
+Epoch 13 | Batch 500 | Diff Loss 0.9961 | Rog Loss 124562.6016 | lambda_rog=0.05
+Epoch 13 | Batch 600 | Diff Loss 1.0095 | Rog Loss 122126.9375 | lambda_rog=0.05
+Epoch 13 Done. Loss: 4815.4585. Time: 113.2s
+Epoch 14 | Batch 0 | Diff Loss 1.0120 | Rog Loss 58067.2695 | lambda_rog=0.05
+Epoch 14 | Batch 100 | Diff Loss 1.0093 | Rog Loss 139164.5000 | lambda_rog=0.05
+Epoch 14 | Batch 200 | Diff Loss 0.9947 | Rog Loss 79285.3750 | lambda_rog=0.05
+Epoch 14 | Batch 300 | Diff Loss 0.9991 | Rog Loss 92178.7891 | lambda_rog=0.05
+Epoch 14 | Batch 400 | Diff Loss 0.9829 | Rog Loss 93056.8906 | lambda_rog=0.05
+Epoch 14 | Batch 500 | Diff Loss 0.9959 | Rog Loss 142089.7031 | lambda_rog=0.05
+Epoch 14 | Batch 600 | Diff Loss 1.0010 | Rog Loss 114727.5938 | lambda_rog=0.05
+Epoch 14 Done. Loss: 4691.2429. Time: 113.0s
+Epoch 15 | Batch 0 | Diff Loss 1.0000 | Rog Loss 67807.0625 | lambda_rog=0.05
+Epoch 15 | Batch 100 | Diff Loss 0.9972 | Rog Loss 90292.1250 | lambda_rog=0.05
+Epoch 15 | Batch 200 | Diff Loss 1.0173 | Rog Loss 57430.6445 | lambda_rog=0.05
+Epoch 15 | Batch 300 | Diff Loss 0.9931 | Rog Loss 83877.4844 | lambda_rog=0.05
+Epoch 15 | Batch 400 | Diff Loss 1.0038 | Rog Loss 108248.9453 | lambda_rog=0.05
+Epoch 15 | Batch 500 | Diff Loss 0.9949 | Rog Loss 78523.6953 | lambda_rog=0.05
+Epoch 15 | Batch 600 | Diff Loss 0.9922 | Rog Loss 141374.1562 | lambda_rog=0.05
+Epoch 15 Done. Loss: 4655.9226. Time: 112.9s
+Epoch 16 | Batch 0 | Diff Loss 0.9939 | Rog Loss 95380.9922 | lambda_rog=0.05
+Epoch 16 | Batch 100 | Diff Loss 1.0050 | Rog Loss 102902.9688 | lambda_rog=0.05
+Epoch 16 | Batch 200 | Diff Loss 1.0107 | Rog Loss 99560.0078 | lambda_rog=0.05
+Epoch 16 | Batch 300 | Diff Loss 0.9801 | Rog Loss 92268.0469 | lambda_rog=0.05
+Epoch 16 | Batch 400 | Diff Loss 0.9919 | Rog Loss 101402.2812 | lambda_rog=0.05
+Epoch 16 | Batch 500 | Diff Loss 0.9899 | Rog Loss 52494.6758 | lambda_rog=0.05
+Epoch 16 | Batch 600 | Diff Loss 0.9867 | Rog Loss 100298.5234 | lambda_rog=0.05
+Epoch 16 Done. Loss: 4634.7925. Time: 112.9s
+Epoch 17 | Batch 0 | Diff Loss 0.9996 | Rog Loss 130696.6250 | lambda_rog=0.05
+Epoch 17 | Batch 100 | Diff Loss 0.9933 | Rog Loss 88891.3672 | lambda_rog=0.05
+Epoch 17 | Batch 200 | Diff Loss 0.9949 | Rog Loss 109495.7188 | lambda_rog=0.05
+Epoch 17 | Batch 300 | Diff Loss 0.9940 | Rog Loss 82840.1250 | lambda_rog=0.05
+Epoch 17 | Batch 400 | Diff Loss 0.9910 | Rog Loss 70453.5469 | lambda_rog=0.05
+Epoch 17 | Batch 500 | Diff Loss 0.9694 | Rog Loss 116553.7812 | lambda_rog=0.05
+Epoch 17 | Batch 600 | Diff Loss 0.9777 | Rog Loss 66720.4062 | lambda_rog=0.05
+Epoch 17 Done. Loss: 4474.6186. Time: 112.7s
+Epoch 18 | Batch 0 | Diff Loss 0.9700 | Rog Loss 88831.6250 | lambda_rog=0.05
+Epoch 18 | Batch 100 | Diff Loss 0.9872 | Rog Loss 68537.3359 | lambda_rog=0.05
+Epoch 18 | Batch 200 | Diff Loss 0.9734 | Rog Loss 109462.6953 | lambda_rog=0.05
+Epoch 18 | Batch 300 | Diff Loss 0.9639 | Rog Loss 127990.6562 | lambda_rog=0.05
+Epoch 18 | Batch 400 | Diff Loss 0.9719 | Rog Loss 58822.7227 | lambda_rog=0.05
+Epoch 18 | Batch 500 | Diff Loss 0.9687 | Rog Loss 101453.0312 | lambda_rog=0.05
+Epoch 18 | Batch 600 | Diff Loss 0.9611 | Rog Loss 52227.6562 | lambda_rog=0.05
+Epoch 18 Done. Loss: 4294.1104. Time: 112.6s
+Epoch 19 | Batch 0 | Diff Loss 0.9705 | Rog Loss 90895.6250 | lambda_rog=0.05
+Epoch 19 | Batch 100 | Diff Loss 0.9710 | Rog Loss 77178.9453 | lambda_rog=0.05
+Epoch 19 | Batch 200 | Diff Loss 0.9667 | Rog Loss 80104.4141 | lambda_rog=0.05
+Epoch 19 | Batch 300 | Diff Loss 0.9853 | Rog Loss 95572.4219 | lambda_rog=0.05
+Epoch 19 | Batch 400 | Diff Loss 0.9885 | Rog Loss 114125.1484 | lambda_rog=0.05
+Epoch 19 | Batch 500 | Diff Loss 1.2561 | Rog Loss 43183.2695 | lambda_rog=0.05
+Epoch 19 | Batch 600 | Diff Loss 1.0617 | Rog Loss 60778.8047 | lambda_rog=0.05
+Epoch 19 Done. Loss: 3572.6313. Time: 112.9s

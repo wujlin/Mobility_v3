@@ -17,13 +17,19 @@ class TrajectoryStorage:
         self._ptr = None
         self._length = 0
         
+        # IMPORTANT:
+        # Do NOT keep an HDF5 handle open in the parent process before DataLoader forks.
+        # It may lead to deadlocks/slowdowns when using num_workers>0.
+        # We only load the index (traj_ptr) here and open the file lazily in each process.
         if self.mode == 'r' and self.file_path.exists():
-            self.open()
+            with h5py.File(self.file_path, "r") as f:
+                self._ptr = f["traj_ptr"][:]
+                self._length = len(self._ptr) - 1
 
     def open(self):
         if self.file is None:
             self.file = h5py.File(self.file_path, self.mode)
-            if self.mode == 'r':
+            if self.mode == 'r' and self._ptr is None:
                 self._ptr = self.file['traj_ptr'][:]
                 self._length = len(self._ptr) - 1
 
@@ -31,6 +37,12 @@ class TrajectoryStorage:
         if self.file is not None:
             self.file.close()
             self.file = None
+
+    def __del__(self):
+        try:
+            self.close()
+        except Exception:
+            pass
 
     def __enter__(self):
         self.open()

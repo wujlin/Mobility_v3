@@ -13,6 +13,7 @@ except Exception:  # pragma: no cover
         return x
 
 from src.models.seq.seq_baseline import SeqBaseline
+from src.models.seq.seq_cvae import SeqCVAE
 from src.models.diffusion.diffusion_model import DiffusionTrajectoryModel
 from src.models.physics.physics_condition_diffusion import PhysicsConditionDiffusion
 from src.data.datasets_seq import SeqDataset
@@ -40,6 +41,8 @@ def _load_state_dict(checkpoint_path: str, device: torch.device) -> dict:
 
 def _infer_ckpt_model_type(state_dict: dict) -> Optional[str]:
     keys = state_dict.keys()
+    if any(str(k).startswith("obs_encoder.") for k in keys) and any(str(k).startswith("prior_mu.") for k in keys):
+        return "cvae"
     if any(str(k).startswith("nav_encoder.") for k in keys):
         return "physics"
     if any(str(k).startswith("unet.") for k in keys):
@@ -53,12 +56,32 @@ def _infer_hidden_dim(model_type: str, state_dict: dict) -> Optional[int]:
     if model_type == "baseline":
         w = state_dict.get("head.weight")
         return int(w.shape[1]) if hasattr(w, "shape") and len(w.shape) == 2 else None
+    if model_type == "cvae":
+        w = state_dict.get("decoder_cell.weight_hh")
+        if hasattr(w, "shape") and len(w.shape) == 2:
+            return int(w.shape[1])
+        w = state_dict.get("obs_encoder.weight_ih_l0")
+        if hasattr(w, "shape") and len(w.shape) == 2:
+            return int(w.shape[0]) // 4
+        return None
     if model_type == "diffusion":
         w = state_dict.get("unet.init_conv.weight")
         return int(w.shape[0]) if hasattr(w, "shape") and len(w.shape) == 3 else None
     if model_type == "physics":
         w = state_dict.get("diffusion.unet.init_conv.weight")
         return int(w.shape[0]) if hasattr(w, "shape") and len(w.shape) == 3 else None
+    return None
+
+
+def _infer_latent_dim(model_type: str, state_dict: dict) -> Optional[int]:
+    if model_type != "cvae":
+        return None
+    w = state_dict.get("prior_mu.weight")
+    if hasattr(w, "shape") and len(w.shape) == 2:
+        return int(w.shape[0])
+    b = state_dict.get("prior_mu.bias")
+    if hasattr(b, "shape") and len(b.shape) == 1:
+        return int(b.shape[0])
     return None
 
 
@@ -115,6 +138,8 @@ def evaluate(args):
 
     if args.model_type == 'baseline':
         dataset = SeqDataset(args.data_path, obs_len=args.obs_len, pred_len=args.pred_len, traj_ids=traj_ids)
+    elif args.model_type == 'cvae':
+        dataset = SeqDataset(args.data_path, obs_len=args.obs_len, pred_len=args.pred_len, traj_ids=traj_ids)
     else:
         # Physics or Diffusion
         nav_file = args.nav_file if args.model_type == 'physics' else None
@@ -147,11 +172,22 @@ def evaluate(args):
     if ckpt_hidden_dim is not None and int(args.hidden_dim) != int(ckpt_hidden_dim):
         print(f"[WARN] hidden_dim 不匹配：checkpoint={ckpt_hidden_dim}, args={args.hidden_dim}；已自动改为 checkpoint 值以匹配权重。")
         args.hidden_dim = int(ckpt_hidden_dim)
+
+    ckpt_latent_dim = _infer_latent_dim(args.model_type, state_dict)
+    if ckpt_latent_dim is not None and int(args.latent_dim) != int(ckpt_latent_dim):
+        print(f"[WARN] latent_dim 不匹配：checkpoint={ckpt_latent_dim}, args={args.latent_dim}；已自动改为 checkpoint 值以匹配权重。")
+        args.latent_dim = int(ckpt_latent_dim)
     
     if args.model_type == 'baseline':
         model = SeqBaseline(
             obs_dim=4, act_dim=2, cond_dim=6,
             hidden_dim=args.hidden_dim
+        )
+    elif args.model_type == 'cvae':
+        model = SeqCVAE(
+            obs_dim=4, act_dim=2, cond_dim=6,
+            hidden_dim=args.hidden_dim,
+            latent_dim=args.latent_dim,
         )
     elif args.model_type == 'diffusion':
         model = DiffusionTrajectoryModel(
@@ -218,7 +254,7 @@ def evaluate(args):
             start_pos = norm.denormalize_pos(start_pos_norm.cpu().numpy())
 
             # GT future velocities
-            if args.model_type == 'baseline':
+            if args.model_type in ('baseline', 'cvae'):
                 gt_vel_norm = batch['target_vel'].cpu().numpy()
             else:
                 gt_vel_norm = batch['action'].cpu().numpy()
@@ -240,6 +276,8 @@ def evaluate(args):
             for k in range(K):
                 if args.model_type == 'physics':
                     pred_vel_norm = model.sample_trajectory(obs, cond, args.pred_len, nav_patch=nav_patch)
+                elif args.model_type == 'cvae':
+                    pred_vel_norm = model.sample_trajectory(obs, cond, args.pred_len, z_temperature=float(args.z_temperature))
                 else:
                     pred_vel_norm = model.sample_trajectory(obs, cond, args.pred_len)
 
@@ -358,7 +396,7 @@ def evaluate(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--exp_name', type=str, required=True)
-    parser.add_argument('--model_type', type=str, choices=['baseline', 'diffusion', 'physics'], required=True)
+    parser.add_argument('--model_type', type=str, choices=['baseline', 'cvae', 'diffusion', 'physics'], required=True)
     parser.add_argument('--data_path', type=str, required=True)
     parser.add_argument('--checkpoint', type=str, required=True)
     parser.add_argument('--split', type=str, choices=['train', 'val', 'test', 'all'], default='test')
@@ -373,6 +411,8 @@ if __name__ == "__main__":
     parser.add_argument('--pred_len', type=int, default=12)
     parser.add_argument('--hidden_dim', type=int, default=128) # check defaults
     parser.add_argument('--diff_steps', type=int, default=100)
+    parser.add_argument('--latent_dim', type=int, default=16, help="CVAE latent dim (only for --model_type cvae)")
+    parser.add_argument('--z_temperature', type=float, default=1.0, help="CVAE 采样温度（仅 cvae 生效）")
 
     parser.add_argument('--seed', type=int, default=0)
     

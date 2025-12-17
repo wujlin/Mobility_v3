@@ -13,7 +13,7 @@ Phase A 的目标是 **快速验证方向**，而不是“论文版最终结论�
 
 1. **正确性**：数据产物（split、normalization、nav_field）与代码一致、无泄漏，评估脚本能稳定输出。
 2. **趋势**：对比三类模型在同一任务下的表现趋势：
-   - Baseline（确定性序列预测）
+   - Deterministic L2 Regression（SeqBaseline，确定性序列预测）
    - Data-only Diffusion（纯数据生成）
    - Physics Diffusion（引入 nav_field 的物理条件生成）
 3. **效应归因**：Physics 相对 Diffusion 的提升是否稳定出现在多个微观指标上（ADE/FDE/Fréchet/DTW）。
@@ -40,7 +40,7 @@ Phase A 的目标是 **快速验证方向**，而不是“论文版最终结论�
 ### 2.3 训练与评估配置（本次 Phase A）
 
 - 观测/预测窗口：`obs_len=8`, `pred_len=12`
-- 生成采样数：Diffusion/Physics 为 `K=20`；Baseline 为 `K=1`
+- 生成采样数：Diffusion/Physics 为 `K=20`；Deterministic L2 为 `K=1`
 - 评估集：test split 的窗口样本
 - **Quick Eval 子集**：`num_conditions=320`（`batch_size=32, max_batches=10`，即 test 窗口序列的前 320 个）
 
@@ -52,7 +52,7 @@ Phase A 的目标是 **快速验证方向**，而不是“论文版最终结论�
 
 结果文件（单一真相源）：
 
-- Baseline：`data/experiments/baseline_a_full_eval_quick/metrics.json`
+- Deterministic L2：`data/experiments/baseline_a_full_eval_quick/metrics.json`
 - Diffusion：`data/experiments/diff_a_full_eval_quick/metrics.json`
 - Physics：`data/experiments/physics_a_full_eval_quick/metrics.json`
 
@@ -63,22 +63,22 @@ Phase A 的目标是 **快速验证方向**，而不是“论文版最终结论�
 
 | 模型 | K | ADE_mean | ADE_std | ADE_best | FDE_mean | FDE_std | FDE_best | Fréchet_mean | Fréchet_std | Fréchet_best | DTW_mean | DTW_std | DTW_best |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| Baseline | 1 | 6.419 | 0.000 | 6.419 | 10.936 | 0.000 | 10.936 | 11.154 | 0.000 | 11.154 | 66.556 | 0.000 | 66.556 |
+| Deterministic L2 | 1 | 6.419 | 0.000 | 6.419 | 10.936 | 0.000 | 10.936 | 11.154 | 0.000 | 11.154 | 66.556 | 0.000 | 66.556 |
 | Diffusion | 20 | 6.015 | 3.708 | 1.662 | 10.420 | 7.033 | 1.589 | 10.655 | 6.961 | 2.288 | 62.040 | 44.876 | 14.385 |
 | Physics | 20 | 5.733 | 3.840 | 1.537 | 9.848 | 7.245 | 1.448 | 10.117 | 7.197 | 2.179 | 57.632 | 45.700 | 13.161 |
 
 **关键对比（mean 口径）**：
 
-- Diffusion vs Baseline：ADE ↓6.30%，FDE ↓4.72%，Fréchet ↓4.47%，DTW ↓6.79%。
+- Diffusion vs Deterministic L2：ADE ↓6.30%，FDE ↓4.72%，Fréchet ↓4.47%，DTW ↓6.79%。
 - Physics vs Diffusion：ADE ↓4.69%，FDE ↓5.49%，Fréchet ↓5.05%，DTW ↓7.11%。
-- Physics vs Baseline：ADE ↓10.69%，FDE ↓9.95%，Fréchet ↓9.30%，DTW ↓13.41%。
+- Physics vs Deterministic L2：ADE ↓10.69%，FDE ↓9.95%，Fréchet ↓9.30%，DTW ↓13.41%。
 
 ### 3.2 宏观指标（MSD/Rog）与 GT 对照（同一 320 条 condition）
 
 > 本段 GT 对照是在相同 320 条窗口上，对 ground-truth future positions 计算得到（step-based）。  
 > Phase B（dt-fixed）才允许将 lag 映射到真实时间并做更强物理解释。
 
-| 指标 | GT | Baseline | Diffusion | Physics |
+| 指标 | GT | Deterministic L2 | Diffusion | Physics |
 |---|---:|---:|---:|---:|
 | MSD_1 | 5.299 | 4.599 | 5.580 | 6.025 |
 | MSD_5 | 95.938 | 110.059 | 74.896 | 82.034 |
@@ -87,8 +87,8 @@ Phase A 的目标是 **快速验证方向**，而不是“论文版最终结论�
 
 宏观“对齐度”（相对 GT）：
 
-- Rog 相对误差：Baseline 31.41%，Diffusion 6.19%，Physics **0.94%**。
-- MSD 曲线平均相对误差：Baseline 17.24%，Diffusion 20.44%，Physics **14.63%**（本子集上最佳）。
+- Rog 相对误差：Deterministic L2 31.41%，Diffusion 6.19%，Physics **0.94%**。
+- MSD 曲线平均相对误差：Deterministic L2 17.24%，Diffusion 20.44%，Physics **14.63%**（本子集上最佳）。
 
 ---
 
@@ -107,7 +107,7 @@ Phase A 的目标是 **快速验证方向**，而不是“论文版最终结论�
 
 ### 发现 C：Physics 在宏观结构上更接近 GT（至少在 Rog 上非常明显）
 
-在本 quick 子集上，Physics 的 Rog 与 GT 几乎重合（相对误差 0.94%），而 Baseline 明显过“扩散”、Diffusion 略偏“收缩”。
+在本 quick 子集上，Physics 的 Rog 与 GT 几乎重合（相对误差 0.94%），而 Deterministic L2 明显过“扩散”、Diffusion 略偏“收缩”。
 
 这与“物理场作为条件”在宏观形态上提供约束是一致的，但 Phase A 仍只适合做趋势判断。
 
@@ -125,7 +125,7 @@ Phase A 的目标是 **快速验证方向**，而不是“论文版最终结论�
 
 1. `fig1_micro_metrics.pdf/png`：四个微观指标的 mean（含 best-of-K 标记）对比
 2. `fig2_msd_curve.pdf/png`：MSD 曲线（可选含 GT 对照）与幂律指数（step-based）
-3. `fig3_traj_overlay.pdf/png`：同一组样本上 Baseline/Diffusion/Physics 与 GT 轨迹叠图
+3. `fig3_traj_overlay.pdf/png`：同一组样本上 Deterministic L2/Diffusion/Physics 与 GT 轨迹叠图
 4. `fig4_error_cdf.pdf/png`：ADE/FDE 的经验 CDF（基于保存样本的分布）
 5. `fig5_rog_boxplot.pdf/png`：Rog 的箱线图（GT 与三模型，基于保存样本）
 

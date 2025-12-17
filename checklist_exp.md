@@ -186,6 +186,7 @@
 
 - [ ] Baseline-A：RNN/Transformer（预测）
 - [ ] Baseline-B：Data-only Diffusion（生成）
+- [ ] Baseline-C：CVAE（生成，多模态 baseline）
 - [ ] Model-C1：Physics-informed Diffusion（Nav Condition）
 - [ ] Model-C2：Physics-informed + Macro regularizer（如果做了的话）
 
@@ -209,6 +210,7 @@
 | Baseline-A (RNN) | | | | | |
 | Baseline-A (Transformer) | | | | | |
 | Baseline-B (Data-only Diffusion) | | | | | |
+| Baseline-C (CVAE) | | | | | |
 | Model-C1 (Nav Cond) | | | | | |
 | Model-C2 (+Macro Regularizer) | | | | | |
 
@@ -218,6 +220,7 @@
 |-----|------------|---------|--------------|---------|
 | Baseline-A | | | | |
 | Baseline-B | | | | |
+| Baseline-C | | | | |
 | Model-C1 | | | | |
 | Model-C2 | | | | |
 
@@ -228,6 +231,7 @@
 | Ground Truth | $\alpha_\text{data}$ | — | — |
 | Baseline-A | | | |
 | Baseline-B | | | |
+| Baseline-C | | | |
 | Model-C1 | | | |
 | Model-C2 | | | |
 

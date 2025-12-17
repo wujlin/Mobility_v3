@@ -55,7 +55,8 @@ Phase B 的主线很简单：把 Phase A 的“step-based 趋势验证”升级�
 
 ### 3.1 三类模型（与 Phase A 一致）
 
-- Baseline：`src/models/seq/seq_baseline.py`
+- **Deterministic L2 Regression（SeqBaseline, K=1）**：`src/models/seq/seq_baseline.py`
+- **CVAE baseline（多模态，对位 Diffusion/Physics）**：`src/models/seq/seq_cvae.py`
 - Data-only Diffusion：`src/models/diffusion/diffusion_model.py`
 - Physics Diffusion（nav_patch 条件）：`src/models/physics/physics_condition_diffusion.py`
 
@@ -63,7 +64,7 @@ Phase B 的主线很简单：把 Phase A 的“step-based 趋势验证”升级�
 
 权重（本地）：
 
-- Baseline：`data/experiments/baseline_b_dt30/last.pt`
+- Deterministic L2（SeqBaseline）权重：`data/experiments/baseline_b_dt30/last.pt`
 - Diffusion：`data/experiments/diff_b_dt30/last.pt`
 - Physics：`data/experiments/physics_b_dt30/last.pt`
 
@@ -75,7 +76,7 @@ Phase B 的主线很简单：把 Phase A 的“step-based 趋势验证”升级�
 - `patch_size=32`（Physics）
 - `epochs=50`，`batch_size=2048`，`lr=1e-3`
 
-Baseline（从权重推断）：
+Deterministic L2（从权重推断）：
 
 - `hidden_dim=128`
 - `data/experiments/baseline_b_dt30/last.pt` 为 legacy 产物（缺少 `config` 字段）；论文版建议重训并记录完整训练配置。
@@ -86,8 +87,8 @@ Baseline（从权重推断）：
 
 ### 4.1 评估产物路径
 
-- Quick Eval（320 条 condition，K=20）：  
-  - Baseline：`data/experiments/baseline_b_dt30_eval_quick/metrics.json`（+ `samples.npz`）  
+- Quick Eval（320 条 condition；生成模型 K=20，Deterministic L2 为 K=1）：  
+  - Deterministic L2：`data/experiments/baseline_b_dt30_eval_quick/metrics.json`（+ `samples.npz`）  
   - Diffusion：`data/experiments/diff_b_dt30_eval_quick/metrics.json`（+ `samples.npz`）  
   - Physics：`data/experiments/physics_b_dt30_eval_quick/metrics.json`（+ `samples.npz`）
 - b1 子集（32 条 condition，debug 用的最小闭环，避免跑太久）：  
@@ -99,20 +100,20 @@ Baseline（从权重推断）：
 
 | 模型 | K | ADE_mean | ADE_std | ADE_best | FDE_mean | FDE_std | FDE_best | Fréchet_mean | Fréchet_std | Fréchet_best | DTW_mean | DTW_std | DTW_best |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| Baseline | 1 | 5.467 | 0.000 | 5.467 | 8.855 | 0.000 | 8.855 | 9.234 | 0.000 | 9.234 | 54.496 | 0.000 | 54.496 |
+| Deterministic L2 | 1 | 5.467 | 0.000 | 5.467 | 8.855 | 0.000 | 8.855 | 9.234 | 0.000 | 9.234 | 54.496 | 0.000 | 54.496 |
 | Diffusion | 20 | 6.741 | 2.651 | 2.836 | 11.636 | 5.025 | 3.950 | 11.838 | 4.956 | 4.433 | 72.064 | 33.670 | 26.194 |
 | Physics | 20 | 6.744 | 2.926 | 2.510 | 11.644 | 5.556 | 3.419 | 11.863 | 5.464 | 4.028 | 71.981 | 36.824 | 22.623 |
 
 **现象（必须正视）**：
 
-- 在该 quick 子集上，Diffusion/Physics 的 **mean 口径**微观误差显著劣于 Baseline（ADE/FDE/Fréchet/DTW 均 ↑约 23–32%）。  
+- 在该 quick 子集上，Diffusion/Physics 的 **mean 口径**微观误差显著劣于 Deterministic L2（ADE/FDE/Fréchet/DTW 均 ↑约 23–32%）。  
 - Physics 的 **mean** 与 Diffusion 基本持平，但 **best-of-K** 明显更好（四个指标均比 Diffusion 的 best-of-K 低约 9–14%），说明 nav_field 条件更像是在提升“覆盖潜力/上界”，而不是提升“典型样本质量”。
 
-> 这与 Phase A（Physics 在 mean 口径上优于 Baseline）的趋势不同：Phase B(dt30) 下 Baseline 很强，而 Diffusion/Physics 出现明显的“低位移幅度/偏收缩”问题（见 4.3）。
+> 这与 Phase A（Physics 在 mean 口径上优于 Deterministic L2）的趋势不同：Phase B(dt30) 下 Deterministic L2 很强，而 Diffusion/Physics 出现明显的“低位移幅度/偏收缩”问题（见 4.3）。
 
 ### 4.3 宏观指标与 GT 对照（Quick Eval：同 320 条 condition）
 
-| 指标 | GT | Baseline | Diffusion | Physics |
+| 指标 | GT | Deterministic L2 | Diffusion | Physics |
 |---|---:|---:|---:|---:|
 | MSD_1 | 5.345 | 3.322 | 2.136 | 2.578 |
 | MSD_5 | 103.678 | 81.603 | 32.945 | 38.700 |
@@ -121,7 +122,7 @@ Baseline（从权重推断）：
 
 **宏观解读（preliminary）**：
 
-- Baseline 的 Rog 与 GT 很接近（约 4.7% 相对误差），MSD 也相对更接近（尤其 MSD_10）。  
+- Deterministic L2 的 Rog 与 GT 很接近（约 4.7% 相对误差），MSD 也相对更接近（尤其 MSD_10）。  
 - Diffusion/Physics 的 MSD 与 Rog 明显偏低，表现为生成轨迹整体“收缩/走不动”，导致微观误差（尤其 FDE）偏大。  
 - Physics 相对 Diffusion 的 MSD/Rog 更大（更接近 GT），说明 nav_field 条件确实在“拉回运动幅度”，但目前仍不足以达到可论文结论的水平。
 
@@ -132,7 +133,7 @@ Baseline（从权重推断）：
 
 | 模型 | path_len（pred, mean±std） | path_len（GT, mean±std） |
 |---|---:|---:|
-| Baseline | 16.466 ± 6.860 | 16.738 ± 10.885 |
+| Deterministic L2 | 16.466 ± 6.860 | 16.738 ± 10.885 |
 | Diffusion | 12.135 ± 7.498 | 16.738 ± 10.885 |
 | Physics | 13.190 ± 7.600 | 16.738 ± 10.885 |
 
@@ -146,7 +147,7 @@ Phase B 的“论文级图件”建议与 Phase A 保持同一风格，至少包
 
 1. 微观指标对比（ADE/FDE/Fréchet/DTW，mean + best-of-K）
 2. MSD 曲线（log-log，横轴 $\tau=k\\cdot 30s$，含 GT 对照与幂律指数）
-3. 同一条件下的轨迹叠图（GT + Baseline + Diffusion + Physics）
+3. 同一条件下的轨迹叠图（GT + Deterministic L2 + Diffusion + Physics）
 4. ADE/FDE 的 CDF（基于保存样本）
 5. Rog 的分布（箱线图/小提琴图）
 
@@ -177,7 +178,7 @@ MPLCONFIGDIR=/tmp/mplconfig \
 - （下一步）更稳的中等规模：`max_batches=200`（或全量）
 - 多随机种子（至少 3 个）验证趋势是否稳定
 
-### 6.2 如果 Phase B 仍然“Baseline > Diffusion/Physics”（需要立刻排雷）
+### 6.2 如果 Phase B 仍然“Deterministic L2 > Diffusion/Physics”（需要立刻排雷）
 
 优先排查顺序（KISS）：
 
@@ -189,7 +190,7 @@ MPLCONFIGDIR=/tmp/mplconfig \
 ### 6.3 针对评审建议的快速验证（h=128, batch=512, lr=3e-4, epochs=10）
 
 评审意见见：`docs/PHASE_B_REVIEW.md`，核心假设是：
-- Phase B 下 deterministic Baseline 更容易学到条件均值（strong baseline effect）；
+- Phase B 下 Deterministic L2 更容易学到条件均值（strong baseline effect）；
 - Diffusion/Physics 可能因容量不足（`hidden_dim=64`）产生欠拟合与“收缩”。
 
 为验证该假设，我们做了最小成本的扩容快速实验（dt30，train split 训练；test quick 评估，320 条 condition）：
@@ -229,7 +230,7 @@ MPLCONFIGDIR=/tmp/mplconfig \
 目标：用**同一套 dt30 产物**，把“容量不足/未收敛”这个最主要的工程假设先证伪或证实，再决定是否需要更大方法改动。
 
 建议只做最少的 2×3 个训练（Diffusion/Physics × seeds=0/1/2），每个训练后跑 quick + 中等规模评估。  
-（走 A 路线时，Baseline 不是主要竞争对手；Baseline 多 seed 重训仅作为 *reference*，可选。）
+（走 A 路线时，Deterministic L2 不是主要竞争对手；其多 seed 重训仅作为 *reference*，可选。）
 
 ```bash
 # 0) 强制使用 dt30 数据（单一真相源）
@@ -239,7 +240,7 @@ NAV=data/processed_dt30/nav_field.npz
 # 1) 训练：Diffusion / Physics（hidden_dim=128，epochs=100）
 #    说明：num_workers 在 Windows/WSL 建议 0；在 Linux 服务器可用 4/8。
 for SEED in 0 1 2; do
-  # （可选 reference）Baseline 重训（用于检查训练/评估环境是否一致）
+  # （可选 reference）Deterministic L2 重训（用于检查训练/评估环境是否一致）
   # python -m src.training.train_baseline \
   #   --data_path ${DATA} \
   #   --split train \
@@ -263,11 +264,20 @@ for SEED in 0 1 2; do
     --exp_name physics_b_dt30_h128_b512_lr1e-3_e100_s${SEED} \
     --hidden_dim 128 --batch_size 512 --lr 1e-3 --epochs 100 \
     --num_workers 0 --seed ${SEED}
+
+  # CVAE baseline（多模态，对位 Diffusion/Physics；论文主表建议补齐）
+  python -m src.training.train_cvae \
+    --data_path ${DATA} \
+    --split train \
+    --exp_name cvae_b_dt30_h128_z16_b512_lr1e-3_e100_s${SEED} \
+    --hidden_dim 128 --latent_dim 16 --beta_kl 0.1 --kl_anneal_epochs 10 \
+    --batch_size 512 --lr 1e-3 --epochs 100 \
+    --num_workers 0 --seed ${SEED}
 done
 
 # 2) 评估：quick（320 条 condition）+ mid（约 6400 条 condition）
 for SEED in 0 1 2; do
-  # （可选 reference）Baseline 评估（quick/mid）
+  # （可选 reference）Deterministic L2 评估（quick/mid）
   # python -m src.training.evaluate \
   #   --exp_name baseline_b_dt30_h128_b2048_lr1e-3_e50_s${SEED}_eval_quick \
   #   --model_type baseline \
@@ -293,6 +303,14 @@ for SEED in 0 1 2; do
     --split test --batch_size 32 --max_batches 10 --num_workers 0 \
     --num_samples_per_condition 20 --diff_steps 100 --save_samples 200 --seed ${SEED}
 
+  python -m src.training.evaluate \
+    --exp_name cvae_b_dt30_h128_z16_b512_lr1e-3_e100_s${SEED}_eval_quick \
+    --model_type cvae \
+    --data_path ${DATA} \
+    --checkpoint data/experiments/cvae_b_dt30_h128_z16_b512_lr1e-3_e100_s${SEED}/last.pt \
+    --split test --batch_size 32 --max_batches 10 --num_workers 0 \
+    --num_samples_per_condition 20 --z_temperature 1.0 --save_samples 200 --seed ${SEED}
+
   # python -m src.training.evaluate \
   #   --exp_name baseline_b_dt30_h128_b2048_lr1e-3_e50_s${SEED}_eval_mid \
   #   --model_type baseline \
@@ -317,6 +335,14 @@ for SEED in 0 1 2; do
     --nav_file ${NAV} \
     --split test --batch_size 32 --max_batches 200 --num_workers 0 \
     --num_samples_per_condition 20 --diff_steps 100 --save_samples 200 --seed ${SEED}
+
+  python -m src.training.evaluate \
+    --exp_name cvae_b_dt30_h128_z16_b512_lr1e-3_e100_s${SEED}_eval_mid \
+    --model_type cvae \
+    --data_path ${DATA} \
+    --checkpoint data/experiments/cvae_b_dt30_h128_z16_b512_lr1e-3_e100_s${SEED}/last.pt \
+    --split test --batch_size 32 --max_batches 200 --num_workers 0 \
+    --num_samples_per_condition 20 --z_temperature 1.0 --save_samples 200 --seed ${SEED}
 done
 ```
 

@@ -160,16 +160,15 @@ class BaseTrajectoryModel(nn.Module):
 
 ```text
 src/models/seq/
-├── __init__.py
-├── seq_baseline.py    # LSTM/Transformer 实现
-└── encoder.py         # 共享的序列编码器
+├── seq_baseline.py    # Deterministic L2（LSTM encoder-decoder）
+└── seq_cvae.py        # CVAE baseline（多模态生成）
 ```
 
 **核心类：**
 
 ```python
 class SeqBaseline(BaseTrajectoryModel):
-    """简单 LSTM/Transformer baseline"""
+    """Deterministic L2 Regression（确定性序列预测）"""
     
     def forward(self, obs, cond):
         # 返回预测的下一步或未来 F 步
@@ -178,6 +177,11 @@ class SeqBaseline(BaseTrajectoryModel):
     def sample_trajectory(self, obs, cond, horizon, **kwargs):
         # 自回归 rollout
         ...
+```
+
+```python
+class SeqCVAE(BaseTrajectoryModel):
+    """CVAE baseline（多模态生成，对位 Diffusion/Physics）"""
 ```
 
 #### 3.3.2 轨迹扩散模型 `src/models/diffusion/`
@@ -247,7 +251,8 @@ class PhysicsConditionDiffusion(BaseTrajectoryModel):
 ```text
 src/training/
 ├── evaluate.py           # 评估入口（支持 K 采样）
-├── train_baseline.py     # 训练序列预测 baseline
+├── train_baseline.py     # 训练 Deterministic L2（SeqBaseline）
+├── train_cvae.py         # 训练 CVAE baseline
 └── train_diffusion.py    # 训练 diffusion / physics（通过 --model_type）
 ```
 
@@ -261,11 +266,17 @@ src/training/
 **示例用法：**
 
 ```bash
-# Baseline（按 split）
+# Deterministic L2（按 split）
 python -m src.training.train_baseline \
   --data_path data/processed/trajectories/shenzhen_trajectories.h5 \
   --split train \
   --exp_name baseline_v1_strict
+
+# CVAE baseline（按 split）
+python -m src.training.train_cvae \
+  --data_path data/processed/trajectories/shenzhen_trajectories.h5 \
+  --split train \
+  --exp_name cvae_v1_strict
 
 # Data-only Diffusion（按 split）
 python -m src.training.train_diffusion \

@@ -144,7 +144,7 @@ data/processed/splits/
 ### 4.1 采样设置（生成模型）
 
 - 生成模型：每个条件采样 `K=20`
-- 确定性 baseline：`K=1`（或重复 K 次但 std=0，本质等价）
+- **确定性 L2 回归（Deterministic L2 Regression / SeqBaseline）**：`K=1`（或重复 K 次但 std=0，本质等价）
 
 ### 4.2 微观指标（窗口级）
 
@@ -154,6 +154,10 @@ data/processed/splits/
 - DTW：Dynamic Time Warping 距离（允许时间对齐的形状距离）
 - 报告口径（生成模型）：`mean / std / best-of-K`
   - `best-of-K`：对每条样本取 K 条生成里误差最小的那条，再在 batch 上取平均
+
+> **对位说明（论文叙事）**：  
+> - **确定性 L2 回归（SeqBaseline）**的优化目标是条件均值轨迹，主看 `ADE_mean/FDE_mean`（`K=1`）。  
+> - **生成式模型（Diffusion/Physics/CVAE 等）**主看 `best-of-K`（覆盖潜力上界）以及后续补充的分布指标（如 Energy Score/CRPS），避免把“均值回归器”当作多模态生成的主要竞争对手。
 
 > v1 的窗口预测长度通常不足以到达 trip 终点，因此 **Arrival Rate（到达率）不作为 v1 默认指标**；若要做需要定义“到达”与 rollout 策略。
 
@@ -270,11 +274,12 @@ python -m src.utils.sanity_check --data_path data/processed_dt30 --strict --expe
 
 ### 7.4 论文实验设计
 
-**三层模型对比**（核心贡献）：
+**对比模型集合**（paper-ready）：
 
 | 模型 | 描述 | 物理约束 |
 |-----|------|---------|
-| Seq Baseline | RNN/Transformer 序列预测 | 无 |
+| Deterministic L2（SeqBaseline） | 确定性序列预测（L2 回归；输出条件均值，`K=1`） | 无 |
+| CVAE（baseline） | 条件变分自编码器（多模态生成；与 Diffusion 同类对位） | 无 |
 | Data-only Diff | 纯数据扩散生成 | 无 |
 | Physics Diff | 物理约束扩散 | nav_field + (可选) macro reg |
 
@@ -294,4 +299,3 @@ python -m src.utils.sanity_check --data_path data/processed_dt30 --strict --expe
 | w/ vs w/o destination | KnownDest 的影响 |
 | dt=30s vs step-based | 重采样的影响 |
 | K=5,10,20 | 采样数敏感性 |
-

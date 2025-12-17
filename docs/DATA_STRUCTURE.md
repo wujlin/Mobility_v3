@@ -347,8 +347,8 @@ splits/
 
 ```text
 data/experiments/{exp_name}/
-├── last.pt        # 训练保存的权重（baseline: dict；diffusion/physics: state_dict）
-├── epoch_*.pt     # baseline 可选保存（每 5 epoch）
+├── last.pt        # 训练保存的权重（dict：含 model_state_dict/optimizer_state_dict/config 等）
+├── epoch_*.pt     # （可选）baseline 额外保存的纯 state_dict（每 5 epoch）
 ├── metrics.json   # evaluate.py 输出（可选）
 └── samples.npz    # evaluate.py 输出（可选）
 ```

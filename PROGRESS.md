@@ -79,14 +79,15 @@ python -m src.data.run_preprocess
 
 **单元测试全部通过**：
 ```
-test_model_seq.py      ✅ SeqBaseline Test Passed
+test_model_seq.py      ✅ SeqBaseline / SeqCVAE Test Passed
 test_model_diffusion.py ✅ DiffusionModel Test Passed  
 test_model_physics.py   ✅ PhysicsModel Test Passed
 ```
 
 | 模型 | 文件 | 状态 |
 |-----|-----|-----|
-| Seq Baseline | `train_baseline.py` | ✅ 代码就绪 |
+| Deterministic L2（SeqBaseline） | `train_baseline.py` | ✅ 代码就绪 |
+| CVAE（baseline） | `train_cvae.py` | ✅ 代码就绪 |
 | Diffusion | `train_diffusion.py` | ✅ 代码就绪 |
 | Physics | `physics_condition_diffusion.py` | ✅ 代码就绪 |
 
@@ -96,8 +97,11 @@ test_model_physics.py   ✅ PhysicsModel Test Passed
 python -m src.data.build_strict_products --processed_dir data/processed
 python -m src.utils.sanity_check --data_path data/processed --strict
 
-# Baseline
+# Deterministic L2（SeqBaseline）
 python -m src.training.train_baseline --data_path data/processed/trajectories/shenzhen_trajectories.h5 --split train
+
+# CVAE baseline
+python -m src.training.train_cvae --data_path data/processed/trajectories/shenzhen_trajectories.h5 --split train
 
 # Diffusion
 python -m src.training.train_diffusion --model_type diffusion --data_path data/processed/trajectories/shenzhen_trajectories.h5 --split train

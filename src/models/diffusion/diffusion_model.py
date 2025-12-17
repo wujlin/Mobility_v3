@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+from typing import Tuple, Union
 from src.models.base_model import BaseTrajectoryModel
 from src.models.diffusion.unet1d import UNet1D
 from src.models.diffusion.scheduler import DDPMScheduler
@@ -60,6 +61,51 @@ class DiffusionTrajectoryModel(BaseTrajectoryModel):
         x = torch.cat([obs_flat, cond], dim=-1)
         return self.cond_encoder(x)
 
+    def compute_loss(
+        self,
+        obs: torch.Tensor,
+        cond: torch.Tensor,
+        target: torch.Tensor,
+        *,
+        return_x0_pred: bool = False,
+    ) -> Union[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]:
+        """
+        Compute diffusion training loss. Optionally return the predicted clean sample x0_pred.
+
+        Args:
+            obs: (B, H, obs_dim)
+            cond: (B, cond_dim)
+            target: (B, F, act_dim) future velocities (normalized, step displacement)
+            return_x0_pred: if True, also return x0_pred (B, act_dim, F)
+
+        Returns:
+            loss if return_x0_pred=False
+            (loss, x0_pred) if return_x0_pred=True
+        """
+        B = obs.shape[0]
+        device = obs.device
+
+        x_0 = target.permute(0, 2, 1)  # (B, act_dim, F) for Conv1d
+
+        noise = torch.randn_like(x_0)
+        timesteps = torch.randint(0, self.scheduler.num_train_timesteps, (B,), device=device).long()
+
+        self.scheduler.to(device)
+        x_t = self.scheduler.add_noise(x_0, noise, timesteps)
+
+        global_cond = self.get_global_cond(obs, cond)  # (B, emb_dim)
+        noise_pred = self.unet(x_t, timesteps, cond=global_cond)
+
+        diff_loss = nn.functional.mse_loss(noise_pred, noise)
+
+        if not return_x0_pred:
+            return diff_loss
+
+        sqrt_alpha_prod = self.scheduler.sqrt_alphas_cumprod[timesteps].flatten()[:, None, None]
+        sqrt_one_minus_alpha_prod = self.scheduler.sqrt_one_minus_alphas_cumprod[timesteps].flatten()[:, None, None]
+        x0_pred = (x_t - sqrt_one_minus_alpha_prod * noise_pred) / (sqrt_alpha_prod + 1e-8)
+        return diff_loss, x0_pred
+
     def forward(self, obs, cond, target=None):
         """
         Target is FUTURE velocities (B, F, 2).
@@ -68,28 +114,8 @@ class DiffusionTrajectoryModel(BaseTrajectoryModel):
         if target is None:
             # Cannot train without target
             return torch.tensor(0.0, device=obs.device)
-            
-        B = obs.shape[0]
-        device = obs.device
-        
-        # 1. Prepare Inputs
-        x_0 = target.permute(0, 2, 1) # (B, 2, F) for Conv1d
-        
-        # 2. Sample Noise
-        noise = torch.randn_like(x_0)
-        timesteps = torch.randint(0, self.scheduler.num_train_timesteps, (B,), device=device).long()
-        
-        # 3. Add Noise
-        self.scheduler.to(device) # Ensure scheduler on device
-        x_t = self.scheduler.add_noise(x_0, noise, timesteps)
-        
-        # 4. Predict Noise
-        global_cond = self.get_global_cond(obs, cond) # (B, emb_dim)
-        
-        noise_pred = self.unet(x_t, timesteps, cond=global_cond)
-        
-        # 5. Loss
-        return nn.functional.mse_loss(noise_pred, noise)
+
+        return self.compute_loss(obs, cond, target, return_x0_pred=False)
 
     def sample_trajectory(self, obs, cond, horizon, **kwargs):
         """

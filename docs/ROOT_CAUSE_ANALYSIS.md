@@ -63,9 +63,53 @@ Phase B 目前面临的核心矛盾是：**“扩容（h128）稳定了训练，
 ### 策略 C：后续优化 (Optional/Rebuttal)
 - 如果审稿人必须要求 Rog 对齐，可以尝试 **Test-time Rescaling**：
     - `pred_vel = pred_vel * 1.5`（简单粗暴，但有效）。
-    - 或者引入 **Macro Regularizer Loss**（训练时强行惩罚 Rog 偏差）。
+    - 或者引入 **训练级 Rog Macro Loss**（训练时直接惩罚 Rog 偏差；不做昂贵采样，基于训练 forward 推回 `x0_pred`）。
     - 但这属于 Trick，不是 Phase B 当前必须。
+
+> 代码支持：`src/training/train_diffusion.py` 新增 `--lambda_rog`（默认 0 关闭），用于对 Diffusion/Physics 训练加入 Rog 正则项。
+
+---
+
+## 4. 新增关键证据：`vel_scale` 校准实验的“代价”
+
+> 背景：我们收到外部 review 指出 **Temperature（噪声强度）≠ Scale（幅度）**。  
+> 因此我们在推理阶段引入 `vel_scale`（对预测的 future step displacement 做整体缩放）来“只修幅度、不加抖动”。
+
+### 4.1 校准协议（严谨版）
+
+- 校准集：`val` split（避免 test 泄漏）
+- 校准指标：优先用 `speed/path_len` 比值（更直接反映幅度），而不是用 Rog/MSD 反推（后者会把“时间相关性不足”误当成尺度问题）
+- 输出：得到每个模型一个推荐尺度（跨 seed 取 median）
+
+校准结果（val，seeds=0/1/2，prefer=speed）：
+
+- Diffusion：`vel_scale = 1.6395`
+- Physics：`vel_scale = 1.6804`
+
+### 4.2 关键观察：宏观对齐了，但微观明显变差
+
+在 test-mid（6400 conditions，K=20）的对照中：
+
+- **宏观幅度显著改善**：`Rog` 从 ~3.8 拉到 ~6.3，接近 `GT_Rog=6.53`；`pred_speed_mean/gt_speed_mean` 也接近 1（略有 4–5% 过冲）。
+- **微观误差显著恶化**：`ADE_mean/FDE_mean/DTW_mean` 全面变大（例如 Diffusion：`ADE_mean 8.33 → 9.56`）。
+
+这说明一个事实：**Phase B 的瓶颈不只在“走不动”（尺度），还在“走不稳/走不准”（方向与时间相关性不足）**。  
+尺度放大后，方向误差会被同步放大，因此 ADE/FDE 变差是可预期且“不可通过 scale 单独解决”的。
+
+### 4.3 进一步信号：即使速度对齐，MSD 仍偏小
+
+即使 `pred_speed_mean ≈ gt_speed_mean`，`MSD_10` 依然显著低于 GT（约 0.84–0.87×）。
+
+这更像“随机游走/方向抵消”（高频转向导致净位移不足），而不是单纯的尺度缩放问题。
+
+**结论（对外沟通的硬事实）**：`vel_scale` 能作为论文版的“幅度校准”工具，但它不是根治手术；若要同时拿到宏观幅度与微观精度，需要训练级修复（目标函数/参数化/结构）。
 
 ## 5. 总结
 **问题不在代码，而在特性。**
 当前的 Phase B 结果（Physics h128）已经具备发表条件。它展示了一个**“精度更高、覆盖更好、但略显保守”**的物理增强生成器。这完全符合“引入物理场约束”的直觉——约束通常就会带来方差的减小。
+
+补充一句更严谨的版本（结合 `vel_scale` 证据）：
+
+- 目前我们已证明：**收缩既包含“尺度偏小”，也包含“时间相关性不足”**。  
+- `vel_scale` 可以让宏观幅度对齐，但会暴露/放大微观方向误差。  
+- 若专家要给建议，我们真正需要的是：如何让生成模型在 dt30 下学到更强的方向持久性与低频运动结构（而不是靠 temperature 或 POI 堆信息）。

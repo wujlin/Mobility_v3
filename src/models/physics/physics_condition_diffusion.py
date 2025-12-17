@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+from typing import Tuple, Union
 from src.models.base_model import BaseTrajectoryModel
 from src.models.diffusion.diffusion_model import DiffusionTrajectoryModel
 from src.models.physics.cnn_encoder import CNNEncoder
@@ -34,7 +35,33 @@ class PhysicsConditionDiffusion(BaseTrajectoryModel):
             hidden_dim=hidden_dim,
             diffusion_steps=diffusion_steps
         )
-        
+
+    def compute_loss(
+        self,
+        obs: torch.Tensor,
+        cond: torch.Tensor,
+        target: torch.Tensor,
+        *,
+        nav_patch: torch.Tensor,
+        return_x0_pred: bool = False,
+    ) -> Union[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]:
+        """
+        Compute diffusion loss for physics-conditioned model.
+
+        Args:
+            obs: (B, H, 4)
+            cond: (B, 6)
+            target: (B, F, 2)
+            nav_patch: (B, 3, K, K)
+            return_x0_pred: if True, also return x0_pred (B, act_dim, F)
+        """
+        if nav_patch is None:
+            raise ValueError("Nav Patch is required for Physics Model")
+
+        nav_emb = self.nav_encoder(nav_patch)  # (B, nav_emb_dim)
+        full_cond = torch.cat([cond, nav_emb], dim=-1)
+        return self.diffusion.compute_loss(obs, full_cond, target, return_x0_pred=return_x0_pred)
+
     def forward(self, obs, cond, target=None, nav_patch=None):
         """
         obs: (B, H, 4)

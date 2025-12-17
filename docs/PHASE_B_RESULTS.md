@@ -438,4 +438,36 @@ python -m src.training.evaluate \
   --vel_scale <FILL_FROM_CALIBRATION>
 ```
 
-> 备注：若 `vel_scale` 能明显拉近 `gt_speed_mean/gt_path_len_mean` 但 `Rog/MSD` 仍偏小，则说明问题不止是尺度，还包含“时间相关性/方向持久性”不足；此时应进入训练级修复（例如幅度正则、objective/scheduler 改进）。
+> 备注：若 `vel_scale` 能明显拉近 `gt_speed_mean/gt_path_len_mean` 但 `Rog/MSD` 仍偏小，则说明问题不止是尺度，还包含“时间相关性/方向持久性”不足；此时应进入训练级修复（例如训练时加入 Rog Macro Loss）。  
+> 代码入口：`python -m src.training.train_diffusion --lambda_rog <WEIGHT>`（默认 0 关闭；Diffusion/Physics 都支持）。
+
+#### 6.6.2 校准后的效果（test-mid, 6400 conditions，示例：seed2）
+
+**结论（事实）**：`vel_scale` 能把 *速度/路径长度/活动半径* 拉到接近 GT，但 **微观误差（ADE/FDE/Fréchet/DTW）会显著变差**；这说明 Phase B 的问题不仅是“幅度收缩”，还包含“方向/时间相关性不足（更像随机游走）”，尺度放大后方向误差被同步放大。
+
+示例产物（test-mid，`num_conditions=6400, K=20`）：
+
+- Diffusion（scale 后）：`data/experiments/diff_dt30_s2_eval_test_mid_velscale/metrics.json`
+- Physics（scale 后）：`data/experiments/phys_dt30_s2_eval_test_mid_velscale/metrics.json`
+- Diffusion（scale 前，对照）：`data/experiments/diff_b_dt30_h128_b512_lr1e-3_e100_s2_eval_mid/metrics.json`
+- Physics（scale 前，对照）：`data/experiments/physics_b_dt30_h128_b512_lr1e-3_e100_s2_eval_mid/metrics.json`
+
+**宏观幅度（越接近 GT 越好）**：
+
+| 模型 | vel_scale | pred_speed_mean / gt_speed_mean | Rog | GT_Rog | MSD_10 | GT_MSD_10 |
+|---|---:|---:|---:|---:|---:|---:|
+| Diffusion（scale 前） | 1.0 | — | 3.863 | 6.533 | 159.33 | 505.67 |
+| Diffusion（scale 后） | 1.6395 | 2.069 / 1.980 ≈ 1.045 | 6.328 | 6.533 | 425.21 | 505.67 |
+| Physics（scale 前） | 1.0 | — | 3.797 | 6.533 | 156.47 | 505.67 |
+| Physics（scale 后） | 1.6804 | 2.062 / 1.980 ≈ 1.041 | 6.383 | 6.533 | 439.42 | 505.67 |
+
+**微观指标（越小越好；scale 会变差）**：
+
+| 模型 | ADE_mean | FDE_mean | DTW_mean |
+|---|---:|---:|---:|
+| Diffusion（scale 前） | 8.329 | 14.262 | 88.974 |
+| Diffusion（scale 后） | 9.561 | 16.041 | 101.468 |
+| Physics（scale 前） | 8.107 | 14.110 | 85.834 |
+| Physics（scale 后） | 9.370 | 16.043 | 98.512 |
+
+> 关键现象：即使 `pred_speed_mean` 已接近 `gt_speed_mean`，`MSD_10` 仍低于 GT（约 0.84–0.87×）。这说明轨迹虽然“走得动”，但仍存在明显的方向抵消/转向过频（缺少方向持久性），属于训练级问题，不能靠单一 `vel_scale` 完全解决。

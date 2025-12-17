@@ -1,6 +1,6 @@
 # Data
 data/raw/
-data/experiments/
+!data/experiments/
 track_data/
 *.npz
 
@@ -10,6 +10,10 @@ track_data/
 !data/processed_dt30/
 !data/processed_dt30/**
 
+# Ignore model weight files under experiments (allow other experiment artifacts)
+# Keep the experiments directory tracked but exclude large .pt weight files
+data/experiments/**/*.pt
+data/experiments/*.pt
 # Python
 __pycache__/
 *.pyc

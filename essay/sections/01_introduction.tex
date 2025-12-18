@@ -1,6 +1,18 @@
-% TODO: Introduction
-% - Research background and motivation
-% - Problem statement (KnownDestination / OD-conditioned generation)
-% - Why macroscopic constraints (Rog/MSD) matter
-% - Brief contributions and paper organization
+Urban taxi trajectories are a direct and observable footprint of how a city functions: they reflect heterogeneous demand, spatial constraints, and highly stochastic choices made by drivers under incomplete information. For urban analytics and planning, a core question is not only \emph{where} mobility flows concentrate, but also \emph{how uncertain} and \emph{multi-modal} the future can be at the level of individual trips. This is especially important in the presence of complex urban dynamics, where the same local observation may lead to multiple plausible futures due to unobserved factors (traffic, incidents, driver preferences, pricing, etc.).
 
+Most trajectory prediction pipelines are formulated as deterministic regression: given an observed prefix, output a single future trajectory that minimizes an average point-wise error. While such baselines can achieve strong mean accuracy, they inherently collapse the future distribution into a single ``average'' mode, which under-represents uncertainty and can be misleading for risk-aware decision making. In contrast, generative sequence models aim to approximate the full conditional distribution of futures and can be evaluated by both (i) their \emph{coverage} (e.g., best-of-$K$) and (ii) their \emph{distribution match} (e.g., Fr\'echet, DTW), beyond mean errors.
+
+\paragraph{Task definition.}
+We study \textbf{OD-conditioned trajectory generation with a known destination} (KnownDestination). At inference time, the destination is provided as a legitimate conditioning variable (analogous to route planning with a specified endpoint). Given an observed trajectory prefix and the OD context, the model generates multiple plausible future continuations over a short horizon (minutes). This setting is natural for taxi data where trip endpoints are available and actionable.
+
+\paragraph{Why macroscopic structure matters.}
+Beyond local point-wise errors, we emphasize macroscopic motion statistics that relate to city-scale dynamics, such as mean squared displacement (MSD) and radius of gyration (Rog), which are widely used to characterize mobility patterns \citep{gonzalez2008mobility}. In our experiments, diffusion-based generators can produce diverse futures and achieve strong best-of-$K$ performance, but they may exhibit a systematic \emph{shrinkage} phenomenon: trajectories ``move less'' than the ground truth in terms of net displacement. This reveals a non-trivial gap between micro-level fit and macro-level physical realism.
+
+\paragraph{Our approach and contributions.}
+We develop a reproducible pipeline for \textbf{dt-fixed} trajectory generation ($\Delta t = 30$s) and compare:
+(i) a deterministic L2 regression baseline,
+(ii) a conditional diffusion trajectory generator \citep{ho2020ddpm},
+and (iii) a physics-conditioned diffusion model that injects a \emph{navigation field} (a train-only, leakage-free local mean-flow prior) as additional conditioning.
+We implement a strict data contract to prevent leakage (train-only normalization and nav\_field) and adopt an evaluation protocol for generative models including best-of-$K$, distribution metrics, and macroscopic motion statistics. We further provide a systematic diagnosis of the shrinkage issue and report ablations on training-time macro constraints.
+
+The remainder of the report introduces the data and methods, presents quantitative and spatial results, and discusses limitations and future directions for city-scale mobility modeling.

@@ -32,6 +32,46 @@ def _rog_per_traj(pos: torch.Tensor, eps: float = 1e-6) -> torch.Tensor:
     sq = (diff ** 2).sum(dim=-1).mean(dim=1)
     return torch.sqrt(sq + float(eps))
 
+def _macro_indices(pred_len: int, points: list[float]) -> list[int]:
+    """
+    Convert user-provided points to future indices in [0, pred_len-1].
+
+    - If 0 < p <= 1: treat as a fraction of the horizon.
+    - If p > 1: treat as an absolute index.
+    """
+    if pred_len <= 0:
+        return []
+    out: list[int] = []
+    for p in points:
+        if p is None:
+            continue
+        if 0.0 < float(p) <= 1.0:
+            idx = int(round(float(p) * float(pred_len - 1)))
+        else:
+            idx = int(round(float(p)))
+        idx = max(0, min(pred_len - 1, idx))
+        out.append(idx)
+    out = sorted(set(out))
+    return out
+
+def _macro_t_weight(
+    timesteps: torch.Tensor,
+    diff_steps: int,
+    mode: str,
+    gamma: float,
+) -> torch.Tensor:
+    """
+    Per-sample macro-loss weight as a function of diffusion timestep t.
+    Keep timestep sampling uniform; only reweight the macro term.
+    """
+    if mode == "none":
+        return torch.ones_like(timesteps, dtype=torch.float32)
+    if mode == "exp":
+        denom = max(int(diff_steps) - 1, 1)
+        t01 = timesteps.to(torch.float32) / float(denom)
+        return torch.exp(-float(gamma) * t01)
+    raise ValueError(f"Unknown --macro_t_weight: {mode}")
+
 def _load_checkpoint(resume_from: str, device: torch.device) -> dict:
     ckpt = torch.load(resume_from, map_location=device)
     if not isinstance(ckpt, dict):
@@ -143,6 +183,14 @@ def train(args):
         "macro_rel_eps": float(args.macro_rel_eps),
         "rog_loss": str(args.rog_loss),
         "rog_warmup_epochs": int(args.rog_warmup_epochs),
+        "rog_eps": float(args.rog_eps),
+        "macro_disp_weight": str(args.macro_disp_weight),
+        "macro_disp_alpha": float(args.macro_disp_alpha),
+        "macro_disp_clip_min": float(args.macro_disp_clip_min),
+        "macro_disp_clip_max": float(args.macro_disp_clip_max),
+        "macro_t_weight": str(args.macro_t_weight),
+        "macro_t_gamma": float(args.macro_t_gamma),
+        "macro_points": [float(x) for x in (args.macro_points or [])],
     }
     
     model.train()
@@ -226,6 +274,10 @@ def train(args):
                 gt_pos = start_pos[:, None, :] + torch.cumsum(gt_vel, dim=1)
 
                 macro_eps = float(args.rog_eps)
+                # displacement magnitude (used for optional displacement-aware weighting)
+                gt_disp_end = gt_pos[:, -1, :] - start_pos  # (B, 2)
+                gt_disp_norm = torch.linalg.norm(gt_disp_end, dim=-1)  # (B,)
+
                 if args.macro_metric == "rog":
                     macro_pred = _rog_per_traj(pred_pos, eps=macro_eps)  # (B,)
                     macro_gt = _rog_per_traj(gt_pos, eps=macro_eps)      # (B,)
@@ -251,17 +303,64 @@ def train(args):
                         denom = torch.linalg.norm(gt_disp, dim=-1).mean()
                         denom = torch.clamp_min(denom, float(args.macro_rel_eps))
                         macro_loss_per = macro_loss_per / (denom ** 2)
+                elif args.macro_metric == "multi_epe":
+                    # Multi-point displacement constraint on x0_pred positions (cheap, no unrolling).
+                    indices = _macro_indices(int(args.pred_len), list(args.macro_points))
+                    if not indices:
+                        raise ValueError("--macro_metric multi_epe requires non-empty --macro_points")
+
+                    errs = []
+                    for idx in indices:
+                        diff_vec = pred_pos[:, idx, :] - gt_pos[:, idx, :]
+                        err = (diff_vec ** 2).sum(dim=-1)  # (B,)
+                        if args.rog_loss == "relative":
+                            gt_disp_k = gt_pos[:, idx, :] - start_pos
+                            denom = (gt_disp_k ** 2).sum(dim=-1)
+                            denom = torch.clamp_min(denom, float(args.macro_rel_eps))
+                            err = err / denom
+                        elif args.rog_loss == "batch_relative":
+                            denom = torch.clamp_min(gt_disp_norm.mean(), float(args.macro_rel_eps))
+                            err = err / (denom ** 2)
+                        errs.append(err)
+                    macro_loss_per = torch.stack(errs, dim=0).mean(dim=0)  # (B,)
                 else:
                     raise ValueError(f"Unknown --macro_metric: {args.macro_metric}")
 
+                # Optional: soft displacement-aware weighting to avoid low-displacement dominance.
+                weights = torch.ones_like(macro_loss_per, dtype=torch.float32)
+                if args.macro_disp_weight != "none":
+                    if args.macro_disp_weight == "tanh":
+                        w_disp = torch.tanh(float(args.macro_disp_alpha) * gt_disp_norm)
+                    elif args.macro_disp_weight == "clip":
+                        w_disp = torch.clamp(gt_disp_norm, float(args.macro_disp_clip_min), float(args.macro_disp_clip_max))
+                    else:
+                        raise ValueError(f"Unknown --macro_disp_weight: {args.macro_disp_weight}")
+                    weights = weights * w_disp.to(torch.float32)
+
+                # Optional: timestep reweighting (keep sampling uniform; only reweight macro term)
+                w_t = _macro_t_weight(
+                    timesteps=timesteps,
+                    diff_steps=int(args.diff_steps),
+                    mode=str(args.macro_t_weight),
+                    gamma=float(args.macro_t_gamma),
+                )
+                weights = weights * w_t.to(torch.float32)
+
                 t_thr = int(args.macro_t_threshold) if args.macro_t_threshold is not None else None
                 if t_thr is None or t_thr >= int(args.diff_steps):
-                    macro_loss = macro_loss_per.mean()
+                    denom = torch.clamp_min(weights.sum(), 1e-6)
+                    macro_loss = (macro_loss_per * weights).sum() / denom
                 elif t_thr <= 0:
                     macro_loss = torch.zeros((), device=device)
                 else:
                     mask = timesteps < t_thr
-                    macro_loss = macro_loss_per[mask].mean() if mask.any() else torch.zeros((), device=device)
+                    if mask.any():
+                        ml = macro_loss_per[mask]
+                        w = weights[mask]
+                        denom = torch.clamp_min(w.sum(), 1e-6)
+                        macro_loss = (ml * w).sum() / denom
+                    else:
+                        macro_loss = torch.zeros((), device=device)
 
                 loss = diff_loss + float(args.lambda_rog) * macro_loss
             else:
@@ -339,12 +438,25 @@ if __name__ == "__main__":
 
     # Training-time macro regularization (paper-facing; cheap, no sampling)
     parser.add_argument('--lambda_rog', type=float, default=0.0, help="Macro Loss weight (0 disables)")
-    parser.add_argument('--macro_metric', type=str, choices=['epe', 'rog'], default='epe', help="macro target: epe=endpoint error (pos-space), rog=radius of gyration")
+    parser.add_argument('--macro_metric', type=str, choices=['epe', 'rog', 'multi_epe'], default='epe', help="macro target: epe=endpoint error (pos-space), multi_epe=multi-point EPE, rog=radius of gyration")
     parser.add_argument('--macro_t_threshold', type=int, default=50, help="only apply macro loss when diffusion timestep t < threshold (hard SNR gate); set >=diff_steps to disable")
     parser.add_argument('--rog_loss', type=str, choices=['relative', 'absolute', 'batch_relative'], default='relative', help="macro loss scaling: relative/absolute/batch_relative")
     parser.add_argument('--macro_rel_eps', type=float, default=1.0, help="denominator floor for relative macro loss (prevents blow-up on near-stationary windows)")
     parser.add_argument('--rog_warmup_epochs', type=int, default=0, help="only apply Rog loss after N warmup epochs")
     parser.add_argument('--rog_eps', type=float, default=1e-6)
+
+    # Displacement-aware weighting (to address low-displacement dominance)
+    parser.add_argument('--macro_disp_weight', type=str, choices=['none', 'tanh', 'clip'], default='none')
+    parser.add_argument('--macro_disp_alpha', type=float, default=0.1, help="tanh(alpha*|gt_disp|) when --macro_disp_weight=tanh")
+    parser.add_argument('--macro_disp_clip_min', type=float, default=0.0)
+    parser.add_argument('--macro_disp_clip_max', type=float, default=1e9)
+
+    # Macro loss timestep weighting (do NOT bias timestep sampling distribution)
+    parser.add_argument('--macro_t_weight', type=str, choices=['none', 'exp'], default='none')
+    parser.add_argument('--macro_t_gamma', type=float, default=2.0, help="exp(-gamma*t/T) when --macro_t_weight=exp")
+
+    # Multi-lag points (used when --macro_metric=multi_epe)
+    parser.add_argument('--macro_points', type=float, nargs='*', default=[0.25, 0.5, 1.0], help="fractions in (0,1] or indices; e.g., 0.25 0.5 1.0")
     
     args = parser.parse_args()
 

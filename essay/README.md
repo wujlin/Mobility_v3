@@ -27,3 +27,7 @@ Implementation Plan, Task List and Thought in Chinese：本目录提供一个满
 - `sections/06_ai_declaration.tex`：AI 写作声明（每人独立提交时也要保留）。
 - `sections/07_contributions.tex`：个人贡献声明（每人独立提交版本要写清楚）。
 
+## 快速写作素材（建议直接复用）
+- 冲刺写作骨架与可直接引用的关键数字：`docs/ESSAY_QUICK_GUIDE.md`
+- Phase B 结果表（含 quick 320 的主表）：`docs/PHASE_B_RESULTS.md`
+- 现成图件（PNG/PDF）：`data/experiments/phase_b_report/figures_quick/`

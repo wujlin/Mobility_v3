@@ -1,6 +1,10 @@
 import numpy as np
-import torch
 from pathlib import Path
+
+try:
+    import torch
+except ModuleNotFoundError:  # optional for visualization-only environments
+    torch = None
 
 class NavField:
     """
@@ -90,6 +94,8 @@ class NavField:
 
     def to_tensor(self):
         """Return full field as tensor"""
+        if torch is None:
+            raise ModuleNotFoundError("torch is required for NavField.to_tensor()")
         dir_t = torch.from_numpy(self.direction)
         spd_t = torch.from_numpy(self.speed).unsqueeze(0)
         return torch.cat([dir_t, spd_t], dim=0) # (3, H, W)

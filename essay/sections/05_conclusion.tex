@@ -1,5 +1,3 @@
-% TODO: Conclusion
-% - Summary of findings
-% - Key contributions
-% - Implications (e.g., risk-aware mobility modeling / planning)
+We built a strict and reproducible pipeline for OD-conditioned taxi trajectory generation with explicit temporal semantics (dt-fixed=30s) and leakage-free data products (train-only normalization and navigation field). Quantitatively, diffusion-based generators demonstrate strong best-of-$K$ capability, and physics conditioning further improves the oracle upper bound, suggesting improved coverage of plausible futures. However, both generators exhibit a systematic macroscopic shrinkage in net displacement (MSD/Rog), highlighting a meaningful gap between micro-level fitting and macro-level physical realism.
 
+Beyond prediction accuracy, our geographic-space visualizations connect generated trajectories to urban spatial structure, supporting an interpretation of probabilistic trajectory generation as a tool for understanding and simulating complex urban dynamics under uncertainty. Future work will focus on improving low-frequency directional persistence via better macro supervision (e.g., displacement-aware weighting) and extending the framework to road-level constraints.

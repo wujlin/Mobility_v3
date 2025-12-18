@@ -1,5 +1,64 @@
-% TODO: Results
-% - Main quantitative table (Best-of-K first; distribution metrics; macro metrics)
-% - Ablations: lambda_rog sweep, with/without physics, warmup sensitivity
-% - Qualitative: trajectory samples, diversity vs realism, failure cases
+\subsection{Quantitative results (Phase B, dt-fixed=30s)}
+We report a quick but strict evaluation on 320 sampled conditions from the test split. For deterministic regression, $K=1$; for diffusion-based generators, $K=20$.
 
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=0.98\linewidth]{figures/fig1_micro_metrics.png}
+  \caption{Micro-level metrics on Phase B quick evaluation (mean/std and best-of-$K$ where applicable).}
+  \label{fig:micro}
+\end{figure}
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=0.90\linewidth]{figures/fig2_msd_curve.png}
+  \caption{MSD curve comparison (Pred vs GT) under dt-fixed=30s.}
+  \label{fig:msd}
+\end{figure}
+
+\paragraph{Micro-level errors.}
+The deterministic baseline achieves the best mean errors (ADE\_mean=5.467, FDE\_mean=8.855; Figure~\ref{fig:micro}). This is expected because it is optimized to predict a single conditional mean trajectory.
+In contrast, diffusion-based generators have higher mean errors (Diffusion ADE\_mean=6.741, Physics ADE\_mean=6.744), but exhibit substantially better \emph{best-of-$K$} capability:
+\begin{itemize}
+  \item Diffusion: ADE\_best=2.836, FDE\_best=3.950
+  \item Physics: ADE\_best=2.510, FDE\_best=3.419
+\end{itemize}
+This indicates that the generative models can place plausible futures among their samples even when the averaged prediction is less accurate.
+
+\paragraph{Distribution-aware metrics.}
+Diffusion/Physics show larger Fr\'echet and DTW than the deterministic baseline in this setting, reflecting a trade-off between distributional diversity and point-wise mean accuracy.
+
+\paragraph{Macro-level physical realism: shrinkage remains.}
+We observe a clear shrinkage phenomenon in macroscopic motion statistics. Compared to the ground truth:
+\begin{itemize}
+  \item Diffusion has Rog=3.056 (0.582$\times$GT\_Rog=5.247) and MSD\_10=100.948 (0.289$\times$GT\_MSD\_10=349.740).
+  \item Physics improves slightly to Rog=3.435 (0.655$\times$GT) and MSD\_10=116.869 (0.334$\times$GT), but still underestimates net displacement.
+\end{itemize}
+Thus, while physics conditioning helps directional guidance and best-of-$K$, it does not fully resolve low-frequency displacement underestimation.
+Figure~\ref{fig:msd} visualizes this gap directly via MSD curves over real time lags ($\tau = k\Delta t$).
+
+\subsection{Ablation: training-time macro loss (EPE with batch normalization)}
+Motivated by expert feedback, we tested a training-time macro constraint based on end-to-end displacement error (EPE) with (i) hard timestep gating ($t < 0.5T$) to avoid high-noise shortcuts, and (ii) batch-level normalization to prevent instability on low-displacement windows.
+On a large validation subset (K=1, 51,200 conditions), sweeping $\lambda \in \{0.01, 0.03, 0.06\}$ produced nearly identical results, suggesting a plateau region where the macro signal is not yet strong enough to change the learned dynamics. Macro shrinkage improves modestly but remains substantial (e.g., pred\_speed/gt\_speed $\approx 0.60$; MSD\_10/GT\_MSD\_10 $\approx 0.26$).
+
+\subsection{Geographic-space visualization (urban interpretation)}
+To connect model behavior to urban spatial structure, we visualize generated trajectories in geographic space by mapping grid coordinates back to latitude/longitude using the dataset bounding box. Figure~\ref{fig:geo-overlay} shows trajectory overlays (subset of saved evaluation samples), and Figure~\ref{fig:geo-density} shows spatial density maps (predicted density with ground-truth contours). These ``map-like'' visualizations highlight two practical aspects:
+\begin{itemize}
+  \item \textbf{Spatial heterogeneity}: mobility concentrates along specific corridors and regions rather than being spatially uniform.
+  \item \textbf{Probabilistic futures}: diffusion-based generators yield a family of plausible continuations, which is more aligned with complex and stochastic urban dynamics than a single mean path.
+\end{itemize}
+
+% ----------------- Figures (placeholders) -----------------
+% If compiling in Overleaf, upload the corresponding PDFs/PNGs into the project.
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=0.95\linewidth]{figures/fig_geo_traj_overlay.png}
+  \caption{Geographic-space trajectory overlays (subset of evaluation samples).}
+  \label{fig:geo-overlay}
+\end{figure}
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=0.95\linewidth]{figures/fig_geo_density.png}
+  \caption{Spatial density maps in geographic space (predicted density with ground-truth contour reference; subset of saved samples).}
+  \label{fig:geo-density}
+\end{figure}

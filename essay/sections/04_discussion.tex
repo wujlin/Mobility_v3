@@ -1,5 +1,20 @@
-% TODO: Discussion
-% - Interpretation: macro loss improves directional persistence / long-range structure
-% - Limitations: static nav patch approximation, grid-based representation
-% - Future work: autoregressive nav patch, goal-first framework, road-level (v2)
+\subsection{Interpretation: why generative models trade mean error for coverage}
+Our results illustrate a key methodological point: on multi-modal futures, minimizing point-wise mean error favors predicting a single conditional average, which can score well on ADE\_mean but does not represent the uncertainty of plausible routes. Diffusion-based generators explicitly model a conditional distribution and thus should be judged by (i) best-of-$K$ capability, and (ii) distribution-aware metrics. In this sense, the deterministic baseline is a strong reference for mean accuracy, while diffusion/physics models are evaluated for coverage and realistic variability.
 
+\subsection{Shrinkage as a macro-level failure mode}
+Despite strong best-of-$K$ performance, both diffusion and physics-conditioned diffusion under-estimate macroscopic motion (Rog/MSD). This suggests that the learned generative dynamics lack sufficient \emph{directional persistence} (low-frequency structure), so net displacement is reduced due to frequent turning and cancellation. Importantly, a simple post-hoc velocity rescaling can partially fix amplitude but tends to amplify direction errors, indicating that the problem is not purely a scale issue but involves temporal correlation and low-frequency structure.
+
+\subsection{Role of the navigation field (physics conditioning)}
+The navigation field provides a local mean-flow prior estimated from historical data. This can improve directional guidance and best-of-$K$ (Physics outperforms data-only diffusion on ADE\_best/FDE\_best), which is consistent with the hypothesis that urban mobility is shaped by spatial constraints and recurrent flow patterns. At the same time, a mean-field prior can be conservative: it may regularize trajectories toward average behavior and thus does not automatically recover long-range displacement without additional macro supervision.
+
+\subsection{Urban complex dynamics: what the model helps us understand}
+From an urban analytics perspective, the value of a probabilistic trajectory generator is not limited to point-wise prediction. It enables:
+\begin{itemize}
+  \item \textbf{Risk-aware forecasting}: sampling multiple plausible futures supports downstream planning under uncertainty (e.g., scenario analysis).
+  \item \textbf{Spatial heterogeneity analysis}: map-space density and trajectory bundles reveal how mobility concentrates and diversifies across the city.
+  \item \textbf{Physics-inspired priors}: the nav\_field can be interpreted as a coarse-grained flow field, linking micro trajectories to mesoscopic dynamics.
+\end{itemize}
+These aspects are aligned with the view of cities as complex dynamical systems, where uncertainty and variability are essential signals rather than noise to be suppressed.
+
+\subsection{Limitations and future work}
+Our current v1 pipeline is grid-based and uses a static nav\_patch, which is a simplifying approximation. For longer horizons, rolling (autoregressive) nav\_patch updates or road-level map matching would better respect spatial constraints. Most importantly, the shrinkage issue remains open: our macro-loss ablations indicate that naive low-frequency supervision can plateau. A promising next step is to reweight macro supervision by ground-truth displacement (or filter low-displacement windows) so that macro gradients are not diluted by near-stationary segments. Another direction is a goal-first generative framework: predict destination distribution first, then generate goal-conditioned paths, which can enforce global displacement more directly.

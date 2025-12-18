@@ -1,26 +1,75 @@
-\subsection{Quantitative Results (Phase B)}
-We evaluate the models on the test split using both micro-level accuracy metrics and macro-level physical consistency metrics. Table 1 summarizes the performance of the Baseline, Diffusion, and Physics-conditioned Diffusion models.
+\subsection{Quantitative Results (Phase B, dt-fixed=30s)}
+We report a quick but strict evaluation on 320 sampled conditions from the test split under dt-fixed=30s. Deterministic regression is evaluated with $K=1$, while diffusion-based generators are evaluated with $K=20$.
 
-\paragraph{Micro-level Performance}
-As shown in Figure~\ref{fig:micro}, the deterministic baseline achieves the lowest mean errors (ADE: 5.47, FDE: 8.86). This is an expected property of regression models trained with L2 loss, which tend to predict the conditional mean of the future distribution. However, this comes at the cost of diversity ($K=1$).
-Generative models, evaluated with $K=20$, show higher mean errors but significantly better \textbf{Best-of-K} performance (Physics ADE\_best: 2.51, Diffusion ADE\_best: 2.84). This confirms that while individual samples may vary, the generative models cover the ground truth distribution more effectively than a single deterministic forecast.
+\begin{table}[t]
+  \centering
+  \small
+  \begin{tabular}{lrrrrrrr}
+    \toprule
+    Model & $K$ & ADE$_{\text{mean}}$ & ADE$_{\text{best}}$ & FDE$_{\text{mean}}$ & FDE$_{\text{best}}$ & MSD$_{10}$ & Rog \\
+    \midrule
+    Baseline (L2) & 1  & 5.467 & 5.467 & 8.855  & 8.855  & 304.099 & 5.494 \\
+    Diffusion     & 20 & 6.741 & 2.836 & 11.636 & 3.950  & 100.948 & 3.056 \\
+    Physics       & 20 & 6.744 & 2.510 & 11.644 & 3.419  & 116.869 & 3.435 \\
+    \bottomrule
+  \end{tabular}
+  \caption{Phase B quick results on the test split (320 conditions). Ground-truth macro references on the same conditions are GT\_Rog=5.247 and GT\_MSD$_{10}$=349.740.}
+  \label{tab:phaseb_quick}
+\end{table}
 
-\paragraph{Macro-level Analysis: The Shrinkage Phenomenon}
-Despite their coverage advantage, generative models exhibit a systematic "shrinkage" in macroscopic motion statistics. The average Radius of Gyration (Rog) for Diffusion is 3.06, compared to the Ground Truth (GT) of 5.25 (Ratio $\approx 0.58$). Similarly, the Mean Squared Displacement at 10 steps (MSD\_10) is only $\approx 29\%$ of the GT value.
-Figure~\ref{fig:msd} presents the MSD curves ($\text{MSD}(\tau)$ vs. lag $\tau$). The GT curve follows a super-diffusive trend ($\text{MSD} \propto \tau^\alpha$ with $\alpha > 1$), characteristic of directed travel. In contrast, the uncalibrated generative models show a flatter slope, resembling a constrained random walk. This indicates a lack of \textbf{directional persistence} in the learned dynamics: generated trajectories change direction too frequently, cancelling out net displacement.
+\paragraph{Micro-level errors and coverage.}
+The deterministic baseline achieves the best mean errors (Table~\ref{tab:phaseb_quick}), which is expected for L2 regression that approximates the conditional mean.
+In contrast, diffusion-based generators have higher mean errors but much stronger \textbf{best-of-$K$} capability: Physics improves the oracle upper bound over data-only diffusion (ADE$_\text{best}$ 2.510 vs. 2.836; FDE$_\text{best}$ 3.419 vs. 3.950), indicating better coverage when the navigation-field prior is provided.
 
-\subsection{Ablation Study: Macro Regularization}
-To address the shrinkage issue, we investigated training-time macroscopic regularization. We introduced an end-to-end displacement penalty (EPE) applied during training.
+\paragraph{Macro-level physical realism: shrinkage persists.}
+Despite strong best-of-$K$, diffusion and physics-conditioned diffusion under-estimate macroscopic motion. For example, diffusion has Rog=3.056 compared to GT\_Rog=5.247 (ratio $\approx 0.58$), and MSD$_{10}$ is 100.948 compared to GT\_MSD$_{10}$=349.740 (ratio $\approx 0.29$).
+Physics conditioning improves these macro statistics modestly (Rog=3.435, MSD$_{10}$=116.869) but does not eliminate the gap.
+Figure~\ref{fig:phaseb_quant} visualizes this directly via micro-metric summaries and MSD curves over real-time lags.
 
-\paragraph{Sensitivity to Regularization Weight}
-We swept the regularization weight $\lambda \in \{0.01, 0.05, 0.1\}$. Results indicate a critical trade-off:
-\begin{itemize}
-    \item \textbf{Low $\lambda$ (< 0.01)}: The macro signal is too weak compared to the primary diffusion denoising loss, resulting in negligible change in Rog/MSD.
-    \item \textbf{High $\lambda$ (> 0.05)}: The model fails to converge to realistic trajectories. Instead of producing smooth, directed paths, the model minimizes the EPE loss by introducing \textbf{high-frequency jitter}—pathological oscillations that increase the total path length and "spread" without semantic correctness. This "noise explosion" phenomenon suggests that imposing geometric constraints on noisy intermediate states (large diffusion timesteps) can be detrimental.
-\end{itemize}
+\begin{figure}[t]
+  \centering
+  \begin{subfigure}[t]{\linewidth}
+    \centering
+    \includegraphics[width=0.98\linewidth]{figures/fig1_micro_metrics.png}
+    \caption{Micro-level metrics (mean/std and best-of-$K$ where applicable).}
+    \label{fig:phaseb_micro}
+  \end{subfigure}
 
-\paragraph{Timestep Gating}
-We further experimented with gating the macro loss, applying it only when the diffusion timestep $t < T_{thr}$. Setting $T_{thr}=50$ (halfway point) effectively suppresses the jitter artifact, as the geometric constraint is only applied when the trajectory structure is semi-formed. However, even with gating, the recovery of Rog is partial ($\approx 65\%$ of GT), indicating that the "mean-reversion" bias of the diffusion objective is a strong attractor that is difficult to fully overcome with auxiliary losses derived from noisy proxies.
+  \vspace{0.4em}
+  \begin{subfigure}[t]{\linewidth}
+    \centering
+    \includegraphics[width=0.90\linewidth]{figures/fig2_msd_curve.png}
+    \caption{MSD curves (Pred vs. GT) under dt-fixed=30s.}
+    \label{fig:phaseb_msd}
+  \end{subfigure}
+  \caption{Phase B quantitative evidence: diffusion-based generators improve best-of-$K$ coverage but exhibit macroscopic shrinkage in MSD/Rog.}
+  \label{fig:phaseb_quant}
+\end{figure}
 
-\subsection{Geographic Visualization}
-To qualitatively assess the generated mobility patterns, we project the grid-based trajectories back to geographic coordinates (Figure~\ref{fig:geo-overlay} and \ref{fig:geo-density}). The density maps confirm that the Physics-conditioned model captures the spatial heterogeneity of urban flow better than the pure diffusion model, concentrating probability mass along major transit corridors.
+\subsection{Ablation: Training-Time Macro Loss (EPE)}
+Motivated by the shrinkage phenomenon, we tested a training-time macroscopic constraint based on end-to-end displacement error (Eq.~\ref{eq:macro_loss}). To avoid shortcut solutions at highly noisy diffusion timesteps, we apply hard gating (only for early timesteps) and use batch-level normalization for stability.
+On a large validation subset (51,200 conditions, $K=1$), sweeping $\lambda \in \{0.01, 0.03, 0.06\}$ produced nearly identical results, suggesting a plateau region where the macro signal is not yet strong enough to change the learned low-frequency dynamics. Macro shrinkage improves modestly but remains substantial (e.g., pred\_speed/gt\_speed $\approx 0.60$; MSD$_{10}$/GT\_MSD$_{10}$ $\approx 0.26$).
+
+\subsection{Geographic-space Visualization (Scheme B)}
+To connect model behavior to urban spatial structure, we visualize a subset of saved evaluation samples (N=80 conditions) in geographic space using a linear bbox projection (without road-level map matching).
+Figure~\ref{fig:phaseb_geo} shows trajectory overlays and spatial density maps. These ``map-like'' visualizations highlight (i) \textbf{spatial heterogeneity} (mobility concentrates along corridors and regions), and (ii) \textbf{probabilistic futures} (diffusion-based generators yield diverse continuations compared to a single mean path).
+
+\begin{figure}[t]
+  \centering
+  \begin{subfigure}[t]{\linewidth}
+    \centering
+    \includegraphics[width=0.95\linewidth]{figures/fig_geo_traj_overlay.png}
+    \caption{Trajectory overlays (subset of saved evaluation samples).}
+    \label{fig:geo_overlay}
+  \end{subfigure}
+
+  \vspace{0.4em}
+  \begin{subfigure}[t]{\linewidth}
+    \centering
+    \includegraphics[width=0.95\linewidth]{figures/fig_geo_density.png}
+    \caption{Spatial density maps (predicted density with ground-truth contour reference).}
+    \label{fig:geo_density}
+  \end{subfigure}
+  \caption{Geographic-space visualizations (Scheme B) for urban interpretation.}
+  \label{fig:phaseb_geo}
+\end{figure}

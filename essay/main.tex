@@ -21,25 +21,25 @@
 \usepackage{subcaption}
 \usepackage{amsmath}
 \usepackage{amssymb}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
 \usepackage{siunitx}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,fit,calc}
 \usepackage{hyperref}
 \hypersetup{hidelinks}
 
 \usepackage[round,authoryear]{natbib}
 
 \title{Title Placeholder: Physics-Informed Diffusion for OD-Conditioned Trajectory Generation}
-\author{StudentID\_Name \\ (Collaborators: ...)}
+\author{Jinlin Wu}
 \date{\today}
 
 \begin{document}
 \maketitle
 
 \begin{abstract}
-% 150--250 words.
-% 1) Research question + motivation
-% 2) Data + method summary
-% 3) Key results
-% 4) Contributions / implications
+Urban trajectory generation is essential for modeling the stochastic and multi-modal nature of city-scale mobility. Deterministic regression models can achieve low point-wise mean errors, but often collapse uncertainty into a single conditional-mean path. We study Origin--Destination (OD) conditioned trajectory generation with a known destination and propose a physics-conditioned diffusion framework that injects a train-only navigation field as a non-parametric mean-flow prior. Using a rigorous fixed-interval protocol ($\Delta t=30$s) on a Shenzhen taxi dataset, we evaluate both micro-level errors (ADE/FDE and best-of-$K$ coverage) and macro-level motion statistics (MSD/Rog). Results show that diffusion-based generators provide substantially better best-of-$K$ coverage than deterministic baselines, and that navigation-field conditioning further improves the oracle upper bound. However, we also identify a systematic failure mode: generated trajectories underestimate macroscopic displacement, exhibiting a ``shrinkage'' phenomenon in MSD and Rog. A training-time macroscopic loss ablation yields only modest improvements, highlighting a non-trivial gap between probabilistic coverage and physical realism. Our work contributes a leakage-free, reproducible pipeline and a diagnosis framework for macro-level inconsistencies in generative mobility modeling.
 \end{abstract}
 
 \section{Introduction}

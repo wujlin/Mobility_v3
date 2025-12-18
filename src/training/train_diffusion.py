@@ -127,6 +127,7 @@ def train(args):
         "lambda_rog": float(args.lambda_rog),
         "macro_metric": str(args.macro_metric),
         "macro_t_threshold": (int(args.macro_t_threshold) if args.macro_t_threshold is not None else None),
+        "macro_rel_eps": float(args.macro_rel_eps),
         "rog_loss": str(args.rog_loss),
         "rog_warmup_epochs": int(args.rog_warmup_epochs),
     }
@@ -199,7 +200,8 @@ def train(args):
                     macro_loss_per = (diff_vec ** 2).sum(dim=-1)  # (B,)
                     if args.rog_loss == "relative":
                         gt_disp = gt_end - start_pos
-                        denom = (gt_disp ** 2).sum(dim=-1) + macro_eps
+                        denom = (gt_disp ** 2).sum(dim=-1)
+                        denom = torch.clamp_min(denom, float(args.macro_rel_eps))
                         macro_loss_per = macro_loss_per / denom
                 else:
                     raise ValueError(f"Unknown --macro_metric: {args.macro_metric}")
@@ -289,6 +291,7 @@ if __name__ == "__main__":
     parser.add_argument('--macro_metric', type=str, choices=['epe', 'rog'], default='epe', help="macro target: epe=endpoint error (pos-space), rog=radius of gyration")
     parser.add_argument('--macro_t_threshold', type=int, default=50, help="only apply macro loss when diffusion timestep t < threshold (hard SNR gate); set >=diff_steps to disable")
     parser.add_argument('--rog_loss', type=str, choices=['relative', 'absolute'], default='relative', help="macro loss scaling: relative/absolute")
+    parser.add_argument('--macro_rel_eps', type=float, default=1.0, help="denominator floor for relative macro loss (prevents blow-up on near-stationary windows)")
     parser.add_argument('--rog_warmup_epochs', type=int, default=0, help="only apply Rog loss after N warmup epochs")
     parser.add_argument('--rog_eps', type=float, default=1e-6)
     

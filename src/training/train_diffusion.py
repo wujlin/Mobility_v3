@@ -11,6 +11,7 @@ import random
 from src.models.diffusion.diffusion_model import DiffusionTrajectoryModel
 from src.models.physics.physics_condition_diffusion import PhysicsConditionDiffusion
 from src.data.datasets_diffusion import DiffusionDataset
+from src.models.seq.seq_baseline import SeqBaseline
 
 def _set_seed(seed: int) -> None:
     random.seed(int(seed))
@@ -18,6 +19,40 @@ def _set_seed(seed: int) -> None:
     torch.manual_seed(int(seed))
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(int(seed))
+
+def _load_baseline_prior(prior_checkpoint: str, device: torch.device) -> SeqBaseline:
+    """
+    Load a frozen SeqBaseline as a deterministic prior for residual diffusion.
+
+    Supported checkpoint formats:
+    - {"model_state_dict": ..., "config": {...}} (preferred)
+    - raw state_dict saved via torch.save(model.state_dict())
+    """
+    ckpt = torch.load(str(prior_checkpoint), map_location=device)
+    if isinstance(ckpt, dict) and "model_state_dict" in ckpt:
+        state_dict = ckpt["model_state_dict"]
+        cfg = ckpt.get("config", {})
+        hidden_dim = cfg.get("hidden_dim") if isinstance(cfg, dict) else None
+    elif isinstance(ckpt, dict):
+        state_dict = ckpt
+        hidden_dim = None
+    else:
+        raise TypeError(f"Unsupported prior checkpoint format: {type(ckpt)}")
+
+    if hidden_dim is None:
+        w = state_dict.get("head.weight")
+        if hasattr(w, "shape") and len(w.shape) == 2:
+            hidden_dim = int(w.shape[1])
+
+    if hidden_dim is None:
+        raise ValueError(f"Cannot infer prior hidden_dim from checkpoint: {prior_checkpoint}")
+
+    model = SeqBaseline(obs_dim=4, act_dim=2, cond_dim=6, hidden_dim=int(hidden_dim)).to(device)
+    model.load_state_dict(state_dict)
+    model.eval()
+    for p in model.parameters():
+        p.requires_grad_(False)
+    return model
 
 def _rog_per_traj(pos: torch.Tensor, eps: float = 1e-6) -> torch.Tensor:
     """
@@ -191,6 +226,8 @@ def train(args):
         "macro_t_weight": str(args.macro_t_weight),
         "macro_t_gamma": float(args.macro_t_gamma),
         "macro_points": [float(x) for x in (args.macro_points or [])],
+        "prior_checkpoint": (str(args.prior_checkpoint) if args.prior_checkpoint else None),
+        "residual_mode": bool(args.prior_checkpoint),
     }
     
     model.train()
@@ -211,12 +248,27 @@ def train(args):
         start_epoch = int(ckpt.get("epoch", -1)) + 1
         ckpt_cfg = ckpt.get("config", {})
         if isinstance(ckpt_cfg, dict):
+            if args.prior_checkpoint is None and ckpt_cfg.get("prior_checkpoint"):
+                args.prior_checkpoint = str(ckpt_cfg["prior_checkpoint"])
+                run_config["prior_checkpoint"] = str(args.prior_checkpoint)
+                run_config["residual_mode"] = True
+                print(f"[OK] resume: 使用 ckpt 中的 prior_checkpoint={args.prior_checkpoint}")
             for k in ("model_type", "hidden_dim", "diff_steps", "obs_len", "pred_len", "patch_size"):
                 old = ckpt_cfg.get(k)
                 new = run_config.get(k)
                 if old is not None and new is not None and str(old) != str(new):
                     print(f"[WARN] resume 配置不一致：{k}: ckpt={old} vs args={new}（可能导致加载失败或效果异常）")
+            # Prior mismatch is important for residual diffusion.
+            old_prior = ckpt_cfg.get("prior_checkpoint")
+            new_prior = run_config.get("prior_checkpoint")
+            if old_prior is not None and new_prior is not None and str(old_prior) != str(new_prior):
+                print(f"[WARN] resume 配置不一致：prior_checkpoint: ckpt={old_prior} vs args={new_prior}（Residual 模式必须一致）")
         print(f"[OK] Resumed from {resume_from} (start_epoch={start_epoch})")
+
+    prior_model = None
+    if args.prior_checkpoint:
+        prior_model = _load_baseline_prior(str(args.prior_checkpoint), device=device)
+        print(f"[OK] Residual mode enabled: prior={args.prior_checkpoint}")
 
     if start_epoch >= int(args.epochs):
         print(f"[DONE] start_epoch({start_epoch}) >= --epochs({int(args.epochs)}), nothing to train.")
@@ -234,11 +286,20 @@ def train(args):
                 break
             obs = batch['obs'].to(device)
             cond = batch['cond'].to(device)
-            action = batch['action'].to(device) # Future Vel
+            action_full = batch['action'].to(device) # Future Vel (normalized, full)
             
             nav_patch = None
             if args.model_type == 'physics':
                 nav_patch = batch['nav_patch'].to(device)
+
+            # Residual target: vel_residual = vel_full - vel_prior
+            prior_vel_norm = None
+            if prior_model is not None:
+                with torch.no_grad():
+                    prior_vel_norm = prior_model.sample_trajectory(obs, cond, int(args.pred_len))
+                target_action = action_full - prior_vel_norm
+            else:
+                target_action = action_full
             
             optimizer.zero_grad()
             
@@ -249,7 +310,7 @@ def train(args):
                     diff_loss, x0_pred, timesteps = model.compute_loss(
                         obs,
                         cond,
-                        action,
+                        target_action,
                         nav_patch=nav_patch,
                         return_x0_pred=True,
                         return_timesteps=True,
@@ -258,7 +319,7 @@ def train(args):
                     diff_loss, x0_pred, timesteps = model.compute_loss(
                         obs,
                         cond,
-                        action,
+                        target_action,
                         return_x0_pred=True,
                         return_timesteps=True,
                     )
@@ -266,9 +327,12 @@ def train(args):
                 start_pos_norm = obs[:, -1, :2]  # (B, 2)
                 start_pos = (start_pos_norm + 1.0) / 2.0 * pos_range + pos_min  # (B, 2)
 
+                # x0_pred is the model's prediction of the clean target (residual if prior is enabled).
                 pred_vel_norm = x0_pred.permute(0, 2, 1)  # (B, F, 2)
+                if prior_vel_norm is not None:
+                    pred_vel_norm = pred_vel_norm + prior_vel_norm
                 pred_vel = pred_vel_norm * vel_std + vel_mean
-                gt_vel = action * vel_std + vel_mean
+                gt_vel = action_full * vel_std + vel_mean
 
                 pred_pos = start_pos[:, None, :] + torch.cumsum(pred_vel, dim=1)
                 gt_pos = start_pos[:, None, :] + torch.cumsum(gt_vel, dim=1)
@@ -365,9 +429,9 @@ def train(args):
                 loss = diff_loss + float(args.lambda_rog) * macro_loss
             else:
                 if args.model_type == 'physics':
-                    diff_loss = model(obs, cond, target=action, nav_patch=nav_patch)
+                    diff_loss = model(obs, cond, target=target_action, nav_patch=nav_patch)
                 else:
-                    diff_loss = model(obs, cond, target=action)
+                    diff_loss = model(obs, cond, target=target_action)
                 macro_loss = None
                 loss = diff_loss
             
@@ -435,6 +499,7 @@ if __name__ == "__main__":
     parser.add_argument('--resume', action='store_true', help="resume from data/experiments/<exp_name>/last.pt if exists")
     parser.add_argument('--resume_from', type=str, default=None, help="explicit checkpoint path to resume from")
     parser.add_argument('--no_resume_optim', action='store_true', help="when resuming, do NOT load optimizer_state_dict (recommended when changing loss/weights)")
+    parser.add_argument('--prior_checkpoint', type=str, default=None, help="Residual diffusion: frozen deterministic prior checkpoint (SeqBaseline last.pt)")
 
     # Training-time macro regularization (paper-facing; cheap, no sampling)
     parser.add_argument('--lambda_rog', type=float, default=0.0, help="Macro Loss weight (0 disables)")

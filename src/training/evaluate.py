@@ -38,6 +38,37 @@ def _load_state_dict(checkpoint_path: str, device: torch.device) -> dict:
         return ckpt
     raise TypeError(f"Unsupported checkpoint format: {type(ckpt)}")
 
+def _load_baseline_prior(prior_checkpoint: str, device: torch.device) -> SeqBaseline:
+    """
+    Load a frozen SeqBaseline as a deterministic prior for residual diffusion evaluation.
+    """
+    ckpt = torch.load(prior_checkpoint, map_location=device)
+    if isinstance(ckpt, dict) and "model_state_dict" in ckpt:
+        state_dict = ckpt["model_state_dict"]
+        cfg = ckpt.get("config", {})
+        hidden_dim = cfg.get("hidden_dim") if isinstance(cfg, dict) else None
+    elif isinstance(ckpt, dict):
+        state_dict = ckpt
+        hidden_dim = None
+    else:
+        raise TypeError(f"Unsupported prior checkpoint format: {type(ckpt)}")
+
+    if hidden_dim is None:
+        w = state_dict.get("head.weight")
+        if hasattr(w, "shape") and len(w.shape) == 2:
+            hidden_dim = int(w.shape[1])
+
+    if hidden_dim is None:
+        raise ValueError(f"Cannot infer prior hidden_dim from checkpoint: {prior_checkpoint}")
+
+    model = SeqBaseline(obs_dim=4, act_dim=2, cond_dim=6, hidden_dim=int(hidden_dim))
+    model.load_state_dict(state_dict)
+    model.to(device)
+    model.eval()
+    for p in model.parameters():
+        p.requires_grad_(False)
+    return model
+
 
 def _infer_ckpt_model_type(state_dict: dict) -> Optional[str]:
     keys = state_dict.keys()
@@ -148,6 +179,9 @@ def evaluate(args):
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print(f"Using device: {device}")
+
+    if args.prior_checkpoint and args.model_type in ("baseline", "cvae"):
+        raise ValueError("--prior_checkpoint 仅用于 diffusion/physics 的 residual 评估（baseline/cvae 不需要 prior）")
     
     # 1. Load Data
     # Evaluation usually on 'test' split via mode='r'? 
@@ -235,6 +269,11 @@ def evaluate(args):
     model.load_state_dict(state_dict)
     model.to(device)
     model.eval()
+
+    prior_model = None
+    if args.prior_checkpoint:
+        prior_model = _load_baseline_prior(str(args.prior_checkpoint), device=device)
+        print(f"[OK] Residual eval enabled: prior={args.prior_checkpoint}")
     
     # 3. Inference Loop (streaming aggregation to avoid OOM)
     K = 1 if args.model_type == "baseline" else int(args.num_samples_per_condition)
@@ -290,6 +329,11 @@ def evaluate(args):
             start_pos_norm = obs[:, -1, :2]
             start_pos = norm.denormalize_pos(start_pos_norm.cpu().numpy())
 
+            # Deterministic prior (normalized vel)
+            prior_vel_norm = None
+            if prior_model is not None:
+                prior_vel_norm = prior_model.sample_trajectory(obs, cond, int(args.pred_len))
+
             # GT future velocities
             if args.model_type in ('baseline', 'cvae'):
                 gt_vel_norm = batch['target_vel'].cpu().numpy()
@@ -325,6 +369,10 @@ def evaluate(args):
                     pred_vel_norm = model.sample_trajectory(obs, cond, args.pred_len, z_temperature=float(args.z_temperature))
                 else:
                     pred_vel_norm = model.sample_trajectory(obs, cond, args.pred_len)
+
+                # Residual mode: model predicts residual vel; add deterministic prior.
+                if prior_vel_norm is not None and args.model_type in ("diffusion", "physics"):
+                    pred_vel_norm = pred_vel_norm + prior_vel_norm
 
                 pred_vel = norm.denormalize_vel(pred_vel_norm.cpu().numpy())
                 pred_vel = pred_vel * float(args.vel_scale)
@@ -408,6 +456,7 @@ def evaluate(args):
         "num_conditions": int(total_n),
         "K": int(K),
         "vel_scale": float(args.vel_scale),
+        "prior_checkpoint": (str(args.prior_checkpoint) if args.prior_checkpoint else None),
         "ADE_mean": ade_mean_sum / total_n,
         "ADE_std": ade_std_sum / total_n,
         "ADE_best": ade_best_sum / total_n,
@@ -463,6 +512,7 @@ if __name__ == "__main__":
     parser.add_argument('--model_type', type=str, choices=['baseline', 'cvae', 'diffusion', 'physics'], required=True)
     parser.add_argument('--data_path', type=str, required=True)
     parser.add_argument('--checkpoint', type=str, required=True)
+    parser.add_argument('--prior_checkpoint', type=str, default=None, help="Residual diffusion: frozen deterministic prior checkpoint (SeqBaseline last.pt)")
     parser.add_argument('--split', type=str, choices=['train', 'val', 'test', 'all'], default='test')
     parser.add_argument('--splits_dir', type=str, default=None, help="override splits dir (default: <processed_dir>/splits)")
     

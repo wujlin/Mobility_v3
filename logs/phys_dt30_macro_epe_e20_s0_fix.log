@@ -1,0 +1,105 @@
+Using device: cuda
+Using seed: 0
+Loading datasets...
+Using split=train: 97222 trajectories (/media/liuzhihang/仓库/projects/Mobility_v3/data/processed_dt30/splits/train_ids.npy)
+Initializing PhysicsConditionDiffusion...
+Epoch 0 | Batch 0 | Diff Loss 1.1092
+Epoch 0 | Batch 100 | Diff Loss 0.4415
+Epoch 0 | Batch 200 | Diff Loss 0.4092
+Epoch 0 | Batch 300 | Diff Loss 0.4012
+Epoch 0 Done. Loss: 0.4610. Time: 137.8s
+Epoch 1 | Batch 0 | Diff Loss 0.4075
+Epoch 1 | Batch 100 | Diff Loss 0.3861
+Epoch 1 | Batch 200 | Diff Loss 0.3857
+Epoch 1 | Batch 300 | Diff Loss 0.3850
+Epoch 1 Done. Loss: 0.3879. Time: 135.4s
+Epoch 2 | Batch 0 | Diff Loss 0.3752
+Epoch 2 | Batch 100 | Diff Loss 0.3690
+Epoch 2 | Batch 200 | Diff Loss 0.3697
+Epoch 2 | Batch 300 | Diff Loss 0.3673
+Epoch 2 Done. Loss: 0.3683. Time: 135.3s
+Epoch 3 | Batch 0 | Diff Loss 0.3499
+Epoch 3 | Batch 100 | Diff Loss 0.3642
+Epoch 3 | Batch 200 | Diff Loss 0.3570
+Epoch 3 | Batch 300 | Diff Loss 0.3526
+Epoch 3 Done. Loss: 0.3537. Time: 135.5s
+Epoch 4 | Batch 0 | Diff Loss 0.3487
+Epoch 4 | Batch 100 | Diff Loss 0.3455
+Epoch 4 | Batch 200 | Diff Loss 0.3306
+Epoch 4 | Batch 300 | Diff Loss 0.3372
+Epoch 4 Done. Loss: 0.3421. Time: 135.5s
+Epoch 5 | Batch 0 | Diff Loss 0.3402 | Macro Loss 0.1815 | lambda_rog=0.05 | metric=epe | t<thr(50)
+Epoch 5 | Batch 100 | Diff Loss 0.3450 | Macro Loss 0.0914 | lambda_rog=0.05 | metric=epe | t<thr(50)
+Epoch 5 | Batch 200 | Diff Loss 0.3398 | Macro Loss 0.1286 | lambda_rog=0.05 | metric=epe | t<thr(50)
+Epoch 5 | Batch 300 | Diff Loss 0.3312 | Macro Loss 0.1205 | lambda_rog=0.05 | metric=epe | t<thr(50)
+Epoch 5 Done. Loss: 0.3426. Time: 138.1s
+Epoch 6 | Batch 0 | Diff Loss 0.3303 | Macro Loss 0.0727 | lambda_rog=0.05 | metric=epe | t<thr(50)
+Epoch 6 | Batch 100 | Diff Loss 0.3293 | Macro Loss 0.0884 | lambda_rog=0.05 | metric=epe | t<thr(50)
+Epoch 6 | Batch 200 | Diff Loss 0.3224 | Macro Loss 0.1004 | lambda_rog=0.05 | metric=epe | t<thr(50)
+Epoch 6 | Batch 300 | Diff Loss 0.3256 | Macro Loss 0.1002 | lambda_rog=0.05 | metric=epe | t<thr(50)
+Epoch 6 Done. Loss: 0.3315. Time: 137.0s
+Epoch 7 | Batch 0 | Diff Loss 0.3218 | Macro Loss 0.0978 | lambda_rog=0.05 | metric=epe | t<thr(50)
+Epoch 7 | Batch 100 | Diff Loss 0.3152 | Macro Loss 0.0794 | lambda_rog=0.05 | metric=epe | t<thr(50)
+Epoch 7 | Batch 200 | Diff Loss 0.3160 | Macro Loss 0.1094 | lambda_rog=0.05 | metric=epe | t<thr(50)
+Epoch 7 | Batch 300 | Diff Loss 0.3218 | Macro Loss 0.0770 | lambda_rog=0.05 | metric=epe | t<thr(50)
+Epoch 7 Done. Loss: 0.3252. Time: 136.8s
+Epoch 8 | Batch 0 | Diff Loss 0.3220 | Macro Loss 0.0890 | lambda_rog=0.05 | metric=epe | t<thr(50)
+Epoch 8 | Batch 100 | Diff Loss 0.3156 | Macro Loss 0.0668 | lambda_rog=0.05 | metric=epe | t<thr(50)
+Epoch 8 | Batch 200 | Diff Loss 0.3207 | Macro Loss 0.0588 | lambda_rog=0.05 | metric=epe | t<thr(50)
+Epoch 8 | Batch 300 | Diff Loss 0.3156 | Macro Loss 0.0594 | lambda_rog=0.05 | metric=epe | t<thr(50)
+Epoch 8 Done. Loss: 0.3196. Time: 136.8s
+Epoch 9 | Batch 0 | Diff Loss 0.3163 | Macro Loss 0.0783 | lambda_rog=0.05 | metric=epe | t<thr(50)
+Epoch 9 | Batch 100 | Diff Loss 0.3131 | Macro Loss 0.1378 | lambda_rog=0.05 | metric=epe | t<thr(50)
+Epoch 9 | Batch 200 | Diff Loss 0.3088 | Macro Loss 0.0799 | lambda_rog=0.05 | metric=epe | t<thr(50)
+Epoch 9 | Batch 300 | Diff Loss 0.3059 | Macro Loss 0.0644 | lambda_rog=0.05 | metric=epe | t<thr(50)
+Epoch 9 Done. Loss: 0.3153. Time: 136.9s
+Epoch 10 | Batch 0 | Diff Loss 0.3159 | Macro Loss 0.0667 | lambda_rog=0.05 | metric=epe | t<thr(50)
+Epoch 10 | Batch 100 | Diff Loss 0.3037 | Macro Loss 0.0927 | lambda_rog=0.05 | metric=epe | t<thr(50)
+Epoch 10 | Batch 200 | Diff Loss 0.3053 | Macro Loss 0.1085 | lambda_rog=0.05 | metric=epe | t<thr(50)
+Epoch 10 | Batch 300 | Diff Loss 0.3018 | Macro Loss 0.0793 | lambda_rog=0.05 | metric=epe | t<thr(50)
+Epoch 10 Done. Loss: 0.3116. Time: 136.7s
+Epoch 11 | Batch 0 | Diff Loss 0.3063 | Macro Loss 0.0830 | lambda_rog=0.05 | metric=epe | t<thr(50)
+Epoch 11 | Batch 100 | Diff Loss 0.3023 | Macro Loss 0.0760 | lambda_rog=0.05 | metric=epe | t<thr(50)
+Epoch 11 | Batch 200 | Diff Loss 0.3010 | Macro Loss 0.1009 | lambda_rog=0.05 | metric=epe | t<thr(50)
+Epoch 11 | Batch 300 | Diff Loss 0.3069 | Macro Loss 0.0687 | lambda_rog=0.05 | metric=epe | t<thr(50)
+Epoch 11 Done. Loss: 0.3082. Time: 136.8s
+Epoch 12 | Batch 0 | Diff Loss 0.3004 | Macro Loss 0.0830 | lambda_rog=0.05 | metric=epe | t<thr(50)
+Epoch 12 | Batch 100 | Diff Loss 0.3020 | Macro Loss 0.0599 | lambda_rog=0.05 | metric=epe | t<thr(50)
+Epoch 12 | Batch 200 | Diff Loss 0.2997 | Macro Loss 0.0803 | lambda_rog=0.05 | metric=epe | t<thr(50)
+Epoch 12 | Batch 300 | Diff Loss 0.3013 | Macro Loss 0.0740 | lambda_rog=0.05 | metric=epe | t<thr(50)
+Epoch 12 Done. Loss: 0.3047. Time: 137.1s
+Epoch 13 | Batch 0 | Diff Loss 0.2993 | Macro Loss 0.0756 | lambda_rog=0.05 | metric=epe | t<thr(50)
+Epoch 13 | Batch 100 | Diff Loss 0.2976 | Macro Loss 0.0744 | lambda_rog=0.05 | metric=epe | t<thr(50)
+Epoch 13 | Batch 200 | Diff Loss 0.2999 | Macro Loss 0.0596 | lambda_rog=0.05 | metric=epe | t<thr(50)
+Epoch 13 | Batch 300 | Diff Loss 0.2972 | Macro Loss 0.0653 | lambda_rog=0.05 | metric=epe | t<thr(50)
+Epoch 13 Done. Loss: 0.3025. Time: 137.0s
+Epoch 14 | Batch 0 | Diff Loss 0.3019 | Macro Loss 0.1416 | lambda_rog=0.05 | metric=epe | t<thr(50)
+Epoch 14 | Batch 100 | Diff Loss 0.2947 | Macro Loss 0.0625 | lambda_rog=0.05 | metric=epe | t<thr(50)
+Epoch 14 | Batch 200 | Diff Loss 0.2957 | Macro Loss 0.1001 | lambda_rog=0.05 | metric=epe | t<thr(50)
+Epoch 14 | Batch 300 | Diff Loss 0.2899 | Macro Loss 0.0950 | lambda_rog=0.05 | metric=epe | t<thr(50)
+Epoch 14 Done. Loss: 0.2995. Time: 136.9s
+Epoch 15 | Batch 0 | Diff Loss 0.2897 | Macro Loss 0.1373 | lambda_rog=0.05 | metric=epe | t<thr(50)
+Epoch 15 | Batch 100 | Diff Loss 0.2966 | Macro Loss 0.0851 | lambda_rog=0.05 | metric=epe | t<thr(50)
+Epoch 15 | Batch 200 | Diff Loss 0.2892 | Macro Loss 0.0612 | lambda_rog=0.05 | metric=epe | t<thr(50)
+Epoch 15 | Batch 300 | Diff Loss 0.2922 | Macro Loss 0.0843 | lambda_rog=0.05 | metric=epe | t<thr(50)
+Epoch 15 Done. Loss: 0.2968. Time: 136.9s
+Epoch 16 | Batch 0 | Diff Loss 0.2857 | Macro Loss 0.0605 | lambda_rog=0.05 | metric=epe | t<thr(50)
+Epoch 16 | Batch 100 | Diff Loss 0.2875 | Macro Loss 0.0660 | lambda_rog=0.05 | metric=epe | t<thr(50)
+Epoch 16 | Batch 200 | Diff Loss 0.2846 | Macro Loss 0.0771 | lambda_rog=0.05 | metric=epe | t<thr(50)
+Epoch 16 | Batch 300 | Diff Loss 0.2861 | Macro Loss 0.0551 | lambda_rog=0.05 | metric=epe | t<thr(50)
+Epoch 16 Done. Loss: 0.2950. Time: 136.9s
+Epoch 17 | Batch 0 | Diff Loss 0.2892 | Macro Loss 0.0605 | lambda_rog=0.05 | metric=epe | t<thr(50)
+Epoch 17 | Batch 100 | Diff Loss 0.2856 | Macro Loss 0.1104 | lambda_rog=0.05 | metric=epe | t<thr(50)
+Epoch 17 | Batch 200 | Diff Loss 0.2908 | Macro Loss 0.0865 | lambda_rog=0.05 | metric=epe | t<thr(50)
+Epoch 17 | Batch 300 | Diff Loss 0.2874 | Macro Loss 0.0672 | lambda_rog=0.05 | metric=epe | t<thr(50)
+Epoch 17 Done. Loss: 0.2932. Time: 137.1s
+Epoch 18 | Batch 0 | Diff Loss 0.2881 | Macro Loss 0.0690 | lambda_rog=0.05 | metric=epe | t<thr(50)
+Epoch 18 | Batch 100 | Diff Loss 0.2908 | Macro Loss 0.0587 | lambda_rog=0.05 | metric=epe | t<thr(50)
+Epoch 18 | Batch 200 | Diff Loss 0.2918 | Macro Loss 0.0584 | lambda_rog=0.05 | metric=epe | t<thr(50)
+Epoch 18 | Batch 300 | Diff Loss 0.2928 | Macro Loss 0.0919 | lambda_rog=0.05 | metric=epe | t<thr(50)
+Epoch 18 Done. Loss: 0.2908. Time: 137.1s
+Epoch 19 | Batch 0 | Diff Loss 0.2862 | Macro Loss 0.0705 | lambda_rog=0.05 | metric=epe | t<thr(50)
+Epoch 19 | Batch 100 | Diff Loss 0.2881 | Macro Loss 0.0644 | lambda_rog=0.05 | metric=epe | t<thr(50)
+Epoch 19 | Batch 200 | Diff Loss 0.2877 | Macro Loss 0.0723 | lambda_rog=0.05 | metric=epe | t<thr(50)
+Epoch 19 | Batch 300 | Diff Loss 0.2806 | Macro Loss 0.0917 | lambda_rog=0.05 | metric=epe | t<thr(50)
+Epoch 19 Done. Loss: 0.2885. Time: 137.1s

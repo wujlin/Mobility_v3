@@ -153,11 +153,13 @@ def train(args):
         if "model_state_dict" not in ckpt:
             raise KeyError(f"Checkpoint missing model_state_dict: {resume_from}")
         model.load_state_dict(ckpt["model_state_dict"])
-        if "optimizer_state_dict" in ckpt:
+        if "optimizer_state_dict" in ckpt and not bool(args.no_resume_optim):
             try:
                 optimizer.load_state_dict(ckpt["optimizer_state_dict"])
             except Exception as e:
                 print(f"[WARN] optimizer_state_dict 加载失败（将继续但不恢复优化器状态）：{e}")
+        elif bool(args.no_resume_optim):
+            print("[OK] 已跳过 optimizer_state_dict（--no_resume_optim）")
         start_epoch = int(ckpt.get("epoch", -1)) + 1
         ckpt_cfg = ckpt.get("config", {})
         if isinstance(ckpt_cfg, dict):
@@ -325,6 +327,7 @@ if __name__ == "__main__":
     parser.add_argument('--max_batches', type=int, default=None, help="limit batches per epoch (for smoke runs)")
     parser.add_argument('--resume', action='store_true', help="resume from data/experiments/<exp_name>/last.pt if exists")
     parser.add_argument('--resume_from', type=str, default=None, help="explicit checkpoint path to resume from")
+    parser.add_argument('--no_resume_optim', action='store_true', help="when resuming, do NOT load optimizer_state_dict (recommended when changing loss/weights)")
 
     # Training-time macro regularization (paper-facing; cheap, no sampling)
     parser.add_argument('--lambda_rog', type=float, default=0.0, help="Macro Loss weight (0 disables)")

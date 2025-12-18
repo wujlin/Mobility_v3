@@ -63,10 +63,10 @@ Phase B 目前面临的核心矛盾是：**“扩容（h128）稳定了训练，
 ### 策略 C：后续优化 (Optional/Rebuttal)
 - 如果审稿人必须要求 Rog 对齐，可以尝试 **Test-time Rescaling**：
     - `pred_vel = pred_vel * 1.5`（简单粗暴，但有效）。
-    - 或者引入 **训练级 Rog Macro Loss**（训练时直接惩罚 Rog 偏差；不做昂贵采样，基于训练 forward 推回 `x0_pred`）。
+    - 或者引入 **训练级 Macro Loss**（更推荐位移类目标：EPE/MSD，而非 Rog；并且必须做 diffusion timestep 门控 `t < threshold`，避免在大噪声步上施加几何约束导致高频抖动爆炸）。
     - 但这属于 Trick，不是 Phase B 当前必须。
 
-> 代码支持：`src/training/train_diffusion.py` 新增 `--lambda_rog`（默认 0 关闭），用于对 Diffusion/Physics 训练加入 Rog 正则项。
+> 代码支持：`src/training/train_diffusion.py` 支持训练期 Macro Loss（默认关闭）。推荐配置示例：`--lambda_rog <W> --macro_metric epe --macro_t_threshold 50 --rog_warmup_epochs 5`。
 
 ---
 

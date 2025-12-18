@@ -114,7 +114,7 @@ nav_field 是局部平均流场，可能提升 best-of-K 上界，但把典型�
 
 > KISS：先只做一个明确动作，验证方向对不对。
 
-- **动作**：启用训练级 `Rog` Macro Loss（Diffusion/Physics 均支持 `--lambda_rog`），保持 nav_field 不变。  
+- **动作**：启用训练级 Macro Loss（建议从位移类目标 EPE/MSD 开始，而非 Rog；并对 diffusion timestep 做门控 `t < threshold`），保持 nav_field 不变。  
 - **验证**：1 个 seed 跑小规模（例如 10–20 epochs）观察：  
   - Rog/MSD 是否上升并更接近 GT  
   - 微观指标是否不再随着 `vel_scale` 放大而崩坏（方向更稳）

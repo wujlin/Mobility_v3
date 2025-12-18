@@ -30,6 +30,19 @@ def test_physics_model():
     loss = model(obs, cond, target=target, nav_patch=nav_patch)
     print(f"Physics Loss: {loss.item()}")
     assert loss.shape == ()
+
+    # 1b. Test compute_loss extras (x0_pred + timesteps)
+    loss2, x0_pred, timesteps = model.compute_loss(
+        obs,
+        cond,
+        target,
+        nav_patch=nav_patch,
+        return_x0_pred=True,
+        return_timesteps=True,
+    )
+    assert loss2.shape == ()
+    assert x0_pred.shape == (B, act_dim, F)
+    assert timesteps.shape == (B,)
     
     # 2. Test Sample
     horizon = F

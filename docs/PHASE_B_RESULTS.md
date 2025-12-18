@@ -438,8 +438,9 @@ python -m src.training.evaluate \
   --vel_scale <FILL_FROM_CALIBRATION>
 ```
 
-> 备注：若 `vel_scale` 能明显拉近 `gt_speed_mean/gt_path_len_mean` 但 `Rog/MSD` 仍偏小，则说明问题不止是尺度，还包含“时间相关性/方向持久性”不足；此时应进入训练级修复（例如训练时加入 Rog Macro Loss）。  
-> 代码入口：`python -m src.training.train_diffusion --lambda_rog <WEIGHT>`（默认 0 关闭；Diffusion/Physics 都支持）。
+> 备注：若 `vel_scale` 能明显拉近 `gt_speed_mean/gt_path_len_mean` 但 `Rog/MSD` 仍偏小，则说明问题不止是尺度，还包含“时间相关性/方向持久性”不足；此时应进入训练级修复（训练期 Macro Loss）。  
+> 重要：Macro Loss 必须做 diffusion timestep 门控（例如 `t < 50`），否则在大噪声步上约束 `x0_pred` 会触发高频抖动爆炸（path_len 变大但净位移更差）。  
+> 代码入口（推荐）：`python -m src.training.train_diffusion --lambda_rog <W> --macro_metric epe --macro_t_threshold 50 --rog_warmup_epochs 5`（默认 Macro 关闭；Diffusion/Physics 都支持）。
 
 #### 6.6.2 校准后的效果（test-mid, 6400 conditions，示例：seed2）
 

@@ -68,19 +68,27 @@ class DiffusionTrajectoryModel(BaseTrajectoryModel):
         target: torch.Tensor,
         *,
         return_x0_pred: bool = False,
-    ) -> Union[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]:
+        return_timesteps: bool = False,
+    ) -> Union[
+        torch.Tensor,
+        Tuple[torch.Tensor, torch.Tensor],
+        Tuple[torch.Tensor, torch.Tensor, torch.Tensor],
+    ]:
         """
-        Compute diffusion training loss. Optionally return the predicted clean sample x0_pred.
+        Compute diffusion training loss. Optionally return the predicted clean sample x0_pred and/or the sampled timesteps.
 
         Args:
             obs: (B, H, obs_dim)
             cond: (B, cond_dim)
             target: (B, F, act_dim) future velocities (normalized, step displacement)
             return_x0_pred: if True, also return x0_pred (B, act_dim, F)
+            return_timesteps: if True, also return timesteps (B,)
 
         Returns:
-            loss if return_x0_pred=False
-            (loss, x0_pred) if return_x0_pred=True
+            loss if return_x0_pred=False and return_timesteps=False
+            (loss, x0_pred) if return_x0_pred=True and return_timesteps=False
+            (loss, timesteps) if return_x0_pred=False and return_timesteps=True
+            (loss, x0_pred, timesteps) if return_x0_pred=True and return_timesteps=True
         """
         B = obs.shape[0]
         device = obs.device
@@ -98,13 +106,18 @@ class DiffusionTrajectoryModel(BaseTrajectoryModel):
 
         diff_loss = nn.functional.mse_loss(noise_pred, noise)
 
-        if not return_x0_pred:
+        if not return_x0_pred and not return_timesteps:
             return diff_loss
 
         sqrt_alpha_prod = self.scheduler.sqrt_alphas_cumprod[timesteps].flatten()[:, None, None]
         sqrt_one_minus_alpha_prod = self.scheduler.sqrt_one_minus_alphas_cumprod[timesteps].flatten()[:, None, None]
         x0_pred = (x_t - sqrt_one_minus_alpha_prod * noise_pred) / (sqrt_alpha_prod + 1e-8)
-        return diff_loss, x0_pred
+
+        if return_x0_pred and return_timesteps:
+            return diff_loss, x0_pred, timesteps
+        if return_x0_pred:
+            return diff_loss, x0_pred
+        return diff_loss, timesteps
 
     def forward(self, obs, cond, target=None):
         """

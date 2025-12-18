@@ -44,7 +44,12 @@ class PhysicsConditionDiffusion(BaseTrajectoryModel):
         *,
         nav_patch: torch.Tensor,
         return_x0_pred: bool = False,
-    ) -> Union[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]:
+        return_timesteps: bool = False,
+    ) -> Union[
+        torch.Tensor,
+        Tuple[torch.Tensor, torch.Tensor],
+        Tuple[torch.Tensor, torch.Tensor, torch.Tensor],
+    ]:
         """
         Compute diffusion loss for physics-conditioned model.
 
@@ -54,13 +59,20 @@ class PhysicsConditionDiffusion(BaseTrajectoryModel):
             target: (B, F, 2)
             nav_patch: (B, 3, K, K)
             return_x0_pred: if True, also return x0_pred (B, act_dim, F)
+            return_timesteps: if True, also return timesteps (B,)
         """
         if nav_patch is None:
             raise ValueError("Nav Patch is required for Physics Model")
 
         nav_emb = self.nav_encoder(nav_patch)  # (B, nav_emb_dim)
         full_cond = torch.cat([cond, nav_emb], dim=-1)
-        return self.diffusion.compute_loss(obs, full_cond, target, return_x0_pred=return_x0_pred)
+        return self.diffusion.compute_loss(
+            obs,
+            full_cond,
+            target,
+            return_x0_pred=return_x0_pred,
+            return_timesteps=return_timesteps,
+        )
 
     def forward(self, obs, cond, target=None, nav_patch=None):
         """

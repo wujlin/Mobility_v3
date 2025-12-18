@@ -125,6 +125,8 @@ def train(args):
         "num_workers": int(args.num_workers),
         "max_batches": (int(args.max_batches) if args.max_batches is not None else None),
         "lambda_rog": float(args.lambda_rog),
+        "macro_metric": str(args.macro_metric),
+        "macro_t_threshold": (int(args.macro_t_threshold) if args.macro_t_threshold is not None else None),
         "rog_loss": str(args.rog_loss),
         "rog_warmup_epochs": int(args.rog_warmup_epochs),
     }
@@ -134,7 +136,7 @@ def train(args):
     for epoch in range(args.epochs):
         total_loss = 0
         total_diff_loss = 0
-        total_rog_loss = 0
+        total_macro_loss = 0
         start_time = time.time()
         step_count = 0
         
@@ -151,19 +153,26 @@ def train(args):
             
             optimizer.zero_grad()
             
-            use_rog = float(args.lambda_rog) > 0 and int(epoch) >= int(args.rog_warmup_epochs)
+            use_macro = float(args.lambda_rog) > 0 and int(epoch) >= int(args.rog_warmup_epochs)
 
-            if use_rog:
+            if use_macro:
                 if args.model_type == 'physics':
-                    diff_loss, x0_pred = model.compute_loss(
+                    diff_loss, x0_pred, timesteps = model.compute_loss(
                         obs,
                         cond,
                         action,
                         nav_patch=nav_patch,
                         return_x0_pred=True,
+                        return_timesteps=True,
                     )
                 else:
-                    diff_loss, x0_pred = model.compute_loss(obs, cond, action, return_x0_pred=True)
+                    diff_loss, x0_pred, timesteps = model.compute_loss(
+                        obs,
+                        cond,
+                        action,
+                        return_x0_pred=True,
+                        return_timesteps=True,
+                    )
 
                 start_pos_norm = obs[:, -1, :2]  # (B, 2)
                 start_pos = (start_pos_norm + 1.0) / 2.0 * pos_range + pos_min  # (B, 2)
@@ -175,22 +184,42 @@ def train(args):
                 pred_pos = start_pos[:, None, :] + torch.cumsum(pred_vel, dim=1)
                 gt_pos = start_pos[:, None, :] + torch.cumsum(gt_vel, dim=1)
 
-                rog_pred = _rog_per_traj(pred_pos, eps=float(args.rog_eps))
-                rog_gt = _rog_per_traj(gt_pos, eps=float(args.rog_eps))
-
-                if args.rog_loss == "relative":
-                    rog_loss = ((rog_pred - rog_gt) / (rog_gt + float(args.rog_eps))) ** 2
+                macro_eps = float(args.rog_eps)
+                if args.macro_metric == "rog":
+                    macro_pred = _rog_per_traj(pred_pos, eps=macro_eps)  # (B,)
+                    macro_gt = _rog_per_traj(gt_pos, eps=macro_eps)      # (B,)
+                    if args.rog_loss == "relative":
+                        macro_loss_per = ((macro_pred - macro_gt) / (macro_gt + macro_eps)) ** 2
+                    else:
+                        macro_loss_per = (macro_pred - macro_gt) ** 2
+                elif args.macro_metric == "epe":
+                    pred_end = pred_pos[:, -1, :]  # (B, 2)
+                    gt_end = gt_pos[:, -1, :]      # (B, 2)
+                    diff_vec = pred_end - gt_end
+                    macro_loss_per = (diff_vec ** 2).sum(dim=-1)  # (B,)
+                    if args.rog_loss == "relative":
+                        gt_disp = gt_end - start_pos
+                        denom = (gt_disp ** 2).sum(dim=-1) + macro_eps
+                        macro_loss_per = macro_loss_per / denom
                 else:
-                    rog_loss = (rog_pred - rog_gt) ** 2
-                rog_loss = rog_loss.mean()
+                    raise ValueError(f"Unknown --macro_metric: {args.macro_metric}")
 
-                loss = diff_loss + float(args.lambda_rog) * rog_loss
+                t_thr = int(args.macro_t_threshold) if args.macro_t_threshold is not None else None
+                if t_thr is None or t_thr >= int(args.diff_steps):
+                    macro_loss = macro_loss_per.mean()
+                elif t_thr <= 0:
+                    macro_loss = torch.zeros((), device=device)
+                else:
+                    mask = timesteps < t_thr
+                    macro_loss = macro_loss_per[mask].mean() if mask.any() else torch.zeros((), device=device)
+
+                loss = diff_loss + float(args.lambda_rog) * macro_loss
             else:
                 if args.model_type == 'physics':
                     diff_loss = model(obs, cond, target=action, nav_patch=nav_patch)
                 else:
                     diff_loss = model(obs, cond, target=action)
-                rog_loss = None
+                macro_loss = None
                 loss = diff_loss
             
             loss.backward()
@@ -199,18 +228,19 @@ def train(args):
             
             total_loss += loss.item()
             total_diff_loss += diff_loss.item()
-            if rog_loss is not None:
-                total_rog_loss += float(rog_loss.item())
+            if macro_loss is not None:
+                total_macro_loss += float(macro_loss.item())
             step_count += 1
             
             if batch_idx % 100 == 0:
-                 if rog_loss is None:
+                 if macro_loss is None:
                      print(f"Epoch {epoch} | Batch {batch_idx} | Diff Loss {diff_loss.item():.4f}")
                  else:
                      print(
                          f"Epoch {epoch} | Batch {batch_idx} | "
-                         f"Diff Loss {diff_loss.item():.4f} | Rog Loss {rog_loss.item():.4f} | "
-                         f"lambda_rog={float(args.lambda_rog):g}"
+                         f"Diff Loss {diff_loss.item():.4f} | Macro Loss {macro_loss.item():.4f} | "
+                         f"lambda_rog={float(args.lambda_rog):g} | metric={args.macro_metric} | "
+                         f"t<thr({int(args.macro_t_threshold)})"
                      )
                  
         avg_loss = total_loss / max(step_count, 1)
@@ -255,8 +285,10 @@ if __name__ == "__main__":
     parser.add_argument('--max_batches', type=int, default=None, help="limit batches per epoch (for smoke runs)")
 
     # Training-time macro regularization (paper-facing; cheap, no sampling)
-    parser.add_argument('--lambda_rog', type=float, default=0.0, help="Rog Macro Loss weight (0 disables)")
-    parser.add_argument('--rog_loss', type=str, choices=['relative', 'absolute'], default='relative')
+    parser.add_argument('--lambda_rog', type=float, default=0.0, help="Macro Loss weight (0 disables)")
+    parser.add_argument('--macro_metric', type=str, choices=['epe', 'rog'], default='epe', help="macro target: epe=endpoint error (pos-space), rog=radius of gyration")
+    parser.add_argument('--macro_t_threshold', type=int, default=50, help="only apply macro loss when diffusion timestep t < threshold (hard SNR gate); set >=diff_steps to disable")
+    parser.add_argument('--rog_loss', type=str, choices=['relative', 'absolute'], default='relative', help="macro loss scaling: relative/absolute")
     parser.add_argument('--rog_warmup_epochs', type=int, default=0, help="only apply Rog loss after N warmup epochs")
     parser.add_argument('--rog_eps', type=float, default=1e-6)
     

@@ -28,6 +28,12 @@ def test_diffusion_model():
     print(f"Diffusion Loss: {loss.item()}")
     assert loss.shape == ()
     assert not torch.isnan(loss)
+
+    # 1b. Test compute_loss extras (x0_pred + timesteps)
+    loss2, x0_pred, timesteps = model.compute_loss(obs, cond, target, return_x0_pred=True, return_timesteps=True)
+    assert loss2.shape == ()
+    assert x0_pred.shape == (B, act_dim, F)
+    assert timesteps.shape == (B,)
     
     # 2. Test Sample (Inference)
     horizon = F

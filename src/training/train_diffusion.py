@@ -231,6 +231,9 @@ def train(args):
                     macro_gt = _rog_per_traj(gt_pos, eps=macro_eps)      # (B,)
                     if args.rog_loss == "relative":
                         macro_loss_per = ((macro_pred - macro_gt) / (macro_gt + macro_eps)) ** 2
+                    elif args.rog_loss == "batch_relative":
+                        denom = torch.clamp_min(macro_gt.mean(), float(args.macro_rel_eps))
+                        macro_loss_per = ((macro_pred - macro_gt) / denom) ** 2
                     else:
                         macro_loss_per = (macro_pred - macro_gt) ** 2
                 elif args.macro_metric == "epe":
@@ -243,6 +246,11 @@ def train(args):
                         denom = (gt_disp ** 2).sum(dim=-1)
                         denom = torch.clamp_min(denom, float(args.macro_rel_eps))
                         macro_loss_per = macro_loss_per / denom
+                    elif args.rog_loss == "batch_relative":
+                        gt_disp = gt_end - start_pos
+                        denom = torch.linalg.norm(gt_disp, dim=-1).mean()
+                        denom = torch.clamp_min(denom, float(args.macro_rel_eps))
+                        macro_loss_per = macro_loss_per / (denom ** 2)
                 else:
                     raise ValueError(f"Unknown --macro_metric: {args.macro_metric}")
 
@@ -333,7 +341,7 @@ if __name__ == "__main__":
     parser.add_argument('--lambda_rog', type=float, default=0.0, help="Macro Loss weight (0 disables)")
     parser.add_argument('--macro_metric', type=str, choices=['epe', 'rog'], default='epe', help="macro target: epe=endpoint error (pos-space), rog=radius of gyration")
     parser.add_argument('--macro_t_threshold', type=int, default=50, help="only apply macro loss when diffusion timestep t < threshold (hard SNR gate); set >=diff_steps to disable")
-    parser.add_argument('--rog_loss', type=str, choices=['relative', 'absolute'], default='relative', help="macro loss scaling: relative/absolute")
+    parser.add_argument('--rog_loss', type=str, choices=['relative', 'absolute', 'batch_relative'], default='relative', help="macro loss scaling: relative/absolute/batch_relative")
     parser.add_argument('--macro_rel_eps', type=float, default=1.0, help="denominator floor for relative macro loss (prevents blow-up on near-stationary windows)")
     parser.add_argument('--rog_warmup_epochs', type=int, default=0, help="only apply Rog loss after N warmup epochs")
     parser.add_argument('--rog_eps', type=float, default=1e-6)

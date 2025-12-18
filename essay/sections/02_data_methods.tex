@@ -1,0 +1,11 @@
+% TODO: Data and Methods
+% Data:
+% - Shenzhen taxi trajectories, preprocessing (grid-based), dt-fixed=30s
+% - Train/val/test split and leakage-free products (nav_field train-only)
+%
+% Methods:
+% - Baseline (deterministic) and diffusion/physics models
+% - Conditioning: (o, d, t0), obs_len=8, pred_len=12
+% - Training objective: diffusion loss + macro loss (Rog/MSD) with warmup
+% - Evaluation protocol: K=20, best-of-K, Frechet/DTW, MSD/Rog (+ GT)
+

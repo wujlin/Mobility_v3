@@ -1,0 +1,74 @@
+\documentclass[12pt]{article}
+
+% ============================================================
+% Paper template (Overleaf-friendly)
+% Requirements: Times New Roman (approx), 12pt, 1.5 spacing,
+% single column, 1-inch margins.
+% ============================================================
+
+\usepackage[margin=1in]{geometry}
+\usepackage{setspace}
+\onehalfspacing
+
+% Times-like fonts that compile reliably on Overleaf (pdfLaTeX).
+% If you need the *exact* Times New Roman, see essay/README.md.
+\usepackage{newtxtext}
+\usepackage{newtxmath}
+
+\usepackage{microtype}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{subcaption}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{siunitx}
+\usepackage{hyperref}
+\hypersetup{hidelinks}
+
+\usepackage[round,authoryear]{natbib}
+
+\title{Title Placeholder: Physics-Informed Diffusion for OD-Conditioned Trajectory Generation}
+\author{StudentID\_Name \\ (Collaborators: ...)}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+% 150--250 words.
+% 1) Research question + motivation
+% 2) Data + method summary
+% 3) Key results
+% 4) Contributions / implications
+\end{abstract}
+
+\section{Introduction}
+\input{sections/01_introduction.tex}
+
+\section{Data and Methods}
+\input{sections/02_data_methods.tex}
+
+\section{Results}
+\input{sections/03_results.tex}
+
+\section{Discussion}
+\input{sections/04_discussion.tex}
+
+\section{Conclusion}
+\input{sections/05_conclusion.tex}
+
+\section{Declaration of Generative AI and AI-Assisted Technologies}
+\input{sections/06_ai_declaration.tex}
+
+\section{Author Contribution Statement}
+\input{sections/07_contributions.tex}
+
+\bibliographystyle{plainnat}
+\bibliography{references}
+
+\appendix
+\section{Appendix}
+\input{sections/A_appendix.tex}
+
+\end{document}
+

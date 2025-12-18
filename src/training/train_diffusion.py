@@ -32,6 +32,12 @@ def _rog_per_traj(pos: torch.Tensor, eps: float = 1e-6) -> torch.Tensor:
     sq = (diff ** 2).sum(dim=-1).mean(dim=1)
     return torch.sqrt(sq + float(eps))
 
+def _load_checkpoint(resume_from: str, device: torch.device) -> dict:
+    ckpt = torch.load(resume_from, map_location=device)
+    if not isinstance(ckpt, dict):
+        raise TypeError(f"Unsupported checkpoint format: {type(ckpt)}")
+    return ckpt
+
 def train(args):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print(f"Using device: {device}")
@@ -107,6 +113,13 @@ def train(args):
     save_dir = Path(f"data/experiments/{args.exp_name}")
     save_dir.mkdir(parents=True, exist_ok=True)
 
+    # Optional resume (for fast iteration without wasting epochs)
+    resume_from = args.resume_from
+    if args.resume and resume_from is None:
+        candidate = save_dir / "last.pt"
+        if candidate.exists():
+            resume_from = str(candidate)
+
     run_config = {
         "model_type": args.model_type,
         "data_path": args.data_path,
@@ -133,8 +146,33 @@ def train(args):
     }
     
     model.train()
+
+    start_epoch = 0
+    if resume_from is not None:
+        ckpt = _load_checkpoint(resume_from, device=device)
+        if "model_state_dict" not in ckpt:
+            raise KeyError(f"Checkpoint missing model_state_dict: {resume_from}")
+        model.load_state_dict(ckpt["model_state_dict"])
+        if "optimizer_state_dict" in ckpt:
+            try:
+                optimizer.load_state_dict(ckpt["optimizer_state_dict"])
+            except Exception as e:
+                print(f"[WARN] optimizer_state_dict 加载失败（将继续但不恢复优化器状态）：{e}")
+        start_epoch = int(ckpt.get("epoch", -1)) + 1
+        ckpt_cfg = ckpt.get("config", {})
+        if isinstance(ckpt_cfg, dict):
+            for k in ("model_type", "hidden_dim", "diff_steps", "obs_len", "pred_len", "patch_size"):
+                old = ckpt_cfg.get(k)
+                new = run_config.get(k)
+                if old is not None and new is not None and str(old) != str(new):
+                    print(f"[WARN] resume 配置不一致：{k}: ckpt={old} vs args={new}（可能导致加载失败或效果异常）")
+        print(f"[OK] Resumed from {resume_from} (start_epoch={start_epoch})")
+
+    if start_epoch >= int(args.epochs):
+        print(f"[DONE] start_epoch({start_epoch}) >= --epochs({int(args.epochs)}), nothing to train.")
+        return
     
-    for epoch in range(args.epochs):
+    for epoch in range(start_epoch, int(args.epochs)):
         total_loss = 0
         total_diff_loss = 0
         total_macro_loss = 0
@@ -285,6 +323,8 @@ if __name__ == "__main__":
     parser.add_argument('--seed', type=int, default=0)
     parser.add_argument('--num_workers', type=int, default=4)
     parser.add_argument('--max_batches', type=int, default=None, help="limit batches per epoch (for smoke runs)")
+    parser.add_argument('--resume', action='store_true', help="resume from data/experiments/<exp_name>/last.pt if exists")
+    parser.add_argument('--resume_from', type=str, default=None, help="explicit checkpoint path to resume from")
 
     # Training-time macro regularization (paper-facing; cheap, no sampling)
     parser.add_argument('--lambda_rog', type=float, default=0.0, help="Macro Loss weight (0 disables)")

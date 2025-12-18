@@ -3,6 +3,8 @@ data/raw/
 !data/experiments/
 track_data/
 *.npz
+!data/processed/**/*.npz
+!data/processed_dt30/**/*.npz
 
 # Keep processed data (for sharing)
 !data/processed/
@@ -14,6 +16,16 @@ track_data/
 # Keep the experiments directory tracked but exclude large .pt weight files
 data/experiments/**/*.pt
 data/experiments/*.pt
+data/experiments/**/.last.pt.*
+data/experiments/.last.pt.*
+
+# Logs
+logs/
+old_logs/
+
+# Backups (auto-generated)
+data/processed/**/*.legacy.*
+data/processed_dt30/**/*.legacy.*
 # Python
 __pycache__/
 *.pyc

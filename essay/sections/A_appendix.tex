@@ -1,5 +1,27 @@
-% TODO: Appendices (optional)
-% - Additional tables/figures
-% - Implementation details, hyperparameters
-% - Extra qualitative samples
+% ============================================================
+% Appendix: extra figures/tables for completeness
+% ============================================================
 
+\subsection{Additional Quantitative Visualizations (Phase B)}
+To keep the main text focused, we place additional evaluation visualizations here. All plots are generated from the same strict Phase B pipeline (dt-fixed=30s) and use the saved evaluation samples where applicable.
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=0.95\linewidth]{figures/fig3_traj_overlay.png}
+  \caption{Qualitative trajectory overlays in grid space (multiple sampled conditions).}
+  \label{fig:appendix_traj_overlay}
+\end{figure}
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=0.90\linewidth]{figures/fig4_error_cdf.png}
+  \caption{Empirical CDF of ADE/FDE computed on saved evaluation samples.}
+  \label{fig:appendix_error_cdf}
+\end{figure}
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=0.90\linewidth]{figures/fig5_rog_boxplot.png}
+  \caption{Distribution of radius of gyration (Rog) across trajectories (saved samples).}
+  \label{fig:appendix_rog_boxplot}
+\end{figure}

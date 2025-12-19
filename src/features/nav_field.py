@@ -52,11 +52,14 @@ class NavField:
 
         self.H, self.W = self.direction.shape[1], self.direction.shape[2]
         
-    def get_patch(self, center_pos: np.ndarray, patch_size: int = 32) -> np.ndarray:
+    def get_patch(self, center_pos: np.ndarray, patch_size: int = 32, *, channel2: str = "speed") -> np.ndarray:
         """
         Extract a square patch centered at center_pos [y, x].
-        Returns: (3, K, K) array [dir_y, dir_x, speed]
+        Returns: (3, K, K) array [dir_y, dir_x, channel2]
         Handles padding if out of bounds.
+
+        Args:
+            channel2: "speed" (default), "count", or "zeros".
         """
         y, x = int(center_pos[0]), int(center_pos[1])
         r = patch_size // 2
@@ -66,7 +69,7 @@ class NavField:
         x_min, x_max = x - r, x + r
         
         # Prepare canvas
-        # Channels: 2 for direction + 1 for speed = 3
+        # Channels: 2 for direction + 1 for extra scalar (speed/count/zeros) = 3
         patch = np.zeros((3, patch_size, patch_size), dtype=np.float32)
         
         # Intersection with image
@@ -85,10 +88,19 @@ class NavField:
             # Copy Direction
             patch[0:2, patch_y_min:patch_y_max, patch_x_min:patch_x_max] = \
                 self.direction[:, img_y_min:img_y_max, img_x_min:img_x_max]
-            
-            # Copy Speed
-            patch[2, patch_y_min:patch_y_max, patch_x_min:patch_x_max] = \
-                self.speed[img_y_min:img_y_max, img_x_min:img_x_max]
+
+            if channel2 == "speed":
+                src = self.speed
+            elif channel2 == "count":
+                src = self.count
+            elif channel2 == "zeros":
+                src = None
+            else:
+                raise ValueError(f"Unknown channel2: {channel2} (expected: speed/count/zeros)")
+
+            if src is not None:
+                patch[2, patch_y_min:patch_y_max, patch_x_min:patch_x_max] = \
+                    src[img_y_min:img_y_max, img_x_min:img_x_max]
                 
         return patch
 

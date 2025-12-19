@@ -19,6 +19,7 @@ class DiffusionDataset(Dataset):
                  step: int = 1,
                  nav_field_file: str = None,
                  nav_patch_size: int = 32,
+                 nav_patch_channel2: str = "speed",
                  normalizer: Normalizer = None,
                  traj_ids: Optional[np.ndarray] = None):
         
@@ -28,6 +29,7 @@ class DiffusionDataset(Dataset):
         self.window_size = obs_len + pred_len
         self.step = step
         self.nav_patch_size = nav_patch_size
+        self.nav_patch_channel2 = str(nav_patch_channel2)
         
         if normalizer is not None:
             self.normalizer = normalizer
@@ -41,6 +43,13 @@ class DiffusionDataset(Dataset):
         self.nav_field = None
         if nav_field_file:
             self.nav_field = NavField(nav_field_file)
+            if self.nav_patch_channel2 not in ("speed", "count", "zeros"):
+                raise ValueError(f"Unknown nav_patch_channel2: {self.nav_patch_channel2} (expected: speed/count/zeros)")
+
+        self._nav_count_log1p_max = 1.0
+        if self.nav_field is not None and self.nav_patch_channel2 == "count":
+            if self.nav_field.count is not None:
+                self._nav_count_log1p_max = float(np.maximum(np.log1p(self.nav_field.count).max(), 1.0))
             
         self.samples = []
         self._build_index()
@@ -113,8 +122,7 @@ class DiffusionDataset(Dataset):
             # Center is the last observed position
             # Use RAW (denormalized) position for lookup!
             center_pos = pos_window[self.obs_len - 1] 
-            
-            patch = self.nav_field.get_patch(center_pos, self.nav_patch_size)
+            patch = self.nav_field.get_patch(center_pos, self.nav_patch_size, channel2=self.nav_patch_channel2)
             
             # Nav patch is already normalized?
             # NavField returns raw directions (unit) and speed as step displacement magnitude (grid_cell/step).
@@ -124,15 +132,15 @@ class DiffusionDataset(Dataset):
             
             patch_tensor = torch.from_numpy(patch).float()
             
-            # Normalize speed channel (index 2)
-            # Basic scaling or reuse vel_std? Speed is magnitude, vel is vector.
-            # Let's say we have nav_max_speed in settings? 
-            # Or just divide by a constant like 30.0.
-            # NORM.vel_mean is vector mean ~ 0.
-            # NORM.vel_std is vector std.
-            # Let's use vel_std[0] approx.
-            # Simple division for now.
-            patch_tensor[2] = patch_tensor[2] / self.normalizer.config.nav_max_speed
+            # Normalize channel-2
+            if self.nav_patch_channel2 == "speed":
+                patch_tensor[2] = patch_tensor[2] / self.normalizer.config.nav_max_speed
+            elif self.nav_patch_channel2 == "count":
+                patch_tensor[2] = torch.log1p(patch_tensor[2]) / float(self._nav_count_log1p_max)
+            elif self.nav_patch_channel2 == "zeros":
+                patch_tensor[2].zero_()
+            else:  # pragma: no cover
+                raise ValueError(f"Unknown nav_patch_channel2: {self.nav_patch_channel2}")
             
             result["nav_patch"] = patch_tensor # (3, K, K)
             

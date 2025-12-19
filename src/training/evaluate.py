@@ -210,6 +210,7 @@ def evaluate(args):
             pred_len=args.pred_len,
             nav_field_file=nav_file,
             nav_patch_size=args.patch_size,
+            nav_patch_channel2=args.nav_patch_channel2,
             traj_ids=traj_ids,
         )
         
@@ -519,6 +520,13 @@ if __name__ == "__main__":
     # Physics args
     parser.add_argument('--nav_file', type=str, default=None)
     parser.add_argument('--patch_size', type=int, default=32)
+    parser.add_argument(
+        '--nav_patch_channel2',
+        type=str,
+        choices=['speed', 'count', 'zeros'],
+        default='speed',
+        help="nav_patch 第3通道：speed(默认)/count/log1p(count)/zeros(置零，仅方向)",
+    )
     
     # Model args
     parser.add_argument('--obs_len', type=int, default=8)

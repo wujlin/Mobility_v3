@@ -140,6 +140,7 @@ def train(args):
         pred_len=args.pred_len,
         nav_field_file=nav_file,
         nav_patch_size=args.patch_size,
+        nav_patch_channel2=args.nav_patch_channel2,
         traj_ids=traj_ids,
     )
     # torch-friendly normalization constants (avoid numpy<->torch ops in training loop)
@@ -202,6 +203,7 @@ def train(args):
         "splits_dir": args.splits_dir,
         "nav_file": args.nav_file,
         "patch_size": args.patch_size,
+        "nav_patch_channel2": str(args.nav_patch_channel2),
         "obs_len": args.obs_len,
         "pred_len": args.pred_len,
         "hidden_dim": args.hidden_dim,
@@ -481,6 +483,13 @@ if __name__ == "__main__":
     # Physics args
     parser.add_argument('--nav_file', type=str, default=None)
     parser.add_argument('--patch_size', type=int, default=32)
+    parser.add_argument(
+        '--nav_patch_channel2',
+        type=str,
+        choices=['speed', 'count', 'zeros'],
+        default='speed',
+        help="nav_patch 第3通道：speed(默认)/count/log1p(count)/zeros(置零，仅方向)",
+    )
     parser.add_argument('--lambda_macro', type=float, default=0.0, help="(deprecated) use --lambda_rog instead")
     
     # Model args

@@ -42,13 +42,32 @@ Figure~\ref{fig:phaseb_quant} visualizes this directly via micro-metric summarie
     \caption{MSD curves (Pred vs. GT) under dt-fixed=30s.}
     \label{fig:phaseb_msd}
   \end{subfigure}
-  \caption{Phase B quantitative evidence: diffusion-based generators improve best-of-$K$ coverage but exhibit macroscopic shrinkage in MSD/Rog.}
+  \caption{Phase B v1.0 quantitative evidence: diffusion-based generators improve best-of-$K$ coverage but exhibit macroscopic shrinkage in MSD/Rog.}
   \label{fig:phaseb_quant}
 \end{figure}
 
 \subsection{Ablation: Training-Time Macro Loss (EPE)}
 Motivated by the shrinkage phenomenon, we tested a training-time macroscopic constraint based on end-to-end displacement error (Eq.~\ref{eq:macro_loss}). To avoid shortcut solutions at highly noisy diffusion timesteps, we apply hard gating (only for early timesteps) and use batch-level normalization for stability.
 On a large validation subset (51,200 conditions, $K=1$), sweeping $\lambda \in \{0.01, 0.03, 0.06\}$ produced nearly identical results, suggesting a plateau region where the macro signal is not yet strong enough to change the learned low-frequency dynamics. Macro shrinkage improves modestly but remains substantial (e.g., pred\_speed/gt\_speed $\approx 0.60$; MSD$_{10}$/GT\_MSD$_{10}$ $\approx 0.26$).
+
+\subsection{Residual Diffusion (v1.1): Frozen Prior + Stochastic Residual}
+Given the limited gains from training-time macro loss, we adopt a residual formulation (Eq.~\ref{eq:residual_decomp}) that uses a frozen deterministic baseline as a low-frequency prior and learns stochastic residuals with diffusion.
+Table~\ref{tab:phaseb_residual_val} summarizes a quick validation on the same subset (first 192 conditions of the val split). The residual diffusion model keeps strong oracle capability (ADE$_\text{best}$ 2.496 vs. baseline 4.602) while substantially reducing shrinkage: pred\_speed/gt\_speed improves from 0.77 to 0.95, Rog/GT\_Rog improves from 0.80 to 0.93, and MSD$_{10}$/GT\_MSD$_{10}$ improves from 0.74 to 0.84.
+
+\begin{table}[t]
+  \centering
+  \small
+  \begin{tabular}{lrrrrrrr}
+    \toprule
+    Model & $K$ & ADE$_{\text{mean}}$ & ADE$_{\text{best}}$ & FDE$_{\text{mean}}$ & FDE$_{\text{best}}$ & MSD$_{10}$ & Rog \\
+    \midrule
+    Baseline (prior, L2) & 1  & 4.602 & 4.602 & 7.239 & 7.239 & 507.712 & 5.345 \\
+    Residual Diffusion   & 20 & 5.735 & 2.496 & 9.680 & 3.053 & 576.014 & 6.225 \\
+    \bottomrule
+  \end{tabular}
+  \caption{Residual diffusion quick validation on the val split (192 conditions). The deterministic baseline checkpoint (\texttt{baseline\_b\_dt30}) is used as a frozen prior. Ground-truth macro references on the same conditions are GT\_Rog=6.682 and GT\_MSD$_{10}$=683.528.}
+  \label{tab:phaseb_residual_val}
+\end{table}
 
 \subsection{Geographic-space Visualization (Scheme B)}
 To connect model behavior to urban spatial structure, we visualize a subset of saved evaluation samples (N=80 conditions) in geographic space using a linear bbox projection (without road-level map matching).

@@ -73,6 +73,16 @@ We adopt a denoising diffusion probabilistic model (DDPM) \citep{ho2020ddpm} to 
 \paragraph{Physics-conditioned diffusion (navigation field).}
 We extend the diffusion model by injecting an additional, non-parametric prior in the form of a navigation-field patch around the current position (Section~\ref{sec:navfield}).
 
+\paragraph{Residual diffusion (v1.1, frozen deterministic prior).}
+In Phase B we observe a systematic ``shrinkage'' failure mode in pure diffusion: sampled trajectories tend to under-estimate macroscopic displacement (low MSD/Rog). To decouple low-frequency scale from stochastic variation, we adopt a residual formulation:
+\begin{equation}
+  \mathbf{v}_{1:F} = \mathbf{v}^{\mathrm{prior}}_{1:F} + \mathbf{v}^{\mathrm{res}}_{1:F},
+  \qquad
+  \mathbf{v}^{\mathrm{prior}}_{1:F} = f_{\mathrm{base}}(\mathbf{X}, \mathbf{c}),
+  \label{eq:residual_decomp}
+\end{equation}
+where $f_{\mathrm{base}}$ is a frozen deterministic baseline (trained under the same dt-fixed protocol), and the diffusion model learns the conditional distribution of residual velocities $p_\theta(\mathbf{v}^{\mathrm{res}} \mid \mathbf{X},\mathbf{c})$. At inference, we sample residuals and add them back to the prior to obtain full future velocities.
+
 \subsection{Conditional DDPM for Future Velocities}
 \label{sec:ddpm}
 We model the clean future velocity sequence as a matrix $\mathbf{y}_0 \in \mathbb{R}^{F\times 2}$, and define a forward noising process that gradually perturbs $\mathbf{y}_0$ into $\mathbf{y}_T \sim \mathcal{N}(\mathbf{0}, \mathbf{I})$.

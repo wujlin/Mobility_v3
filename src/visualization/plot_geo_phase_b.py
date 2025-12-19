@@ -117,8 +117,11 @@ def plot_geo_overlays(
     num_trajs: int,
     seed: int,
     flip_y: bool,
+    extent_mode: str,
+    pad_frac: float,
+    style_context: str,
 ) -> None:
-    set_style(context="paper", font_scale=1.1)
+    set_style(context=str(style_context), font_scale=1.1)
 
     rng = np.random.default_rng(int(seed))
     ncols = len(samples_list)
@@ -128,11 +131,32 @@ def plot_geo_overlays(
 
     aspect = _aspect_for_latlon(grid)
 
-    for ax, s in zip(axes, samples_list):
-        N = int(s.preds.shape[0])
-        take = min(int(num_trajs), N)
-        idx = rng.choice(N, size=take, replace=False) if take > 0 else np.array([], dtype=np.int64)
+    # Use the same trajectory subset across models for comparability.
+    N = min(int(s.preds.shape[0]) for s in samples_list)
+    take = min(int(num_trajs), N)
+    idx = rng.choice(N, size=take, replace=False) if take > 0 else np.array([], dtype=np.int64)
 
+    # Optional zoom: compute extent from the selected samples (union of GT + all preds).
+    extent = None
+    if extent_mode == "data" and take > 0:
+        lons = []
+        lats = []
+        for s in samples_list:
+            pr = _grid_yx_to_latlon(s.preds[idx].reshape(-1, 2), grid, flip_y=flip_y)
+            gt = _grid_yx_to_latlon(s.targets[idx].reshape(-1, 2), grid, flip_y=flip_y)
+            lats.append(pr[:, 0]); lons.append(pr[:, 1])
+            lats.append(gt[:, 0]); lons.append(gt[:, 1])
+        lat = np.concatenate(lats, axis=0)
+        lon = np.concatenate(lons, axis=0)
+        lat_min, lat_max = float(np.min(lat)), float(np.max(lat))
+        lon_min, lon_max = float(np.min(lon)), float(np.max(lon))
+        dlat = max(lat_max - lat_min, 1e-6)
+        dlon = max(lon_max - lon_min, 1e-6)
+        lat_pad = float(pad_frac) * dlat
+        lon_pad = float(pad_frac) * dlon
+        extent = (lon_min - lon_pad, lon_max + lon_pad, lat_min - lat_pad, lat_max + lat_pad)
+
+    for ax, s in zip(axes, samples_list):
         preds_ll = _grid_yx_to_latlon(s.preds[idx], grid, flip_y=flip_y)  # (take, F, 2) [lat, lon]
         targets_ll = _grid_yx_to_latlon(s.targets[idx], grid, flip_y=flip_y)
 
@@ -148,8 +172,12 @@ def plot_geo_overlays(
         ax.set_title(f"{s.name} (N={take})")
         ax.set_xlabel("Longitude")
         ax.set_ylabel("Latitude")
-        ax.set_xlim(grid.min_lon, grid.max_lon)
-        ax.set_ylim(grid.min_lat, grid.max_lat)
+        if extent is None:
+            ax.set_xlim(grid.min_lon, grid.max_lon)
+            ax.set_ylim(grid.min_lat, grid.max_lat)
+        else:
+            ax.set_xlim(extent[0], extent[1])
+            ax.set_ylim(extent[2], extent[3])
         ax.set_aspect(aspect)
         ax.grid(True, ls="--", alpha=0.25)
         ax.legend(loc="upper right")
@@ -163,12 +191,15 @@ def plot_geo_density(
     out_dir: Path,
     bins: int,
     flip_y: bool,
+    extent_mode: str,
+    pad_frac: float,
+    style_context: str,
 ) -> None:
     """
     Density plot: per model, draw Pred heatmap (log1p counts) + GT contour.
     GT uses the same samples.npz targets (subset), so caption should state it's a subset.
     """
-    set_style(context="paper", font_scale=1.1)
+    set_style(context=str(style_context), font_scale=1.1)
 
     ncols = len(samples_list)
     fig, axes = plt.subplots(1, ncols, figsize=(5.2 * ncols, 4.8), constrained_layout=True)
@@ -176,7 +207,25 @@ def plot_geo_density(
         axes = [axes]
 
     aspect = _aspect_for_latlon(grid)
-    extent = [grid.min_lon, grid.max_lon, grid.min_lat, grid.max_lat]
+    if extent_mode == "data":
+        lons = []
+        lats = []
+        for s in samples_list:
+            pr = _grid_yx_to_latlon(s.preds.reshape(-1, 2), grid, flip_y=flip_y)
+            gt = _grid_yx_to_latlon(s.targets.reshape(-1, 2), grid, flip_y=flip_y)
+            lats.append(pr[:, 0]); lons.append(pr[:, 1])
+            lats.append(gt[:, 0]); lons.append(gt[:, 1])
+        lat = np.concatenate(lats, axis=0)
+        lon = np.concatenate(lons, axis=0)
+        lat_min, lat_max = float(np.min(lat)), float(np.max(lat))
+        lon_min, lon_max = float(np.min(lon)), float(np.max(lon))
+        dlat = max(lat_max - lat_min, 1e-6)
+        dlon = max(lon_max - lon_min, 1e-6)
+        lat_pad = float(pad_frac) * dlat
+        lon_pad = float(pad_frac) * dlon
+        extent = [lon_min - lon_pad, lon_max + lon_pad, lat_min - lat_pad, lat_max + lat_pad]
+    else:
+        extent = [grid.min_lon, grid.max_lon, grid.min_lat, grid.max_lat]
 
     for ax, s in zip(axes, samples_list):
         preds_ll = _grid_yx_to_latlon(s.preds.reshape(-1, 2), grid, flip_y=flip_y)
@@ -191,7 +240,7 @@ def plot_geo_density(
             pred_lon,
             pred_lat,
             bins=int(bins),
-            range=[[grid.min_lon, grid.max_lon], [grid.min_lat, grid.max_lat]],
+            range=[[extent[0], extent[1]], [extent[2], extent[3]]],
         )
         gt_hist, _, _ = np.histogram2d(
             gt_lon,
@@ -222,8 +271,8 @@ def plot_geo_density(
         ax.set_title(f"{s.name}: Pred density (GT contour)")
         ax.set_xlabel("Longitude")
         ax.set_ylabel("Latitude")
-        ax.set_xlim(grid.min_lon, grid.max_lon)
-        ax.set_ylim(grid.min_lat, grid.max_lat)
+        ax.set_xlim(extent[0], extent[1])
+        ax.set_ylim(extent[2], extent[3])
         ax.set_aspect(aspect)
         ax.grid(False)
 
@@ -248,6 +297,15 @@ def main() -> None:
     parser.add_argument("--num_trajs", type=int, default=60, help="number of trajectories to overlay per model")
     parser.add_argument("--bins", type=int, default=220, help="2D histogram bins for density plot")
     parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument(
+        "--extent",
+        type=str,
+        choices=["full", "data"],
+        default="full",
+        help="Plot extent: 'full' uses dataset bbox; 'data' zooms to the saved samples (union of GT+pred).",
+    )
+    parser.add_argument("--pad_frac", type=float, default=0.08, help="Padding fraction when --extent=data.")
+    parser.add_argument("--style", type=str, choices=["paper", "talk"], default="paper", help="Matplotlib style preset.")
     parser.add_argument(
         "--flip_y",
         action="store_true",
@@ -277,6 +335,9 @@ def main() -> None:
         num_trajs=int(args.num_trajs),
         seed=int(args.seed),
         flip_y=bool(args.flip_y),
+        extent_mode=str(args.extent),
+        pad_frac=float(args.pad_frac),
+        style_context=str(args.style),
     )
     plot_geo_density(
         samples_list=samples_list,
@@ -284,9 +345,11 @@ def main() -> None:
         out_dir=out_dir,
         bins=int(args.bins),
         flip_y=bool(args.flip_y),
+        extent_mode=str(args.extent),
+        pad_frac=float(args.pad_frac),
+        style_context=str(args.style),
     )
 
 
 if __name__ == "__main__":
     main()
-

@@ -7,6 +7,11 @@ Implementation Plan, Task List and Thought in Chinese：本目录提供一个满
 2. 在 Overleaf 中把 `main.tex` 设为主文件（Main document）。
 3. 默认用 **pdfLaTeX** 编译即可。
 
+## 汇报 PPT（Beamer）
+- 本目录额外提供 `slides.tex`（Beamer 版 PPT），默认复用 `figures/` 里的图件与 `references.bib`。
+- 在 Overleaf 中将 `slides.tex` 设为主文件即可编译 PPT。
+- 主题默认优先使用 `metropolis`（Overleaf 通常可用），若不可用会自动回退到 `Madrid`。
+
 ## 字体说明（Times New Roman）
 - 目前模板使用 `newtxtext/newtxmath`，在 Overleaf 上稳定、外观接近 Times New Roman。
 - 如果课程/格式要求必须是“系统字体的 Times New Roman（严格一致）”，通常需要 **XeLaTeX + fontspec**，并确保编译环境里有 Times New Roman 字体（Overleaf 默认不一定提供）。建议做法是：

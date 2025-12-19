@@ -212,24 +212,23 @@
 \begin{frame}{Phase B v1.0: Interpretable Maps (Diffusion)}
 \begin{columns}[T,onlytextwidth]
   \begin{column}{0.49\linewidth}
-    \TrimGraphicSmall{fig_geo_traj_overlay.png}{1550}{0}{1554}{0}
+    \TrimGraphicSmall{fig_geo_traj_overlay.png}{1555}{0}{1555}{0}
     \vspace{-0.2em}
     \centering{\scriptsize Trajectory overlay (Diffusion vs GT)}
   \end{column}
   \begin{column}{0.49\linewidth}
-    \TrimGraphicSmall{fig_geo_density.png}{1550}{0}{1550}{0}
+    \TrimGraphicSmall{fig_geo_density.png}{1555}{0}{1555}{0}
     \vspace{-0.2em}
     \centering{\scriptsize Density (Pred heatmap, GT contour)}
   \end{column}
 \end{columns}
 \vspace{0.4em}
-\scriptsize\textbf{Reading guide:} diffusion produces diverse futures, but macro displacement can be biased low (shrinkage).
-\end{frame}
+\scriptsize\textbf{Reading guide:} diffusion produces diverse futures, but macro displacement can be biased low (shrinkage). \textit{(Middle panel of combined figure.)}\end{frame}
 
 \begin{frame}{Phase B v1.0: Interpretable Maps (Physics)}
 \begin{columns}[T,onlytextwidth]
   \begin{column}{0.49\linewidth}
-    \TrimGraphicSmall{fig_geo_traj_overlay.png}{3120}{0}{0}{0}
+    \TrimGraphicSmall{fig_geo_traj_overlay.png}{3110}{0}{0}{0}
     \vspace{-0.2em}
     \centering{\scriptsize Trajectory overlay (Physics vs GT)}
   \end{column}
@@ -240,8 +239,7 @@
   \end{column}
 \end{columns}
 \vspace{0.4em}
-\scriptsize\textbf{Reading guide:} nav\_field acts as a local mean-flow prior and improves oracle coverage, but does not eliminate shrinkage.
-\end{frame}
+\scriptsize\textbf{Reading guide:} nav\_field acts as a local mean-flow prior and improves oracle coverage, but does not eliminate shrinkage. \textit{(Right panel of combined figure.)}\end{frame}
 
 \begin{frame}{Phase B v1.0: Qualitative Cases (grid space)}
 \scriptsize Each panel is a different OD-conditioned sample (GT vs Baseline vs Diffusion vs Physics). This helps visually connect micro-level coverage to the macro-level shrinkage diagnosis.

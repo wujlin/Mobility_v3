@@ -48,47 +48,68 @@ Figure~\ref{fig:phaseb_quant} visualizes this directly via micro-metric summarie
 
 \subsection{Ablation: Training-Time Macro Loss (EPE)}
 Motivated by the shrinkage phenomenon, we tested a training-time macroscopic constraint based on end-to-end displacement error (Eq.~\ref{eq:macro_loss}). To avoid shortcut solutions at highly noisy diffusion timesteps, we apply hard gating (only for early timesteps) and use batch-level normalization for stability.
-On a large validation subset (51,200 conditions, $K=1$), sweeping $\lambda \in \{0.01, 0.03, 0.06\}$ produced nearly identical results, suggesting a plateau region where the macro signal is not yet strong enough to change the learned low-frequency dynamics. Macro shrinkage improves modestly but remains substantial (e.g., pred\_speed/gt\_speed $\approx 0.60$; MSD$_{10}$/GT\_MSD$_{10}$ $\approx 0.26$).
+Empirically, macro supervision is \emph{sensitive}: if the weight is too small, improvements can plateau; if too large, the model may over-compensate and produce heavy-tailed motion that degrades \emph{typical} samples (K=1), even if oracle best-of-$K$ improves. This motivates a structural fix rather than further exhaustive $\lambda$ sweeps.
 
 \subsection{Residual Diffusion (v1.1): Frozen Prior + Stochastic Residual}
 Given the limited gains from training-time macro loss, we adopt a residual formulation (Eq.~\ref{eq:residual_decomp}) that uses a frozen deterministic baseline as a low-frequency prior and learns stochastic residuals with diffusion.
-Table~\ref{tab:phaseb_residual_val} summarizes a quick validation on the same subset (first 192 conditions of the val split). The residual diffusion model keeps strong oracle capability (ADE$_\text{best}$ 2.496 vs. baseline 4.602) while substantially reducing shrinkage: pred\_speed/gt\_speed improves from 0.77 to 0.95, Rog/GT\_Rog improves from 0.80 to 0.93, and MSD$_{10}$/GT\_MSD$_{10}$ improves from 0.74 to 0.84.
+Table~\ref{tab:phaseb_residual_test_fast} summarizes a fast, leakage-free check on the test split (K=10) using the deterministic baseline checkpoint (\texttt{baseline\_b\_dt30}) as a frozen prior. Residual diffusion largely restores macroscopic scale (speed and Rog ratios close to 1) while maintaining strong oracle best-of-$K$ capability. Residual \emph{physics} diffusion further improves the oracle upper bound (best-of-$K$) but remains slightly conservative in MSD/Rog due to the mean-flow tether effect of the navigation-field prior.
+Unless otherwise stated, we keep the sampling schedule consistent with training (100 diffusion steps) and use smaller subsets (\texttt{max\_batches}) only for quick validation; aggressive step-reduction can change calibration and is not used for reporting.
 
 \begin{table}[t]
   \centering
   \small
-  \begin{tabular}{lrrrrrrr}
+  \begin{tabular}{lrrrrrrrr}
     \toprule
-    Model & $K$ & ADE$_{\text{mean}}$ & ADE$_{\text{best}}$ & FDE$_{\text{mean}}$ & FDE$_{\text{best}}$ & MSD$_{10}$ & Rog \\
+    Model & $K$ & ADE$_{\text{mean}}$ & ADE$_{\text{best}}$ & FDE$_{\text{mean}}$ & FDE$_{\text{best}}$ & Speed Ratio & Rog Ratio & MSD$_{10}$ Ratio \\
     \midrule
-    Baseline (prior, L2) & 1  & 4.602 & 4.602 & 7.239 & 7.239 & 507.712 & 5.345 \\
-    Residual Diffusion   & 20 & 5.735 & 2.496 & 9.680 & 3.053 & 576.014 & 6.225 \\
+    Residual Diffusion   & 10 & 6.919 & 3.656 & 11.426 & 4.975 & 1.016 & 1.004 & 0.935 \\
+    Residual Physics     & 10 & 5.948 & 2.709 & 9.885  & 3.569 & 0.951 & 0.945 & 0.864 \\
     \bottomrule
   \end{tabular}
-  \caption{Residual diffusion quick validation on the val split (192 conditions). The deterministic baseline checkpoint (\texttt{baseline\_b\_dt30}) is used as a frozen prior. Ground-truth macro references on the same conditions are GT\_Rog=6.682 and GT\_MSD$_{10}$=683.528.}
-  \label{tab:phaseb_residual_val}
+  \caption{Residual variants fast check on the test split (K=10; subset evaluation). Ratios are computed against ground-truth statistics on the same evaluated subset. Metrics are from \texttt{data/experiments/diff\_residual\_test\_fast/metrics.json} and \texttt{data/experiments/phys\_residual\_test\_fast/metrics.json}.}
+  \label{tab:phaseb_residual_test_fast}
 \end{table}
 
 \subsection{Geographic-space Visualization (Scheme B)}
 To connect model behavior to urban spatial structure, we visualize a subset of saved evaluation samples (N=80 conditions) in geographic space using a linear bbox projection (without road-level map matching).
-Figure~\ref{fig:phaseb_geo} shows trajectory overlays and spatial density maps. These ``map-like'' visualizations highlight (i) \textbf{spatial heterogeneity} (mobility concentrates along corridors and regions), and (ii) \textbf{probabilistic futures} (diffusion-based generators yield diverse continuations compared to a single mean path).
+Figure~\ref{fig:phaseb_geo} shows trajectory overlays and Figure~\ref{fig:phaseb_geo_density} shows spatial density maps. These ``map-like'' visualizations highlight (i) \textbf{spatial heterogeneity} (mobility concentrates along corridors and regions), and (ii) \textbf{probabilistic futures} (diffusion-based generators yield diverse continuations compared to a single mean path).
 
 \begin{figure}[t]
   \centering
   \begin{subfigure}[t]{\linewidth}
     \centering
     \includegraphics[width=0.95\linewidth]{figures/fig_geo_traj_overlay.png}
-    \caption{Trajectory overlays (subset of saved evaluation samples).}
+    \caption{Phase B v1.0: baseline vs diffusion vs physics (trajectory overlays).}
     \label{fig:geo_overlay}
   \end{subfigure}
 
   \vspace{0.4em}
   \begin{subfigure}[t]{\linewidth}
     \centering
+    \includegraphics[width=0.95\linewidth]{figures/fig_geo_traj_overlay_v11.png}
+    \caption{Phase B v1.1: residual diffusion (frozen prior + stochastic residual).}
+    \label{fig:geo_overlay_v11}
+  \end{subfigure}
+  \caption{Geographic-space visualizations (trajectory overlays) for urban interpretation.}
+  \label{fig:phaseb_geo}
+\end{figure}
+
+\begin{figure}[t]
+  \centering
+  \begin{subfigure}[t]{\linewidth}
+    \centering
     \includegraphics[width=0.95\linewidth]{figures/fig_geo_density.png}
-    \caption{Spatial density maps (predicted density with ground-truth contour reference).}
+    \caption{Phase B v1.0: predicted density with ground-truth contour reference.}
     \label{fig:geo_density}
   \end{subfigure}
-  \caption{Geographic-space visualizations (Scheme B) for urban interpretation.}
-  \label{fig:phaseb_geo}
+
+  \vspace{0.4em}
+  \begin{subfigure}[t]{\linewidth}
+    \centering
+    \includegraphics[width=0.95\linewidth]{figures/fig_geo_density_v11.png}
+    \caption{Phase B v1.1: density map under residual diffusion.}
+    \label{fig:geo_density_v11}
+  \end{subfigure}
+  \caption{Geographic-space visualizations (density maps) for urban interpretation.}
+  \label{fig:phaseb_geo_density}
 \end{figure}

@@ -168,6 +168,8 @@ def train(args):
         model = PhysicsConditionDiffusion(
             obs_dim=4, act_dim=2, cond_dim=6,
             nav_patch_size=args.patch_size,
+            nav_emb_scale=args.nav_emb_scale,
+            nav_emb_dropout=args.nav_emb_dropout,
             obs_len=args.obs_len, pred_len=args.pred_len,
             hidden_dim=args.hidden_dim,
             diffusion_steps=args.diff_steps
@@ -204,6 +206,8 @@ def train(args):
         "nav_file": args.nav_file,
         "patch_size": args.patch_size,
         "nav_patch_channel2": str(args.nav_patch_channel2),
+        "nav_emb_scale": float(args.nav_emb_scale),
+        "nav_emb_dropout": float(args.nav_emb_dropout),
         "obs_len": args.obs_len,
         "pred_len": args.pred_len,
         "hidden_dim": args.hidden_dim,
@@ -490,6 +494,8 @@ if __name__ == "__main__":
         default='speed',
         help="nav_patch 第3通道：speed(默认)/count/log1p(count)/zeros(置零，仅方向)",
     )
+    parser.add_argument('--nav_emb_scale', type=float, default=1.0, help="Physics: nav embedding 强度缩放（<1 减弱 mean-field tether）")
+    parser.add_argument('--nav_emb_dropout', type=float, default=0.0, help="Physics: 训练时对 nav embedding 做 dropout（提升鲁棒性）")
     parser.add_argument('--lambda_macro', type=float, default=0.0, help="(deprecated) use --lambda_rog instead")
     
     # Model args

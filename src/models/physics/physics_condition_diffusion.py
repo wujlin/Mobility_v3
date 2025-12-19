@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from typing import Tuple, Union
 from src.models.base_model import BaseTrajectoryModel
 from src.models.diffusion.diffusion_model import DiffusionTrajectoryModel
@@ -16,6 +17,8 @@ class PhysicsConditionDiffusion(BaseTrajectoryModel):
                  cond_dim: int = 6,
                  nav_patch_size: int = 32,
                  nav_emb_dim: int = 32,
+                 nav_emb_scale: float = 1.0,
+                 nav_emb_dropout: float = 0.0,
                  obs_len: int = 8,
                  pred_len: int = 12,
                  hidden_dim: int = 64,
@@ -23,6 +26,8 @@ class PhysicsConditionDiffusion(BaseTrajectoryModel):
         super().__init__()
         
         self.nav_encoder = CNNEncoder(output_dim=nav_emb_dim, patch_size=nav_patch_size)
+        self.nav_emb_scale = float(nav_emb_scale)
+        self.nav_emb_dropout = float(nav_emb_dropout)
         
         # Instantiate wrapped diffusion model
         # Condition dim increases by nav_emb_dim
@@ -35,6 +40,13 @@ class PhysicsConditionDiffusion(BaseTrajectoryModel):
             hidden_dim=hidden_dim,
             diffusion_steps=diffusion_steps
         )
+
+    def _apply_nav_emb(self, nav_emb: torch.Tensor) -> torch.Tensor:
+        if self.nav_emb_scale != 1.0:
+            nav_emb = nav_emb * self.nav_emb_scale
+        if self.nav_emb_dropout > 0.0:
+            nav_emb = F.dropout(nav_emb, p=float(self.nav_emb_dropout), training=self.training)
+        return nav_emb
 
     def compute_loss(
         self,
@@ -65,6 +77,7 @@ class PhysicsConditionDiffusion(BaseTrajectoryModel):
             raise ValueError("Nav Patch is required for Physics Model")
 
         nav_emb = self.nav_encoder(nav_patch)  # (B, nav_emb_dim)
+        nav_emb = self._apply_nav_emb(nav_emb)
         full_cond = torch.cat([cond, nav_emb], dim=-1)
         return self.diffusion.compute_loss(
             obs,
@@ -86,6 +99,7 @@ class PhysicsConditionDiffusion(BaseTrajectoryModel):
             
         # Encode Nav
         nav_emb = self.nav_encoder(nav_patch) # (B, nav_emb_dim)
+        nav_emb = self._apply_nav_emb(nav_emb)
         
         # Concat Cond
         full_cond = torch.cat([cond, nav_emb], dim=-1)
@@ -98,6 +112,7 @@ class PhysicsConditionDiffusion(BaseTrajectoryModel):
             
         # Encode Nav
         nav_emb = self.nav_encoder(nav_patch)
+        nav_emb = self._apply_nav_emb(nav_emb)
         
         # Concat Cond
         full_cond = torch.cat([cond, nav_emb], dim=-1)

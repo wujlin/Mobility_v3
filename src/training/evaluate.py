@@ -264,7 +264,8 @@ def evaluate(args):
             nav_patch_size=args.patch_size,
             obs_len=args.obs_len, pred_len=args.pred_len,
             hidden_dim=args.hidden_dim,
-            diffusion_steps=args.diff_steps
+            diffusion_steps=args.diff_steps,
+            nav_emb_scale=float(args.nav_emb_scale),
         )
         
     model.load_state_dict(state_dict)
@@ -527,6 +528,7 @@ if __name__ == "__main__":
         default='speed',
         help="nav_patch 第3通道：speed(默认)/count/log1p(count)/zeros(置零，仅方向)",
     )
+    parser.add_argument('--nav_emb_scale', type=float, default=1.0, help="Physics: nav embedding 强度缩放（<1 减弱 mean-field tether）")
     
     # Model args
     parser.add_argument('--obs_len', type=int, default=8)

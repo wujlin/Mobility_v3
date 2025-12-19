@@ -113,3 +113,15 @@ Phase B 目前面临的核心矛盾是：**“扩容（h128）稳定了训练，
 - 目前我们已证明：**收缩既包含“尺度偏小”，也包含“时间相关性不足”**。  
 - `vel_scale` 可以让宏观幅度对齐，但会暴露/放大微观方向误差。  
 - 若专家要给建议，我们真正需要的是：如何让生成模型在 dt30 下学到更强的方向持久性与低频运动结构（而不是靠 temperature 或 POI 堆信息）。
+
+---
+
+## 6. 更新（v1.1 Residual Diffusion：结构性修复验证）
+
+Phase B v1.1 引入 **prior + residual decomposition**（详见 `docs/RESIDUAL_DIFFUSION.md`）后，fast test 证据显示：
+
+- Data-only residual 已基本恢复宏观尺度（`pred_speed_mean/gt_speed_mean≈1`，`Rog/GT_Rog≈1`）；
+- Physics residual micro 更强但宏观仍略保守（`Rog/GT_Rog≈0.95`，`MSD_10/GT_MSD_10≈0.86`）。
+
+这进一步支持本复盘的核心判断：  
+“收缩”是 **生成分布学习机制 + 物理先验保守性** 的结构性现象，单靠 `vel_scale` 或 naive macro loss 很难根治；Residual 把“尺度”交给 prior，使问题从“走不动”转为“如何在不破坏尺度的前提下建模多模态偏离”，从而显著降低优化难度与验证成本。

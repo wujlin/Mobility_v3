@@ -472,3 +472,33 @@ python -m src.training.evaluate \
 | Physics（scale 后） | 9.370 | 16.043 | 98.512 |
 
 > 关键现象：即使 `pred_speed_mean` 已接近 `gt_speed_mean`，`MSD_10` 仍低于 GT（约 0.84–0.87×）。这说明轨迹虽然“走得动”，但仍存在明显的方向抵消/转向过频（缺少方向持久性），属于训练级问题，不能靠单一 `vel_scale` 完全解决。
+
+---
+
+## 7. Phase B v1.1：Residual Diffusion（结构性修复 shrinkage）
+
+> 背景：v1.0/v1.0+macro/vel_scale 的证据链表明，“收缩”不只是校准问题，而是生成分布学习失败 + 物理先验保守性叠加。  
+> 核心改动（KISS）：用确定性 baseline 作为 **prior** 固定低频结构与尺度，让 diffusion/physics 只学习 residual（不再从零学“物理 + 随机性”）。
+
+### 7.1 方案定义（单一入口）
+
+详见：`docs/RESIDUAL_DIFFUSION.md`
+
+### 7.2 已完成的 fast 证据（test, K=10，确认方向）
+
+> 说明：以下为 fast eval（用于确认“宏观是否恢复 + micro 是否有增益”），不是最终 paper table。
+
+| 模型 | 指标文件 | `pred_speed_mean/gt_speed_mean` | `Rog/GT_Rog` | `MSD_10/GT_MSD_10` | `ADE_best` | `FDE_best` |
+|---|---|---:|---:|---:|---:|---:|
+| Residual Diffusion | `data/experiments/diff_residual_test_fast/metrics.json` | 1.016 | 1.004 | 0.935 | 3.656 | 4.975 |
+| Residual Physics | `data/experiments/phys_residual_test_fast/metrics.json` | 0.951 | 0.945 | 0.864 | 2.709 | 3.569 |
+
+**解读（事实 + 最小推论）**：
+- Residual（data-only）在 fast eval 中 **几乎完全恢复宏观尺度**（speed/Rog 接近 1），说明“prior+residual decomposition”对 shrinkage 是结构性修复。
+- Residual Physics micro 更强（best-of-K 更好），但宏观仍略保守（MSD10≈0.86×GT），与 nav_field 的“local mean-flow tether”一致；这提示 physics-conditioned residual 仍需隔离变量继续排查（但方向已经显著优于 v1.0）。
+
+### 7.3 下一步（时间成本可控的验证顺序）
+
+1) 先按 `docs/RESIDUAL_DIFFUSION.md` 的建议做两阶段评估（`K=1+B=50` → `K=10+B=200`）。  
+2) 只在“方向正确”的前提下再跑全量 test（否则纯属烧时间）。  
+3) 若 physics residual 仍偏保守，优先做 **conditioning 的低成本 ablation**（例如 `nav_emb_scale`），但避免无意义的大 sweep（已观察到收益快速饱和）。

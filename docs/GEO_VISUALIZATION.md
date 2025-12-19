@@ -38,6 +38,38 @@ python -m src.visualization.plot_geo_phase_b \
 - `data/experiments/phase_b_report/figures_geo_quick/fig_geo_traj_overlay.(png|pdf)`
 - `data/experiments/phase_b_report/figures_geo_quick/fig_geo_density.(png|pdf)`
 
+## 2.3（v1.1 Residual）Prior + Residual 的地图证据
+
+v1.1 的讲故事重点是：“prior 负责尺度与主走廊；residual 负责多模态偏离”。因此建议至少给两张图：
+
+- 轨迹叠图（GT + 多条预测）
+- 预测密度图（Pred heatmap + GT contour）
+
+当前仓库已包含一份可直接用于 PPT/essay 的产物：
+
+- `data/experiments/residual_report/figures_geo/fig_geo_traj_overlay.(png|pdf)`
+- `data/experiments/residual_report/figures_geo/fig_geo_density.(png|pdf)`
+- 同步拷贝到 `essay/figures/fig_geo_traj_overlay_v11.(png|pdf)`、`essay/figures/fig_geo_density_v11.(png|pdf)`（用于 `essay/slides.tex`）
+
+若要重新生成（需要先在 eval 时保存 `samples.npz`）：
+
+1) 在残差模型 eval 时加 `--save_samples 200`（示例）：
+
+```bash
+python -m src.training.evaluate \
+  --exp_name diff_dt30_residual_priorB_eval_test_vis \
+  --model_type diffusion \
+  --data_path data/processed_dt30/trajectories/shenzhen_trajectories.h5 \
+  --checkpoint data/experiments/diff_dt30_residual_priorB_h128_b2048_lr1e-3_e100_s0/last.pt \
+  --prior_checkpoint data/experiments/baseline_b_dt30/last.pt \
+  --split test \
+  --obs_len 8 --pred_len 12 \
+  --num_samples_per_condition 20 --diff_steps 100 \
+  --save_samples 200 --seed 0
+```
+
+2) 然后用 `plot_geo_phase_b` 把 `samples.npz` 投影到经纬度（与 v1.0 完全同一套路）。
+
 ## 2.1（强烈建议加到 essay）OD 热点图（Origin/Destination）
 
 这张图非常“城市科学友好”，直观展示空间异质性（哪里是上车热点/下车热点）：

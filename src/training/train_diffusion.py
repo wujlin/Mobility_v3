@@ -402,7 +402,11 @@ def train(args):
                     if args.macro_disp_weight == "tanh":
                         w_disp = torch.tanh(float(args.macro_disp_alpha) * gt_disp_norm)
                     elif args.macro_disp_weight == "clip":
-                        w_disp = torch.clamp(gt_disp_norm, float(args.macro_disp_clip_min), float(args.macro_disp_clip_max))
+                        # Multiplicative weighting (additive logic): w = clip(disp / mean_disp, lo, hi)
+                        # This boosts large-displacement windows with w>1 instead of only suppressing small ones.
+                        disp_ref = torch.clamp_min(gt_disp_norm.mean(), 1e-6)
+                        w_disp = gt_disp_norm / disp_ref
+                        w_disp = torch.clamp(w_disp, float(args.macro_disp_clip_min), float(args.macro_disp_clip_max))
                     else:
                         raise ValueError(f"Unknown --macro_disp_weight: {args.macro_disp_weight}")
                     weights = weights * w_disp.to(torch.float32)
@@ -528,8 +532,8 @@ if __name__ == "__main__":
     # Displacement-aware weighting (to address low-displacement dominance)
     parser.add_argument('--macro_disp_weight', type=str, choices=['none', 'tanh', 'clip'], default='none')
     parser.add_argument('--macro_disp_alpha', type=float, default=0.1, help="tanh(alpha*|gt_disp|) when --macro_disp_weight=tanh")
-    parser.add_argument('--macro_disp_clip_min', type=float, default=0.0)
-    parser.add_argument('--macro_disp_clip_max', type=float, default=1e9)
+    parser.add_argument('--macro_disp_clip_min', type=float, default=0.5, help="when --macro_disp_weight=clip: clip(disp/mean_disp, min, max)")
+    parser.add_argument('--macro_disp_clip_max', type=float, default=5.0, help="when --macro_disp_weight=clip: clip(disp/mean_disp, min, max)")
 
     # Macro loss timestep weighting (do NOT bias timestep sampling distribution)
     parser.add_argument('--macro_t_weight', type=str, choices=['none', 'exp'], default='none')

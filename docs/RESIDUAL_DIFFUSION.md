@@ -235,6 +235,14 @@ Residual 的天花板很大程度取决于 prior（deterministic baseline）的�
 - **暂时不换 Transformer prior**：当前主线要证明的是 *Residual Framework*（scale vs stochasticity 解耦）与 *physics conditioning* 的作用机理。换成 Transformer 会引入大量新变量（收敛/过拟合/实现差异），导致无法归因。
 - **先“修目标函数”而不是“换架构”**：deterministic prior 的主要偏差来自 MSE 的均值回归（mean reversion），优先用 displacement-aware weighting 把宏观尺度抬起来，再让 residual 专注学习随机性。
 
+我们在 dt30 的 smoke→full prior 训练中已经看到非常明确的信号：
+
+- `tanh`（只会压低小位移，权重上限≤1）在 smoke budget 下几乎无收益（宏观 ratio 与未加权 baseline 接近）。
+- `clip`（允许 `w>1`，把长位移样本显式放大）在同预算 smoke 下显著抬升宏观尺度，并在 full run（e50）达到稳定的 “>=GT” 先验幅度：
+  - test, K=1：speed≈1.01–1.03，Rog≈1.06–1.09，MSD10≈1.03–1.08（seed0/1）
+
+结论：**Prior 侧必须使用允许 `w>1` 的加权策略**，否则 residual 会被迫承担宏观尺度修正，天花板很低。
+
 ### B) Nav Field 的更精细交互（避免 mean-field tether）
 
 当前 physics 条件注入是 `nav_emb` 与 `cond` 的拼接（concat）。它能稳定方向，但也可能像“锚链”把生成拉向局部均值。
@@ -250,6 +258,44 @@ Residual 的天花板很大程度取决于 prior（deterministic baseline）的�
    - 推荐在 residual physics 上做一个对照组（与 `speed` 版本同配置），用 `K=1,B=50` 快速证伪。
 
 3) 若 tether 仍明显，再考虑结构改动（ControlNet/FILM 注入等），避免变量耦合导致定位困难。
+
+阶段性实验结论（dt30, residual physics, prior=disp-aware clip）：
+
+- `nav_patch_channel2=speed` vs `count` 在 `val, ds100, K=10, B=200` 下差异极小：
+  - speed：speed≈0.961，Rog≈0.944，ADE_best≈4.14
+  - count：speed≈0.958，Rog≈0.942，ADE_best≈4.18
+
+含义：目前的 “tether/保守” 主要不是由 speed 通道单独造成，更像是 **direction mean-field + concat 注入方式** 的整体效应。
+
+补充：`nav_emb_scale` 在 `val, ds100, K=5, B=100` 的快速对照里同样表现为“弱旋钮”：
+
+- `nav_emb_scale=0.75`：speed≈0.991，Rog≈0.967，MSD10≈0.910，ADE_best≈4.66
+- `nav_emb_scale=1.25`：speed≈0.985，Rog≈0.962，MSD10≈0.909，ADE_best≈4.61
+
+差异在 1% 量级，优先级明显低于 “prior 质量” 与 “residual decomposition”。
+
+另一个重要观察（收敛性排雷）：在同一 residual physics 配置下，**继续训练会让 micro 变好但 macro 变差**（典型的 safe-play / local minimum）：
+
+- `e20 (val, ds100, K=10, B=200)`: speed≈0.961，Rog≈0.944，ADE_best≈4.14
+- `e40 (val, ds100, K=10, B=200)`: speed≈0.953，Rog≈0.938，ADE_best≈3.94
+
+含义：如果目标是 “Valid Simulation”（宏观真实），不能只追 micro；需要引入训练级低频约束（例如门控的 multi-EPE macro loss）来打破保守陷阱。
+
+### D) Macro-FT（低成本验证）结论：**无效（触发止损）**
+
+在 `e40` checkpoint 上做 5-epoch 的 macro fine-tune（`multi_epe + t<thr(50) + exp(t) + batch_relative`），并行尝试 `λ=0.005/0.01`：
+
+| 设置 | Speed Ratio | RoG Ratio | MSD10 Ratio | ADE_best | FDE_best |
+|---|---:|---:|---:|---:|---:|
+| e40 ref | 0.9525 | 0.9376 | 0.8574 | 3.94 | 5.34 |
+| λ=0.005 | 0.9558 | 0.9363 | 0.8560 | 3.90 | 5.25 |
+| λ=0.01 | 0.9569 | 0.9380 | 0.8588 | 3.89 | 5.23 |
+
+结论：
+- macro（RoG/MSD10）几乎不动（<0.01），不满足止损线（RoG 回升 ≥0.01）。
+- micro 继续变好（ADE/FDE 下降）→ 说明模型仍在向“更保守/更靠均值”的局部最优滑动。
+
+因此：**macro fine-tune 级别难以扭转已收敛的保守分布**。下一步若仍坚持 macro 路线，应优先考虑 **从头训练就引入 macro loss（而不是续训）**，或转向更结构化的 conditioning 注入（P2）。
 
 ### C) 采样效率（P2：在保真后再做）
 

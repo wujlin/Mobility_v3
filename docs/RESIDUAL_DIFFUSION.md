@@ -212,3 +212,41 @@ python -m src.training.evaluate \
 并行建议：
 - 同一台多 GPU：每张卡跑一个 eval（不同 `exp_name`），用 `python -u ... |& tee` 保留实时进度。
 - HDF5 并行不稳时：设置 `HDF5_USE_FILE_LOCKING=FALSE`，必要时 `--num_workers 0`。
+
+---
+
+## 8) 教授 Review 对齐（v1.1 之后的优先级）
+
+我们收到教授的批判性 review 后，当前路线的优先级与结论更加明确：
+
+### A) Prior Quality Check（首要任务）
+
+Residual 的天花板很大程度取决于 prior（deterministic baseline）的质量。若 prior 本身就系统性低位移（L2 平滑效应），residual 需要承担过大的“拉伸”压力，容易出现：
+
+- residual 变成“补丁”而不是不确定性建模；
+- 或者宏观恢复受限（MSD10/Rog 上不去）。
+
+因此建议立刻做 displacement-aware 的 deterministic prior（按 GT 位移大小加权 MSE）。
+
+> 代码支持：`src/training/train_baseline.py` 已提供 `--disp_weight {none,tanh,clip}` 等参数（见仓库说明）。
+
+### B) Nav Field 的更精细交互（避免 mean-field tether）
+
+当前 physics 条件注入是 `nav_emb` 与 `cond` 的拼接（concat）。它能稳定方向，但也可能像“锚链”把生成拉向局部均值。
+
+短期（KISS）建议优先做“低成本、可证伪”的 ablation，而不是一上来改结构：
+
+1) **Direction-only 是否真的有效？**
+   - 我们做过 `nav_patch_channel2=zeros`（只保留方向、移除 channel2），结果更保守（见第 5 节），说明“纯方向”在当前实现下并不奏效。
+   - 但这不完全等价于“只提供方向不提供速度”的理想设定：`zeros` 同时移除了“置信度/密度”信息，方向场在低 count 区域可能更噪声，反而会加剧保守行为。
+
+2) **更贴近教授建议的版本：Direction + Count（不提供速度幅度）**
+   - 数据层面已经支持：`nav_patch_channel2=count`（方向 + log-count 作为置信度），避免用 speed 通道“限速”。
+   - 推荐在 residual physics 上做一个对照组（与 `speed` 版本同配置），用 `K=1,B=50` 快速证伪。
+
+3) 若 tether 仍明显，再考虑结构改动（ControlNet/FILM 注入等），避免变量耦合导致定位困难。
+
+### C) 采样效率（P2：在保真后再做）
+
+`diff_steps=50` 会产生明显分布漂移，不作为严谨结论依据。当前优先级是 validity（`diff_steps=100`）。
+若面向 Digital Twin 落地需要加速，建议后续讨论 distillation/flow matching（P2）。

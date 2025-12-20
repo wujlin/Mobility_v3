@@ -16,6 +16,7 @@
 - **我要跑/复现 v1.1（Residual Diffusion）**：`docs/RESIDUAL_DIFFUSION.md`
 - **我要做地理可视化（bbox 映射，不做 map-matching）**：`docs/GEO_VISUALIZATION.md`
 - **我要给教授/专家咨询（问题包）**：`docs/EXPERT_CONSULTATION_PACKET.md`、`docs/PROFESSOR_QUERY_MACRO_LOSS.md`
+- **我要给教授发“当前进展 + 待拍板问题”邮件**：`docs/PROFESSOR_QUERY_RESIDUAL_V11.md`
 - **我要准备汇报讲稿**：`docs/PPT_SPEAKER_NOTES.md`
 - **我要少踩坑地跑实验/同步多机器**：`docs/EXPERIMENT_PLAYBOOK.md`
 

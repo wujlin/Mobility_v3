@@ -34,12 +34,13 @@ class SeqBaseline(BaseTrajectoryModel):
         
         self.head = nn.Linear(hidden_dim, act_dim)
         
-    def forward(self, obs, cond, target=None):
+    def forward(self, obs, cond, target=None, sample_weight=None):
         """
         Args:
             obs: (B, H, 4)
             cond: (B, 6)
             target: (B, F, 2) [future_vel]
+            sample_weight: optional (B,) tensor to reweight per-trajectory loss
         """
         B, H, _ = obs.shape
         device = obs.device
@@ -73,7 +74,17 @@ class SeqBaseline(BaseTrajectoryModel):
                 pred_vel = self.head(h_t)
                 
                 # Accumulate Loss
-                loss += F.mse_loss(pred_vel, target[:, t])
+                if sample_weight is None:
+                    loss += F.mse_loss(pred_vel, target[:, t])
+                else:
+                    w = sample_weight
+                    if w.ndim != 1 or w.shape[0] != B:
+                        raise ValueError(f"sample_weight must be (B,), got {tuple(w.shape)} with B={B}")
+                    # keep scale stable: normalize to mean=1
+                    w = w.to(dtype=pred_vel.dtype, device=pred_vel.device)
+                    w = w / torch.clamp_min(w.mean(), 1e-6)
+                    mse = F.mse_loss(pred_vel, target[:, t], reduction="none").mean(dim=-1)  # (B,)
+                    loss += (mse * w).mean()
                 
                 # Next input: Ground Truth (Teacher Forcing)
                 curr_vel = target[:, t]

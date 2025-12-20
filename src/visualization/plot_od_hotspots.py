@@ -146,7 +146,7 @@ def main() -> None:
         ax.set_ylim(grid.min_lat, grid.max_lat)
         ax.set_aspect(aspect)
         ax.grid(False)
-        cbar = fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
+        cbar = fig.colorbar(im, ax=ax, fraction=0.035, pad=0.02, shrink=0.85, aspect=25)
         cbar.set_label("log(1 + count)")
 
     _save_fig(fig, Path(args.out_dir), "fig_geo_od_hotspots")
@@ -154,4 +154,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

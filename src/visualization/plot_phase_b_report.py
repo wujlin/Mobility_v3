@@ -257,7 +257,9 @@ def plot_traj_overlay(
 
     cols = 3
     rows = int(np.ceil(k / cols)) if k > 0 else 1
-    fig, axes = plt.subplots(rows, cols, figsize=(4.2 * cols, 4.2 * rows), constrained_layout=True)
+    # Use tight_layout with a reserved top margin for the figure-level legend.
+    # (constrained_layout does not reliably account for fig.legend and can lead to overlaps.)
+    fig, axes = plt.subplots(rows, cols, figsize=(4.2 * cols, 4.2 * rows), constrained_layout=False)
     axes = np.array(axes).reshape(-1)
 
     handles = None
@@ -275,7 +277,7 @@ def plot_traj_overlay(
         ax.scatter(gt[0, 1], gt[0, 0], color="black", s=55, marker="*", zorder=5)
         ax.scatter(gt[-1, 1], gt[-1, 0], color=PALETTE["GT"], s=30, marker="o", zorder=5)
 
-        ax.set_title(f"Sample #{int(si)}")
+        ax.set_title(f"Sample #{int(si)}", pad=2)
         ax.set_aspect("equal", adjustable="box")
         ax.invert_yaxis()
         ax.grid(True, ls="--", alpha=0.25)
@@ -287,7 +289,17 @@ def plot_traj_overlay(
         axes[j].axis("off")
 
     if handles and labels:
-        fig.legend(handles, labels, loc="upper center", ncol=4, frameon=False)
+        fig.legend(
+            handles,
+            labels,
+            loc="upper center",
+            ncol=min(4, len(labels)),
+            frameon=False,
+            bbox_to_anchor=(0.5, 0.995),
+        )
+        fig.tight_layout(rect=(0, 0, 1, 0.92))
+    else:
+        fig.tight_layout()
 
     _save_fig(fig, out_dir, "fig3_traj_overlay")
 

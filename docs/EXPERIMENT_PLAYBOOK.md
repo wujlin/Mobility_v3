@@ -106,6 +106,21 @@ python -m src.training.evaluate \
 - `K=20`
 - `full test`（或至少 `max_batches=2000`）
 
+### 3.4 Baseline 训练也支持快跑（prior 调参/排雷用）
+
+为了避免 deterministic prior（baseline）的验证也要每次跑满全量，我们在 `src/training/train_baseline.py` 加入了 `--max_batches`（默认不启用，不影响原实验）。
+
+示例（每个 epoch 只跑 200 个 batch，用于快速验证 displacement-aware weighting 是否方向正确）：
+
+```bash
+python -m src.training.train_baseline \
+  --exp_name baseline_dt30_dispw_smoke \
+  --data_path ${DATA} --split train \
+  --batch_size 1024 --epochs 3 --max_batches 200 \
+  --disp_weight tanh --disp_alpha 0.1 \
+  --num_workers 8 --seed 0
+```
+
 ---
 
 ## 4) Residual 模式（v1.1）专用检查
@@ -151,6 +166,46 @@ rsync -avP wsA:/home/jinlin/projects/Mobility_v3/data/experiments/<exp_dir>/ \
   data/experiments/<exp_dir>/
 ```
 
+### 5.3 本地通过 EasyConnect（SOCKS5 1080）访问工作站A（最常见坑）
+
+如果你的本地环境被 Docker/EasyConnect 隔离，需要通过 SOCKS5 代理（如 `127.0.0.1:1080`）才能访问校园网内网主机：
+
+1) **把配置写进 `~/.ssh/config`（不要在 shell 里直接敲 `Host ...`）**
+
+```sshconfig
+Host wsA
+    HostName 10.13.12.164
+    User jinlin
+    ProxyCommand nc -X 5 -x 127.0.0.1:1080 %h %p
+    ServerAliveInterval 60
+    ServerAliveCountMax 3
+```
+
+2) **快速连通性测试（优先做这个，30 秒排雷）**
+
+```bash
+# 代理是否工作：能否通过 socks 连到 wsA 的 22 端口
+nc -X 5 -x 127.0.0.1:1080 10.13.12.164 22
+
+# ssh 是否能走 wsA 连接
+ssh -v wsA "hostname"
+```
+
+出现 `SOCKSv5 error: TTL expired` / `Connection closed` 往往意味着：
+- EasyConnect/代理没有起来，或 1080 端口在当前容器/WSL 里不可达；
+- 代理起来了，但代理侧路由不到 `10.13.12.164:22`（需要重连/重启 EasyConnect，或检查防火墙策略）。
+
+3) **不依赖 ssh config 的 rsync（更稳，适合临时环境）**
+
+```bash
+rsync -avP -e "ssh -o ProxyCommand='nc -X 5 -x 127.0.0.1:1080 %h %p'" \
+  jinlin@10.13.12.164:/home/jinlin/projects/Mobility_v3/data/experiments/<exp_dir>/ \
+  data/experiments/<exp_dir>/
+```
+
+> 重要：`127.0.0.1:1080` 是“运行 rsync/ssh 的那台机器”的本地环回地址。  
+> 如果你在服务器B执行 rsync，就不能指望它使用你本地电脑的 1080 代理（除非服务器B上也有同样的代理服务）。
+
 ---
 
 ## 6) 命名与记录（可复现最小集）
@@ -174,4 +229,3 @@ rsync -avP wsA:/home/jinlin/projects/Mobility_v3/data/experiments/<exp_dir>/ \
 - `pred_speed_mean/gt_speed_mean < 0.8` 且 10 分钟内无改善迹象（大概率收缩仍在）
 - ablation 的收益“单调但饱和”（例如 `nav_emb_scale` 从 1.0→1.25 几乎不变）
 - 微观指标全面恶化且宏观无显著改善（说明改动方向不对）
-

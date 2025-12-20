@@ -38,14 +38,20 @@ def train(args):
         print(f"Using split={args.split}: {len(traj_ids)} trajectories ({split_file})")
 
     train_dataset = SeqDataset(args.data_path, obs_len=args.obs_len, pred_len=args.pred_len, traj_ids=traj_ids)
+    # torch-friendly denorm constants for displacement-aware weighting (optional)
+    vel_mean = torch.tensor(train_dataset.normalizer.vel_mean, dtype=torch.float32, device=device)
+    vel_std = torch.tensor(train_dataset.normalizer.vel_std, dtype=torch.float32, device=device)
     g = torch.Generator()
     g.manual_seed(int(args.seed))
+    pin_memory = bool(torch.cuda.is_available())
     train_loader = DataLoader(
         train_dataset,
         batch_size=args.batch_size,
         shuffle=True,
         num_workers=int(args.num_workers),
         generator=g,
+        pin_memory=pin_memory,
+        persistent_workers=(int(args.num_workers) > 0),
     )
     
     # 2. Model
@@ -75,6 +81,10 @@ def train(args):
         "lr": args.lr,
         "seed": int(args.seed),
         "num_workers": int(args.num_workers),
+        "disp_weight": str(args.disp_weight),
+        "disp_alpha": float(args.disp_alpha),
+        "disp_clip_min": float(args.disp_clip_min),
+        "disp_clip_max": float(args.disp_clip_max),
     }
     
     print(f"Start training {args.exp_name}...")
@@ -82,6 +92,7 @@ def train(args):
     
     for epoch in range(args.epochs):
         total_loss = 0
+        num_batches = 0
         start_time = time.time()
         
         for batch_idx, batch in enumerate(train_loader):
@@ -91,18 +102,43 @@ def train(args):
             
             optimizer.zero_grad()
             
+            # Optional displacement-aware weighting to mitigate low-displacement dominance.
+            sample_weight = None
+            if str(args.disp_weight) != "none":
+                # Denormalize velocities to keep weighting in physical grid units.
+                target_vel_denorm = target_vel * vel_std + vel_mean  # (B, F, 2)
+                gt_disp = target_vel_denorm.sum(dim=1)  # (B, 2)
+                disp_norm = torch.linalg.norm(gt_disp, dim=-1)  # (B,)
+                if str(args.disp_weight) == "tanh":
+                    sample_weight = torch.tanh(float(args.disp_alpha) * disp_norm)
+                elif str(args.disp_weight) == "clip":
+                    sample_weight = torch.clamp(
+                        disp_norm,
+                        min=float(args.disp_clip_min),
+                        max=float(args.disp_clip_max),
+                    )
+                else:
+                    raise ValueError(f"Unknown --disp_weight: {args.disp_weight}")
+                # Avoid exact zeros which can zero-out gradients for near-stationary windows.
+                sample_weight = torch.clamp_min(sample_weight, 1e-3)
+
             # Forward returns Loss directly
-            loss = model(obs, cond, target=target_vel)
+            loss = model(obs, cond, target=target_vel, sample_weight=sample_weight)
             
             loss.backward()
             optimizer.step()
             
             total_loss += loss.item()
+            num_batches += 1
             
             if batch_idx % 100 == 0:
                 print(f"Epoch {epoch} | Batch {batch_idx} | Loss {loss.item():.4f}")
+
+            if args.max_batches is not None and int(args.max_batches) > 0 and num_batches >= int(args.max_batches):
+                break
                 
-        avg_loss = total_loss / len(train_loader)
+        denom = max(num_batches, 1)
+        avg_loss = total_loss / float(denom)
         duration = time.time() - start_time
         print(f"Epoch {epoch} Done. Avg Loss: {avg_loss:.4f}. Time: {duration:.1f}s")
         
@@ -132,6 +168,17 @@ if __name__ == "__main__":
     parser.add_argument('--lr', type=float, default=1e-3)
     parser.add_argument('--seed', type=int, default=0)
     parser.add_argument('--num_workers', type=int, default=4)
+    parser.add_argument('--max_batches', type=int, default=None, help="limit batches per epoch (for quick iteration)")
+    parser.add_argument(
+        '--disp_weight',
+        type=str,
+        choices=['none', 'tanh', 'clip'],
+        default='none',
+        help="Displacement-aware weighting for L2 baseline (mitigate low-displacement dominance).",
+    )
+    parser.add_argument('--disp_alpha', type=float, default=0.1, help="tanh(alpha*|gt_disp|) when --disp_weight=tanh")
+    parser.add_argument('--disp_clip_min', type=float, default=0.0)
+    parser.add_argument('--disp_clip_max', type=float, default=1e9)
     
     args = parser.parse_args()
     train(args)

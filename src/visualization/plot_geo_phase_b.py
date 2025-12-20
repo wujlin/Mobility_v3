@@ -121,11 +121,13 @@ def plot_geo_overlays(
     pad_frac: float,
     style_context: str,
 ) -> None:
-    set_style(context=str(style_context), font_scale=1.1)
+    # Geo figures are multi-panel; use a slightly smaller scale to keep labels/legends proportionate.
+    set_style(context=str(style_context), font_scale=1.0)
 
     rng = np.random.default_rng(int(seed))
     ncols = len(samples_list)
-    fig, axes = plt.subplots(1, ncols, figsize=(5.2 * ncols, 4.8), constrained_layout=True)
+    # Use tight_layout with a reserved top margin for a single shared legend.
+    fig, axes = plt.subplots(1, ncols, figsize=(5.2 * ncols, 4.8), constrained_layout=False)
     if ncols == 1:
         axes = [axes]
 
@@ -156,6 +158,9 @@ def plot_geo_overlays(
         lon_pad = float(pad_frac) * dlon
         extent = (lon_min - lon_pad, lon_max + lon_pad, lat_min - lat_pad, lat_max + lat_pad)
 
+    handles = None
+    labels = None
+
     for ax, s in zip(axes, samples_list):
         preds_ll = _grid_yx_to_latlon(s.preds[idx], grid, flip_y=flip_y)  # (take, F, 2) [lat, lon]
         targets_ll = _grid_yx_to_latlon(s.targets[idx], grid, flip_y=flip_y)
@@ -180,7 +185,23 @@ def plot_geo_overlays(
             ax.set_ylim(extent[2], extent[3])
         ax.set_aspect(aspect)
         ax.grid(True, ls="--", alpha=0.25)
-        ax.legend(loc="upper right")
+        ax.tick_params(axis="both", which="major", labelsize=9)
+
+        if handles is None:
+            handles, labels = ax.get_legend_handles_labels()
+
+    if handles and labels:
+        fig.legend(
+            handles,
+            labels,
+            loc="upper center",
+            ncol=min(2, len(labels)),
+            frameon=False,
+            bbox_to_anchor=(0.5, 0.995),
+        )
+        fig.tight_layout(rect=(0, 0, 1, 0.92))
+    else:
+        fig.tight_layout()
 
     _save_fig(fig, out_dir, "fig_geo_traj_overlay")
 
@@ -199,10 +220,12 @@ def plot_geo_density(
     Density plot: per model, draw Pred heatmap (log1p counts) + GT contour.
     GT uses the same samples.npz targets (subset), so caption should state it's a subset.
     """
-    set_style(context=str(style_context), font_scale=1.1)
+    # Geo figures are multi-panel; use a slightly smaller scale to keep labels/legends proportionate.
+    set_style(context=str(style_context), font_scale=1.0)
 
     ncols = len(samples_list)
-    fig, axes = plt.subplots(1, ncols, figsize=(5.2 * ncols, 4.8), constrained_layout=True)
+    # Use manual layout + a single shared colorbar (per-panel colorbars cause overlaps and wasted space).
+    fig, axes = plt.subplots(1, ncols, figsize=(5.2 * ncols, 4.8), constrained_layout=False)
     if ncols == 1:
         axes = [axes]
 
@@ -227,10 +250,12 @@ def plot_geo_density(
     else:
         extent = [grid.min_lon, grid.max_lon, grid.min_lat, grid.max_lat]
 
-    for ax, s in zip(axes, samples_list):
+    # Precompute histograms so all panels share the same color scale.
+    pred_hists = []
+    gt_hists = []
+    for s in samples_list:
         preds_ll = _grid_yx_to_latlon(s.preds.reshape(-1, 2), grid, flip_y=flip_y)
         targets_ll = _grid_yx_to_latlon(s.targets.reshape(-1, 2), grid, flip_y=flip_y)
-
         pred_lon = preds_ll[:, 1]
         pred_lat = preds_ll[:, 0]
         gt_lon = targets_ll[:, 1]
@@ -247,14 +272,26 @@ def plot_geo_density(
             gt_lat,
             bins=[lon_edges, lat_edges],
         )
+        pred_hists.append(pred_hist)
+        gt_hists.append(gt_hist)
 
+    vmax = 0.0
+    for h in pred_hists:
+        vmax = max(vmax, float(np.max(np.log1p(h))))
+    vmax = vmax if vmax > 0 else 1.0
+
+    ims = []
+    for ax, s, pred_hist, gt_hist in zip(axes, samples_list, pred_hists, gt_hists):
         im = ax.imshow(
             np.log1p(pred_hist).T,
             origin="lower",
             extent=extent,
             cmap="Blues",
             alpha=0.95,
+            vmin=0.0,
+            vmax=vmax,
         )
+        ims.append(im)
         # GT contour as reference
         levels = 6
         if np.max(gt_hist) > 0:
@@ -268,16 +305,21 @@ def plot_geo_density(
                 alpha=0.55,
             )
 
-        ax.set_title(f"{s.name}: Pred density (GT contour)")
+        ax.set_title(f"{s.name}: Pred density\n(GT contour)", pad=4)
         ax.set_xlabel("Longitude")
         ax.set_ylabel("Latitude")
         ax.set_xlim(extent[0], extent[1])
         ax.set_ylim(extent[2], extent[3])
         ax.set_aspect(aspect)
         ax.grid(False)
+        ax.tick_params(axis="both", which="major", labelsize=9)
 
-        cbar = fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
-        cbar.set_label("log(1 + count)")
+    # Layout: reserve right margin for a shared colorbar.
+    fig.subplots_adjust(right=0.90, wspace=0.22)
+    cax = fig.add_axes([0.915, 0.18, 0.015, 0.66])  # [left, bottom, width, height] in figure coords
+    cbar = fig.colorbar(ims[0], cax=cax)
+    cbar.set_label("log(1 + count)", fontsize=10)
+    cbar.ax.tick_params(labelsize=8)
 
     _save_fig(fig, out_dir, "fig_geo_density")
 

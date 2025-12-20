@@ -1,4 +1,4 @@
-\subsection{Quantitative Results (Phase B, dt-fixed=30s)}
+\subsection{Phase B Results (dt-fixed=30s)}
 We report a quick but strict evaluation on 320 sampled conditions from the test split under dt-fixed=30s. Deterministic regression is evaluated with $K=1$, while diffusion-based generators are evaluated with $K=20$.
 
 \begin{table}[t]
@@ -24,7 +24,7 @@ In contrast, diffusion-based generators have higher mean errors but much stronge
 \paragraph{Macro-level physical realism: shrinkage persists.}
 Despite strong best-of-$K$, diffusion and physics-conditioned diffusion under-estimate macroscopic motion. For example, diffusion has Rog=3.056 compared to GT\_Rog=5.247 (ratio $\approx 0.58$), and MSD$_{10}$ is 100.948 compared to GT\_MSD$_{10}$=349.740 (ratio $\approx 0.29$).
 Physics conditioning improves these macro statistics modestly (Rog=3.435, MSD$_{10}$=116.869) but does not eliminate the gap.
-Figure~\ref{fig:phaseb_quant} visualizes this directly via micro-metric summaries and MSD curves over real-time lags.
+Figure~\ref{fig:phaseb_quant} visualizes this directly via micro-metric summaries and MSD curves over real-time lags. Additional qualitative and distributional summaries are provided in the Appendix (Figures~\ref{fig:appendix_traj_overlay}--\ref{fig:appendix_rog_boxplot}).
 
 \begin{figure}[t]
   \centering
@@ -46,13 +46,13 @@ Figure~\ref{fig:phaseb_quant} visualizes this directly via micro-metric summarie
   \label{fig:phaseb_quant}
 \end{figure}
 
-\subsection{Ablation: Training-Time Macro Loss (EPE)}
+\paragraph{Ablation: training-time macro supervision (EPE).}
 Motivated by the shrinkage phenomenon, we tested a training-time macroscopic constraint based on end-to-end displacement error (Eq.~\ref{eq:macro_loss}). To avoid shortcut solutions at highly noisy diffusion timesteps, we apply hard gating (only for early timesteps) and use batch-level normalization for stability.
 Empirically, macro supervision is \emph{sensitive}: if the weight is too small, improvements can plateau; if too large, the model may over-compensate and produce heavy-tailed motion that degrades \emph{typical} samples (K=1), even if oracle best-of-$K$ improves. This motivates a structural fix rather than further exhaustive $\lambda$ sweeps.
 
-\subsection{Residual Diffusion (v1.1): Frozen Prior + Stochastic Residual}
+\paragraph{Structural fix: residual diffusion (v1.1).}
 Given the limited gains from training-time macro loss, we adopt a residual formulation (Eq.~\ref{eq:residual_decomp}) that uses a frozen deterministic baseline as a low-frequency prior and learns stochastic residuals with diffusion.
-Table~\ref{tab:phaseb_residual_test_fast} summarizes a fast, leakage-free check on the test split (K=10) using the deterministic baseline checkpoint (\texttt{baseline\_b\_dt30}) as a frozen prior. Residual diffusion largely restores macroscopic scale (speed and Rog ratios close to 1) while maintaining strong oracle best-of-$K$ capability. Residual \emph{physics} diffusion further improves the oracle upper bound (best-of-$K$) but remains slightly conservative in MSD/Rog due to the mean-flow tether effect of the navigation-field prior.
+Table~\ref{tab:phaseb_residual_test_fast} summarizes a fast, leakage-free check on the test split ($K=10$) using a deterministic L2 baseline (trained under the same dt-fixed protocol) as a frozen low-frequency prior. Residual diffusion largely restores macroscopic scale (speed and Rog ratios close to 1) while maintaining strong oracle best-of-$K$ capability. Residual \emph{physics} diffusion further improves the oracle upper bound (best-of-$K$) but remains slightly conservative in MSD/Rog due to the mean-flow tether effect of the navigation-field prior.
 Unless otherwise stated, we keep the sampling schedule consistent with training (100 diffusion steps) and use smaller subsets (\texttt{max\_batches}) only for quick validation; aggressive step-reduction can change calibration and is not used for reporting.
 
 \begin{table}[t]
@@ -66,11 +66,11 @@ Unless otherwise stated, we keep the sampling schedule consistent with training 
     Residual Physics     & 10 & 5.948 & 2.709 & 9.885  & 3.569 & 0.951 & 0.945 & 0.864 \\
     \bottomrule
   \end{tabular}
-  \caption{Residual variants fast check on the test split (K=10; subset evaluation). Ratios are computed against ground-truth statistics on the same evaluated subset. Metrics are from \texttt{data/experiments/diff\_residual\_test\_fast/metrics.json} and \texttt{data/experiments/phys\_residual\_test\_fast/metrics.json}.}
+  \caption{Residual variants fast check on the test split ($K=10$; subset evaluation). Ratios are computed against ground-truth statistics on the same evaluated subset under the same evaluation protocol.}
   \label{tab:phaseb_residual_test_fast}
 \end{table}
 
-\subsection{Geographic-space Visualization (Scheme B)}
+\paragraph{Interpretable geographic visualizations (Scheme B).}
 To connect model behavior to urban spatial structure, we visualize a subset of saved evaluation samples (N=80 conditions) in geographic space using a linear bbox projection (without road-level map matching).
 Figure~\ref{fig:phaseb_geo} shows trajectory overlays and Figure~\ref{fig:phaseb_geo_density} shows spatial density maps. These ``map-like'' visualizations highlight (i) \textbf{spatial heterogeneity} (mobility concentrates along corridors and regions), and (ii) \textbf{probabilistic futures} (diffusion-based generators yield diverse continuations compared to a single mean path).
 

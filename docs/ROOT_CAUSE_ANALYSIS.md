@@ -4,9 +4,12 @@
 Phase B 目前面临的核心矛盾是：**“扩容（h128）稳定了训练，微观最佳值（Best-of-K）超越 Baseline，但宏观指标（Rog/MSD）依然显著‘收缩’（Shrinkage），导致平均误差（Mean）不如 Baseline。”**
 
 - **典型数据**：
-    - Baseline: Rog ≈ 5.5 (GT ≈ 5.25) -> **运动幅度准**，但确定性（多样性=0）。
-    - Diffusion: Rog ≈ 3.3 (0.63× GT) -> **显著收缩**。
-    - Physics: Rog ≈ 3.1 (0.59× GT) -> **收缩更严重**。
+    - Baseline（dt30 quick, K=1）：Rog = 5.494（GT_Rog = 5.247）→ **运动幅度准**，但确定性（多样性=0）。  
+      证据：`data/experiments/baseline_b_dt30_eval_quick/metrics.json`
+    - Diffusion（dt30 quick, K=20）：Rog = 3.056（≈ 0.58× GT）→ **显著收缩**。  
+      证据：`data/experiments/diff_b_dt30_eval_quick/metrics.json`
+    - Physics（dt30 quick, K=20）：Rog = 3.435（≈ 0.65× GT）→ **收缩仍在**（且更“保守/稳”，不一定更远）。  
+      证据：`data/experiments/physics_b_dt30_eval_quick/metrics.json`
 
 ## 2. 只有排除了不可能，剩下的就是真相
 
@@ -120,8 +123,49 @@ Phase B 目前面临的核心矛盾是：**“扩容（h128）稳定了训练，
 
 Phase B v1.1 引入 **prior + residual decomposition**（详见 `docs/RESIDUAL_DIFFUSION.md`）后，fast test 证据显示：
 
-- Data-only residual 已基本恢复宏观尺度（`pred_speed_mean/gt_speed_mean≈1`，`Rog/GT_Rog≈1`）；
-- Physics residual micro 更强但宏观仍略保守（`Rog/GT_Rog≈0.95`，`MSD_10/GT_MSD_10≈0.86`）。
+- **Data-only residual（test, K=10）** 已基本恢复宏观尺度：
+  - 速度比：`pred_speed_mean/gt_speed_mean = 2.329/2.292 ≈ 1.016`
+  - Rog 比：`Rog/GT_Rog = 7.487/7.457 ≈ 1.004`
+  - MSD10 比：`MSD_10/GT_MSD_10 = 622.23/665.48 ≈ 0.935`（仍有一定方向抵消）
+  - 证据：`data/experiments/diff_residual_test_fast/metrics.json`
+- **Physics residual（test, K=10）** micro 更强但宏观仍略保守（mean-field tether 迹象）：
+  - 速度比：`2.180/2.292 ≈ 0.951`
+  - Rog 比：`7.048/7.457 ≈ 0.945`
+  - MSD10 比：`574.80/665.48 ≈ 0.864`
+  - 证据：`data/experiments/phys_residual_test_fast/metrics.json`
 
 这进一步支持本复盘的核心判断：  
 “收缩”是 **生成分布学习机制 + 物理先验保守性** 的结构性现象，单靠 `vel_scale` 或 naive macro loss 很难根治；Residual 把“尺度”交给 prior，使问题从“走不动”转为“如何在不破坏尺度的前提下建模多模态偏离”，从而显著降低优化难度与验证成本。
+
+---
+
+## 7. 现状快照与证据链（可直接粘贴到给教授的邮件）
+
+> 目的：把“我们确定了什么/排除了什么/证据在哪”压缩成可讨论材料，避免口头沟通丢信息。
+
+### 7.1 已排除（工程层面）
+
+- **dt 语义/数据泄漏**：dt30 重采样 + train-only nav_field/data_stats + strict sanity check 均已 PASS。  
+  证据入口：`docs/TASK_DEFINITION.md`、`docs/PHASE_B_RESULTS.md#2`
+- **Normalization mismatch / padding 污染 / 模型容量不足**：已逐项排雷（见第 2 节）。
+
+### 7.2 已确认（机制层面）
+
+1) **v1.0 纯 diffusion/physics diffusion 存在稳定的宏观收缩**（MSD/Rog 偏小），且 physics 往往更“稳但保守”。  
+   证据：`data/experiments/diff_b_dt30_eval_quick/metrics.json`、`data/experiments/physics_b_dt30_eval_quick/metrics.json`
+
+2) **Temperature/噪声强度 ≠ 宏观位移幅度**。温度调大主要引入 jitter，不等价于净位移增加。  
+   证据：外部 review + 我们的可视化/诊断结论（见第 4 节）。
+
+3) **`vel_scale` 能“校准幅度”，但会放大方向误差，导致 micro 指标变差**：说明瓶颈不只在尺度，还在方向持久性/低频结构。  
+   证据：第 4 节（校准协议与观察）。
+
+4) **Residual（prior + residual）是目前最有效的结构性修复**：macro 基本回到接近 GT，同时保留 best-of-K。  
+   证据：`data/experiments/diff_residual_test_fast/metrics.json`、`data/experiments/phys_residual_test_fast/metrics.json`
+
+### 7.3 当前真正待解的问题（请教授 review 的点）
+
+- **Physics residual 仍略保守（MSD10 偏低）**：我们怀疑来自 nav_field 的 mean-field tether（尤其速度/强先验通道）。  
+  需要教授判断：更合理的条件注入/归一化/patch 语义是什么，才能“给方向不锁幅度”。
+- **评估成本与分布一致性**：快评可以降 `K/max_batches`，但不建议用不同 `diff_steps` 替代（会改变采样分布）。  
+  需要教授判断：是否有严格的加速采样（如 DPM-Solver/EDM 风格）可用于评估提速而不改分布。

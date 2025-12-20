@@ -2,7 +2,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import matplotlib as mpl
 
-def set_style(context='paper', font_scale=1.5):
+def set_style(context='paper', font_scale=1.1):
     """
     Configure Matplotlib/Seaborn for publication-quality figures.
     Context: 'paper', 'notebook', 'talk', 'poster'
@@ -12,6 +12,12 @@ def set_style(context='paper', font_scale=1.5):
     sns.set_style("ticks") # Clean white background with ticks
     
     # 2. Custom RC Params for Academic Look
+    base_size = 11
+    label_size = base_size * font_scale
+    title_size = (base_size + 1) * font_scale
+    tick_size = (base_size - 2) * font_scale
+    legend_size = (base_size - 1) * font_scale
+
     rc_params = {
         'font.family': 'sans-serif',
         'font.sans-serif': ['Arial', 'DejaVu Sans', 'Liberation Sans'],
@@ -21,17 +27,19 @@ def set_style(context='paper', font_scale=1.5):
         # We stick to standard text for robustness.
         'text.usetex': False, 
         
-        'axes.linewidth': 1.5,
-        'axes.labelsize': 16,
-        'axes.titlesize': 18,
+        'axes.linewidth': 1.2,
+        'axes.labelsize': label_size,
+        'axes.titlesize': title_size,
         
-        'xtick.major.width': 1.5,
-        'ytick.major.width': 1.5,
+        'xtick.major.width': 1.2,
+        'ytick.major.width': 1.2,
+        'xtick.labelsize': tick_size,
+        'ytick.labelsize': tick_size,
         'xtick.direction': 'in',
         'ytick.direction': 'in',
         
         'legend.frameon': False,
-        'legend.fontsize': 14,
+        'legend.fontsize': legend_size,
         
         'figure.dpi': 300,
         'savefig.dpi': 300,

@@ -47,13 +47,19 @@
 % Crop a 3-panel horizontal figure into one panel, then make it fill the column.
 % Strategy: scale to 3*\linewidth first, then clip out 1/3 (so the visible part is ~\linewidth).
 \newcommand{\ThirdLeft}[1]{%
-  \clipbox{0 0 {0.666\width} 0}{\includegraphics[width=3\linewidth]{#1}}%
+  \adjustbox{width=\linewidth}{%
+    \clipbox{0 0 {0.666\width} 0}{\includegraphics[width=3\linewidth]{#1}}%
+  }%
 }
 \newcommand{\ThirdMid}[1]{%
-  \clipbox{{0.333\width} 0 {0.333\width} 0}{\includegraphics[width=3\linewidth]{#1}}%
+  \adjustbox{width=\linewidth}{%
+    \clipbox{{0.333\width} 0 {0.333\width} 0}{\includegraphics[width=3\linewidth]{#1}}%
+  }%
 }
 \newcommand{\ThirdRight}[1]{%
-  \clipbox{{0.666\width} 0 0 0}{\includegraphics[width=3\linewidth]{#1}}%
+  \adjustbox{width=\linewidth}{%
+    \clipbox{{0.666\width} 0 0 0}{\includegraphics[width=3\linewidth]{#1}}%
+  }%
 }
 
 \title{Physics-Informed (and Residual) Diffusion for\\OD-Conditioned Trajectory Generation}
@@ -377,8 +383,13 @@
 \end{frame}
 
 \begin{frame}[allowframebreaks]{References}
+  \scriptsize
+  % Keep the reference page compact but non-empty (slides may have few explicit \cite{}).
+  \nocite{ho2020ddpm,song2021sde,gupta2018socialgan,salzmann2020trajectronpp,zhang2015urbancps}
+  \nocite{Nag2025ExploringDigitalTwinsTransportPlanning,Yan2023DigitalTwinTransportationInfrastructureManagement}
+  \nocite{Wu2022DigitalTwinsAITransportationInfrastructure,Kusic2023DigitalTwinTransportationMotorway}
   \bibliographystyle{plainnat}
-  \bibliography{references}
+  \bibliography{references,digital_twins_recent}
 \end{frame}
 
 \end{document}

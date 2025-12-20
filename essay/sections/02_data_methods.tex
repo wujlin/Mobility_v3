@@ -1,6 +1,6 @@
 To address the tension between multi-modal coverage and macroscopic realism, we develop a rigorous experimental pipeline centered on explicit temporal semantics and physical priors. This section details the mathematical problem setup, the dt-fixed preprocessing protocol, and the hierarchical model architectures proposed to recover physical consistency at city scales.
 
-\subsection{Notation and Problem Setup}
+\subsection{Problem Setup and Data (dt-fixed)}
 We study \textbf{OD-conditioned trajectory generation with a known destination} (KnownDestination). Trajectories are represented in a grid coordinate system. Let $\mathbf{p}_t \in \mathbb{R}^2$ denote the 2D position at step $t$ (grid indices in $[y,x]$ order), and define step displacement (velocity) as
 \begin{equation}
   \mathbf{v}_t = \mathbf{p}_{t+1} - \mathbf{p}_t .
@@ -15,7 +15,7 @@ Given a global context vector $\mathbf{c}$ (time features and OD endpoints), our
 \end{equation}
 At inference, we sample $K$ future trajectories (by sampling $K$ future velocity sequences) to represent multi-modality.
 
-\subsection{Data and Preprocessing (dt-fixed)}
+\paragraph{Dataset.}
 We use the Shenzhen taxicab GPS dataset \citep{zhang2015urbancps}. We preprocess trajectories into grid space and enforce a strict, leakage-free data contract.
 
 \paragraph{Grid rasterization.}
@@ -25,44 +25,19 @@ We discretize the city bounding box (latitude $[22.45, 22.85]$, longitude $[113.
 We resample each trajectory to a fixed interval $\Delta t=30$s and drop segments with large gaps or insufficient length. After resampling, the split sizes are train=97,222, val=21,103, test=21,309 trajectories.
 
 \paragraph{Leakage-free strict products.}
-All normalization statistics and the navigation field (Section~\ref{sec:navfield}) are computed using the \textbf{train split only}.
+All normalization statistics and the navigation field prior are computed using the \textbf{train split only}.
 This prevents information leakage from validation/test into priors or scaling constants.
 
 \paragraph{Normalization and conditioning.}
 We normalize positions and velocities using train-only statistics. The global conditioning vector includes (i) time features (hour-of-day, day-of-week) and (ii) origin and destination (OD) endpoints, both normalized in the same coordinate system.
 
-\subsection{Models}
-We compare three model families: a deterministic regression baseline, a conditional diffusion generator, and a physics-conditioned diffusion variant.
+\subsection{Model Framework}
+We compare a deterministic regression baseline, a conditional diffusion generator, and a physics-conditioned diffusion variant. To address the macroscopic shrinkage observed in Phase B v1.0, we additionally adopt a residual formulation (v1.1) that combines a frozen deterministic prior with stochastic diffusion residuals. Figure~\ref{fig:method-overview} summarizes this decomposition.
 
 \begin{figure}[t]
   \centering
-  \begin{tikzpicture}[
-    node distance=8mm and 10mm,
-    box/.style={draw, rounded corners, align=center, inner sep=4pt, font=\small},
-    arrow/.style={-{Latex[length=2mm]}, thick},
-  ]
-    \node[box] (obs) {Observed history\\$\mathbf{X}$ (pos+vel)};
-    \node[box, above=of obs] (ctx) {Global context\\$\mathbf{c}$ (time + OD)};
-    \node[box, right=of obs] (cond) {Condition encoder\\(MLP)};
-    \node[box, below=of obs] (navf) {Train-only nav field\\$\mathcal{F}$};
-    \node[box, right=of navf] (patch) {Crop nav patch\\$\Phi(\mathbf{p}_0)$};
-    \node[box, right=of patch] (navenc) {Nav encoder\\(CNN)};
-    \node[box, right=of cond] (concat) {Concat\\$[\mathbf{e}_{\mathrm{hist}},\mathbf{e}_{\mathrm{ctx}},\mathbf{e}_{\mathrm{nav}}]$};
-    \node[box, right=of concat] (unet) {1D U-Net\\$\epsilon_\theta(\cdot)$};
-    \node[box, right=of unet] (ddpm) {DDPM reverse\\sampling};
-    \node[box, right=of ddpm] (out) {Future vel.\\$\hat{\mathbf{Y}}$};
-
-    \draw[arrow] (obs) -- (cond);
-    \draw[arrow] (ctx) -- (cond);
-    \draw[arrow] (cond) -- node[above, font=\small]{data-only} (concat);
-    \draw[arrow] (navf) -- (patch);
-    \draw[arrow] (patch) -- (navenc);
-    \draw[arrow] (navenc) -- node[below, font=\small]{physics} (concat);
-    \draw[arrow] (concat) -- (unet);
-    \draw[arrow] (unet) -- (ddpm);
-    \draw[arrow] (ddpm) -- (out);
-  \end{tikzpicture}
-  \caption{Model overview. The physics-conditioned diffusion augments the data-only conditioning with a train-only navigation-field patch encoded by a CNN.}
+  \includegraphics[width=0.98\linewidth]{figures/fig1_framework.png}
+  \caption{Framework overview. We combine a deterministic low-frequency prior (anchor) with a stochastic residual diffusion model (detail) under OD conditioning and a train-only navigation-field prior. The fusion yields multimodal trajectories that retain macroscopic realism while capturing diverse route-level variation.}
   \label{fig:method-overview}
 \end{figure}
 
@@ -73,7 +48,7 @@ The baseline predicts a single future velocity sequence by minimizing L2 error. 
 We adopt a denoising diffusion probabilistic model (DDPM) \citep{ho2020ddpm} to sample future velocity sequences conditioned on history and OD context.
 
 \paragraph{Physics-conditioned diffusion (navigation field).}
-We extend the diffusion model by injecting an additional, non-parametric prior in the form of a navigation-field patch around the current position (Section~\ref{sec:navfield}).
+We extend the diffusion model by injecting an additional, non-parametric prior in the form of a navigation-field patch around the current position (defined below).
 
 \paragraph{Residual diffusion (v1.1, frozen deterministic prior).}
 In Phase B we observe a systematic ``shrinkage'' failure mode in pure diffusion: sampled trajectories tend to under-estimate macroscopic displacement (low MSD/Rog). To decouple low-frequency scale from stochastic variation, we adopt a residual formulation:
@@ -85,8 +60,7 @@ In Phase B we observe a systematic ``shrinkage'' failure mode in pure diffusion:
 \end{equation}
 where $f_{\mathrm{base}}$ is a frozen deterministic baseline (trained under the same dt-fixed protocol), and the diffusion model learns the conditional distribution of residual velocities $p_\theta(\mathbf{v}^{\mathrm{res}} \mid \mathbf{X},\mathbf{c})$. At inference, we sample residuals and add them back to the prior to obtain full future velocities.
 
-\subsection{Conditional DDPM for Future Velocities}
-\label{sec:ddpm}
+\paragraph{Conditional diffusion (DDPM).}
 We model the clean future velocity sequence as a matrix $\mathbf{y}_0 \in \mathbb{R}^{F\times 2}$, and define a forward noising process that gradually perturbs $\mathbf{y}_0$ into $\mathbf{y}_T \sim \mathcal{N}(\mathbf{0}, \mathbf{I})$.
 Using a variance schedule $\{\beta_t\}_{t=1}^T$ with $\alpha_t=1-\beta_t$ and $\bar{\alpha}_t=\prod_{s=1}^t \alpha_s$, the forward process admits the closed form
 \begin{equation}
@@ -100,6 +74,8 @@ The reverse process is learned with a noise predictor $\epsilon_\theta(\mathbf{y
   \label{eq:ddpm_loss}
 \end{equation}
 where $\epsilon \sim \mathcal{N}(\mathbf{0},\mathbf{I})$ and $\mathbf{y}_t=\sqrt{\bar{\alpha}_t}\mathbf{y}_0+\sqrt{1-\bar{\alpha}_t}\epsilon$.
+
+Algorithm~\ref{alg:ddpm_sampling} summarizes the reverse sampling procedure used to generate future velocity sequences during inference.
 
 \begin{algorithm}[t]
   \caption{Reverse diffusion sampling (future velocities)}
@@ -115,8 +91,7 @@ where $\epsilon \sim \mathcal{N}(\mathbf{0},\mathbf{I})$ and $\mathbf{y}_t=\sqrt
   \end{algpseudocode}
 \end{algorithm}
 
-\subsection{Navigation Field Prior and Local Patching}
-\label{sec:navfield}
+\paragraph{Train-only navigation field prior and local patching.}
 We construct a train-only navigation field $\mathcal{F}$ that captures a coarse-grained mean flow of urban mobility in grid space. For each grid cell $(i,j)$, let $\mathcal{K}_{ij}$ be the set of training timesteps whose position falls into that cell. We estimate the mean step displacement and its direction as
 \begin{align}
   \bar{\mathbf{v}}_{ij} &= \frac{1}{|\mathcal{K}_{ij}|}\sum_{k\in\mathcal{K}_{ij}} \mathbf{v}_k,
@@ -134,6 +109,8 @@ At inference time, we crop a local patch around the last observed position $\mat
 \end{equation}
 where $K=32$ in our experiments. The patch is encoded by a lightweight CNN to produce an embedding $\mathbf{e}_{\mathrm{nav}}$, which is concatenated with the global condition. Speed values are normalized by a train-only constant (\texttt{nav\_max\_speed}) to keep the patch scale stable.
 
+Figure~\ref{fig:navfield_geo} visualizes the resulting train-only navigation field in geographic space; we use it as an interpretable mean-flow prior rather than a destination-specific shortest-path field.
+
 \begin{figure}[t]
   \centering
   \includegraphics[width=0.92\linewidth]{figures/fig_geo_nav_field.png}
@@ -141,8 +118,8 @@ where $K=32$ in our experiments. The patch is encoded by a lightweight CNN to pr
   \label{fig:navfield_geo}
 \end{figure}
 
-\subsection{Training-Time Macro Regularization (Ablation)}
-\label{sec:macro_reg}
+\subsection{Training and Evaluation}
+\paragraph{Training-time macro regularization (ablation).}
 To mitigate the macroscopic ``shrinkage'' phenomenon (under-estimated net displacement), we explore an optional macro regularizer. Given $\mathbf{y}_t$ and the predicted noise $\epsilon_\theta$, we reconstruct an estimate of the clean sample
 \begin{equation}
   \hat{\mathbf{y}}_0 = \frac{\mathbf{y}_t - \sqrt{1-\bar{\alpha}_t}\,\epsilon_\theta(\mathbf{y}_t,t,\mathbf{c})}{\sqrt{\bar{\alpha}_t} + 10^{-8}}.
@@ -156,14 +133,14 @@ We then compute the implied positions by summing displacements (Eq.~\ref{eq:vel_
 \end{align}
 To avoid applying geometric constraints at highly noisy diffusion timesteps, we gate this loss to early timesteps (higher signal-to-noise ratio): $\mathcal{L}=\mathcal{L}_{\mathrm{diff}} + \lambda \,\mathbb{I}[t < \tau]\mathcal{L}_{\mathrm{macro}}$.
 
-\subsection{Evaluation Protocol and Geographic-space Visualization (Scheme B)}
+\paragraph{Evaluation protocol.}
 We evaluate on the test split using both micro-level and macro-level metrics. For generative models we draw $K=20$ samples and report both mean and best-of-$K$ (oracle) scores.
 
-\paragraph{Micro metrics.}
+\textbf{Micro metrics.}
 We report ADE/FDE for each condition, and also compute discrete Fr\'echet distance and DTW as distribution-aware trajectory-shape measures.
 For ADE/FDE, we summarize \textbf{mean} over samples and \textbf{best-of-$K$} (minimum over samples) to quantify coverage.
 
-\paragraph{Macro metrics.}
+\textbf{Macro metrics.}
 We report mean squared displacement (MSD) curves and radius of gyration (Rog) to characterize low-frequency motion. MSD is defined as
 \begin{equation}
   \mathrm{MSD}(\tau) = \left\langle \left\|\mathbf{p}_{t+\tau} - \mathbf{p}_t\right\|_2^2 \right\rangle_{t,\;\mathrm{conditions}},
@@ -171,5 +148,5 @@ We report mean squared displacement (MSD) curves and radius of gyration (Rog) to
 \end{equation}
 and Rog is computed per trajectory as $\mathrm{Rog}=\sqrt{\frac{1}{F}\sum_{t=1}^{F}\|\mathbf{p}_t-\bar{\mathbf{p}}\|_2^2}$.
 
-\paragraph{Geographic-space visualization (Scheme B).}
+\textbf{Geographic-space visualization (Scheme B).}
 Models operate in grid space, but for urban interpretation we map grid coordinates back to latitude/longitude by a linear bbox projection using the recorded bbox and grid shape. This produces ``map-like'' overlays and density plots (without road-level map matching). Depending on the grid convention, the latitude axis may require a $y$-flip to match a north-up view; we follow the same convention as our visualization scripts and report this mapping as an approximate display transform.

@@ -230,6 +230,11 @@ Residual 的天花板很大程度取决于 prior（deterministic baseline）的�
 
 > 代码支持：`src/training/train_baseline.py` 已提供 `--disp_weight {none,tanh,clip}` 等参数（见仓库说明）。
 
+补充（PI/组内共识，KISS）：
+
+- **暂时不换 Transformer prior**：当前主线要证明的是 *Residual Framework*（scale vs stochasticity 解耦）与 *physics conditioning* 的作用机理。换成 Transformer 会引入大量新变量（收敛/过拟合/实现差异），导致无法归因。
+- **先“修目标函数”而不是“换架构”**：deterministic prior 的主要偏差来自 MSE 的均值回归（mean reversion），优先用 displacement-aware weighting 把宏观尺度抬起来，再让 residual 专注学习随机性。
+
 ### B) Nav Field 的更精细交互（避免 mean-field tether）
 
 当前 physics 条件注入是 `nav_emb` 与 `cond` 的拼接（concat）。它能稳定方向，但也可能像“锚链”把生成拉向局部均值。

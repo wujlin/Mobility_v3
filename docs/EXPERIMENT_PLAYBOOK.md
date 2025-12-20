@@ -75,6 +75,42 @@ export HDF5_USE_FILE_LOCKING=FALSE
 
 ---
 
+## 2.1) 计算资源怎么“吃满”（少走弯路版）
+
+> 目标：同样的 wall time，拿到更可靠的证伪/证据。  
+> 原则：**先把数据喂饱 GPU**，再谈 batch_size/学习率这种二阶问题。
+
+### (A) 先固定 CPU 线程，避免“线程打架”
+
+```bash
+export OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1
+export HDF5_USE_FILE_LOCKING=FALSE
+```
+
+### (B) `num_workers` 优先级 > `batch_size`
+
+我们在 dt30 的 *physics* 训练上做过小基准（`--max_batches 200` 固定步数）：
+
+- `batch_size=1024, num_workers=0`：~272s/epoch（明显“饿 GPU”）
+- `batch_size=1024, num_workers=8`：~45s/epoch（明显加速）
+
+**建议默认值**：
+- 训练：`--num_workers 8`（不稳定再降到 4）
+- 评估：优先 `--num_workers 0`（避免多进程 + HDF5 的偶发锁/卡顿）
+
+### (C) 说明：启用 `--max_batches` 时，batch_size 过大反而更慢
+
+如果你为了快速验证启用了 `--max_batches`（例如每个 epoch 只跑 200 个 batch），那么：
+
+- **batch_size 越大，每个 batch 计算量越大** → epoch wall time 变长；
+- 因为你本来就不跑完整 epoch，所以“大 batch 缩短 epoch step 数”的优势并不存在。
+
+因此在 *fast training*（带 `--max_batches`）时，推荐：
+- `batch_size=1024` 或 `2048`（先用 1024）
+- 如果 GPU 仍然空闲，再逐步加到 2048（不要一步上 8192/16384）
+
+---
+
 ## 3) 评估成本控制（强烈建议统一两阶段）
 
 ### 3.1 Fast Check（确认方向，10–20 分钟级）
@@ -117,7 +153,7 @@ python -m src.training.train_baseline \
   --exp_name baseline_dt30_dispw_smoke \
   --data_path ${DATA} --split train \
   --batch_size 1024 --epochs 3 --max_batches 200 \
-  --disp_weight tanh --disp_alpha 0.1 \
+  --disp_weight clip --disp_clip_min 0.5 --disp_clip_max 5.0 \
   --num_workers 8 --seed 0
 ```
 

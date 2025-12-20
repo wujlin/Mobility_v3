@@ -112,8 +112,12 @@ def train(args):
                 if str(args.disp_weight) == "tanh":
                     sample_weight = torch.tanh(float(args.disp_alpha) * disp_norm)
                 elif str(args.disp_weight) == "clip":
+                    # Multiplicative weighting (additive logic): w = clip(disp / mean_disp, lo, hi)
+                    # This boosts large-displacement windows with w>1, instead of only down-weighting small ones.
+                    disp_ref = torch.clamp_min(disp_norm.mean(), 1e-6)
+                    sample_weight = disp_norm / disp_ref
                     sample_weight = torch.clamp(
-                        disp_norm,
+                        sample_weight,
                         min=float(args.disp_clip_min),
                         max=float(args.disp_clip_max),
                     )
@@ -177,8 +181,8 @@ if __name__ == "__main__":
         help="Displacement-aware weighting for L2 baseline (mitigate low-displacement dominance).",
     )
     parser.add_argument('--disp_alpha', type=float, default=0.1, help="tanh(alpha*|gt_disp|) when --disp_weight=tanh")
-    parser.add_argument('--disp_clip_min', type=float, default=0.0)
-    parser.add_argument('--disp_clip_max', type=float, default=1e9)
+    parser.add_argument('--disp_clip_min', type=float, default=0.5, help="when --disp_weight=clip: clip(disp/mean_disp, min, max)")
+    parser.add_argument('--disp_clip_max', type=float, default=5.0, help="when --disp_weight=clip: clip(disp/mean_disp, min, max)")
     
     args = parser.parse_args()
     train(args)

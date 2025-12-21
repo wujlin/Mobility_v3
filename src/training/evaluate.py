@@ -29,14 +29,20 @@ def _set_seed(seed: int) -> None:
         torch.cuda.manual_seed_all(int(seed))
 
 
-def _load_state_dict(checkpoint_path: str, device: torch.device) -> dict:
+def _load_checkpoint(checkpoint_path: str, device: torch.device) -> Tuple[dict, dict]:
     ckpt = torch.load(checkpoint_path, map_location=device)
     if isinstance(ckpt, dict) and "model_state_dict" in ckpt:
-        return ckpt["model_state_dict"]
+        cfg = ckpt.get("config", {})
+        return ckpt["model_state_dict"], (cfg if isinstance(cfg, dict) else {})
     if isinstance(ckpt, dict):
         # allow direct state_dict saved via torch.save(model.state_dict())
-        return ckpt
+        return ckpt, {}
     raise TypeError(f"Unsupported checkpoint format: {type(ckpt)}")
+
+
+def _load_state_dict(checkpoint_path: str, device: torch.device) -> dict:
+    state_dict, _ = _load_checkpoint(checkpoint_path, device=device)
+    return state_dict
 
 def _load_baseline_prior(prior_checkpoint: str, device: torch.device) -> SeqBaseline:
     """
@@ -128,6 +134,38 @@ def _infer_nav_gate_hidden(state_dict: dict) -> Optional[int]:
         # Linear(in_dim, hidden) -> weight shape (hidden, in_dim)
         return int(w.shape[0])
     return None
+
+
+def _resolve_pred_type(arg_pred_type: str, ckpt_cfg: dict) -> str:
+    """
+    Resolve diffusion parameterization type for evaluation.
+
+    Args:
+        arg_pred_type: one of {"auto", "eps", "v"}
+        ckpt_cfg: checkpoint config dict if exists
+    Returns:
+        resolved: one of {"eps", "v"}
+    """
+    arg_pred_type = str(arg_pred_type)
+    if arg_pred_type not in ("auto", "eps", "v"):
+        raise ValueError(f"Invalid --pred_type: {arg_pred_type} (expected: auto|eps|v)")
+
+    ckpt_pred: Optional[str] = None
+    if isinstance(ckpt_cfg, dict):
+        for k in ("pred_type", "prediction_type"):
+            v = ckpt_cfg.get(k)
+            if str(v) in ("eps", "v"):
+                ckpt_pred = str(v)
+                break
+
+    if arg_pred_type == "auto":
+        return ckpt_pred or "eps"
+
+    if ckpt_pred is not None and ckpt_pred != arg_pred_type:
+        print(f"[WARN] pred_type 不匹配：ckpt={ckpt_pred}, args={arg_pred_type}；已自动改为 ckpt 值以避免错误评估。")
+        return ckpt_pred
+
+    return arg_pred_type
 
 
 def _integrate_positions(start_pos: np.ndarray, vel: np.ndarray) -> np.ndarray:
@@ -238,7 +276,12 @@ def evaluate(args):
     
     # 2. Load Model (auto-align hyperparams to checkpoint to avoid size mismatch)
     print(f"Loading {args.model_type} model from {args.checkpoint}...")
-    state_dict = _load_state_dict(args.checkpoint, device=device)
+    state_dict, ckpt_cfg = _load_checkpoint(args.checkpoint, device=device)
+
+    # Align diffusion parameterization (eps vs v) to checkpoint to avoid semantic mismatch.
+    if args.model_type in ("diffusion", "physics"):
+        args.pred_type = _resolve_pred_type(getattr(args, "pred_type", "auto"), ckpt_cfg)
+        print(f"[OK] pred_type={args.pred_type}")
 
     ckpt_type = _infer_ckpt_model_type(state_dict)
     if ckpt_type is not None and ckpt_type != args.model_type:
@@ -289,7 +332,8 @@ def evaluate(args):
             obs_dim=4, act_dim=2, cond_dim=6,
             obs_len=args.obs_len, pred_len=args.pred_len,
             hidden_dim=args.hidden_dim,
-            diffusion_steps=args.diff_steps
+            diffusion_steps=args.diff_steps,
+            prediction_type=str(getattr(args, "pred_type", "eps")),
         )
     elif args.model_type == 'physics':
         model = PhysicsConditionDiffusion(
@@ -298,6 +342,7 @@ def evaluate(args):
             obs_len=args.obs_len, pred_len=args.pred_len,
             hidden_dim=args.hidden_dim,
             diffusion_steps=args.diff_steps,
+            prediction_type=str(getattr(args, "pred_type", "eps")),
             nav_emb_scale=float(args.nav_emb_scale),
             nav_gate=str(args.nav_gate),
             nav_gate_hidden=int(getattr(args, "nav_gate_hidden", 32)),
@@ -493,6 +538,7 @@ def evaluate(args):
         "split": args.split,
         "num_conditions": int(total_n),
         "K": int(K),
+        "pred_type": (str(getattr(args, "pred_type", "eps")) if args.model_type in ("diffusion", "physics") else None),
         "vel_scale": float(args.vel_scale),
         "prior_checkpoint": (str(args.prior_checkpoint) if args.prior_checkpoint else None),
         "ADE_mean": ade_mean_sum / total_n,
@@ -573,6 +619,7 @@ if __name__ == "__main__":
     parser.add_argument('--obs_len', type=int, default=8)
     parser.add_argument('--pred_len', type=int, default=12)
     parser.add_argument('--hidden_dim', type=int, default=128) # check defaults
+    parser.add_argument('--pred_type', type=str, choices=['auto', 'eps', 'v'], default='auto', help="Diffusion 参数化：auto(默认，从 checkpoint 对齐)/eps/v")
     parser.add_argument('--diff_steps', type=int, default=100)
     parser.add_argument('--latent_dim', type=int, default=16, help="CVAE latent dim (only for --model_type cvae)")
     parser.add_argument('--z_temperature', type=float, default=1.0, help="CVAE 采样温度（仅 cvae 生效）")

@@ -18,11 +18,16 @@ class DiffusionTrajectoryModel(BaseTrajectoryModel):
                  obs_len: int = 8,
                  pred_len: int = 12,
                  hidden_dim: int = 64,
-                 diffusion_steps: int = 100):
+                 diffusion_steps: int = 100,
+                 prediction_type: str = "eps"):
         super().__init__()
         
         self.pred_len = pred_len
         self.act_dim = act_dim
+        prediction_type = str(prediction_type)
+        if prediction_type not in ("eps", "v"):
+            raise ValueError(f"Unknown prediction_type: {prediction_type} (expected: eps|v)")
+        self.prediction_type = prediction_type
         
         # Condition Encoder: History(Flattened) + Cond -> Emb
         hist_flat_dim = obs_len * obs_dim
@@ -103,10 +108,21 @@ class DiffusionTrajectoryModel(BaseTrajectoryModel):
         x_t = self.scheduler.add_noise(x_0, noise, timesteps)
 
         global_cond = self.get_global_cond(obs, cond)  # (B, emb_dim)
-        noise_pred = self.unet(x_t, timesteps, cond=global_cond)
+        model_out = self.unet(x_t, timesteps, cond=global_cond)
+
+        sqrt_alpha_prod = self.scheduler.sqrt_alphas_cumprod[timesteps].flatten()[:, None, None]
+        sqrt_one_minus_alpha_prod = self.scheduler.sqrt_one_minus_alphas_cumprod[timesteps].flatten()[:, None, None]
+
+        # Train target depends on parameterization:
+        # - eps: target is Gaussian noise epsilon
+        # - v:   target is v = alpha*epsilon - sigma*x0
+        if self.prediction_type == "v":
+            target_out = sqrt_alpha_prod * noise - sqrt_one_minus_alpha_prod * x_0
+        else:
+            target_out = noise
 
         # Per-sample MSE for optional weighting (mitigate low-displacement dominance).
-        per = (noise_pred - noise) ** 2  # (B, C, F)
+        per = (model_out - target_out) ** 2  # (B, C, F)
         per = per.mean(dim=(1, 2))       # (B,)
         if sample_weight is not None:
             w = sample_weight.to(dtype=per.dtype, device=per.device).flatten()
@@ -118,9 +134,13 @@ class DiffusionTrajectoryModel(BaseTrajectoryModel):
         if not return_x0_pred and not return_timesteps:
             return diff_loss
 
-        sqrt_alpha_prod = self.scheduler.sqrt_alphas_cumprod[timesteps].flatten()[:, None, None]
-        sqrt_one_minus_alpha_prod = self.scheduler.sqrt_one_minus_alphas_cumprod[timesteps].flatten()[:, None, None]
-        x0_pred = (x_t - sqrt_one_minus_alpha_prod * noise_pred) / (sqrt_alpha_prod + 1e-8)
+        # x0_pred reconstruction:
+        # - eps: x0 = (x_t - sigma*eps) / alpha
+        # - v:   x0 = alpha*x_t - sigma*v
+        if self.prediction_type == "v":
+            x0_pred = sqrt_alpha_prod * x_t - sqrt_one_minus_alpha_prod * model_out
+        else:
+            x0_pred = (x_t - sqrt_one_minus_alpha_prod * model_out) / (sqrt_alpha_prod + 1e-8)
 
         if return_x0_pred and return_timesteps:
             return diff_loss, x0_pred, timesteps
@@ -166,11 +186,19 @@ class DiffusionTrajectoryModel(BaseTrajectoryModel):
             # Broadcast timestep
             ts = torch.full((B,), t, device=device, dtype=torch.long)
             
-            # Predict noise
-            noise_pred = self.unet(x_t, ts, cond=global_cond)
+            model_out = self.unet(x_t, ts, cond=global_cond)
+
+            # Convert v-prediction to epsilon for DDPM step (scheduler expects epsilon).
+            if self.prediction_type == "v":
+                alpha = self.scheduler.sqrt_alphas_cumprod[t].to(device=device, dtype=x_t.dtype)
+                sigma = self.scheduler.sqrt_one_minus_alphas_cumprod[t].to(device=device, dtype=x_t.dtype)
+                # epsilon = sigma*x_t + alpha*v
+                eps_pred = sigma * x_t + alpha * model_out
+            else:
+                eps_pred = model_out
             
             # Step
-            x_t = self.scheduler.step(noise_pred, t, x_t)
+            x_t = self.scheduler.step(eps_pred, t, x_t)
             
         # 4. Return (B, F, 2)
         return x_t.permute(0, 2, 1)

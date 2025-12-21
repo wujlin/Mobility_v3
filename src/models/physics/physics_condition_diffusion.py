@@ -25,7 +25,8 @@ class PhysicsConditionDiffusion(BaseTrajectoryModel):
                  obs_len: int = 8,
                  pred_len: int = 12,
                  hidden_dim: int = 64,
-                 diffusion_steps: int = 100):
+                 diffusion_steps: int = 100,
+                 prediction_type: str = "eps"):
         super().__init__()
 
         self.obs_dim = int(obs_dim)
@@ -60,7 +61,8 @@ class PhysicsConditionDiffusion(BaseTrajectoryModel):
             obs_len=obs_len,
             pred_len=pred_len,
             hidden_dim=hidden_dim,
-            diffusion_steps=diffusion_steps
+            diffusion_steps=diffusion_steps,
+            prediction_type=str(prediction_type),
         )
 
     def _apply_nav_emb(self, obs: torch.Tensor, cond: torch.Tensor, nav_emb: torch.Tensor) -> torch.Tensor:

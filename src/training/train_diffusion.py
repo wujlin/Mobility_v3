@@ -175,7 +175,8 @@ def train(args):
             nav_gate_dropout=float(args.nav_gate_dropout),
             obs_len=args.obs_len, pred_len=args.pred_len,
             hidden_dim=args.hidden_dim,
-            diffusion_steps=args.diff_steps
+            diffusion_steps=args.diff_steps,
+            prediction_type=str(args.pred_type),
         )
     else:
         print("Initializing Standard DiffusionTrajectoryModel...")
@@ -183,7 +184,8 @@ def train(args):
             obs_dim=4, act_dim=2, cond_dim=6,
             obs_len=args.obs_len, pred_len=args.pred_len,
             hidden_dim=args.hidden_dim,
-            diffusion_steps=args.diff_steps
+            diffusion_steps=args.diff_steps,
+            prediction_type=str(args.pred_type),
         )
     
     model.to(device)
@@ -217,6 +219,7 @@ def train(args):
         "obs_len": args.obs_len,
         "pred_len": args.pred_len,
         "hidden_dim": args.hidden_dim,
+        "pred_type": str(args.pred_type),
         "diff_steps": args.diff_steps,
         "batch_size": args.batch_size,
         "epochs": args.epochs,
@@ -322,6 +325,11 @@ def train(args):
                 new = run_config.get(k)
                 if old is not None and new is not None and str(old) != str(new):
                     print(f"[WARN] resume 配置不一致：{k}: ckpt={old} vs args={new}（可能导致加载失败或效果异常）")
+            old_pred = ckpt_cfg.get("pred_type")
+            if old_pred is not None and str(old_pred) != str(args.pred_type):
+                args.pred_type = str(old_pred)
+                run_config["pred_type"] = str(args.pred_type)
+                print(f"[OK] resume: 使用 ckpt 中的 pred_type={args.pred_type}")
             # Prior mismatch is important for residual diffusion.
             old_prior = ckpt_cfg.get("prior_checkpoint")
             new_prior = run_config.get("prior_checkpoint")
@@ -585,6 +593,7 @@ if __name__ == "__main__":
     parser.add_argument('--obs_len', type=int, default=8)
     parser.add_argument('--pred_len', type=int, default=12)
     parser.add_argument('--hidden_dim', type=int, default=64)
+    parser.add_argument('--pred_type', type=str, choices=['eps', 'v'], default='eps', help="Diffusion prediction parameterization: eps (default) or v (recommended to try for low-frequency structure).")
     parser.add_argument('--diff_steps', type=int, default=100)
     
     # Train args

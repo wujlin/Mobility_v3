@@ -170,6 +170,9 @@ def train(args):
             nav_patch_size=args.patch_size,
             nav_emb_scale=args.nav_emb_scale,
             nav_emb_dropout=args.nav_emb_dropout,
+            nav_gate=str(args.nav_gate),
+            nav_gate_hidden=int(args.nav_gate_hidden),
+            nav_gate_dropout=float(args.nav_gate_dropout),
             obs_len=args.obs_len, pred_len=args.pred_len,
             hidden_dim=args.hidden_dim,
             diffusion_steps=args.diff_steps
@@ -208,6 +211,9 @@ def train(args):
         "nav_patch_channel2": str(args.nav_patch_channel2),
         "nav_emb_scale": float(args.nav_emb_scale),
         "nav_emb_dropout": float(args.nav_emb_dropout),
+        "nav_gate": str(args.nav_gate),
+        "nav_gate_hidden": int(args.nav_gate_hidden),
+        "nav_gate_dropout": float(args.nav_gate_dropout),
         "obs_len": args.obs_len,
         "pred_len": args.pred_len,
         "hidden_dim": args.hidden_dim,
@@ -243,7 +249,47 @@ def train(args):
         ckpt = _load_checkpoint(resume_from, device=device)
         if "model_state_dict" not in ckpt:
             raise KeyError(f"Checkpoint missing model_state_dict: {resume_from}")
-        model.load_state_dict(ckpt["model_state_dict"])
+        state_dict = ckpt["model_state_dict"]
+        try:
+            model.load_state_dict(state_dict)
+        except RuntimeError as e:
+            # Handle architecture drift for optional Physics nav_gate.
+            if args.model_type == "physics":
+                ckpt_has_gate = any(str(k).startswith("nav_gate.") for k in state_dict.keys())
+                model_has_gate = getattr(model, "nav_gate", None) is not None
+                if ckpt_has_gate != model_has_gate:
+                    if ckpt_has_gate:
+                        w = state_dict.get("nav_gate.0.weight")
+                        gate_hidden = int(w.shape[0]) if hasattr(w, "shape") and len(w.shape) == 2 else int(args.nav_gate_hidden)
+                        args.nav_gate = "obscond"
+                        args.nav_gate_hidden = int(gate_hidden)
+                    else:
+                        args.nav_gate = "none"
+                    print(f"[WARN] resume: 检测到 nav_gate 结构不一致，已自动重建模型以匹配 checkpoint（nav_gate={args.nav_gate}）。")
+                    run_config["nav_gate"] = str(args.nav_gate)
+                    run_config["nav_gate_hidden"] = int(args.nav_gate_hidden)
+                    run_config["nav_gate_dropout"] = float(args.nav_gate_dropout)
+                    model = PhysicsConditionDiffusion(
+                        obs_dim=4,
+                        act_dim=2,
+                        cond_dim=6,
+                        nav_patch_size=args.patch_size,
+                        nav_emb_scale=args.nav_emb_scale,
+                        nav_emb_dropout=args.nav_emb_dropout,
+                        nav_gate=str(args.nav_gate),
+                        nav_gate_hidden=int(args.nav_gate_hidden),
+                        nav_gate_dropout=float(args.nav_gate_dropout),
+                        obs_len=args.obs_len,
+                        pred_len=args.pred_len,
+                        hidden_dim=args.hidden_dim,
+                        diffusion_steps=args.diff_steps,
+                    ).to(device)
+                    optimizer = optim.Adam(model.parameters(), lr=args.lr)
+                    model.load_state_dict(state_dict)
+                else:
+                    raise
+            else:
+                raise
         if "optimizer_state_dict" in ckpt and not bool(args.no_resume_optim):
             try:
                 optimizer.load_state_dict(ckpt["optimizer_state_dict"])
@@ -259,6 +305,15 @@ def train(args):
                 run_config["prior_checkpoint"] = str(args.prior_checkpoint)
                 run_config["residual_mode"] = True
                 print(f"[OK] resume: 使用 ckpt 中的 prior_checkpoint={args.prior_checkpoint}")
+            if str(args.nav_gate) == "none" and ckpt_cfg.get("nav_gate") and str(ckpt_cfg.get("nav_gate")) != "none":
+                args.nav_gate = str(ckpt_cfg["nav_gate"])
+                run_config["nav_gate"] = str(args.nav_gate)
+                print(f"[OK] resume: 使用 ckpt 中的 nav_gate={args.nav_gate}")
+            for k in ("nav_gate_hidden", "nav_gate_dropout"):
+                old = ckpt_cfg.get(k)
+                if old is not None:
+                    run_config[k] = old
+                    setattr(args, k, old)
             for k in ("model_type", "hidden_dim", "diff_steps", "obs_len", "pred_len", "patch_size"):
                 old = ckpt_cfg.get(k)
                 new = run_config.get(k)
@@ -500,6 +555,9 @@ if __name__ == "__main__":
     )
     parser.add_argument('--nav_emb_scale', type=float, default=1.0, help="Physics: nav embedding 强度缩放（<1 减弱 mean-field tether）")
     parser.add_argument('--nav_emb_dropout', type=float, default=0.0, help="Physics: 训练时对 nav embedding 做 dropout（提升鲁棒性）")
+    parser.add_argument('--nav_gate', type=str, choices=['none', 'obscond'], default='none', help="Physics: learnable nav_emb gate（按条件自适应减弱 mean-field tether）")
+    parser.add_argument('--nav_gate_hidden', type=int, default=32, help="Physics: nav gate MLP hidden dim")
+    parser.add_argument('--nav_gate_dropout', type=float, default=0.0, help="Physics: dropout on gate scalar (regularize gating)")
     parser.add_argument('--lambda_macro', type=float, default=0.0, help="(deprecated) use --lambda_rog instead")
     
     # Model args

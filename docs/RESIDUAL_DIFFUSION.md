@@ -201,6 +201,57 @@ python -m src.training.evaluate \
 
 ---
 
+## 6.1) 新主线：NavGate（learnable gating，替代静态 `nav_emb_scale`）
+
+动机（KISS）：
+- 当前 physics residual 的剩余偏差更像 mean-field tether（保守化），而 `nav_emb_scale` 是弱旋钮（1% 量级）。
+- 我们希望模型能“按条件自适应地信/不信 nav\_field”，而不是用一个全局常数去调。
+
+实现要点：
+- 在 `PhysicsConditionDiffusion` 中加入可学习 gate：`nav_emb *= sigmoid(MLP([obs, cond]))`，gate $\in (0,1)$；
+- 直观上 gate 只会“减弱 tether”，不负责把尺度拉大（尺度由 prior 负责）。
+
+训练（对照实验建议先跑 `epochs=20,max_batches=200` 快速证伪）：
+
+```bash
+DATA=data/processed_dt30/trajectories/shenzhen_trajectories.h5
+NAV=data/processed_dt30/nav_field.npz
+PRIOR=data/experiments/prior_dt30_dispw_clip0.5_5_h128_b1024_lr1e-3_e50_s1/last.pt  # 推荐 prior；若你的目录名不同请替换
+
+python -m src.training.train_diffusion \
+  --model_type physics \
+  --data_path ${DATA} \
+  --nav_file ${NAV} \
+  --split train \
+  --exp_name phys_residual_navGate_obscond_e20_s0 \
+  --prior_checkpoint ${PRIOR} \
+  --hidden_dim 128 --batch_size 2048 --lr 1e-3 --epochs 20 --max_batches 200 \
+  --num_workers 16 --seed 0 \
+  --nav_gate obscond --nav_gate_hidden 32 --nav_gate_dropout 0.0
+```
+
+评估（建议 `ds100`；`--nav_gate auto` 会从 checkpoint 自动对齐，无需手填）：
+
+```bash
+python -m src.training.evaluate \
+  --exp_name phys_residual_navGate_obscond_val_k10_mb200_ds100 \
+  --model_type physics \
+  --data_path ${DATA} \
+  --nav_file ${NAV} \
+  --checkpoint data/experiments/phys_residual_navGate_obscond_e20_s0/last.pt \
+  --prior_checkpoint ${PRIOR} \
+  --split val \
+  --batch_size 256 --num_workers 0 --max_batches 200 \
+  --num_samples_per_condition 10 --diff_steps 100 \
+  --nav_gate auto
+```
+
+成功判据（止损线）：
+- `RoG/MSD10` 相比 concat 基线回升 `≥0.01`；
+- 不出现明显 jitter（`pred_path_len_mean` 不异常暴涨）。
+
+---
+
 ## 7) 评估成本控制（强烈建议）
 
 为了避免“跑一晚才知道没效果”，建议统一使用两阶段评估：

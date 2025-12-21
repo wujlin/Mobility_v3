@@ -116,6 +116,20 @@ def _infer_latent_dim(model_type: str, state_dict: dict) -> Optional[int]:
     return None
 
 
+def _infer_nav_gate_hidden(state_dict: dict) -> Optional[int]:
+    """
+    Detect optional Physics nav_gate (learnable gating) from checkpoint keys.
+
+    Returns:
+        hidden_dim if nav_gate exists, else None.
+    """
+    w = state_dict.get("nav_gate.0.weight")
+    if hasattr(w, "shape") and len(w.shape) == 2:
+        # Linear(in_dim, hidden) -> weight shape (hidden, in_dim)
+        return int(w.shape[0])
+    return None
+
+
 def _integrate_positions(start_pos: np.ndarray, vel: np.ndarray) -> np.ndarray:
     """
     Integrate step displacement into positions.
@@ -239,6 +253,25 @@ def evaluate(args):
     if ckpt_latent_dim is not None and int(args.latent_dim) != int(ckpt_latent_dim):
         print(f"[WARN] latent_dim 不匹配：checkpoint={ckpt_latent_dim}, args={args.latent_dim}；已自动改为 checkpoint 值以匹配权重。")
         args.latent_dim = int(ckpt_latent_dim)
+
+    # Physics-only: auto-align optional nav_gate to checkpoint to avoid load mismatch.
+    if args.model_type == "physics":
+        ckpt_nav_gate_hidden = _infer_nav_gate_hidden(state_dict)
+        ckpt_has_gate = ckpt_nav_gate_hidden is not None
+        user_nav_gate = str(getattr(args, "nav_gate", "auto"))
+        if user_nav_gate == "auto":
+            args.nav_gate = "obscond" if ckpt_has_gate else "none"
+        else:
+            if ckpt_has_gate and user_nav_gate == "none":
+                print("[WARN] checkpoint 含 nav_gate，但你指定了 --nav_gate none；已自动改为 obscond 以匹配权重。")
+                args.nav_gate = "obscond"
+            elif (not ckpt_has_gate) and user_nav_gate != "none":
+                print("[WARN] checkpoint 不含 nav_gate，但你指定了 --nav_gate!=none；已自动改为 none 以匹配权重。")
+                args.nav_gate = "none"
+            else:
+                args.nav_gate = user_nav_gate
+        if ckpt_has_gate:
+            args.nav_gate_hidden = int(ckpt_nav_gate_hidden)
     
     if args.model_type == 'baseline':
         model = SeqBaseline(
@@ -266,6 +299,9 @@ def evaluate(args):
             hidden_dim=args.hidden_dim,
             diffusion_steps=args.diff_steps,
             nav_emb_scale=float(args.nav_emb_scale),
+            nav_gate=str(args.nav_gate),
+            nav_gate_hidden=int(getattr(args, "nav_gate_hidden", 32)),
+            nav_gate_dropout=float(getattr(args, "nav_gate_dropout", 0.0)),
         )
         
     model.load_state_dict(state_dict)
@@ -529,6 +565,9 @@ if __name__ == "__main__":
         help="nav_patch 第3通道：speed(默认)/count/log1p(count)/zeros(置零，仅方向)",
     )
     parser.add_argument('--nav_emb_scale', type=float, default=1.0, help="Physics: nav embedding 强度缩放（<1 减弱 mean-field tether）")
+    parser.add_argument('--nav_gate', type=str, choices=['auto', 'none', 'obscond'], default='auto', help="Physics: nav_gate 模式（auto: 从 checkpoint 推断；obscond: learnable gate；none: 关闭）")
+    parser.add_argument('--nav_gate_hidden', type=int, default=32, help="Physics: nav gate MLP hidden dim（通常无需手动设置，auto 会从 checkpoint 对齐）")
+    parser.add_argument('--nav_gate_dropout', type=float, default=0.0, help="Physics: dropout on gate scalar (训练时用；评估无影响)")
     
     # Model args
     parser.add_argument('--obs_len', type=int, default=8)

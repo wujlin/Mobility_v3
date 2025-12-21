@@ -160,32 +160,26 @@
 
 ---
 
-## Phase B v1.0: Interpretable Maps (Baseline)
+## Phase B v1.0: Interpretable Maps (Trajectory Overlay)
 
-这一页是 baseline 的地理空间展示，左边是轨迹叠加（GT vs baseline），右边是预测密度热力图（并叠 GT 等高线做参考）。
+这一页把三类模型放在同一张“地理空间叠图”里，方便一眼看出差异（左/中/右分别是 Baseline / Diffusion / Physics，对比 GT）。
 
-需要说明：这不是 road-level map matching，只是用 bbox 做线性投影；目的不是“严格贴道路”，而是展示城市空间中的 **宏观聚集结构与走廊**。
+需要说明两点：
+1) 这不是 road-level map matching，只是用 bbox 做线性投影；目的不是“严格贴道路”，而是展示城市空间中的 **宏观聚集结构与走廊**；
+2) 我们希望读者同时看到“覆盖”和“收缩”：diffusion/physics 的轨迹束更丰富，但典型样本的整体跨度仍偏小（与 MSD/Rog 的 shrinkage 结论一致）。
 
-baseline 的特点是：输出单一均值路径，整体形状相对平滑，但缺乏多样性。
-
-过渡：下面看 diffusion，在同一空间展示下，多样性会更明显，但 shrinkage 也会体现出来。
-
----
-
-## Phase B v1.0: Interpretable Maps (Diffusion)
-
-diffusion 的空间叠图通常能看到更丰富的可能性（因为它是采样式的）。
-但结合上一页的 MSD/Rog，我们要强调：  
-**多样性不等于宏观合理**。如果整体尺度偏小，空间上会体现为轨迹束更集中、更短、更不“放得开”。
-
-过渡：下面看 physics diffusion：加入 nav_field 后，方向引导是否会更符合城市结构？
+过渡：叠图只能看“线”，下一页用密度图展示“概率质量”落在城市空间的哪里。
 
 ---
 
-## Phase B v1.0: Interpretable Maps (Physics)
+## Phase B v1.0: Interpretable Maps (Density + GT contour)
 
-physics diffusion 在局部方向性上更像“顺着城市的主流向/走廊”走，因此 best-of-K 往往更好。
-但重要的是：在 v1.0 里，**它仍然没有根除 shrinkage**——也就是“方向更像了，但跑得还是不够远”。
+这一页是对应的密度热力图（Pred density，叠加 GT contour），同样是左/中/右 Baseline / Diffusion / Physics。
+
+讲解建议：
+- Baseline：概率质量集中在一条“均值走廊”上（确定性，缺少多样性）；
+- Diffusion：覆盖更散，但整体更保守（shrinkage）；
+- Physics：在方向上更贴近主走廊（更像“顺着路走”），但宏观尺度仍未完全恢复。
 
 过渡：下面用 grid-space 的具体 case 把“覆盖 vs shrinkage”的矛盾看得更清楚。
 
@@ -267,7 +261,22 @@ $$
 
 这相当于把任务拆成“低频结构 + 高频随机扰动”，是生成建模里很经典、也很稳健的做法。
 
-过渡：下一页用 quick validation 结果说明：这个结构性修复是否有效。
+过渡：下一页用一张框架图把“prior 负责尺度、residual 负责随机性”的直觉讲清楚，再看 quick validation 的数值证据。
+
+---
+
+## Residual Diffusion (v1.1): Framework Diagram
+
+这一页是方法框架图（Input → Process → Fusion → Output）。我会按从左到右的顺序讲：
+
+1) **Input**：过去轨迹 + 目的地条件 + nav\_field（物理先验）  
+2) **Stream A（prior）**：确定性模型输出一条“均值路径/低频趋势”，它负责把尺度锚住（走多远、总体形状）  
+3) **Stream B（residual diffusion）**：只生成“相对 prior 的随机扰动/多模态偏离”，避免从零学习“尺度 + 不确定性”这件困难事  
+4) **Fusion**：两路相加得到最终的多模态未来轨迹
+
+一句话强调贡献：这等于把“城市动力学的低频部分”和“随机扰动的高频部分”解耦，让每个模块各司其职，既稳又可解释。
+
+过渡：下面用 quick validation 结果说明：这个结构性修复是否有效。
 
 ---
 

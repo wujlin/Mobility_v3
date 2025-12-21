@@ -4,6 +4,8 @@ Implementation Plan, Task List and Thought in Chinese：本文件是一封“可
 
 教授您好，
 
+> 注：该 memo 对应的是“macro loss 作为主线修复 shrinkage”的阶段。Phase B v1.1 之后我们已把主线转向 `prior + residual`，并将剩余瓶颈定位为 nav\_field 的注入/保守 tether（详见 `docs/PROFESSOR_QUERY_RESIDUAL_V11.md`）。此文档保留为阶段性证据与复盘材料。
+
 我们按您上次的建议把训练期 Macro Loss 从 Rog 切换到 **EPE（端到端位移差）**，并做了：
 
 - **Hard gate**：仅在 `t < 0.5*T`（T=100，threshold=50）施加 macro loss，避免大噪声步导致 jitter shortcut。
@@ -68,4 +70,3 @@ Implementation Plan, Task List and Thought in Chinese：本文件是一封“可
 3. 是否建议进一步改 timestep 采样分布：例如训练时 **更偏向小 t**（让 x0_pred 更可靠），从而放大 macro loss 的有效梯度？
 
 非常感谢！
-

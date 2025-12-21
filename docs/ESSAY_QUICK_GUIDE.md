@@ -75,7 +75,8 @@ Implementation Plan, Task List and Thought in Chinese：本文件是“最后 1�
 ### 3.3 我们做了哪些“严谨但仍未完全解决”的改进尝试
 这里写成 ablation（真实且高分）：
 - 推理期 `vel_scale`：能拉近宏观幅度，但会放大方向误差导致 ADE/FDE 变差（说明尺度≠根治）。
-- 训练期 macro loss：从 Rog 到 EPE（端到端位移），并做 timestep gate；仍存在平台区/权衡。
+- 训练期 macro loss：从 Rog 到 EPE（端到端位移），并做 timestep gate；仍存在平台区/权衡（可作为“失败的但严谨的尝试”）。
+- 结构性修复（v1.1 residual）：prior+residual decomposition 把“尺度”交给 deterministic prior，把“随机性”交给 diffusion；在 fast eval 中能显著缓解 shrinkage（可作为“阶段性成功的 pivot”）。
 
 给出一个小表（可放附录）：展示 `pred_speed/gt_speed`、`MSD10/GT`、`Rog/GT` 的 ratio。
 
@@ -86,6 +87,9 @@ Implementation Plan, Task List and Thought in Chinese：本文件是“最后 1�
 结论写法（建议原句）：  
 “Macro loss 在当前实现下尚未根治 shrinkage，但它为后续提供了可解释的控制旋钮；下一步的关键不是继续扫 λ，而是按 GT 位移对 macro 信号做加权/筛选以避免被低位移窗口稀释。”
 
+补充一句（如果篇幅允许）：  
+“进一步地，我们采用 residual decomposition（prior+residual）作为结构性修复，使宏观尺度从‘走不动’转为‘保守 tether’，将后续工作聚焦到 conditioning 注入方式上。”
+
 ---
 
 ## 4) Conclusion：不要写“我们解决了”，写“我们建立了可复现闭环并定位瓶颈”
@@ -94,6 +98,7 @@ Implementation Plan, Task List and Thought in Chinese：本文件是“最后 1�
 1) 我们构建了 dt-fixed=30s、无泄漏合同的数据/训练/评估闭环；  
 2) 生成式模型在 best-of-K 与分布指标上显示出更强覆盖潜力，physics 条件进一步提升最优覆盖；  
 3) 发现并量化了宏观收缩瓶颈，给出可复现诊断与下一步可验证的修复路线（位移加权 macro loss / 更稳的 low-frequency supervision）。
+（可选替换为更贴近最新状态）：位移加权的 deterministic prior + residual decomposition + 更合理的 nav\_field 注入（避免 mean-field tether）。
 
 ---
 

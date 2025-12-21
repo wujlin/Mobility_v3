@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from typing import Tuple, Union
+from typing import Optional, Tuple, Union
 from src.models.base_model import BaseTrajectoryModel
 from src.models.diffusion.diffusion_model import DiffusionTrajectoryModel
 from src.models.physics.cnn_encoder import CNNEncoder
@@ -19,15 +19,37 @@ class PhysicsConditionDiffusion(BaseTrajectoryModel):
                  nav_emb_dim: int = 32,
                  nav_emb_scale: float = 1.0,
                  nav_emb_dropout: float = 0.0,
+                 nav_gate: str = "none",
+                 nav_gate_hidden: int = 32,
+                 nav_gate_dropout: float = 0.0,
                  obs_len: int = 8,
                  pred_len: int = 12,
                  hidden_dim: int = 64,
                  diffusion_steps: int = 100):
         super().__init__()
-        
+
+        self.obs_dim = int(obs_dim)
+        self.cond_dim = int(cond_dim)
+        self.obs_len = int(obs_len)
+
         self.nav_encoder = CNNEncoder(output_dim=nav_emb_dim, patch_size=nav_patch_size)
         self.nav_emb_scale = float(nav_emb_scale)
         self.nav_emb_dropout = float(nav_emb_dropout)
+
+        nav_gate = str(nav_gate)
+        if nav_gate not in ("none", "obscond"):
+            raise ValueError(f"Unknown nav_gate: {nav_gate} (expected: none|obscond)")
+        self.nav_gate_mode = nav_gate
+        self.nav_gate_dropout = float(nav_gate_dropout)
+        self.nav_gate: Optional[nn.Module] = None
+        if self.nav_gate_mode != "none":
+            gate_in_dim = self.obs_len * self.obs_dim + self.cond_dim
+            h = int(nav_gate_hidden)
+            self.nav_gate = nn.Sequential(
+                nn.Linear(gate_in_dim, h),
+                nn.SiLU(),
+                nn.Linear(h, 1),
+            )
         
         # Instantiate wrapped diffusion model
         # Condition dim increases by nav_emb_dim
@@ -41,9 +63,16 @@ class PhysicsConditionDiffusion(BaseTrajectoryModel):
             diffusion_steps=diffusion_steps
         )
 
-    def _apply_nav_emb(self, nav_emb: torch.Tensor) -> torch.Tensor:
+    def _apply_nav_emb(self, obs: torch.Tensor, cond: torch.Tensor, nav_emb: torch.Tensor) -> torch.Tensor:
         if self.nav_emb_scale != 1.0:
             nav_emb = nav_emb * self.nav_emb_scale
+        if self.nav_gate is not None:
+            B = obs.shape[0]
+            gate_in = torch.cat([obs.reshape(B, -1), cond], dim=-1)
+            gate = torch.sigmoid(self.nav_gate(gate_in))  # (B, 1) in (0, 1)
+            if self.nav_gate_dropout > 0.0:
+                gate = F.dropout(gate, p=float(self.nav_gate_dropout), training=self.training)
+            nav_emb = nav_emb * gate
         if self.nav_emb_dropout > 0.0:
             nav_emb = F.dropout(nav_emb, p=float(self.nav_emb_dropout), training=self.training)
         return nav_emb
@@ -77,7 +106,7 @@ class PhysicsConditionDiffusion(BaseTrajectoryModel):
             raise ValueError("Nav Patch is required for Physics Model")
 
         nav_emb = self.nav_encoder(nav_patch)  # (B, nav_emb_dim)
-        nav_emb = self._apply_nav_emb(nav_emb)
+        nav_emb = self._apply_nav_emb(obs, cond, nav_emb)
         full_cond = torch.cat([cond, nav_emb], dim=-1)
         return self.diffusion.compute_loss(
             obs,
@@ -99,7 +128,7 @@ class PhysicsConditionDiffusion(BaseTrajectoryModel):
             
         # Encode Nav
         nav_emb = self.nav_encoder(nav_patch) # (B, nav_emb_dim)
-        nav_emb = self._apply_nav_emb(nav_emb)
+        nav_emb = self._apply_nav_emb(obs, cond, nav_emb)
         
         # Concat Cond
         full_cond = torch.cat([cond, nav_emb], dim=-1)
@@ -112,7 +141,7 @@ class PhysicsConditionDiffusion(BaseTrajectoryModel):
             
         # Encode Nav
         nav_emb = self.nav_encoder(nav_patch)
-        nav_emb = self._apply_nav_emb(nav_emb)
+        nav_emb = self._apply_nav_emb(obs, cond, nav_emb)
         
         # Concat Cond
         full_cond = torch.cat([cond, nav_emb], dim=-1)

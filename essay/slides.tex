@@ -175,7 +175,7 @@
     \end{itemize}
   \end{column}
   \begin{column}{0.46\linewidth}
-    \FitGraphic[height=0.62\textheight]{fig_geo_nav_field.png}
+    \FitGraphic[height=0.62\textheight]{fig_geo_nav_field.pdf}
   \end{column}
 \end{columns}
 \end{frame}
@@ -189,7 +189,7 @@
 \vspace{0.4em}
 \begin{figure}
   \centering
-  \FitGraphic{fig1_micro_metrics.png}
+  \FitGraphic{fig1_micro_metrics.pdf}
   \caption*{\small Micro-level metrics (mean/std and best-of-$K$ where applicable).}
 \end{figure}
 \end{frame}
@@ -205,60 +205,29 @@
 \vspace{0.4em}
 \begin{figure}
   \centering
-  \FitGraphic{fig2_msd_curve.png}
+  \FitGraphic{fig2_msd_curve.pdf}
   \caption*{\small MSD curves (Pred vs. GT) under dt-fixed=30s.}
 \end{figure}
 \end{frame}
 
-\begin{frame}{Phase B v1.0: Interpretable Maps (Baseline)}
-\begin{columns}[T,onlytextwidth]
-  \begin{column}{0.49\linewidth}
-    \ThirdLeft{fig_geo_traj_overlay.png}
-    \vspace{-0.2em}
-    \centering{\scriptsize Trajectory overlay (Baseline vs GT)}
-  \end{column}
-  \begin{column}{0.49\linewidth}
-    \ThirdLeft{fig_geo_density.png}
-    \vspace{-0.2em}
-    \centering{\scriptsize Density (Pred heatmap, GT contour)}
-  \end{column}
-\end{columns}
+\begin{frame}{Phase B v1.0: Interpretable Maps (Trajectory Overlay)}
+\scriptsize\textbf{Reading guide:} these are ``map-like'' visualizations via bbox projection (no road map-matching). Left/Mid/Right correspond to Baseline / Diffusion / Physics.
 \vspace{0.4em}
-\scriptsize\textbf{Reading guide:} these are ``map-like'' visualizations via bbox projection (no road map-matching). They highlight spatial heterogeneity and corridor structure.
+\begin{figure}
+  \centering
+  \includegraphics[width=\linewidth,height=0.70\textheight,keepaspectratio]{fig_geo_traj_overlay.pdf}
+  \caption*{\small Trajectory overlay: GT vs predictions (N=80).}
+\end{figure}
 \end{frame}
 
-\begin{frame}{Phase B v1.0: Interpretable Maps (Diffusion)}
-\begin{columns}[T,onlytextwidth]
-  \begin{column}{0.49\linewidth}
-    \ThirdMid{fig_geo_traj_overlay.png}
-    \vspace{-0.2em}
-    \centering{\scriptsize Trajectory overlay (Diffusion vs GT)}
-  \end{column}
-  \begin{column}{0.49\linewidth}
-    \ThirdMid{fig_geo_density.png}
-    \vspace{-0.2em}
-    \centering{\scriptsize Density (Pred heatmap, GT contour)}
-  \end{column}
-\end{columns}
+\begin{frame}{Phase B v1.0: Interpretable Maps (Density + GT contour)}
+\scriptsize\textbf{Reading guide:} darker blue indicates higher predicted occupancy; GT contour provides a shape reference. Left/Mid/Right: Baseline / Diffusion / Physics.
 \vspace{0.4em}
-\scriptsize\textbf{Reading guide:} diffusion produces diverse futures, but macro displacement can be biased low (shrinkage). \textit{(Middle panel of combined figure.)}
-\end{frame}
-
-\begin{frame}{Phase B v1.0: Interpretable Maps (Physics)}
-\begin{columns}[T,onlytextwidth]
-  \begin{column}{0.49\linewidth}
-    \ThirdRight{fig_geo_traj_overlay.png}
-    \vspace{-0.2em}
-    \centering{\scriptsize Trajectory overlay (Physics vs GT)}
-  \end{column}
-  \begin{column}{0.49\linewidth}
-    \ThirdRight{fig_geo_density.png}
-    \vspace{-0.2em}
-    \centering{\scriptsize Density (Pred heatmap, GT contour)}
-  \end{column}
-\end{columns}
-\vspace{0.4em}
-\scriptsize\textbf{Reading guide:} nav\_field acts as a local mean-flow prior and improves oracle coverage, but does not eliminate shrinkage. \textit{(Right panel of combined figure.)}
+\begin{figure}
+  \centering
+  \includegraphics[width=\linewidth,height=0.70\textheight,keepaspectratio]{fig_geo_density.pdf}
+  \caption*{\small Predicted density map (log-count) with GT contour.}
+\end{figure}
 \end{frame}
 
 \begin{frame}{Phase B v1.0: Qualitative Cases (grid space)}
@@ -266,7 +235,7 @@
 \vspace{0.3em}
 \begin{figure}
   \centering
-  \FitGraphicSmall[height=0.68\textheight]{fig3_traj_overlay.png}
+  \FitGraphicSmall[height=0.68\textheight]{fig3_traj_overlay.pdf}
   \caption*{\small Saved-sample trajectory overlays in grid space (multiple cases).}
 \end{figure}
 \end{frame}
@@ -274,12 +243,12 @@
 \begin{frame}{Phase B v1.0: Distribution Diagnostics}
 \begin{columns}[T,onlytextwidth]
   \begin{column}{0.50\linewidth}
-    \FitGraphicSmall{fig4_error_cdf.png}
+    \FitGraphicSmall{fig4_error_cdf.pdf}
     \vspace{-0.2em}
     \centering{\scriptsize Error CDF (saved samples)}
   \end{column}
   \begin{column}{0.48\linewidth}
-    \FitGraphicSmall{fig5_rog_boxplot.png}
+    \FitGraphicSmall{fig5_rog_boxplot.pdf}
     \vspace{-0.2em}
     \centering{\scriptsize Rog distribution (saved samples)}
   \end{column}
@@ -323,6 +292,14 @@
 \end{itemize}
 \end{frame}
 
+\begin{frame}{Residual Diffusion (v1.1): Framework Diagram}
+\begin{figure}
+  \centering
+  \includegraphics[width=\linewidth,height=0.78\textheight,keepaspectratio]{fig1_framework.png}
+  \caption*{\small Stream A (deterministic prior) anchors low-frequency scale; Stream B (residual diffusion) adds stochastic deviations for multi-modal futures.}
+\end{figure}
+\end{frame}
+
 \begin{frame}{Residual Diffusion (v1.1): Quick Validation}
 \scriptsize
 \begin{table}
@@ -347,7 +324,7 @@
 \begin{frame}{Phase B v1.1: Interpretable Maps (Residual Diffusion) --- Overlay}
 \begin{figure}
   \centering
-  \FitGraphic{fig_geo_traj_overlay_v11.png}
+  \FitGraphic{fig_geo_traj_overlay_v11.pdf}
   \caption*{\small Left: Baseline (prior). Right: Residual Diffusion (v1.1). \textbf{Note:} ``Diffusion'' label in figure refers to residual diffusion.}
 \end{figure}
 \end{frame}
@@ -355,7 +332,7 @@
 \begin{frame}{Phase B v1.1: Interpretable Maps (Residual Diffusion) --- Density}
 \begin{figure}
   \centering
-  \FitGraphic{fig_geo_density_v11.png}
+  \FitGraphic{fig_geo_density_v11.pdf}
   \caption*{\small Left: Baseline (prior). Right: Residual Diffusion (v1.1). Pred density heatmap with GT contour.}
 \end{figure}
 \end{frame}
@@ -382,14 +359,44 @@
 \end{itemize}
 \end{frame}
 
-\begin{frame}[allowframebreaks]{References}
-  \scriptsize
-  % Keep the reference page compact but non-empty (slides may have few explicit \cite{}).
-  \nocite{ho2020ddpm,song2021sde,gupta2018socialgan,salzmann2020trajectronpp,zhang2015urbancps}
-  \nocite{Nag2025ExploringDigitalTwinsTransportPlanning,Yan2023DigitalTwinTransportationInfrastructureManagement}
-  \nocite{Wu2022DigitalTwinsAITransportationInfrastructure,Kusic2023DigitalTwinTransportationMotorway}
-  \bibliographystyle{plainnat}
-  \bibliography{references,digital_twins_recent}
+\begin{frame}{References (selected)}
+\scriptsize
+\begin{thebibliography}{10}
+\bibitem[Ho et~al.(2020)]{ho2020ddpm}
+Ho, Jain, and Abbeel.
+\newblock Denoising diffusion probabilistic models.
+\newblock NeurIPS, 2020.
+
+\bibitem[Song et~al.(2021)]{song2021sde}
+Song, Meng, and Ermon.
+\newblock Score-based generative modeling through stochastic differential equations.
+\newblock ICLR, 2021.
+
+\bibitem[Gupta et~al.(2018)]{gupta2018socialgan}
+Gupta, Johnson, Fei-Fei, Savarese, and Alahi.
+\newblock Social{GAN}: Socially acceptable trajectories with generative adversarial networks.
+\newblock CVPR, 2018.
+
+\bibitem[Salzmann et~al.(2020)]{salzmann2020trajectronpp}
+Salzmann, Ivanovic, Chakravarty, and Pavone.
+\newblock Trajectron++: Dynamically feasible trajectory forecasting with heterogeneous data.
+\newblock ECCV, 2020.
+
+\bibitem[Zhang et~al.(2015)]{zhang2015urbancps}
+Zhang, Zhao, Zhang, and He.
+\newblock UrbanCPS: A cyber-physical system based on multi-source big infrastructure data for heterogeneous model integration.
+\newblock ICCPS, 2015.
+
+\bibitem[Nag et~al.(2025)]{Nag2025ExploringDigitalTwinsTransportPlanning}
+Nag et~al.
+\newblock Exploring digital twins in transport planning: A PRISMA review.
+\newblock European Transport Research Review, 2025.
+
+\bibitem[Yan et~al.(2023)]{Yan2023DigitalTwinTransportationInfrastructureManagement}
+Yan et~al.
+\newblock Digital twins in transportation infrastructure management: A systematic review.
+\newblock Intelligent Transportation Infrastructure, 2023.
+\end{thebibliography}
 \end{frame}
 
 \end{document}

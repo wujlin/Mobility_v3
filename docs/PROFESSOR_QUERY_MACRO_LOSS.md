@@ -1,6 +1,8 @@
-# 教授咨询问题整理：训练期 Macro Loss（Rog/MSD）出现“抖动但走不远”的反常现象
+# 教授咨询问题整理：训练期 Macro Loss（Rog/MSD）出现“抖动但走不远”的反常现象（历史备忘）
 
 Implementation Plan, Task List and Thought in Chinese：本文档用于把我们当前最硬的事实、已做过的实验与最需要教授判断的关键问题，整理成一份可直接发给教授的咨询材料（尽量自洽、可复现、可讨论）。
+
+> 注：本路线在 Phase B v1.1 之后已触发止损（macro fine-tune 收益 <0.01 且容易引入高频捷径/保守收敛）。当前主线已转为 `prior + residual`（见 `docs/RESIDUAL_DIFFUSION.md`），并把剩余问题定位为 nav\_field 注入方式导致的 tether；本文件保留用于回溯与未来 rebuttal/appendix 的背景说明。
 
 ---
 
@@ -172,4 +174,3 @@ python -m src.training.evaluate \
   --split val --batch_size 64 --max_batches 200 --num_workers 0 \
   --num_samples_per_condition 20 --diff_steps 100 --save_samples 0 --seed 0
 ```
-

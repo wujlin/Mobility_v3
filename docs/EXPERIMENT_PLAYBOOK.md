@@ -265,3 +265,6 @@ rsync -avP -e "ssh -o ProxyCommand='nc -X 5 -x 127.0.0.1:1080 %h %p'" \
 - `pred_speed_mean/gt_speed_mean < 0.8` 且 10 分钟内无改善迹象（大概率收缩仍在）
 - ablation 的收益“单调但饱和”（例如 `nav_emb_scale` 从 1.0→1.25 几乎不变）
 - 微观指标全面恶化且宏观无显著改善（说明改动方向不对）
+
+补充（physics residual 常见瓶颈）：
+- 如果 macro 指标卡在 `RoG/MSD10≈0.93–0.95` 且继续训练只会让 micro 更好、macro 更差（safe-play），不要继续拉长 epoch；优先转向 conditioning 注入的结构性 ablation（例如 `--nav_gate obscond`，learnable gating 用于减弱 mean-field tether）。

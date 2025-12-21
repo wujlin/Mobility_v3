@@ -84,6 +84,7 @@ class PhysicsConditionDiffusion(BaseTrajectoryModel):
         target: torch.Tensor,
         *,
         nav_patch: torch.Tensor,
+        sample_weight: Optional[torch.Tensor] = None,
         return_x0_pred: bool = False,
         return_timesteps: bool = False,
     ) -> Union[
@@ -99,6 +100,7 @@ class PhysicsConditionDiffusion(BaseTrajectoryModel):
             cond: (B, 6)
             target: (B, F, 2)
             nav_patch: (B, 3, K, K)
+            sample_weight: optional per-sample weight for diffusion loss (shape: B,)
             return_x0_pred: if True, also return x0_pred (B, act_dim, F)
             return_timesteps: if True, also return timesteps (B,)
         """
@@ -112,11 +114,12 @@ class PhysicsConditionDiffusion(BaseTrajectoryModel):
             obs,
             full_cond,
             target,
+            sample_weight=sample_weight,
             return_x0_pred=return_x0_pred,
             return_timesteps=return_timesteps,
         )
 
-    def forward(self, obs, cond, target=None, nav_patch=None):
+    def forward(self, obs, cond, target=None, nav_patch=None, sample_weight: Optional[torch.Tensor] = None):
         """
         obs: (B, H, 4)
         cond: (B, 6)
@@ -133,7 +136,7 @@ class PhysicsConditionDiffusion(BaseTrajectoryModel):
         # Concat Cond
         full_cond = torch.cat([cond, nav_emb], dim=-1)
         
-        return self.diffusion.forward(obs, full_cond, target)
+        return self.diffusion.forward(obs, full_cond, target, sample_weight=sample_weight)
         
     def sample_trajectory(self, obs, cond, horizon, nav_patch=None, **kwargs):
         if nav_patch is None:

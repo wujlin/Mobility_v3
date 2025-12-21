@@ -231,6 +231,9 @@ def train(args):
         "rog_loss": str(args.rog_loss),
         "rog_warmup_epochs": int(args.rog_warmup_epochs),
         "rog_eps": float(args.rog_eps),
+        "diff_disp_weight": str(args.diff_disp_weight),
+        "diff_disp_clip_min": float(args.diff_disp_clip_min),
+        "diff_disp_clip_max": float(args.diff_disp_clip_max),
         "macro_disp_weight": str(args.macro_disp_weight),
         "macro_disp_alpha": float(args.macro_disp_alpha),
         "macro_disp_clip_min": float(args.macro_disp_clip_min),
@@ -361,6 +364,25 @@ def train(args):
                 target_action = action_full - prior_vel_norm
             else:
                 target_action = action_full
+
+            # Optional: displacement-aware weighting on diffusion loss (primary knob for v1.2).
+            # We compute weights in denormalized (grid) units to keep semantics consistent across runs.
+            gt_vel = action_full * vel_std + vel_mean  # (B, F, 2)
+            gt_disp = gt_vel.sum(dim=1)  # (B, 2)
+            gt_disp_norm = torch.linalg.norm(gt_disp, dim=-1)  # (B,)
+            sample_weight = None
+            if str(args.diff_disp_weight) != "none":
+                if str(args.diff_disp_weight) == "clip":
+                    disp_ref = torch.clamp_min(gt_disp_norm.mean(), 1e-6)
+                    sample_weight = gt_disp_norm / disp_ref
+                    sample_weight = torch.clamp(
+                        sample_weight,
+                        min=float(args.diff_disp_clip_min),
+                        max=float(args.diff_disp_clip_max),
+                    )
+                else:
+                    raise ValueError(f"Unknown --diff_disp_weight: {args.diff_disp_weight}")
+                sample_weight = torch.clamp_min(sample_weight, 1e-3)
             
             optimizer.zero_grad()
             
@@ -373,6 +395,7 @@ def train(args):
                         cond,
                         target_action,
                         nav_patch=nav_patch,
+                        sample_weight=sample_weight,
                         return_x0_pred=True,
                         return_timesteps=True,
                     )
@@ -381,6 +404,7 @@ def train(args):
                         obs,
                         cond,
                         target_action,
+                        sample_weight=sample_weight,
                         return_x0_pred=True,
                         return_timesteps=True,
                     )
@@ -393,15 +417,12 @@ def train(args):
                 if prior_vel_norm is not None:
                     pred_vel_norm = pred_vel_norm + prior_vel_norm
                 pred_vel = pred_vel_norm * vel_std + vel_mean
-                gt_vel = action_full * vel_std + vel_mean
+                # gt_vel / gt_disp_norm were computed once above (for diff-loss weighting); reuse here.
 
                 pred_pos = start_pos[:, None, :] + torch.cumsum(pred_vel, dim=1)
                 gt_pos = start_pos[:, None, :] + torch.cumsum(gt_vel, dim=1)
 
                 macro_eps = float(args.rog_eps)
-                # displacement magnitude (used for optional displacement-aware weighting)
-                gt_disp_end = gt_pos[:, -1, :] - start_pos  # (B, 2)
-                gt_disp_norm = torch.linalg.norm(gt_disp_end, dim=-1)  # (B,)
 
                 if args.macro_metric == "rog":
                     macro_pred = _rog_per_traj(pred_pos, eps=macro_eps)  # (B,)
@@ -494,9 +515,9 @@ def train(args):
                 loss = diff_loss + float(args.lambda_rog) * macro_loss
             else:
                 if args.model_type == 'physics':
-                    diff_loss = model(obs, cond, target=target_action, nav_patch=nav_patch)
+                    diff_loss = model(obs, cond, target=target_action, nav_patch=nav_patch, sample_weight=sample_weight)
                 else:
-                    diff_loss = model(obs, cond, target=target_action)
+                    diff_loss = model(obs, cond, target=target_action, sample_weight=sample_weight)
                 macro_loss = None
                 loss = diff_loss
             
@@ -588,6 +609,10 @@ if __name__ == "__main__":
     parser.add_argument('--rog_eps', type=float, default=1e-6)
 
     # Displacement-aware weighting (to address low-displacement dominance)
+    parser.add_argument('--diff_disp_weight', type=str, choices=['none', 'clip'], default='none', help="Diffusion diff-loss weighting. Recommended for v1.2: clip(disp/mean_disp, lo, hi).")
+    parser.add_argument('--diff_disp_clip_min', type=float, default=0.5)
+    parser.add_argument('--diff_disp_clip_max', type=float, default=5.0)
+
     parser.add_argument('--macro_disp_weight', type=str, choices=['none', 'tanh', 'clip'], default='none')
     parser.add_argument('--macro_disp_alpha', type=float, default=0.1, help="tanh(alpha*|gt_disp|) when --macro_disp_weight=tanh")
     parser.add_argument('--macro_disp_clip_min', type=float, default=0.5, help="when --macro_disp_weight=clip: clip(disp/mean_disp, min, max)")

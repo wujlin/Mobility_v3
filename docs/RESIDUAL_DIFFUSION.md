@@ -250,6 +250,17 @@ python -m src.training.evaluate \
 - `RoG/MSD10` 相比 concat 基线回升 `≥0.01`；
 - 不出现明显 jitter（`pred_path_len_mean` 不异常暴涨）。
 
+### 6.1.1) 最新 quick 证据（val, ds100, K=10, B=200）：NavGate v0 未达止损线
+
+在相同设置下对比 `concat` vs `NavGate(obscond)`（同一评估口径）：
+
+| 结构 | Speed Ratio | RoG Ratio | MSD10 Ratio | ADE\_best | FDE\_best |
+|---|---:|---:|---:|---:|---:|
+| Concat\_k10 | 0.9692 | 0.9510 | 0.8777 | 4.14 | 5.53 |
+| NavGate\_k10 | 0.9584 | 0.9414 | 0.8600 | 4.11 | 5.50 |
+
+结论（事实）：NavGate 在该轮实验中 **macro 指标略降**（未达到 `≥0.01` 的回升要求），同时 micro 指标略有改善；因此 **不作为当前主线修复**，后续若继续探索需先定位 gate 的行为（gate 是否饱和、是否“关掉了”有用的 nav 信号）。
+
 ---
 
 ## 7) 评估成本控制（强烈建议）
@@ -352,3 +363,57 @@ Residual 的天花板很大程度取决于 prior（deterministic baseline）的�
 
 `diff_steps=50` 会产生明显分布漂移，不作为严谨结论依据。当前优先级是 validity（`diff_steps=100`）。
 若面向 Digital Twin 落地需要加速，建议后续讨论 distillation/flow matching（P2）。
+
+---
+
+## 9) v1.2：对 diff_loss 做位移加权（Displacement-aware Diff Loss Weighting）
+
+动机（First Principles）：
+- residual/physics 在收敛后常见“**微观变好、宏观变差**”的 safe-play 局部最优：模型更愿意待在均值附近以降低点对点误差；
+- 这类偏差往往来自 **目标函数被低位移窗口主导**（low-displacement dominance），而不是 sampling temperature 或简单 macro-loss 能稳定解决的。
+
+做法（KISS）：
+- 保持 diffusion 的 timestep 采样均匀不变；
+- 只对 **diffusion 的 diff_loss** 做 per-sample 权重：
+  $$w_i = \mathrm{clip}\Big(\frac{\|\Delta x^{gt}_i\|}{\mathbb{E}[\|\Delta x^{gt}\|]},\; w_{min},\; w_{max}\Big),\;\; w_{max}>1$$
+- 其中 $\Delta x^{gt}$ 在实现中由 **反归一化后的 GT 速度**求和得到（单位：grid cells / step），保证语义一致。
+
+对应开关（训练脚本：`src/training/train_diffusion.py`）：
+- `--diff_disp_weight clip`
+- `--diff_disp_clip_min 0.5`
+- `--diff_disp_clip_max 5.0`
+
+### 7.1 建议的最小对照（先快速证伪，再全量）
+
+以 physics residual 为例（推荐先 `epochs=20,max_batches=200` 快速筛）：
+
+```bash
+DATA=data/processed_dt30/trajectories/shenzhen_trajectories.h5
+NAV=data/processed_dt30/nav_field.npz
+PRIOR=data/experiments/baseline_b_dt30/last.pt
+
+# 对照 A：不加权（baseline）
+python -m src.training.train_diffusion \
+  --model_type physics --data_path ${DATA} --nav_file ${NAV} --split train \
+  --exp_name phys_residual_v12_ref_e20_s0 \
+  --prior_checkpoint ${PRIOR} \
+  --hidden_dim 128 --batch_size 2048 --lr 1e-3 --epochs 20 --max_batches 200 \
+  --num_workers 16 --seed 0 \
+  --lambda_rog 0
+
+# 对照 B：v1.2 diff_loss 位移加权
+python -m src.training.train_diffusion \
+  --model_type physics --data_path ${DATA} --nav_file ${NAV} --split train \
+  --exp_name phys_residual_v12_dispw_clip_e20_s0 \
+  --prior_checkpoint ${PRIOR} \
+  --hidden_dim 128 --batch_size 2048 --lr 1e-3 --epochs 20 --max_batches 200 \
+  --num_workers 16 --seed 0 \
+  --diff_disp_weight clip --diff_disp_clip_min 0.5 --diff_disp_clip_max 5.0 \
+  --lambda_rog 0
+```
+
+评估建议（两阶段，控制时间成本）：
+1) `K=1,max_batches=50,ds100` 先看 macro ratio 是否回升（止损线：RoG/MSD10 回升 ≥ 0.01）
+2) `K=10,max_batches=200,ds100` 再看 best-of-K
+
+> 注意：如果 `speed_ratio > 1.1` 且 `ADE_best` 明显变差，优先把 `--diff_disp_clip_max` 从 5.0 降到 3.0（避免过度放大长位移样本导致 overshoot）。

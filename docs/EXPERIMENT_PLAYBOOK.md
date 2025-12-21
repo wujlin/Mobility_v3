@@ -174,6 +174,12 @@ python -m src.training.evaluate ... \
 - `Rog / GT_Rog`
 - `MSD_10 / GT_MSD_10`
 
+如果你观察到 “micro 变好但 macro 持续下滑”（safe-play / local minimum），优先尝试 v1.2 的 **diff\_loss 位移加权**（不引入 macro loss）：
+
+```bash
+--diff_disp_weight clip --diff_disp_clip_min 0.5 --diff_disp_clip_max 5.0
+```
+
 ---
 
 ## 5) 多机器同步（校园网常用拓扑）

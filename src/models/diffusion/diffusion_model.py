@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from typing import Tuple, Union
+from typing import Optional, Tuple, Union
 from src.models.base_model import BaseTrajectoryModel
 from src.models.diffusion.unet1d import UNet1D
 from src.models.diffusion.scheduler import DDPMScheduler
@@ -67,6 +67,7 @@ class DiffusionTrajectoryModel(BaseTrajectoryModel):
         cond: torch.Tensor,
         target: torch.Tensor,
         *,
+        sample_weight: Optional[torch.Tensor] = None,
         return_x0_pred: bool = False,
         return_timesteps: bool = False,
     ) -> Union[
@@ -104,7 +105,15 @@ class DiffusionTrajectoryModel(BaseTrajectoryModel):
         global_cond = self.get_global_cond(obs, cond)  # (B, emb_dim)
         noise_pred = self.unet(x_t, timesteps, cond=global_cond)
 
-        diff_loss = nn.functional.mse_loss(noise_pred, noise)
+        # Per-sample MSE for optional weighting (mitigate low-displacement dominance).
+        per = (noise_pred - noise) ** 2  # (B, C, F)
+        per = per.mean(dim=(1, 2))       # (B,)
+        if sample_weight is not None:
+            w = sample_weight.to(dtype=per.dtype, device=per.device).flatten()
+            w = torch.clamp_min(w, 1e-6)
+            diff_loss = (per * w).sum() / w.sum()
+        else:
+            diff_loss = per.mean()
 
         if not return_x0_pred and not return_timesteps:
             return diff_loss
@@ -119,7 +128,13 @@ class DiffusionTrajectoryModel(BaseTrajectoryModel):
             return diff_loss, x0_pred
         return diff_loss, timesteps
 
-    def forward(self, obs, cond, target=None):
+    def forward(
+        self,
+        obs: torch.Tensor,
+        cond: torch.Tensor,
+        target: Optional[torch.Tensor] = None,
+        sample_weight: Optional[torch.Tensor] = None,
+    ) -> torch.Tensor:
         """
         Target is FUTURE velocities (B, F, 2).
         Returns diffusion loss.
@@ -128,7 +143,7 @@ class DiffusionTrajectoryModel(BaseTrajectoryModel):
             # Cannot train without target
             return torch.tensor(0.0, device=obs.device)
 
-        return self.compute_loss(obs, cond, target, return_x0_pred=False)
+        return self.compute_loss(obs, cond, target, sample_weight=sample_weight, return_x0_pred=False)
 
     def sample_trajectory(self, obs, cond, horizon, **kwargs):
         """

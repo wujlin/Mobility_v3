@@ -118,3 +118,25 @@ python -m src.visualization.plot_cfg_pareto \
 
 图中右轴自带 `y=1` 虚线（validity gate）。
 
+---
+
+## 6) 微观案例图（同一条件下对比多模型）
+
+这张图强调 micro 行为差异：同一个 OD 条件下，GT vs Prior vs CFG2 vs CFG3 的局部轨迹形状差异。
+（注意：`samples.npz` 默认仅保存 `k=0` 一条采样，因此此图用于“定性对比”，不是多模态 fan-out。）
+
+```bash
+python -m src.visualization.plot_geo_case_study \
+  --stats_path data/processed_dt30/data_stats.json \
+  --basemap_geojson geo_map/Shenzhen_county.geojson \
+  --sample "Prior:data/experiments/prior_geo_viz_test/samples.npz" \
+  --sample "CFG2:data/experiments/phys_cfg_geo_viz_test_cfg2/samples.npz" \
+  --sample "CFG3:data/experiments/phys_cfg_geo_viz_test_cfg3/samples.npz" \
+  --out_dir essay/figures/stage_cfg \
+  --num_cases 9 --cols 3 --seed 0 --pad_frac 0.12 \
+  --stem fig_geo_case_study_cfg \
+  --style paper
+```
+
+输出：
+- `essay/figures/stage_cfg/fig_geo_case_study_cfg.(png|pdf)`

@@ -13,6 +13,13 @@ Given a global context vector $\mathbf{c}$ (time features and OD endpoints), our
   p_\theta(\mathbf{Y}\mid \mathbf{X}, \mathbf{c}).
   \label{eq:cond_dist}
 \end{equation}
+In our experiments, we use $H=8$ observed steps and $F=12$ future steps under dt-fixed $\Delta t=30$s.
+Given the last observed position $\mathbf{p}_0$, predicted positions are obtained by cumulative summation:
+\begin{equation}
+  \mathbf{p}_k = \mathbf{p}_0 + \sum_{t=1}^{k}\mathbf{v}_t,\quad k=1,\dots,F.
+  \label{eq:pos_from_vel}
+\end{equation}
+We use \emph{macroscopic shrinkage} to refer to systematic under-estimation of net displacement $\|\mathbf{p}_F-\mathbf{p}_0\|_2$ and mean speed $\frac{1}{F}\sum_{t=1}^{F}\|\mathbf{v}_t\|_2$, which manifests as biased macroscopic motion statistics such as MSD and Rog.
 
 \subsection{Model Framework}
 We compare a deterministic regression baseline, conditional diffusion generators, and our residual formulation that explicitly separates macroscopic scale from stochastic variability (Figure~\ref{fig:method-overview}).
@@ -20,40 +27,49 @@ We compare a deterministic regression baseline, conditional diffusion generators
 \begin{figure}[t]
   \centering
   \includegraphics[width=0.95\linewidth]{figures/fig1_framework.png}
-  \caption{Framework overview. A frozen deterministic prior captures OD-driven macroscopic motion scale. A diffusion model samples stochastic residual deviations, optionally conditioned on a train-only navigation-field prior. The sum yields diverse trajectories while preserving macroscopic motion statistics.}
+  \caption{Framework overview. A frozen deterministic prior captures OD-driven macroscopic motion scale. A diffusion model samples stochastic residual deviations, optionally conditioned on a train-only navigation field. The sum yields diverse trajectories while preserving macroscopic motion statistics.}
   \label{fig:method-overview}
 \end{figure}
 
-\paragraph{Deterministic baseline (L2 regression).}
-The baseline predicts a single future velocity sequence by minimizing L2 error (equivalently $K=1$ at inference).
+\paragraph{Deterministic prior (L2 regression).}
+We train an L2 regression model as a deterministic baseline and use the same model as the \emph{deterministic prior} in residual variants. The prior predicts a single future velocity sequence,
+$\mathbf{v}^{\mathrm{prior}}_{1:F}=f_{\mathrm{prior}}(\mathbf{X},\mathbf{c})$, and is frozen when training diffusion residuals (equivalently $K=1$ at inference).
 
 \paragraph{Conditional diffusion generator.}
-We adopt a denoising diffusion probabilistic model (DDPM) \citep{ho2020ddpm} to sample future velocity sequences conditioned on $(\mathbf{X},\mathbf{c})$. The model is trained to predict diffusion noise with the standard objective
+We adopt a denoising diffusion probabilistic model (DDPM) \citep{ho2020ddpm} to sample a target sequence conditioned on $(\mathbf{X},\mathbf{c})$. In the non-residual setting the target is the future velocity sequence; in residual variants the target is the residual velocity sequence defined below. The model is trained to predict diffusion noise with the standard objective
 \begin{equation}
   \mathcal{L}_{\mathrm{diff}} =
   \mathbb{E}_{\mathbf{y}_0,t,\epsilon}\left[\left\|\epsilon - \epsilon_\theta(\mathbf{y}_t,t,\mathbf{c})\right\|_2^2\right],
   \label{eq:ddpm_loss}
 \end{equation}
-where $\mathbf{y}_0$ is the clean future velocity matrix, $\mathbf{y}_t$ is its noisy version at timestep $t$, and $\epsilon \sim \mathcal{N}(\mathbf{0},\mathbf{I})$.
+where $\mathbf{y}_0$ is the clean target velocity matrix (future velocities in non-residual variants, residual velocities in residual variants), $\mathbf{y}_t$ is its noisy version at timestep $t$, and $\epsilon \sim \mathcal{N}(\mathbf{0},\mathbf{I})$.
 
-\paragraph{Physics conditioning via a train-only navigation field.}
-To incorporate an empirical flow prior without relying on a road graph, we construct a train-only \emph{navigation field} that summarizes local mean displacement direction and speed in grid space. For each grid cell we estimate a mean direction $\mathbf{u}_{ij}$ and mean speed $s_{ij}$ from the training split. At inference, we crop a local patch around the last observed position $\mathbf{p}_0$:
+\paragraph{Navigation field conditioning (train-only).}
+To incorporate an empirical flow signal without relying on a road graph, we construct a \emph{navigation field} that summarizes local mean displacement direction and speed in grid space. Importantly, this field is computed using the \textbf{training split only} and is fixed during training and evaluation to satisfy the leakage-free data contract.
+For each grid cell $(i,j)$ we estimate the mean displacement $\bar{\mathbf{v}}_{ij}$ over training steps that fall into the cell, the corresponding mean direction $\mathbf{u}_{ij}$, and mean speed $s_{ij}$:
+\begin{align}
+  \bar{\mathbf{v}}_{ij} &= \frac{1}{|\mathcal{T}_{ij}|}\sum_{k\in\mathcal{T}_{ij}} \mathbf{v}_k, &
+  \mathbf{u}_{ij} &= \frac{\bar{\mathbf{v}}_{ij}}{\|\bar{\mathbf{v}}_{ij}\|_2 + \delta}, &
+  s_{ij} &= \frac{1}{|\mathcal{T}_{ij}|}\sum_{k\in\mathcal{T}_{ij}} \|\mathbf{v}_k\|_2,
+  \label{eq:nav_field_def}
+\end{align}
+where $\mathcal{T}_{ij}$ is the set of training steps located in cell $(i,j)$ and $\delta$ is a small constant for numerical stability. At inference, we crop a local patch around the last observed position $\mathbf{p}_0$:
 \begin{equation}
-  \Phi(\mathbf{p}_0) \in \mathbb{R}^{3\times K\times K}, \quad
-  \Phi = [\,\mathbf{u}_y,\mathbf{u}_x, s\,],
+  \Phi(\mathbf{p}_0) \in \mathbb{R}^{3\times P\times P}, \quad
+  \Phi = [\,u_y, u_x, s\,],
   \label{eq:nav_patch}
 \end{equation}
-encode it with a CNN encoder, and concatenate the resulting embedding with the global condition.
+where $u_y$ and $u_x$ are the two components of the direction field $\mathbf{u}=[u_y,u_x]$. We encode the patch with a CNN encoder and concatenate the resulting embedding with the global condition. In our experiments, we use $P=32$.
 
 \paragraph{Main method: Physics-Informed Residual Diffusion.}
-Pure diffusion can exhibit \emph{macroscopic shrinkage} (under-estimated displacement and speed). We address this structurally by decomposing future motion into a deterministic prior plus a stochastic residual:
+Pure diffusion can exhibit \emph{macroscopic shrinkage} (Eq.~\ref{eq:pos_from_vel}), where the sampled net displacement scale is systematically smaller than the ground truth. We address this structurally by decomposing future motion into a deterministic prior plus a stochastic residual:
 \begin{equation}
   \mathbf{v}_{1:F} = \mathbf{v}^{\mathrm{prior}}_{1:F} + \mathbf{v}^{\mathrm{res}}_{1:F},
   \qquad
-  \mathbf{v}^{\mathrm{prior}}_{1:F} = f_{\mathrm{base}}(\mathbf{X}, \mathbf{c}),
+  \mathbf{v}^{\mathrm{prior}}_{1:F} = f_{\mathrm{prior}}(\mathbf{X}, \mathbf{c}),
   \label{eq:residual_decomp}
 \end{equation}
-where $f_{\mathrm{base}}$ is a frozen baseline trained under the same dt-fixed protocol. During training, we define the diffusion target as the residual velocity $\mathbf{v}^{\mathrm{res}}=\mathbf{v}-\mathbf{v}^{\mathrm{prior}}$. During inference, we sample $\mathbf{v}^{\mathrm{res}}$ and add it back to the prior to obtain the final future trajectory.
+where $f_{\mathrm{prior}}$ is the frozen deterministic prior trained under the same dt-fixed protocol. During training, we define the diffusion target as the residual velocity $\mathbf{v}^{\mathrm{res}}=\mathbf{v}-\mathbf{v}^{\mathrm{prior}}$, so the model learns stochastic deviations around the prior rather than the full displacement scale. During inference, we sample $\mathbf{v}^{\mathrm{res}}$ and add it back to the deterministic prior to obtain the final future trajectory.
 
 \subsection{Evaluation Protocol}
 For generative models we draw $K$ samples per condition and report both mean errors and best-of-$K$ (oracle; minimum over $K$ samples) metrics to quantify coverage. We evaluate micro-level errors (ADE/FDE) and macro-level physical realism via mean squared displacement (MSD) curves and radius of gyration (Rog). MSD is defined as

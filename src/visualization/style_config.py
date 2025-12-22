@@ -58,9 +58,31 @@ PALETTE = {
 }
 
 def get_color(method_name):
-    # Fallback logic
-    if 'baseline' in method_name.lower(): return PALETTE['Baseline']
-    if 'physics' in method_name.lower(): return PALETTE['Physics']
-    if 'diffusion' in method_name.lower(): return PALETTE['Diffusion']
-    if 'gt' in method_name.lower() or 'target' in method_name.lower(): return PALETTE['GT']
-    return '#84919E' # Grey default
+    # Fallback logic (heuristic name matching; keep KISS)
+    name = (method_name or "").lower()
+
+    # Ground truth
+    if "gt" in name or "target" in name:
+        return PALETTE["GT"]
+
+    # Deterministic anchor / prior
+    if "prior" in name or "anchor" in name:
+        return PALETTE["Baseline"]
+
+    # CFG settings (treat as physics-derived variants; use distinct shades)
+    if "cfg2" in name:
+        return "#00A087"  # same family as Physics
+    if "cfg3" in name:
+        return "#007A63"  # darker green
+    if "cfg" in name:
+        return PALETTE["Physics"]
+
+    # Baselines / models
+    if "baseline" in name:
+        return PALETTE["Baseline"]
+    if "physics" in name or "phys" in name:
+        return PALETTE["Physics"]
+    if "diffusion" in name or "diff" in name:
+        return PALETTE["Diffusion"]
+
+    return "#84919E"  # Grey default

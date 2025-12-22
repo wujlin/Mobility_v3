@@ -20,6 +20,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from src.features.nav_field import NavField
+from src.visualization.basemap import BasemapStyle, draw_geojson_basemap
 from src.visualization.style_config import set_style
 
 
@@ -72,6 +73,13 @@ def main() -> None:
     parser.add_argument("--out_dir", type=str, default="data/experiments/phase_b_report/figures_geo_quick")
     parser.add_argument("--stride", type=int, default=18, help="downsample step for arrows")
     parser.add_argument("--flip_y", action="store_true", help="flip y->lat mapping if needed")
+    parser.add_argument("--basemap_geojson", type=str, default=None, help="Optional GeoJSON overlay (WGS84 lon/lat).")
+    parser.add_argument("--basemap_edgecolor", type=str, default="#3A3A3A")
+    parser.add_argument("--basemap_facecolor", type=str, default="none")
+    parser.add_argument("--basemap_linewidth", type=float, default=0.7)
+    parser.add_argument("--basemap_alpha", type=float, default=0.55)
+    parser.add_argument("--basemap_labels", action="store_true")
+    parser.add_argument("--basemap_label_size", type=int, default=8)
     args = parser.parse_args()
 
     set_style(context="paper", font_scale=1.1)
@@ -110,13 +118,24 @@ def main() -> None:
     dlon = dir_x * lon_scale
 
     fig, ax = plt.subplots(1, 1, figsize=(7.2, 6.0), constrained_layout=True)
+    basemap_geojson = Path(args.basemap_geojson) if args.basemap_geojson else None
+    basemap_style = BasemapStyle(
+        edgecolor=str(args.basemap_edgecolor),
+        facecolor=str(args.basemap_facecolor),
+        linewidth=float(args.basemap_linewidth),
+        alpha=float(args.basemap_alpha),
+        label=bool(args.basemap_labels),
+        label_size=int(args.basemap_label_size),
+    )
     im = ax.imshow(
         np.log1p(heat).T,
         origin="lower",
         extent=extent,
         cmap="Greys",
         alpha=0.95,
+        zorder=2,
     )
+    draw_geojson_basemap(ax, basemap_geojson, basemap_style, zorder_base=3)
     ax.quiver(
         lon,
         lat,
@@ -128,6 +147,7 @@ def main() -> None:
         width=0.0018,
         alpha=0.55,
         color="#1f77b4",
+        zorder=4,
     )
     ax.set_title("Navigation field (train-only mean-flow prior)")
     ax.set_xlabel("Longitude")

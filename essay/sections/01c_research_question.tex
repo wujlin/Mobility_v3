@@ -1,6 +1,6 @@
 We study \textbf{OD-conditioned trajectory generation with a known destination} (KnownDestination) under an explicit temporal semantics setting (dt-fixed $\Delta t = 30$s). We investigate the following questions under a strict, leakage-free evaluation protocol:
 \begin{itemize}
-  \item \textbf{Coverage vs.\ realism:} how do deterministic regression and diffusion-based generators compare in micro-level errors (mean and best-of-$K$) and macro-level motion statistics (MSD/Rog)?
-  \item \textbf{Main hypothesis:} can a \textbf{residual decomposition} (deterministic prior + stochastic residual diffusion) mitigate macroscopic shrinkage while retaining multi-modality?
-  \item \textbf{Role of physics conditioning:} does injecting a \textbf{train-only navigation-field prior} improve best-of-$K$ coverage without introducing conservative bias in macroscopic motion?
+  \item \textbf{Coverage vs.\ realism:} under OD conditioning, how do deterministic regression and diffusion-based generators compare in micro-level errors (mean; best-of-$K$ oracle, i.e., minimum error over $K$ samples) and macro-level motion statistics (net displacement, MSD, Rog)?
+  \item \textbf{Main hypothesis:} can a \textbf{residual decomposition} (deterministic prior + stochastic residual diffusion) mitigate macroscopic shrinkage, defined as systematic under-estimation of net displacement and speed, while retaining multi-modality?
+  \item \textbf{Role of navigation field conditioning:} does injecting a \textbf{train-only navigation field conditioning signal} improve best-of-$K$ coverage without introducing conservative bias in macroscopic motion scale?
 \end{itemize}

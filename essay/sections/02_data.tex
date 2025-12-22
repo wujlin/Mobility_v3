@@ -7,7 +7,7 @@ We discretize the city bounding box (latitude $[22.45, 22.85]$, longitude $[113.
 To assign explicit time semantics to displacements, we resample trajectories to a fixed interval $\Delta t = 30$s and drop segments with large gaps or insufficient length. The resulting split sizes are train=97,222, val=21,103, and test=21,309 trajectories.
 
 \paragraph{Leakage-free data products.}
-All normalization statistics and the navigation-field prior are computed using the \textbf{train split only}. This strict contract prevents information leakage from validation/test into priors or scaling constants.
+All normalization statistics and the navigation field (used for conditioning) are computed using the \textbf{train split only}. This strict contract prevents information leakage from validation/test into conditioning signals or scaling constants.
 
 \paragraph{Windows and conditioning.}
 We use an observation window length $H=8$ and prediction horizon $F=12$ (4 minutes of history and 6 minutes of future). The global conditioning vector includes time features (hour-of-day, day-of-week) and normalized origin/destination (OD) endpoints.

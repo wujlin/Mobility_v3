@@ -20,6 +20,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import h5py
 
+from src.visualization.basemap import BasemapStyle, draw_geojson_basemap
 from src.visualization.style_config import set_style
 
 
@@ -91,6 +92,13 @@ def main() -> None:
     parser.add_argument("--max_trajs", type=int, default=200000, help="subsample trajectories for speed (0=all)")
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--flip_y", action="store_true", help="flip y->lat mapping if needed")
+    parser.add_argument("--basemap_geojson", type=str, default=None, help="Optional GeoJSON overlay (WGS84 lon/lat).")
+    parser.add_argument("--basemap_edgecolor", type=str, default="#3A3A3A")
+    parser.add_argument("--basemap_facecolor", type=str, default="none")
+    parser.add_argument("--basemap_linewidth", type=float, default=0.7)
+    parser.add_argument("--basemap_alpha", type=float, default=0.55)
+    parser.add_argument("--basemap_labels", action="store_true")
+    parser.add_argument("--basemap_label_size", type=int, default=8)
     args = parser.parse_args()
 
     set_style(context="paper", font_scale=1.1)
@@ -118,6 +126,15 @@ def main() -> None:
 
     extent = [grid.min_lon, grid.max_lon, grid.min_lat, grid.max_lat]
     aspect = _aspect_for_latlon(grid)
+    basemap_geojson = Path(args.basemap_geojson) if args.basemap_geojson else None
+    basemap_style = BasemapStyle(
+        edgecolor=str(args.basemap_edgecolor),
+        facecolor=str(args.basemap_facecolor),
+        linewidth=float(args.basemap_linewidth),
+        alpha=float(args.basemap_alpha),
+        label=bool(args.basemap_labels),
+        label_size=int(args.basemap_label_size),
+    )
 
     fig, axes = plt.subplots(1, 2, figsize=(12.8, 5.2), constrained_layout=True)
     for ax, pts, title in [
@@ -138,7 +155,9 @@ def main() -> None:
             extent=extent,
             cmap="magma",
             alpha=0.95,
+            zorder=2,
         )
+        draw_geojson_basemap(ax, basemap_geojson, basemap_style, zorder_base=3)
         ax.set_title(title)
         ax.set_xlabel("Longitude")
         ax.set_ylabel("Latitude")

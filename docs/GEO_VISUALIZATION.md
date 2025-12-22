@@ -81,6 +81,7 @@ python -m src.training.evaluate \
 python -m src.visualization.plot_od_hotspots \
   --data_path data/processed_dt30/trajectories/shenzhen_trajectories.h5 \
   --stats_path data/processed_dt30/data_stats.json \
+  --basemap_geojson geo_map/Shenzhen_county.geojson \
   --out_dir data/experiments/phase_b_report/figures_geo_quick \
   --bins 240 --max_trajs 200000 --seed 0
 ```
@@ -96,6 +97,7 @@ python -m src.visualization.plot_od_hotspots \
 python -m src.visualization.plot_nav_field_geo \
   --nav_file data/processed_dt30/nav_field.npz \
   --stats_path data/processed_dt30/data_stats.json \
+  --basemap_geojson geo_map/Shenzhen_county.geojson \
   --out_dir data/experiments/phase_b_report/figures_geo_quick \
   --stride 18
 ```

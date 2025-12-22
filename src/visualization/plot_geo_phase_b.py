@@ -24,7 +24,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from src.visualization.style_config import get_color, set_style
-from src.visualization.geojson_utils import geojson_label_points, iter_geojson_lines, load_geojson_features
+from src.visualization.basemap import BasemapStyle, draw_geojson_basemap
 
 
 @dataclass(frozen=True)
@@ -130,67 +130,6 @@ def _parse_sample_arg(raw: str) -> Tuple[str, Path]:
     return label, Path(path)
 
 
-@dataclass(frozen=True)
-class BasemapStyle:
-    edgecolor: str
-    facecolor: str
-    linewidth: float
-    alpha: float
-    label: bool
-    label_size: int
-
-
-def _draw_basemap(ax: plt.Axes, geojson_path: Optional[Path], style: BasemapStyle, zorder_base: int = 0) -> None:
-    if geojson_path is None:
-        return
-    if not geojson_path.exists():
-        raise FileNotFoundError(geojson_path)
-    feats = load_geojson_features(geojson_path)
-
-    if str(style.facecolor).lower() != "none":
-        for f in feats:
-            # Fill only exterior boundaries (avoid filling holes). GeoJSON convention: ring[0] is exterior.
-            if f.geometry_type == "Polygon" and f.coordinates:
-                ring0 = f.coordinates[0]  # type: ignore[index]
-                xs = [float(x) for x, _ in ring0]
-                ys = [float(y) for _, y in ring0]
-                ax.fill(xs, ys, facecolor=style.facecolor, edgecolor="none", alpha=style.alpha * 0.35, zorder=int(zorder_base))
-            elif f.geometry_type == "MultiPolygon" and f.coordinates:
-                for poly in f.coordinates:  # type: ignore[assignment]
-                    if not poly:
-                        continue
-                    ring0 = poly[0]
-                    xs = [float(x) for x, _ in ring0]
-                    ys = [float(y) for _, y in ring0]
-                    ax.fill(xs, ys, facecolor=style.facecolor, edgecolor="none", alpha=style.alpha * 0.35, zorder=int(zorder_base))
-
-    for f in feats:
-        for line in iter_geojson_lines(f):
-            xs = [p[0] for p in line]
-            ys = [p[1] for p in line]
-            ax.plot(
-                xs,
-                ys,
-                color=style.edgecolor,
-                linewidth=style.linewidth,
-                alpha=style.alpha,
-                zorder=int(zorder_base) + 1,
-            )
-
-    if style.label:
-        for name, x, y in geojson_label_points(feats, name_prop="name"):
-            ax.text(
-                x,
-                y,
-                name,
-                fontsize=int(style.label_size),
-                color=style.edgecolor,
-                alpha=min(1.0, style.alpha + 0.15),
-                ha="center",
-                va="center",
-                zorder=int(zorder_base) + 2,
-            )
-
 
 def plot_geo_overlays(
     samples_list: List[Samples],
@@ -246,7 +185,7 @@ def plot_geo_overlays(
     labels = None
 
     for ax, s in zip(axes, samples_list):
-        _draw_basemap(ax, basemap_geojson, basemap_style)
+        draw_geojson_basemap(ax, basemap_geojson, basemap_style, zorder_base=0)
         preds_ll = _grid_yx_to_latlon(s.preds[idx], grid, flip_y=flip_y)  # (take, F, 2) [lat, lon]
         targets_ll = _grid_yx_to_latlon(s.targets[idx], grid, flip_y=flip_y)
 
@@ -411,7 +350,7 @@ def plot_geo_density(
             )
 
         # Basemap boundaries on top of heatmap for readability.
-        _draw_basemap(ax, basemap_geojson, basemap_style, zorder_base=4)
+        draw_geojson_basemap(ax, basemap_geojson, basemap_style, zorder_base=4)
 
         ax.set_title(f"{s.name}: Pred density\n(GT contour)", pad=4)
         ax.set_xlabel("Longitude")

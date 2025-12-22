@@ -32,7 +32,7 @@
 
 \usepackage[round,authoryear]{natbib}
 
-\title{Title Placeholder: Physics-Informed Diffusion for OD-Conditioned Trajectory Generation}
+\title{Title Placeholder: Physics-Informed Residual Diffusion for OD-Conditioned Trajectory Generation}
 \author{Jinlin Wu}
 \date{\today}
 
@@ -40,7 +40,7 @@
 \maketitle
 
 \begin{abstract}
-Accurate simulation of human mobility is fundamental to resilient urban planning and mobility Digital Twins. However, current approaches face a validity gap: deterministic baselines miss stochastic route choice, while generative models can suffer from \emph{macroscopic shrinkage}, producing diverse yet physically unrealistic trajectories with under-estimated displacement and speed. We propose \textbf{Physics-Informed Residual Diffusion}, which decomposes trajectory generation into a frozen deterministic prior (low-frequency anchor) and a diffusion model for stochastic residuals, optionally conditioned on a train-only navigation-field prior. Using a strict dt-fixed ($\Delta t=30$s), leakage-free protocol on the Shenzhen taxi dataset, we show that residual diffusion substantially improves macroscopic motion statistics while maintaining strong best-of-$K$ coverage. The resulting framework provides a practical path toward simulation-valid, data-driven urban mobility generation.
+Accurate simulation of human mobility is fundamental to resilient urban planning and mobility Digital Twins. However, current approaches face a validity gap: deterministic baselines miss stochastic route choice, while generative models can suffer from \emph{macroscopic shrinkage}, producing diverse yet physically unrealistic trajectories with under-estimated displacement and speed. We propose \textbf{Physics-Informed Residual Diffusion}, which decomposes trajectory generation into a frozen deterministic prior that captures macroscopic motion scale and a diffusion model for stochastic residuals, optionally conditioned on a train-only navigation field. Using a strict dt-fixed ($\Delta t=30$s), leakage-free protocol on the Shenzhen taxi dataset, we show that residual diffusion substantially improves macroscopic motion statistics while maintaining strong best-of-$K$ coverage. The resulting framework provides a practical path toward simulation-valid, data-driven urban mobility generation.
 \end{abstract}
 
 \section{Introduction}

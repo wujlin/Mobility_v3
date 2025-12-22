@@ -274,3 +274,55 @@ rsync -avP -e "ssh -o ProxyCommand='nc -X 5 -x 127.0.0.1:1080 %h %p'" \
 
 补充（physics residual 常见瓶颈）：
 - 如果 macro 指标卡在 `RoG/MSD10≈0.93–0.95` 且继续训练只会让 micro 更好、macro 更差（safe-play），不要继续拉长 epoch；优先转向 conditioning 注入的结构性 ablation（例如 `--nav_gate obscond`，learnable gating 用于减弱 mean-field tether）。
+
+---
+
+## 8) CFG（Destination Guidance）排雷：别把“调参”当 CFG
+
+我们在讨论 CFG 时，经常会出现“做过但失败了”的错觉。大多数情况下，失败的是 **温度/尺度/宏观 loss/mean-field 注入强度**，而不是严格意义上的 CFG。
+
+### 8.1 真实 CFG 的两个必要条件（缺一不可）
+
+1) **训练期必须有 uncond 分支能力**  
+也就是：训练时随机把 destination（`d_y, d_x`）做 dropout，让模型学到 “没有目的地时的预测”：
+
+- `train_diffusion.py`：`--cfg_drop_dest_prob > 0`
+- uncond 的定义：`--cfg_uncond_dest_mode origin|zeros`
+
+2) **推理期必须做 guidance 组合**  
+每一步采样需要做两次前向（cond/uncond），并按 CFG 公式合成：
+
+`pred = pred_uncond + s * (pred_cond - pred_uncond)`，其中 `s = cfg_scale`
+
+- `evaluate.py`：`--cfg_scale > 0`
+
+> 成本提醒：CFG 会让采样期计算量约 ×2；因此建议只在 confirm/test 时启用，fast check 可先用 `cfg_scale=0/1`。
+
+### 8.2 如何快速判断“某个 checkpoint 是否支持 CFG”
+
+如果训练时没有启用 dropout（`cfg_drop_dest_prob=0`），推理期开 `cfg_scale` 通常无效或不稳定。
+
+```bash
+python - <<'PY'
+import torch
+ckpt = torch.load("data/experiments/<exp_name>/last.pt", map_location="cpu")
+cfg = ckpt.get("config", {}) or {}
+print("cfg_drop_dest_prob =", cfg.get("cfg_drop_dest_prob"))
+print("cfg_uncond_dest_mode =", cfg.get("cfg_uncond_dest_mode"))
+PY
+```
+
+### 8.3 最小可证伪跑法（推荐直接用脚本）
+
+脚本：`scripts/phase_b_cfg_destination_guidance.sh`
+
+```bash
+GPUS="0" SEED=0 \
+PRIOR_CKPT=data/experiments/baseline_b_dt30/last.pt \
+CFG_DROP=0.1 CFG_SCALES="0 1 2" \
+bash scripts/phase_b_cfg_destination_guidance.sh
+```
+
+产物：
+- `data/experiments/phys_residual_cfgp0.1_pred*_e20_mb200_s0/last.pt`
+- `data/experiments/..._val_k10_mb200_cfg{0,1,2}/metrics.json`

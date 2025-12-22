@@ -40,7 +40,7 @@
 \maketitle
 
 \begin{abstract}
-Accurate simulation of human mobility is fundamental to resilient urban planning and the development of Digital Twins. However, current modeling approaches face a critical validity gap: deterministic baselines fail to capture the stochastic nature of individual choices, while emerging generative models often suffer from ``macroscopic shrinkage,'' producing diverse but physically unrealistic trajectories that underestimate urban velocity and displacement. Here, we propose a \textbf{Physics-Informed Residual Diffusion} framework that effectively reconciles microscopic stochasticity with macroscopic physical consistency. By decomposing trajectory generation into a deterministic low-frequency anchor and a stochastic high-frequency residual, our approach decouples the learning of physical scale from the modeling of uncertainty. We show on a city-scale Shenzhen taxi dataset that this hierarchical formulation resolves the shrinkage artifact, achieving state-of-the-art coverage (best-of-$K$) while restoring correct motion statistics. This work offers a scalable, data-driven engine for valid urban simulation, bridging the divide between deep generative modeling and transportation engineering.
+Accurate simulation of human mobility is fundamental to resilient urban planning and mobility Digital Twins. However, current approaches face a validity gap: deterministic baselines miss stochastic route choice, while generative models can suffer from \emph{macroscopic shrinkage}, producing diverse yet physically unrealistic trajectories with under-estimated displacement and speed. We propose \textbf{Physics-Informed Residual Diffusion}, which decomposes trajectory generation into a frozen deterministic prior (low-frequency anchor) and a diffusion model for stochastic residuals, optionally conditioned on a train-only navigation-field prior. Using a strict dt-fixed ($\Delta t=30$s), leakage-free protocol on the Shenzhen taxi dataset, we show that residual diffusion substantially improves macroscopic motion statistics while maintaining strong best-of-$K$ coverage. The resulting framework provides a practical path toward simulation-valid, data-driven urban mobility generation.
 \end{abstract}
 
 \section{Introduction}
@@ -49,8 +49,14 @@ Accurate simulation of human mobility is fundamental to resilient urban planning
 \section{Related Work}
 \input{sections/01b_related_work.tex}
 
-\section{Data and Methods}
-\input{sections/02_data_methods.tex}
+\section{Research Question}
+\input{sections/01c_research_question.tex}
+
+\section{Study Region and Data}
+\input{sections/02_data.tex}
+
+\section{Methodology}
+\input{sections/03_methodology.tex}
 
 \section{Results}
 \input{sections/03_results.tex}
@@ -58,7 +64,7 @@ Accurate simulation of human mobility is fundamental to resilient urban planning
 \section{Discussion}
 \input{sections/04_discussion.tex}
 
-\section{Conclusion}
+\section{Conclusion and Future Work}
 \input{sections/05_conclusion.tex}
 
 \section{Declaration of Generative AI and AI-Assisted Technologies}
@@ -69,10 +75,6 @@ Accurate simulation of human mobility is fundamental to resilient urban planning
 
 \bibliographystyle{plainnat}
 \bibliography{references,digital_twins_recent}
-
-\appendix
-\section{Appendix}
-\input{sections/A_appendix.tex}
 
 \end{document}
 

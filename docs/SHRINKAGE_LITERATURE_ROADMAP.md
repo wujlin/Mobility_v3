@@ -93,6 +93,11 @@ KnownDestination 任务下，destination 是强条件。CFG 在采样时显式�
 - 推理：`guidance_scale ∈ {0, 1, 2}` 只做 3 点对照
 - 成功判据：macro 不过冲的情况下 FDE_best 明显下降，且不产生高频抖动。
 
+**当前仓库状态（已落地）**  
+- 训练支持：`src/training/train_diffusion.py` 已增加 `--cfg_drop_dest_prob` / `--cfg_uncond_dest_mode`  
+- 评估支持：`src/training/evaluate.py` 已增加 `--cfg_scale` / `--cfg_uncond_dest_mode`  
+- 一键脚本：`scripts/phase_b_cfg_destination_guidance.sh`
+
 ---
 
 ### 2.3 OGD 思想：更好的“起点分布”与更少采样步数（P2，偏效率）

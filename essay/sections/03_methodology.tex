@@ -20,7 +20,7 @@ We compare a deterministic regression baseline, conditional diffusion generators
 \begin{figure}[t]
   \centering
   \includegraphics[width=0.95\linewidth]{figures/fig1_framework.png}
-  \caption{Framework overview. A frozen deterministic prior (anchor) captures low-frequency OD-driven motion. A diffusion model samples high-frequency residuals (detail), optionally conditioned on a train-only navigation-field prior. The sum yields diverse trajectories while preserving macroscopic motion statistics.}
+  \caption{Framework overview. A frozen deterministic prior captures OD-driven macroscopic motion scale. A diffusion model samples stochastic residual deviations, optionally conditioned on a train-only navigation-field prior. The sum yields diverse trajectories while preserving macroscopic motion statistics.}
   \label{fig:method-overview}
 \end{figure}
 
@@ -37,14 +37,13 @@ We adopt a denoising diffusion probabilistic model (DDPM) \citep{ho2020ddpm} to 
 where $\mathbf{y}_0$ is the clean future velocity matrix, $\mathbf{y}_t$ is its noisy version at timestep $t$, and $\epsilon \sim \mathcal{N}(\mathbf{0},\mathbf{I})$.
 
 \paragraph{Physics conditioning via a train-only navigation field.}
-To inject a lightweight physical prior without road-graph engineering, we construct a train-only \emph{navigation field} that summarizes local mean flow in grid space.
-For each grid cell we estimate a mean displacement direction $\mathbf{u}_{ij}$ and mean speed $s_{ij}$ from the training split. At inference, we crop a local patch around the last observed position $\mathbf{p}_0$:
+To incorporate an empirical flow prior without relying on a road graph, we construct a train-only \emph{navigation field} that summarizes local mean displacement direction and speed in grid space. For each grid cell we estimate a mean direction $\mathbf{u}_{ij}$ and mean speed $s_{ij}$ from the training split. At inference, we crop a local patch around the last observed position $\mathbf{p}_0$:
 \begin{equation}
   \Phi(\mathbf{p}_0) \in \mathbb{R}^{3\times K\times K}, \quad
   \Phi = [\,\mathbf{u}_y,\mathbf{u}_x, s\,],
   \label{eq:nav_patch}
 \end{equation}
-encode it with a small CNN, and concatenate the resulting embedding with the global condition.
+encode it with a CNN encoder, and concatenate the resulting embedding with the global condition.
 
 \paragraph{Main method: Physics-Informed Residual Diffusion.}
 Pure diffusion can exhibit \emph{macroscopic shrinkage} (under-estimated displacement and speed). We address this structurally by decomposing future motion into a deterministic prior plus a stochastic residual:
@@ -54,10 +53,10 @@ Pure diffusion can exhibit \emph{macroscopic shrinkage} (under-estimated displac
   \mathbf{v}^{\mathrm{prior}}_{1:F} = f_{\mathrm{base}}(\mathbf{X}, \mathbf{c}),
   \label{eq:residual_decomp}
 \end{equation}
-where $f_{\mathrm{base}}$ is a frozen baseline trained under the same dt-fixed protocol. The diffusion model learns the conditional distribution of residual velocities and samples $\mathbf{v}^{\mathrm{res}}$; adding it back to the prior yields the final future trajectory.
+where $f_{\mathrm{base}}$ is a frozen baseline trained under the same dt-fixed protocol. During training, we define the diffusion target as the residual velocity $\mathbf{v}^{\mathrm{res}}=\mathbf{v}-\mathbf{v}^{\mathrm{prior}}$. During inference, we sample $\mathbf{v}^{\mathrm{res}}$ and add it back to the prior to obtain the final future trajectory.
 
 \subsection{Evaluation Protocol}
-For generative models we draw $K$ samples per condition and report both mean errors and best-of-$K$ (oracle) metrics to quantify coverage. We evaluate micro-level errors (ADE/FDE) and macro-level physical realism via mean squared displacement (MSD) curves and radius of gyration (Rog). MSD is defined as
+For generative models we draw $K$ samples per condition and report both mean errors and best-of-$K$ (oracle; minimum over $K$ samples) metrics to quantify coverage. We evaluate micro-level errors (ADE/FDE) and macro-level physical realism via mean squared displacement (MSD) curves and radius of gyration (Rog). MSD is defined as
 \begin{equation}
   \mathrm{MSD}(\tau) = \left\langle \left\|\mathbf{p}_{t+\tau} - \mathbf{p}_t\right\|_2^2 \right\rangle,
   \label{eq:msd}

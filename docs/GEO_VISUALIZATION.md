@@ -20,14 +20,15 @@ Implementation Plan, Task List and Thought in Chinese：本文件说明如何把
 - `data/experiments/diff_b_dt30_eval_quick/samples.npz`
 - `data/experiments/physics_b_dt30_eval_quick/samples.npz`
 
-然后运行：
+然后运行（推荐：使用可重复的 `--sample "Label:Path"`，避免标签误导）：
 
 ```bash
 python -m src.visualization.plot_geo_phase_b \
   --stats_path data/processed_dt30/data_stats.json \
-  --baseline_samples data/experiments/baseline_b_dt30_eval_quick/samples.npz \
-  --diff_samples data/experiments/diff_b_dt30_eval_quick/samples.npz \
-  --physics_samples data/experiments/physics_b_dt30_eval_quick/samples.npz \
+  --basemap_geojson geo_map/Shenzhen_county.geojson \
+  --sample "Baseline:data/experiments/baseline_b_dt30_eval_quick/samples.npz" \
+  --sample "Diffusion:data/experiments/diff_b_dt30_eval_quick/samples.npz" \
+  --sample "Physics:data/experiments/physics_b_dt30_eval_quick/samples.npz" \
   --out_dir data/experiments/phase_b_report/figures_geo_quick \
   --num_trajs 80 \
   --bins 220 \
@@ -37,6 +38,8 @@ python -m src.visualization.plot_geo_phase_b \
 输出：
 - `data/experiments/phase_b_report/figures_geo_quick/fig_geo_traj_overlay.(png|pdf)`
 - `data/experiments/phase_b_report/figures_geo_quick/fig_geo_density.(png|pdf)`
+
+> 兼容说明：脚本仍保留旧参数 `--baseline_samples/--diff_samples/--physics_samples`，但已标记为 deprecated。
 
 ## 2.3（v1.1 Residual）Prior + Residual 的地图证据
 
@@ -109,6 +112,26 @@ python -m src.visualization.plot_geo_phase_b ... --flip_y
 ```
 
 ---
+
+## 2.4（CFG）micro–macro 旋钮图（Pareto）
+
+这张图用来支撑核心叙事：CFG 是 **推理期可控旋钮**，而不是参数地狱。我们通常固定两点：
+- `cfg=2`：micro-optimal（主表）
+- `cfg=3`：macro-validity-optimal（附图/讨论）
+
+运行：
+
+```bash
+python -m src.visualization.plot_cfg_pareto \
+  --glob "data/experiments/phys_residual_cfgp0.1_predeps_e20_mb200_s0_val_k10_mb200_cfg*/metrics.json" \
+  --out_dir essay/figures \
+  --style paper
+```
+
+输出：
+- `essay/figures/fig_cfg_pareto.(png|pdf)`
+
+图中右轴会画 `y=1` 的虚线作为 validity gate（pred/GT=1）。
 
 ## 3) 论文/essay 的 caption 建议（务必诚实）
 

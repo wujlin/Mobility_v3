@@ -2,10 +2,10 @@
 We evaluate on a strict dt-fixed ($\Delta t=30$s) protocol using 320 sampled test conditions. The deterministic baseline is evaluated with $K=1$, while diffusion-based generators use $K=20$ samples per condition.
 
 \paragraph{Micro-level errors and coverage.}
-As expected, the deterministic baseline achieves the lowest mean errors (ADE$_\text{mean}=5.467$, FDE$_\text{mean}=8.855$). Diffusion improves multi-modality: best-of-$K$ (oracle) errors are substantially lower (Diffusion ADE$_\text{best}=2.836$; Physics ADE$_\text{best}=2.510$), indicating stronger coverage when the navigation-field prior is provided.
+As expected, the deterministic baseline achieves the lowest mean errors (ADE$_\text{mean}=5.467$, FDE$_\text{mean}=8.855$). Diffusion improves multi-modality: best-of-$K$ (oracle; minimum error over $K$ samples) errors are substantially lower (Diffusion ADE$_\text{best}=2.836$; Physics ADE$_\text{best}=2.510$), indicating stronger coverage when the navigation-field prior is provided.
 
 \paragraph{Macro-level physical realism: shrinkage in pure diffusion.}
-Despite strong best-of-$K$, pure diffusion under-estimates macroscopic motion (e.g., Rog=3.056 vs.\ GT\_Rog=5.247; MSD$_{10}$=100.948 vs.\ GT\_MSD$_{10}$=349.740). Physics conditioning improves these statistics modestly (Rog=3.435; MSD$_{10}$=116.869) but does not eliminate the gap. Figure~\ref{fig:phaseb_quant} visualizes this tension via micro summaries and MSD curves.
+Despite strong best-of-$K$, pure diffusion under-estimates macroscopic motion (e.g., Rog=3.056 vs.\ GT\_Rog=5.247; MSD$_{10}$=100.948 vs.\ GT\_MSD$_{10}$=349.740). Physics conditioning improves these statistics modestly (Rog=3.435; MSD$_{10}$=116.869) but does not eliminate the gap. Figure~\ref{fig:phaseb_quant} visualizes this pattern via micro summaries and MSD curves.
 
 \begin{figure}[t]
   \centering
@@ -27,8 +27,8 @@ Despite strong best-of-$K$, pure diffusion under-estimates macroscopic motion (e
   \label{fig:phaseb_quant}
 \end{figure}
 
-\subsection{Main Result: Residual Diffusion Resolves Shrinkage}
-To decouple macroscopic scale from stochastic variation, we apply residual diffusion (Eq.~\ref{eq:residual_decomp}), using a frozen deterministic baseline as a low-frequency prior and learning diffusion residuals. Table~\ref{tab:residual_fast} reports a leakage-free fast check on the test split ($K=10$): residual diffusion restores macroscopic scale (speed and Rog ratios close to 1) while retaining strong oracle best-of-$K$ behavior. Residual \emph{physics} diffusion further improves best-of-$K$ but remains slightly conservative in MSD/Rog due to the mean-flow tether effect of the navigation-field prior.
+\subsection{Main Result: Residual Diffusion Mitigates Shrinkage}
+To separate macroscopic motion scale from stochastic variation, we apply residual diffusion (Eq.~\ref{eq:residual_decomp}), using a frozen deterministic baseline as a prior and learning diffusion residuals. Table~\ref{tab:residual_test} reports a leakage-free evaluation on 51,200 test conditions ($K=10$): residual diffusion restores macroscopic scale (speed and Rog ratios close to 1) while retaining strong best-of-$K$ behavior. Residual \emph{physics} diffusion further improves best-of-$K$, but its macroscopic statistics remain slightly conservative, consistent with conditioning on a train-only mean-flow prior.
 
 \begin{table}[t]
   \centering
@@ -41,12 +41,12 @@ To decouple macroscopic scale from stochastic variation, we apply residual diffu
     Residual Physics     & 10 & 0.951 & 0.945 & 0.864 & 2.709 \\
     \bottomrule
   \end{tabular}
-  \caption{Fast check for residual variants on the test split ($K=10$; subset evaluation). Ratios are computed against ground-truth statistics on the same evaluated subset under the same protocol.}
-  \label{tab:residual_fast}
+  \caption{Residual variants on the test split (51,200 conditions; $K=10$). Ratios are computed against ground-truth statistics on the same evaluated conditions under the same protocol.}
+  \label{tab:residual_test}
 \end{table}
 
 \paragraph{Qualitative geographic-space visualization (Scheme B).}
-To connect model behavior to urban spatial structure, we visualize saved evaluation samples in geographic space via a linear bbox projection (without road-level map matching). Figure~\ref{fig:residual_geo_overlay} compares the deterministic prior (baseline) with residual diffusion. \textbf{Note:} the panel title ``Diffusion'' refers to residual diffusion (v1.1) because the visualization script uses the diffusion codepath for both variants.
+To connect model behavior to urban spatial structure, we visualize saved evaluation samples in geographic space via a linear bbox projection (without road-level map matching). Figure~\ref{fig:residual_geo_overlay} compares the deterministic prior (baseline) with residual diffusion. The panel title ``Diffusion'' denotes the diffusion-based generator; in this figure it corresponds to the residual diffusion variant.
 
 \begin{figure}[t]
   \centering

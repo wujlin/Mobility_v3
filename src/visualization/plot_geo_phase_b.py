@@ -24,6 +24,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from src.visualization.style_config import get_color, set_style
+from src.visualization.geojson_utils import geojson_label_points, iter_geojson_lines, load_geojson_features
 
 
 @dataclass(frozen=True)
@@ -110,6 +111,87 @@ def _load_samples(path: Path, name: str) -> Samples:
     return Samples(name=name, preds=preds, targets=targets)
 
 
+def _parse_sample_arg(raw: str) -> Tuple[str, Path]:
+    """
+    Parse --sample "Label:/path/to/samples.npz".
+
+    NOTE: split on the first ':' so Windows paths like 'E:\\...' still work
+    (the second ':' remains in the path string).
+    """
+    if ":" not in raw:
+        raise ValueError(f"Invalid --sample '{raw}'. Expected 'Label:Path'.")
+    label, path = raw.split(":", 1)
+    label = label.strip()
+    path = path.strip()
+    if not label:
+        raise ValueError(f"Invalid --sample '{raw}': empty label.")
+    if not path:
+        raise ValueError(f"Invalid --sample '{raw}': empty path.")
+    return label, Path(path)
+
+
+@dataclass(frozen=True)
+class BasemapStyle:
+    edgecolor: str
+    facecolor: str
+    linewidth: float
+    alpha: float
+    label: bool
+    label_size: int
+
+
+def _draw_basemap(ax: plt.Axes, geojson_path: Optional[Path], style: BasemapStyle, zorder_base: int = 0) -> None:
+    if geojson_path is None:
+        return
+    if not geojson_path.exists():
+        raise FileNotFoundError(geojson_path)
+    feats = load_geojson_features(geojson_path)
+
+    if str(style.facecolor).lower() != "none":
+        for f in feats:
+            # Fill only exterior boundaries (avoid filling holes). GeoJSON convention: ring[0] is exterior.
+            if f.geometry_type == "Polygon" and f.coordinates:
+                ring0 = f.coordinates[0]  # type: ignore[index]
+                xs = [float(x) for x, _ in ring0]
+                ys = [float(y) for _, y in ring0]
+                ax.fill(xs, ys, facecolor=style.facecolor, edgecolor="none", alpha=style.alpha * 0.35, zorder=int(zorder_base))
+            elif f.geometry_type == "MultiPolygon" and f.coordinates:
+                for poly in f.coordinates:  # type: ignore[assignment]
+                    if not poly:
+                        continue
+                    ring0 = poly[0]
+                    xs = [float(x) for x, _ in ring0]
+                    ys = [float(y) for _, y in ring0]
+                    ax.fill(xs, ys, facecolor=style.facecolor, edgecolor="none", alpha=style.alpha * 0.35, zorder=int(zorder_base))
+
+    for f in feats:
+        for line in iter_geojson_lines(f):
+            xs = [p[0] for p in line]
+            ys = [p[1] for p in line]
+            ax.plot(
+                xs,
+                ys,
+                color=style.edgecolor,
+                linewidth=style.linewidth,
+                alpha=style.alpha,
+                zorder=int(zorder_base) + 1,
+            )
+
+    if style.label:
+        for name, x, y in geojson_label_points(feats, name_prop="name"):
+            ax.text(
+                x,
+                y,
+                name,
+                fontsize=int(style.label_size),
+                color=style.edgecolor,
+                alpha=min(1.0, style.alpha + 0.15),
+                ha="center",
+                va="center",
+                zorder=int(zorder_base) + 2,
+            )
+
+
 def plot_geo_overlays(
     samples_list: List[Samples],
     grid: GridConfig,
@@ -120,6 +202,8 @@ def plot_geo_overlays(
     extent_mode: str,
     pad_frac: float,
     style_context: str,
+    basemap_geojson: Optional[Path],
+    basemap_style: BasemapStyle,
 ) -> None:
     # Geo figures are multi-panel; use a slightly smaller scale to keep labels/legends proportionate.
     set_style(context=str(style_context), font_scale=1.0)
@@ -162,6 +246,7 @@ def plot_geo_overlays(
     labels = None
 
     for ax, s in zip(axes, samples_list):
+        _draw_basemap(ax, basemap_geojson, basemap_style)
         preds_ll = _grid_yx_to_latlon(s.preds[idx], grid, flip_y=flip_y)  # (take, F, 2) [lat, lon]
         targets_ll = _grid_yx_to_latlon(s.targets[idx], grid, flip_y=flip_y)
 
@@ -171,8 +256,24 @@ def plot_geo_overlays(
         for i in range(take):
             gt = targets_ll[i]
             pr = preds_ll[i]
-            ax.plot(gt[:, 1], gt[:, 0], color="#222222", lw=1.2, alpha=0.30, label="GT" if i == 0 else None)
-            ax.plot(pr[:, 1], pr[:, 0], color=pred_color, lw=1.2, alpha=0.35, label=s.name if i == 0 else None)
+            ax.plot(
+                gt[:, 1],
+                gt[:, 0],
+                color="#222222",
+                lw=1.2,
+                alpha=0.30,
+                label="GT" if i == 0 else None,
+                zorder=3,
+            )
+            ax.plot(
+                pr[:, 1],
+                pr[:, 0],
+                color=pred_color,
+                lw=1.2,
+                alpha=0.35,
+                label=s.name if i == 0 else None,
+                zorder=4,
+            )
 
         ax.set_title(f"{s.name} (N={take})")
         ax.set_xlabel("Longitude")
@@ -215,6 +316,8 @@ def plot_geo_density(
     extent_mode: str,
     pad_frac: float,
     style_context: str,
+    basemap_geojson: Optional[Path],
+    basemap_style: BasemapStyle,
 ) -> None:
     """
     Density plot: per model, draw Pred heatmap (log1p counts) + GT contour.
@@ -290,6 +393,7 @@ def plot_geo_density(
             alpha=0.95,
             vmin=0.0,
             vmax=vmax,
+            zorder=2,
         )
         ims.append(im)
         # GT contour as reference
@@ -303,7 +407,11 @@ def plot_geo_density(
                 colors="black",
                 linewidths=0.8,
                 alpha=0.55,
+                zorder=3,
             )
+
+        # Basemap boundaries on top of heatmap for readability.
+        _draw_basemap(ax, basemap_geojson, basemap_style, zorder_base=4)
 
         ax.set_title(f"{s.name}: Pred density\n(GT contour)", pad=4)
         ax.set_xlabel("Longitude")
@@ -332,9 +440,15 @@ def main() -> None:
         required=True,
         help="Path to data_stats.json containing grid_config bbox (min/max lat/lon).",
     )
-    parser.add_argument("--baseline_samples", type=str, default=None, help=".../samples.npz")
-    parser.add_argument("--diff_samples", type=str, default=None, help=".../samples.npz")
-    parser.add_argument("--physics_samples", type=str, default=None, help=".../samples.npz")
+    parser.add_argument(
+        "--sample",
+        action="append",
+        default=[],
+        help="Add one panel: 'Label:/path/to/samples.npz' (repeatable).",
+    )
+    parser.add_argument("--baseline_samples", type=str, default=None, help="[deprecated] .../samples.npz")
+    parser.add_argument("--diff_samples", type=str, default=None, help="[deprecated] .../samples.npz")
+    parser.add_argument("--physics_samples", type=str, default=None, help="[deprecated] .../samples.npz")
     parser.add_argument("--out_dir", type=str, default="data/experiments/phase_b_report/figures_geo")
     parser.add_argument("--num_trajs", type=int, default=60, help="number of trajectories to overlay per model")
     parser.add_argument("--bins", type=int, default=220, help="2D histogram bins for density plot")
@@ -353,11 +467,26 @@ def main() -> None:
         action="store_true",
         help="flip y->lat mapping if your grid y axis is opposite (debug option)",
     )
+    parser.add_argument(
+        "--basemap_geojson",
+        type=str,
+        default=None,
+        help="Optional GeoJSON (WGS84 lon/lat) to draw as a basemap (e.g., geo_map/Shenzhen_county.geojson).",
+    )
+    parser.add_argument("--basemap_edgecolor", type=str, default="#3A3A3A")
+    parser.add_argument("--basemap_facecolor", type=str, default="none", help="Use 'none' for transparent fill.")
+    parser.add_argument("--basemap_linewidth", type=float, default=0.7)
+    parser.add_argument("--basemap_alpha", type=float, default=0.55)
+    parser.add_argument("--basemap_labels", action="store_true", help="Draw district labels from GeoJSON properties['name'].")
+    parser.add_argument("--basemap_label_size", type=int, default=8)
     args = parser.parse_args()
 
     grid = _load_grid_config(Path(args.stats_path))
 
     samples_list: List[Samples] = []
+    for raw in args.sample:
+        label, path = _parse_sample_arg(str(raw))
+        samples_list.append(_load_samples(path, name=label))
     if args.baseline_samples:
         samples_list.append(_load_samples(Path(args.baseline_samples), name="Baseline"))
     if args.diff_samples:
@@ -366,9 +495,20 @@ def main() -> None:
         samples_list.append(_load_samples(Path(args.physics_samples), name="Physics"))
 
     if not samples_list:
-        raise ValueError("No samples provided. Use at least one of --baseline_samples/--diff_samples/--physics_samples.")
+        raise ValueError(
+            "No samples provided. Use --sample 'Label:Path' (recommended) or legacy --baseline_samples/--diff_samples/--physics_samples."
+        )
 
     out_dir = Path(args.out_dir)
+    basemap_geojson = Path(args.basemap_geojson) if args.basemap_geojson else None
+    basemap_style = BasemapStyle(
+        edgecolor=str(args.basemap_edgecolor),
+        facecolor=str(args.basemap_facecolor),
+        linewidth=float(args.basemap_linewidth),
+        alpha=float(args.basemap_alpha),
+        label=bool(args.basemap_labels),
+        label_size=int(args.basemap_label_size),
+    )
 
     plot_geo_overlays(
         samples_list=samples_list,
@@ -380,6 +520,8 @@ def main() -> None:
         extent_mode=str(args.extent),
         pad_frac=float(args.pad_frac),
         style_context=str(args.style),
+        basemap_geojson=basemap_geojson,
+        basemap_style=basemap_style,
     )
     plot_geo_density(
         samples_list=samples_list,
@@ -390,6 +532,8 @@ def main() -> None:
         extent_mode=str(args.extent),
         pad_frac=float(args.pad_frac),
         style_context=str(args.style),
+        basemap_geojson=basemap_geojson,
+        basemap_style=basemap_style,
     )
 
 

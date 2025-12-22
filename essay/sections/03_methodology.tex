@@ -22,7 +22,7 @@ Given the last observed position $\mathbf{p}_0$, predicted positions are obtaine
 We use \emph{macroscopic shrinkage} to refer to systematic under-estimation of net displacement $\|\mathbf{p}_F-\mathbf{p}_0\|_2$ and mean speed $\frac{1}{F}\sum_{t=1}^{F}\|\mathbf{v}_t\|_2$, which manifests as biased macroscopic motion statistics such as MSD and Rog.
 
 \subsection{Model Framework}
-We compare a deterministic regression baseline, conditional diffusion generators, and our residual formulation that explicitly separates macroscopic scale from stochastic variability (Figure~\ref{fig:method-overview}).
+We compare a deterministic prior (L2 regression), conditional diffusion generators, and our residual formulation that explicitly separates macroscopic scale from stochastic variability (Figure~\ref{fig:method-overview}).
 
 \begin{figure}[t]
   \centering
@@ -32,7 +32,7 @@ We compare a deterministic regression baseline, conditional diffusion generators
 \end{figure}
 
 \paragraph{Deterministic prior (L2 regression).}
-We train an L2 regression model as a deterministic baseline and use the same model as the \emph{deterministic prior} in residual variants. The prior predicts a single future velocity sequence,
+We train an L2 regression model as a deterministic predictor, and use the same model as the \emph{deterministic prior} in residual variants. The prior predicts a single future velocity sequence,
 $\mathbf{v}^{\mathrm{prior}}_{1:F}=f_{\mathrm{prior}}(\mathbf{X},\mathbf{c})$, and is frozen when training diffusion residuals (equivalently $K=1$ at inference).
 
 \paragraph{Conditional diffusion generator.}
@@ -60,6 +60,7 @@ where $\mathcal{T}_{ij}$ is the set of training steps located in cell $(i,j)$ an
   \label{eq:nav_patch}
 \end{equation}
 where $u_y$ and $u_x$ are the two components of the direction field $\mathbf{u}=[u_y,u_x]$. We encode the patch with a CNN encoder and concatenate the resulting embedding with the global condition. In our experiments, we use $P=32$.
+We refer to a diffusion generator augmented with navigation field conditioning as \emph{Physics} in our results for brevity.
 
 \paragraph{Main method: Physics-Informed Residual Diffusion.}
 Pure diffusion can exhibit \emph{macroscopic shrinkage} (Eq.~\ref{eq:pos_from_vel}), where the sampled net displacement scale is systematically smaller than the ground truth. We address this structurally by decomposing future motion into a deterministic prior plus a stochastic residual:
@@ -71,10 +72,27 @@ Pure diffusion can exhibit \emph{macroscopic shrinkage} (Eq.~\ref{eq:pos_from_ve
 \end{equation}
 where $f_{\mathrm{prior}}$ is the frozen deterministic prior trained under the same dt-fixed protocol. During training, we define the diffusion target as the residual velocity $\mathbf{v}^{\mathrm{res}}=\mathbf{v}-\mathbf{v}^{\mathrm{prior}}$, so the model learns stochastic deviations around the prior rather than the full displacement scale. During inference, we sample $\mathbf{v}^{\mathrm{res}}$ and add it back to the deterministic prior to obtain the final future trajectory.
 
+\paragraph{Destination guidance via classifier-free guidance (CFG).}
+In the KnownDestination setting, destination is a legitimate conditioning input, but its influence can be too weak (leading to conservative motion) or too strong (over-constraining stochasticity). We therefore adopt classifier-free guidance (CFG) as an \emph{inference-time} control knob.
+During training we randomly drop the destination coordinates in the condition vector with probability $p_{\mathrm{drop}}$ to form an ``unconditional'' branch. At sampling time, we evaluate both conditional and unconditional predictions and combine them as
+\begin{equation}
+  \hat{\epsilon} = \hat{\epsilon}_{\mathrm{u}} + s\cdot(\hat{\epsilon}_{\mathrm{c}}-\hat{\epsilon}_{\mathrm{u}}),
+  \label{eq:cfg}
+\end{equation}
+where $s$ is the CFG scale, and $\hat{\epsilon}_{\mathrm{c}}$/$\hat{\epsilon}_{\mathrm{u}}$ denote conditional/unconditional noise predictions. In this essay we treat CFG as a protocolized knob and report two interpretable settings ($s=2$ and $s=3$) rather than an open-ended sweep.
+
 \subsection{Evaluation Protocol}
-For generative models we draw $K$ samples per condition and report both mean errors and best-of-$K$ (oracle; minimum over $K$ samples) metrics to quantify coverage. We evaluate micro-level errors (ADE/FDE) and macro-level physical realism via mean squared displacement (MSD) curves and radius of gyration (Rog). MSD is defined as
+For generative models we draw $K$ samples per condition and report both mean errors and best-of-$K$ (oracle; minimum over $K$ samples) metrics to quantify coverage. We evaluate micro-level errors using average displacement error (ADE) and final displacement error (FDE) computed on predicted position sequences:
+\begin{align}
+  \mathrm{ADE} &= \frac{1}{F}\sum_{t=1}^{F}\left\|\mathbf{p}_t-\mathbf{p}^{\mathrm{gt}}_t\right\|_2, &
+  \mathrm{FDE} &= \left\|\mathbf{p}_F-\mathbf{p}^{\mathrm{gt}}_F\right\|_2.
+  \label{eq:ade_fde}
+\end{align}
+For generative models, mean ADE/FDE average over samples, and best-of-$K$ takes the minimum over the $K$ sampled trajectories for each condition.
+
+We evaluate macro-level physical realism via mean squared displacement (MSD) curves and radius of gyration (Rog). MSD is defined as
 \begin{equation}
   \mathrm{MSD}(\tau) = \left\langle \left\|\mathbf{p}_{t+\tau} - \mathbf{p}_t\right\|_2^2 \right\rangle,
   \label{eq:msd}
 \end{equation}
-and Rog is computed per trajectory as $\mathrm{Rog}=\sqrt{\frac{1}{F}\sum_{t=1}^{F}\|\mathbf{p}_t-\bar{\mathbf{p}}\|_2^2}$.
+and Rog is computed per trajectory as $\mathrm{Rog}=\sqrt{\frac{1}{F}\sum_{t=1}^{F}\|\mathbf{p}_t-\bar{\mathbf{p}}\|_2^2}$, where $\bar{\mathbf{p}}$ is the mean position over the prediction horizon.

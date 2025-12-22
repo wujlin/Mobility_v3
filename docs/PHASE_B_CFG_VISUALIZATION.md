@@ -31,7 +31,8 @@ rsync -avP data/experiments/<EXP_DIR>/  jinlin@10.13.12.164:/home/jinlin/project
 ## 3) 生成可视化所需的 `samples.npz`（建议 N=400）
 
 > 地理可视化依赖 `evaluate.py` 的 `--save_samples`，会在 `data/experiments/<exp_name>/samples.npz` 写入子集样本。
-> 说明：当前 `samples.npz` 默认只保存 `k=0` 的一条采样（足够画城市级密度与 overlay）。
+> 说明（重要）：为了展示 **多模态**，建议对生成模型开启 `--save_all_k`，额外保存 `preds_k (N,K,F,2)`。
+> 这样第 6 节的微观案例图可以画出“轨迹束（spaghetti）”，而不是单条随机采样。
 
 在工作站 A（GPU）执行：
 
@@ -57,7 +58,7 @@ python -m src.training.evaluate \
   --checkpoint $CKPT --prior_checkpoint $PRIOR \
   --split test --batch_size 256 --num_workers 8 \
   --num_samples_per_condition 20 --diff_steps 100 \
-  --cfg_scale 2 --save_samples 400 --max_batches 200 --seed 0
+  --cfg_scale 2 --save_samples 400 --save_all_k --max_batches 200 --seed 0
 
 # Physics residual + CFG3（附图/讨论）
 python -m src.training.evaluate \
@@ -67,7 +68,7 @@ python -m src.training.evaluate \
   --checkpoint $CKPT --prior_checkpoint $PRIOR \
   --split test --batch_size 256 --num_workers 8 \
   --num_samples_per_condition 20 --diff_steps 100 \
-  --cfg_scale 3 --save_samples 400 --max_batches 200 --seed 0
+  --cfg_scale 3 --save_samples 400 --save_all_k --max_batches 200 --seed 0
 ```
 
 ---
@@ -93,8 +94,8 @@ python -m src.visualization.plot_geo_phase_b \
 ```
 
 输出：
-- `essay/figures/stage_cfg/fig_geo_traj_overlay.(png|pdf)`
-- `essay/figures/stage_cfg/fig_geo_density.(png|pdf)`
+- 默认：`(png|pdf)` 两种格式都会输出；
+- 如需只输出 PNG：追加 `--png_only`。
 
 可选增强：
 - 加区名标签：`--basemap_labels --basemap_label_size 8`
@@ -114,7 +115,8 @@ python -m src.visualization.plot_cfg_pareto \
 ```
 
 输出：
-- `essay/figures/stage_cfg/fig_cfg_pareto.(png|pdf)`
+- 默认：`(png|pdf)` 两种格式都会输出；
+- 如需只输出 PNG：追加 `--png_only`。
 
 图中右轴自带 `y=1` 虚线（validity gate）。
 
@@ -123,7 +125,7 @@ python -m src.visualization.plot_cfg_pareto \
 ## 6) 微观案例图（同一条件下对比多模型）
 
 这张图强调 micro 行为差异：同一个 OD 条件下，GT vs Prior vs CFG2 vs CFG3 的局部轨迹形状差异。
-（注意：`samples.npz` 默认仅保存 `k=0` 一条采样，因此此图用于“定性对比”，不是多模态 fan-out。）
+（若 samples.npz 含 `preds_k`，则会自动画 spaghetti 轨迹束，用于展示多模态分叉。）
 
 ```bash
 python -m src.visualization.plot_geo_case_study \
@@ -134,6 +136,7 @@ python -m src.visualization.plot_geo_case_study \
   --sample "CFG3:data/experiments/phys_cfg_geo_viz_test_cfg3/samples.npz" \
   --out_dir essay/figures/stage_cfg \
   --num_cases 9 --cols 3 --seed 0 --pad_frac 0.12 \
+  --k_plot 12 \
   --stem fig_geo_case_study_cfg \
   --style paper
 ```

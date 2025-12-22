@@ -403,6 +403,7 @@ def evaluate(args):
     gt_rog_count = 0
 
     save_preds = []
+    save_preds_k_by_k = None  # optional: list[list[np.ndarray]] for saving all K samples
     save_targets = []
     save_start_pos = []
     
@@ -466,6 +467,17 @@ def evaluate(args):
             frechet_list = []
             dtw_list = []
 
+            # Saving policy:
+            # - Always keep backward-compatible `preds` as k=0.
+            # - Optionally save all K as `preds_k` (N, K, F, 2) when --save_all_k is enabled.
+            want_save = int(args.save_samples) > 0 and len(save_targets) < int(args.save_samples)
+            take = 0
+            if want_save:
+                remaining = int(args.save_samples) - len(save_targets)
+                take = min(remaining, int(gt_pos.shape[0]))
+                if bool(getattr(args, "save_all_k", False)) and save_preds_k_by_k is None:
+                    save_preds_k_by_k = [[] for _ in range(int(K))]
+
             for k in range(K):
                 if args.model_type == 'physics':
                     pred_vel_norm = model.sample_trajectory(
@@ -520,13 +532,14 @@ def evaluate(args):
                 rog_sum += float(np.sum(rog))
                 rog_count += int(rog.shape[0])
 
-                # save a few examples (only k=0)
-                if k == 0 and len(save_preds) < int(args.save_samples):
-                    remaining = int(args.save_samples) - len(save_preds)
-                    take = min(remaining, pred_pos.shape[0])
-                    save_preds.extend(pred_pos[:take])
-                    save_targets.extend(gt_pos[:take])
-                    save_start_pos.extend(start_pos[:take])
+                # Save examples (k=0 for backward compatibility; optionally all K).
+                if take > 0:
+                    if k == 0 and len(save_targets) < int(args.save_samples):
+                        save_preds.extend(pred_pos[:take].astype(np.float32, copy=False))
+                        save_targets.extend(gt_pos[:take].astype(np.float32, copy=False))
+                        save_start_pos.extend(start_pos[:take].astype(np.float32, copy=False))
+                    if bool(getattr(args, "save_all_k", False)) and save_preds_k_by_k is not None:
+                        save_preds_k_by_k[int(k)].append(pred_pos[:take].astype(np.float32, copy=False))
 
             ade_k = np.stack(ade_list, axis=0)  # (K, B)
             fde_k = np.stack(fde_list, axis=0)  # (K, B)
@@ -617,12 +630,26 @@ def evaluate(args):
         json.dump(results, f, indent=4)
         
     if save_preds:
-        np.savez(
-            out_dir / "samples.npz",
-            preds=np.stack(save_preds, axis=0),
-            targets=np.stack(save_targets, axis=0),
-            start_pos=np.stack(save_start_pos, axis=0),
-        )
+        npz_kwargs = {
+            "preds": np.stack(save_preds, axis=0),
+            "targets": np.stack(save_targets, axis=0),
+            "start_pos": np.stack(save_start_pos, axis=0),
+        }
+        if bool(getattr(args, "save_all_k", False)) and save_preds_k_by_k is not None:
+            per_k = []
+            for k_list in save_preds_k_by_k:
+                if not k_list:
+                    raise RuntimeError(
+                        "save_all_k enabled but some k lists are empty; this indicates a bug in saving logic."
+                    )
+                per_k.append(np.concatenate(k_list, axis=0))
+            preds_k = np.stack(per_k, axis=1)  # (N, K, F, 2)
+            if preds_k.shape[0] != npz_kwargs["preds"].shape[0]:
+                raise RuntimeError(
+                    f"save_all_k enabled but N mismatch: preds_k N={preds_k.shape[0]} vs preds N={npz_kwargs['preds'].shape[0]}"
+                )
+            npz_kwargs["preds_k"] = preds_k.astype(np.float32, copy=False)
+        np.savez(out_dir / "samples.npz", **npz_kwargs)
              
     print(f"Results saved to {out_dir}")
 
@@ -666,6 +693,7 @@ if __name__ == "__main__":
     parser.add_argument('--num_workers', type=int, default=4, help="DataLoader workers; 0 for single-process (WSL/权限受限环境建议 0)")
     parser.add_argument('--num_samples_per_condition', type=int, default=20, help="K for diffusion/physics (baseline uses 1)")
     parser.add_argument('--save_samples', type=int, default=100, help="number of (pred,target) pairs to save")
+    parser.add_argument('--save_all_k', action='store_true', help="when saving samples, also save all K predictions as preds_k (N,K,F,2)")
     parser.add_argument('--max_batches', type=int, default=None, help="limit evaluation batches for quick runs")
     parser.add_argument('--vel_scale', type=float, default=1.0, help="对预测 future vel 做整体缩放（用于修正运动幅度偏小；与温度/噪声解耦）")
     parser.add_argument('--cfg_scale', type=float, default=0.0, help="CFG guidance scale（0 关闭；>0 放大 destination 条件影响）")

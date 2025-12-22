@@ -14,7 +14,8 @@ Inputs:
 - Optional: --basemap_geojson geo_map/Shenzhen_county.geojson
 
 Note:
-- samples.npz stores only k=0 predictions; this figure is for qualitative comparison, not multi-sample fan-out.
+- If samples.npz contains `preds_k` (N,K,F,2) (saved via evaluate.py --save_all_k), this script will render
+  "spaghetti" bundles to visualize multi-modality. Otherwise it falls back to single-path `preds` (k=0).
 """
 
 from __future__ import annotations
@@ -92,14 +93,15 @@ def _parse_sample_arg(raw: str) -> Tuple[str, Path]:
     return label, Path(path)
 
 
-def _save_fig(fig: plt.Figure, out_dir: Path, stem: str) -> None:
+def _save_fig(fig: plt.Figure, out_dir: Path, stem: str, png_only: bool) -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
-    pdf = out_dir / f"{stem}.pdf"
     png = out_dir / f"{stem}.png"
-    fig.savefig(pdf)
     fig.savefig(png, dpi=300)
-    print(f"[OK] saved {pdf}")
     print(f"[OK] saved {png}")
+    if not bool(png_only):
+        pdf = out_dir / f"{stem}.pdf"
+        fig.savefig(pdf)
+        print(f"[OK] saved {pdf}")
 
 
 def _compute_extent(latlon_list: List[np.ndarray], pad_frac: float) -> Tuple[float, float, float, float]:
@@ -122,6 +124,12 @@ def main() -> None:
     parser.add_argument("--stem", type=str, default="fig_geo_case_study")
     parser.add_argument("--num_cases", type=int, default=9)
     parser.add_argument("--cols", type=int, default=3)
+    parser.add_argument(
+        "--k_plot",
+        type=int,
+        default=12,
+        help="If a model provides preds_k (N,K,F,2), plot up to k_plot trajectories (spaghetti).",
+    )
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--pad_frac", type=float, default=0.12)
     parser.add_argument("--flip_y", action="store_true")
@@ -133,6 +141,7 @@ def main() -> None:
     parser.add_argument("--basemap_alpha", type=float, default=0.60)
     parser.add_argument("--basemap_labels", action="store_true")
     parser.add_argument("--basemap_label_size", type=int, default=7)
+    parser.add_argument("--png_only", action="store_true", help="Only save PNG (skip PDF).")
 
     parser.add_argument("--title", type=str, default="Qualitative case studies (geographic space)")
     parser.add_argument("--style", type=str, choices=["paper", "talk"], default="paper")
@@ -147,15 +156,19 @@ def main() -> None:
 
     # Load samples
     preds_by_model: Dict[str, np.ndarray] = {}
+    preds_k_by_model: Dict[str, np.ndarray] = {}
     target_ref: Optional[np.ndarray] = None
     N = None
     for raw in args.sample:
         label, path = _parse_sample_arg(str(raw))
         data = np.load(path)
         preds = np.asarray(data["preds"], dtype=np.float32)
+        preds_k = np.asarray(data["preds_k"], dtype=np.float32) if "preds_k" in data.files else None
         targets = np.asarray(data["targets"], dtype=np.float32)
         if preds.ndim != 3 or preds.shape[-1] != 2:
             raise ValueError(f"Invalid preds shape in {path}: {preds.shape}, expected (N,F,2)")
+        if preds_k is not None and (preds_k.ndim != 4 or preds_k.shape[-1] != 2):
+            raise ValueError(f"Invalid preds_k shape in {path}: {preds_k.shape}, expected (N,K,F,2)")
         if targets.ndim != 3 or targets.shape[-1] != 2:
             raise ValueError(f"Invalid targets shape in {path}: {targets.shape}, expected (N,F,2)")
         if target_ref is None:
@@ -165,6 +178,8 @@ def main() -> None:
             if targets.shape != target_ref.shape or np.max(np.abs(targets - target_ref)) > 1e-6:
                 raise ValueError(f"targets mismatch across sample files; ensure evaluations saved aligned subsets. Offender: {path}")
         preds_by_model[label] = preds
+        if preds_k is not None:
+            preds_k_by_model[label] = preds_k
 
     assert target_ref is not None
     n_total = int(target_ref.shape[0])
@@ -190,6 +205,8 @@ def main() -> None:
     handles = None
     labels = None
 
+    k_plot = max(1, int(args.k_plot))
+
     for i, si in enumerate(idx):
         ax = axes[i]
         draw_geojson_basemap(ax, basemap_geojson, basemap_style, zorder_base=0)
@@ -197,16 +214,46 @@ def main() -> None:
         gt_ll = _grid_yx_to_latlon(target_ref[si], grid, flip_y=bool(args.flip_y))
         ax.plot(gt_ll[:, 1], gt_ll[:, 0], color="#222222", lw=2.2, label="GT", zorder=3)
 
+        ll_all: List[np.ndarray] = [gt_ll]
         for name, pred in preds_by_model.items():
-            pr_ll = _grid_yx_to_latlon(pred[si], grid, flip_y=bool(args.flip_y))
-            ax.plot(pr_ll[:, 1], pr_ll[:, 0], color=get_color(name), lw=1.9, ls="--", label=name, alpha=0.95, zorder=4)
+            color = get_color(name)
+            if name in preds_k_by_model:
+                pk = preds_k_by_model[name]
+                K = int(pk.shape[1])
+                take_k = min(k_plot, K)
+                # Deterministic, evenly-spaced subset (stable across runs)
+                k_idx = np.linspace(0, K - 1, num=take_k, dtype=int) if take_k > 1 else np.array([0], dtype=int)
+                for j, kj in enumerate(k_idx):
+                    pr_ll = _grid_yx_to_latlon(pk[si, kj], grid, flip_y=bool(args.flip_y))
+                    ll_all.append(pr_ll)
+                    ax.plot(
+                        pr_ll[:, 1],
+                        pr_ll[:, 0],
+                        color=color,
+                        lw=1.1,
+                        alpha=0.22,
+                        label=name if j == 0 else None,
+                        zorder=4,
+                    )
+            else:
+                pr_ll = _grid_yx_to_latlon(pred[si], grid, flip_y=bool(args.flip_y))
+                ll_all.append(pr_ll)
+                ax.plot(
+                    pr_ll[:, 1],
+                    pr_ll[:, 0],
+                    color=color,
+                    lw=2.0,
+                    ls="--",
+                    alpha=0.90,
+                    label=name,
+                    zorder=5,
+                )
 
         # Start/end markers (GT)
         ax.scatter(gt_ll[0, 1], gt_ll[0, 0], color="black", s=35, marker="*", zorder=5)
         ax.scatter(gt_ll[-1, 1], gt_ll[-1, 0], color="#222222", s=16, marker="o", zorder=5)
 
         # Per-case extent
-        ll_all = [gt_ll] + [_grid_yx_to_latlon(preds_by_model[n][si], grid, flip_y=bool(args.flip_y)) for n in preds_by_model.keys()]
         x0, x1, y0, y1 = _compute_extent(ll_all, pad_frac=float(args.pad_frac))
         ax.set_xlim(x0, x1)
         ax.set_ylim(y0, y1)
@@ -230,9 +277,8 @@ def main() -> None:
     else:
         fig.tight_layout()
 
-    _save_fig(fig, out_dir=Path(args.out_dir), stem=str(args.stem))
+    _save_fig(fig, out_dir=Path(args.out_dir), stem=str(args.stem), png_only=bool(args.png_only))
 
 
 if __name__ == "__main__":
     main()
-

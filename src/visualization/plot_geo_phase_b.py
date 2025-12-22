@@ -81,14 +81,15 @@ def _grid_yx_to_latlon(yx: np.ndarray, grid: GridConfig, flip_y: bool = False) -
     return np.stack([lat, lon], axis=-1)
 
 
-def _save_fig(fig: plt.Figure, out_dir: Path, stem: str) -> None:
+def _save_fig(fig: plt.Figure, out_dir: Path, stem: str, png_only: bool) -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
-    pdf = out_dir / f"{stem}.pdf"
     png = out_dir / f"{stem}.png"
-    fig.savefig(pdf)
     fig.savefig(png, dpi=300)
-    print(f"[OK] saved {pdf}")
     print(f"[OK] saved {png}")
+    if not bool(png_only):
+        pdf = out_dir / f"{stem}.pdf"
+        fig.savefig(pdf)
+        print(f"[OK] saved {pdf}")
 
 
 def _aspect_for_latlon(grid: GridConfig) -> float:
@@ -101,14 +102,16 @@ def _aspect_for_latlon(grid: GridConfig) -> float:
 class Samples:
     name: str
     preds: np.ndarray  # (N, F, 2) [y, x]
+    preds_k: Optional[np.ndarray]  # (N, K, F, 2) [y, x] (optional)
     targets: np.ndarray  # (N, F, 2) [y, x]
 
 
 def _load_samples(path: Path, name: str) -> Samples:
     data = np.load(path)
     preds = np.asarray(data["preds"], dtype=np.float32)
+    preds_k = np.asarray(data["preds_k"], dtype=np.float32) if "preds_k" in data.files else None
     targets = np.asarray(data["targets"], dtype=np.float32)
-    return Samples(name=name, preds=preds, targets=targets)
+    return Samples(name=name, preds=preds, preds_k=preds_k, targets=targets)
 
 
 def _parse_sample_arg(raw: str) -> Tuple[str, Path]:
@@ -143,6 +146,7 @@ def plot_geo_overlays(
     style_context: str,
     basemap_geojson: Optional[Path],
     basemap_style: BasemapStyle,
+    png_only: bool,
 ) -> None:
     # Geo figures are multi-panel; use a slightly smaller scale to keep labels/legends proportionate.
     set_style(context=str(style_context), font_scale=1.0)
@@ -243,7 +247,7 @@ def plot_geo_overlays(
     else:
         fig.tight_layout()
 
-    _save_fig(fig, out_dir, "fig_geo_traj_overlay")
+    _save_fig(fig, out_dir, "fig_geo_traj_overlay", png_only=bool(png_only))
 
 
 def plot_geo_density(
@@ -257,6 +261,7 @@ def plot_geo_density(
     style_context: str,
     basemap_geojson: Optional[Path],
     basemap_style: BasemapStyle,
+    png_only: bool,
 ) -> None:
     """
     Density plot: per model, draw Pred heatmap (log1p counts) + GT contour.
@@ -276,7 +281,8 @@ def plot_geo_density(
         lons = []
         lats = []
         for s in samples_list:
-            pr = _grid_yx_to_latlon(s.preds.reshape(-1, 2), grid, flip_y=flip_y)
+            preds_for_extent = s.preds_k.reshape(-1, 2) if s.preds_k is not None else s.preds.reshape(-1, 2)
+            pr = _grid_yx_to_latlon(preds_for_extent, grid, flip_y=flip_y)
             gt = _grid_yx_to_latlon(s.targets.reshape(-1, 2), grid, flip_y=flip_y)
             lats.append(pr[:, 0]); lons.append(pr[:, 1])
             lats.append(gt[:, 0]); lons.append(gt[:, 1])
@@ -296,7 +302,8 @@ def plot_geo_density(
     pred_hists = []
     gt_hists = []
     for s in samples_list:
-        preds_ll = _grid_yx_to_latlon(s.preds.reshape(-1, 2), grid, flip_y=flip_y)
+        preds_for_density = s.preds_k.reshape(-1, 2) if s.preds_k is not None else s.preds.reshape(-1, 2)
+        preds_ll = _grid_yx_to_latlon(preds_for_density, grid, flip_y=flip_y)
         targets_ll = _grid_yx_to_latlon(s.targets.reshape(-1, 2), grid, flip_y=flip_y)
         pred_lon = preds_ll[:, 1]
         pred_lat = preds_ll[:, 0]
@@ -368,7 +375,7 @@ def plot_geo_density(
     cbar.set_label("log(1 + count)", fontsize=10)
     cbar.ax.tick_params(labelsize=8)
 
-    _save_fig(fig, out_dir, "fig_geo_density")
+    _save_fig(fig, out_dir, "fig_geo_density", png_only=bool(png_only))
 
 
 def main() -> None:
@@ -401,6 +408,7 @@ def main() -> None:
     )
     parser.add_argument("--pad_frac", type=float, default=0.08, help="Padding fraction when --extent=data.")
     parser.add_argument("--style", type=str, choices=["paper", "talk"], default="paper", help="Matplotlib style preset.")
+    parser.add_argument("--png_only", action="store_true", help="Only save PNG (skip PDF).")
     parser.add_argument(
         "--flip_y",
         action="store_true",
@@ -461,6 +469,7 @@ def main() -> None:
         style_context=str(args.style),
         basemap_geojson=basemap_geojson,
         basemap_style=basemap_style,
+        png_only=bool(args.png_only),
     )
     plot_geo_density(
         samples_list=samples_list,
@@ -473,6 +482,7 @@ def main() -> None:
         style_context=str(args.style),
         basemap_geojson=basemap_geojson,
         basemap_style=basemap_style,
+        png_only=bool(args.png_only),
     )
 
 

@@ -20,6 +20,10 @@ Implementation Plan, Task List and Thought in Chinese：本文件说明如何把
 - `data/experiments/diff_b_dt30_eval_quick/samples.npz`
 - `data/experiments/physics_b_dt30_eval_quick/samples.npz`
 
+> 重要更新（避免踩坑）：  
+> 以往 `samples.npz` 只保存了 **k=0 的单条采样**，会把扩散模型的多模态优势完全“压扁”。  
+> 现在 `evaluate.py` 支持 `--save_all_k`，会额外写入 `preds_k (N,K,F,2)`，用于“轨迹束（spaghetti）”可视化。
+
 然后运行（推荐：使用可重复的 `--sample "Label:Path"`，避免标签误导）：
 
 ```bash
@@ -36,10 +40,13 @@ python -m src.visualization.plot_geo_phase_b \
 ```
 
 输出：
-- `data/experiments/phase_b_report/figures_geo_quick/fig_geo_traj_overlay.(png|pdf)`
-- `data/experiments/phase_b_report/figures_geo_quick/fig_geo_density.(png|pdf)`
+- 默认：`(png|pdf)` 两种格式都会输出；
+- 如需只输出 PNG（更快/更省空间）：追加 `--png_only`。
 
 > 兼容说明：脚本仍保留旧参数 `--baseline_samples/--diff_samples/--physics_samples`，但已标记为 deprecated。
+
+> 说明（口径建议）：`fig_geo_density` 更适合作为 **宏观一致性 / 安全性** 证据（“分布没跑偏”），  
+> 多模态优势请用第 2.5 节的 spaghetti 图来讲（“会分叉、会覆盖多条可行路径”）。
 
 ## 2.3（v1.1 Residual）Prior + Residual 的地图证据
 
@@ -68,7 +75,7 @@ python -m src.training.evaluate \
   --split test \
   --obs_len 8 --pred_len 12 \
   --num_samples_per_condition 20 --diff_steps 100 \
-  --save_samples 200 --seed 0
+  --save_samples 200 --save_all_k --seed 0
 ```
 
 2) 然后用 `plot_geo_phase_b` 把 `samples.npz` 投影到经纬度（与 v1.0 完全同一套路）。
@@ -104,6 +111,41 @@ python -m src.visualization.plot_nav_field_geo \
 
 输出：
 - `data/experiments/phase_b_report/figures_geo_quick/fig_geo_nav_field.(png|pdf)`
+
+## 2.5（强烈推荐，money shot）多模态轨迹束（Spaghetti）微观案例图
+
+这张图用来“降维打击”展示生成模型优势：同一 OD 条件下，**Prior 只有一条均值路径**，而扩散模型会形成一束分叉的可行路径。
+
+### (1) 先在 eval 保存全K样本
+
+```bash
+python -m src.training.evaluate \
+  --exp_name phys_cfg_geo_viz_test_cfg2 \
+  --model_type physics \
+  --data_path data/processed_dt30/trajectories/shenzhen_trajectories.h5 \
+  --nav_file data/processed_dt30/nav_field.npz \
+  --checkpoint data/experiments/phys_residual_cfgp0.1_predeps_e20_mb200_s0/last.pt \
+  --prior_checkpoint data/experiments/baseline_b_dt30/last.pt \
+  --split test --batch_size 256 --num_workers 8 \
+  --num_samples_per_condition 20 --diff_steps 100 --cfg_scale 2 \
+  --save_samples 200 --save_all_k --max_batches 200 --seed 0
+```
+
+### (2) 再画“轨迹束”案例图（叠加深圳区县边界）
+
+```bash
+python -m src.visualization.plot_geo_case_study \
+  --stats_path data/processed_dt30/data_stats.json \
+  --basemap_geojson geo_map/Shenzhen_county.geojson \
+  --sample "Prior:data/experiments/prior_geo_viz_test/samples.npz" \
+  --sample "CFG2:data/experiments/phys_cfg_geo_viz_test_cfg2/samples.npz" \
+  --out_dir essay/figures/stage_cfg \
+  --stem fig_geo_case_study_spaghetti \
+  --num_cases 9 --cols 3 --k_plot 12 --seed 0 --pad_frac 0.12
+```
+
+输出：
+- `essay/figures/stage_cfg/fig_geo_case_study_spaghetti.(png|pdf)`
 
 ### 若发现南北翻转（lat 方向反了）
 

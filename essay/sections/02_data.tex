@@ -1,13 +1,15 @@
-We use the Shenzhen taxicab GPS dataset \citep{zhang2015urbancps} and preprocess it into a strict, reproducible dt-fixed benchmark.
+\subsection{Spatiotemporal Data Curation for Mobility Digital Twins}
+A mobility Digital Twin is only as reliable as its spatiotemporal data layer. To make \emph{simulation validity} measurable and reproducible, we curate the Shenzhen taxicab GPS dataset \citep{zhang2015urbancps} into a strict \emph{dt-fixed} benchmark with a leakage-free data contract.
 
 \paragraph{Study region and grid representation.}
-We discretize the city bounding box (latitude $[22.45, 22.85]$, longitude $[113.75, 114.65]$) into a $H_g \times W_g = 400 \times 800$ grid. Trajectory positions are stored as grid coordinates $\mathbf{p}_t=[y_t,x_t]$.
+We consider the Shenzhen urban area within a bounding box (latitude $[22.45, 22.85]$, longitude $[113.75, 114.65]$) and discretize it into a $H_g \times W_g = 400 \times 800$ grid. Trajectory positions are stored as grid coordinates $\mathbf{p}_t=[y_t,x_t]$, which supports city-scale aggregation and the construction of train-only, non-parametric flow statistics.
 
-\paragraph{dt-fixed resampling and splits.}
-To assign explicit time semantics to displacements, we resample trajectories to a fixed interval $\Delta t = 30$s and drop segments with large gaps or insufficient length. The resulting split sizes are train=97,222, val=21,103, and test=21,309 trajectories.
+\paragraph{dt-fixed resampling: why it matters for physics consistency.}
+Raw taxi GPS streams are irregularly sampled, so a ``one-step'' displacement does not correspond to a fixed physical time interval. This ambiguity directly undermines macroscopic motion statistics (e.g., MSD curves) and any field-based signal that depends on step magnitude. We therefore resample each trajectory to a fixed interval $\Delta t = 30$s using linear interpolation, so that each step displacement $\mathbf{v}_t=\mathbf{p}_{t+1}-\mathbf{p}_t$ has an explicit temporal semantics. When physical velocity is needed, it can be obtained by dividing by $\Delta t$.
 
-\paragraph{Leakage-free data products.}
-All normalization statistics and the navigation field (used for conditioning) are computed using the \textbf{train split only}. This strict contract prevents information leakage from validation/test into conditioning signals or scaling constants.
+\paragraph{Strict curation rules and dataset scale.}
+We enforce a reproducible resampling contract: timestamps are deduplicated (mean over repeated seconds), monotonicity is required, and any trajectory with a maximum raw gap exceeding $300$s is dropped to avoid discontinuous motion and preserve trajectory-level OD semantics. We further remove trajectories whose total duration is shorter than $9\Delta t$ (equivalently, fewer than 10 dt-fixed points). The resulting dt-fixed benchmark spans 2011-04-18 to 2011-04-24. Starting from 154,285 processed trajectories, the benchmark contains 139,634 trajectories, with 10,897 dropped due to large gaps and 3,754 due to insufficient duration. The final split sizes are train=97,222, val=21,103, and test=21,309 trajectories. On the training split, the mean dt-fixed trajectory length is 31.9 points (min=10, max=1,397), corresponding to millions of resampled trajectory points and enabling robust estimation of aggregate statistics.
+Concretely, the train split alone contains approximately $97{,}222 \times 31.9 \approx 3.1\times10^6$ dt-fixed points.
 
-\paragraph{Windows and conditioning.}
-We use an observation window length $H=8$ and prediction horizon $F=12$ (4 minutes of history and 6 minutes of future). The global conditioning vector includes time features (hour-of-day, day-of-week) and normalized origin/destination (OD) endpoints.
+\paragraph{Leakage-free derived products and OD conditioning.}
+All normalization statistics and the navigation field used for conditioning are computed from the \textbf{training split only} and then frozen for validation/test evaluation. This leakage-free protocol is essential for a Digital Twin setting, where conditioning signals must not encode future information. For each trajectory, we define the OD context using the trajectory-level origin and destination endpoints; we then extract sliding windows with observation length $H=8$ and prediction horizon $F=12$ under the same dt-fixed semantics.

@@ -78,7 +78,7 @@ def load_points(paths: List[Path]) -> List[Point]:
     return pts
 
 
-def plot_pareto(points: List[Point], out_dir: Path, title: str, style: str) -> None:
+def plot_pareto(points: List[Point], out_dir: Path, title: str, style: str, png_only: bool) -> None:
     set_style(context=str(style), font_scale=1.15)
 
     xs = [p.cfg for p in points]
@@ -112,12 +112,13 @@ def plot_pareto(points: List[Point], out_dir: Path, title: str, style: str) -> N
     ax_l.legend(h1 + h2, l1 + l2, loc="upper center", ncol=2, frameon=False)
 
     out_dir.mkdir(parents=True, exist_ok=True)
-    pdf = out_dir / "fig_cfg_pareto.pdf"
     png = out_dir / "fig_cfg_pareto.png"
-    fig.savefig(pdf)
     fig.savefig(png, dpi=300)
-    print(f"[OK] saved {pdf}")
     print(f"[OK] saved {png}")
+    if not bool(png_only):
+        pdf = out_dir / "fig_cfg_pareto.pdf"
+        fig.savefig(pdf)
+        print(f"[OK] saved {pdf}")
 
 
 def main() -> None:
@@ -127,6 +128,7 @@ def main() -> None:
     parser.add_argument("--out_dir", type=str, default="essay/figures", help="Output dir for fig_cfg_pareto.(pdf|png)")
     parser.add_argument("--title", type=str, default="CFG trade-off: micro vs macro validity")
     parser.add_argument("--style", type=str, choices=["paper", "talk"], default="paper")
+    parser.add_argument("--png_only", action="store_true", help="Only save PNG (skip PDF).")
     args = parser.parse_args()
 
     paths: List[Path] = []
@@ -139,9 +141,8 @@ def main() -> None:
         raise ValueError("No metrics provided. Use --metrics ... or --glob 'data/experiments/.../metrics.json'")
 
     points = load_points(paths)
-    plot_pareto(points, out_dir=Path(args.out_dir), title=str(args.title), style=str(args.style))
+    plot_pareto(points, out_dir=Path(args.out_dir), title=str(args.title), style=str(args.style), png_only=bool(args.png_only))
 
 
 if __name__ == "__main__":
     main()
-

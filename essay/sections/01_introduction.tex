@@ -4,11 +4,6 @@ These requirements expose a gap in existing approaches. Deterministic regression
 
 We address the coverage--realism gap with \textbf{Physics-Informed Residual Diffusion}. The method decomposes future motion into (i) a frozen deterministic prior that captures OD-driven displacement scale and (ii) a diffusion model that learns stochastic residual deviations around that prior. In addition, we use a train-only navigation field---a non-parametric estimate of local mean flow computed from the training split---as a conditioning signal to improve route-level coverage without leaking information from validation/test data.
 
-\paragraph{Contributions.}
-\begin{itemize}
-  \item We build a dt-fixed ($\Delta t=30$s), leakage-free pipeline, including train-only normalization and navigation-field construction.
-  \item We diagnose macroscopic shrinkage in pure diffusion under a strict evaluation protocol and propose residual diffusion as a structural remedy.
-  \item We report micro-level errors and best-of-$K$ coverage together with macroscopic motion statistics (MSD/Rog) to evaluate simulation validity.
-\end{itemize}
+We establish a leakage-free, dt-fixed ($\Delta t=30$s) pipeline for OD-conditioned trajectory generation, incorporating train-only normalization and navigation-field construction to ensure rigorous evaluation. Within this framework, we diagnose macroscopic shrinkage in pure diffusion models and propose physics-informed residual diffusion as a structural remedy that anchors motion scale via a deterministic prior. Our evaluation protocol goes beyond standard point-wise metrics, reporting micro-level best-of-$K$ coverage alongside macroscopic motion statistics (MSD and Rog) to comprehensively assess simulation validity in the context of mobility Digital Twins.
 
 The remainder of the paper reviews related work, states the research question, describes the study region and data, details the methodology, and presents results and discussion.

@@ -282,6 +282,14 @@ def evaluate(args):
     if args.model_type in ("diffusion", "physics"):
         args.pred_type = _resolve_pred_type(getattr(args, "pred_type", "auto"), ckpt_cfg)
         print(f"[OK] pred_type={args.pred_type}")
+        if float(getattr(args, "cfg_scale", 0.0)) != 0.0:
+            cfg_drop = ckpt_cfg.get("cfg_drop_dest_prob") if isinstance(ckpt_cfg, dict) else None
+            try:
+                cfg_drop_f = float(cfg_drop) if cfg_drop is not None else 0.0
+            except Exception:
+                cfg_drop_f = 0.0
+            if cfg_drop_f <= 0.0:
+                print("[WARN] 你设置了 --cfg_scale，但 checkpoint 未启用 cfg_drop_dest_prob（CFG 训练 dropout）；CFG 可能无效或不稳定。")
 
     ckpt_type = _infer_ckpt_model_type(state_dict)
     if ckpt_type is not None and ckpt_type != args.model_type:
@@ -409,6 +417,19 @@ def evaluate(args):
 
             nav_patch = batch['nav_patch'].to(device) if args.model_type == 'physics' else None
 
+            # CFG inference: build unconditional condition by dropping destination (d_y, d_x)
+            cond_uncond = None
+            cfg_scale = float(getattr(args, "cfg_scale", 0.0))
+            if cfg_scale != 0.0 and args.model_type in ("diffusion", "physics"):
+                cond_uncond = cond.clone()
+                mode = str(getattr(args, "cfg_uncond_dest_mode", "origin"))
+                if mode == "origin":
+                    cond_uncond[:, 4:6] = cond_uncond[:, 2:4]
+                elif mode == "zeros":
+                    cond_uncond[:, 4:6].zero_()
+                else:  # pragma: no cover
+                    raise ValueError(f"Unknown --cfg_uncond_dest_mode: {mode}")
+
             start_pos_norm = obs[:, -1, :2]
             start_pos = norm.denormalize_pos(start_pos_norm.cpu().numpy())
 
@@ -447,11 +468,24 @@ def evaluate(args):
 
             for k in range(K):
                 if args.model_type == 'physics':
-                    pred_vel_norm = model.sample_trajectory(obs, cond, args.pred_len, nav_patch=nav_patch)
+                    pred_vel_norm = model.sample_trajectory(
+                        obs,
+                        cond,
+                        args.pred_len,
+                        nav_patch=nav_patch,
+                        cond_uncond=cond_uncond,
+                        cfg_scale=cfg_scale,
+                    )
                 elif args.model_type == 'cvae':
                     pred_vel_norm = model.sample_trajectory(obs, cond, args.pred_len, z_temperature=float(args.z_temperature))
                 else:
-                    pred_vel_norm = model.sample_trajectory(obs, cond, args.pred_len)
+                    pred_vel_norm = model.sample_trajectory(
+                        obs,
+                        cond,
+                        args.pred_len,
+                        cond_uncond=cond_uncond,
+                        cfg_scale=cfg_scale,
+                    )
 
                 # Residual mode: model predicts residual vel; add deterministic prior.
                 if prior_vel_norm is not None and args.model_type in ("diffusion", "physics"):
@@ -539,6 +573,8 @@ def evaluate(args):
         "num_conditions": int(total_n),
         "K": int(K),
         "pred_type": (str(getattr(args, "pred_type", "eps")) if args.model_type in ("diffusion", "physics") else None),
+        "cfg_scale": (float(getattr(args, "cfg_scale", 0.0)) if args.model_type in ("diffusion", "physics") else None),
+        "cfg_uncond_dest_mode": (str(getattr(args, "cfg_uncond_dest_mode", "origin")) if args.model_type in ("diffusion", "physics") else None),
         "vel_scale": float(args.vel_scale),
         "prior_checkpoint": (str(args.prior_checkpoint) if args.prior_checkpoint else None),
         "ADE_mean": ade_mean_sum / total_n,
@@ -632,6 +668,8 @@ if __name__ == "__main__":
     parser.add_argument('--save_samples', type=int, default=100, help="number of (pred,target) pairs to save")
     parser.add_argument('--max_batches', type=int, default=None, help="limit evaluation batches for quick runs")
     parser.add_argument('--vel_scale', type=float, default=1.0, help="对预测 future vel 做整体缩放（用于修正运动幅度偏小；与温度/噪声解耦）")
+    parser.add_argument('--cfg_scale', type=float, default=0.0, help="CFG guidance scale（0 关闭；>0 放大 destination 条件影响）")
+    parser.add_argument('--cfg_uncond_dest_mode', type=str, choices=['origin', 'zeros'], default='origin', help="CFG uncond 分支 destination 替换方式")
     
     args = parser.parse_args()
     evaluate(args)

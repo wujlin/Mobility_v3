@@ -165,28 +165,54 @@ class DiffusionTrajectoryModel(BaseTrajectoryModel):
 
         return self.compute_loss(obs, cond, target, sample_weight=sample_weight, return_x0_pred=False)
 
-    def sample_trajectory(self, obs, cond, horizon, **kwargs):
+    def sample_trajectory(
+        self,
+        obs: torch.Tensor,
+        cond: torch.Tensor,
+        horizon: int,
+        *,
+        cond_uncond: Optional[torch.Tensor] = None,
+        cfg_scale: float = 0.0,
+        **kwargs,
+    ) -> torch.Tensor:
         """
         Reverse diffusion sampling.
+
+        Args:
+            obs: (B, H, 4)
+            cond: (B, cond_dim)
+            horizon: future length F
+            cond_uncond: (B, cond_dim), unconditional condition for CFG (optional)
+            cfg_scale: CFG guidance scale; 0 disables CFG
         """
         B = obs.shape[0]
         device = obs.device
         self.scheduler.to(device)
-        
+
         # 1. Prepare Condition
         global_cond = self.get_global_cond(obs, cond)
-        
+        use_cfg = (cond_uncond is not None) and (float(cfg_scale) != 0.0)
+        global_cond_uncond = None
+        if use_cfg:
+            global_cond_uncond = self.get_global_cond(obs, cond_uncond.to(device=device, dtype=cond.dtype))
+
         # 2. Random Noise
         # Shape: (B, Act_Dim, Horizon)
         shape = (B, self.act_dim, horizon)
         x_t = torch.randn(shape, device=device)
-        
+
         # 3. Denoise Loop
         for t in reversed(range(self.scheduler.num_train_timesteps)):
             # Broadcast timestep
             ts = torch.full((B,), t, device=device, dtype=torch.long)
-            
-            model_out = self.unet(x_t, ts, cond=global_cond)
+
+            if use_cfg:
+                # out = out_u + s*(out_c - out_u)
+                out_u = self.unet(x_t, ts, cond=global_cond_uncond)
+                out_c = self.unet(x_t, ts, cond=global_cond)
+                model_out = out_u + float(cfg_scale) * (out_c - out_u)
+            else:
+                model_out = self.unet(x_t, ts, cond=global_cond)
 
             # Convert v-prediction to epsilon for DDPM step (scheduler expects epsilon).
             if self.prediction_type == "v":

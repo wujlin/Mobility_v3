@@ -140,18 +140,39 @@ class PhysicsConditionDiffusion(BaseTrajectoryModel):
         
         return self.diffusion.forward(obs, full_cond, target, sample_weight=sample_weight)
         
-    def sample_trajectory(self, obs, cond, horizon, nav_patch=None, **kwargs):
+    def sample_trajectory(
+        self,
+        obs: torch.Tensor,
+        cond: torch.Tensor,
+        horizon: int,
+        nav_patch: Optional[torch.Tensor] = None,
+        *,
+        cond_uncond: Optional[torch.Tensor] = None,
+        cfg_scale: float = 0.0,
+        **kwargs,
+    ) -> torch.Tensor:
         if nav_patch is None:
             raise ValueError("Nav Patch is required for Physics Model inference")
             
-        # Encode Nav
-        nav_emb = self.nav_encoder(nav_patch)
-        nav_emb = self._apply_nav_emb(obs, cond, nav_emb)
-        
-        # Concat Cond
+        # Encode Nav (shared base)
+        nav_emb_base = self.nav_encoder(nav_patch)
+
+        nav_emb = self._apply_nav_emb(obs, cond, nav_emb_base)
         full_cond = torch.cat([cond, nav_emb], dim=-1)
-        
-        return self.diffusion.sample_trajectory(obs, full_cond, horizon, **kwargs)
+
+        full_cond_uncond = None
+        if cond_uncond is not None:
+            nav_emb_u = self._apply_nav_emb(obs, cond_uncond, nav_emb_base)
+            full_cond_uncond = torch.cat([cond_uncond, nav_emb_u], dim=-1)
+
+        return self.diffusion.sample_trajectory(
+            obs,
+            full_cond,
+            horizon,
+            cond_uncond=full_cond_uncond,
+            cfg_scale=float(cfg_scale),
+            **kwargs,
+        )
 
     def to(self, device):
         super().to(device)

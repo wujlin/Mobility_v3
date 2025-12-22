@@ -244,6 +244,9 @@ def train(args):
         "macro_t_weight": str(args.macro_t_weight),
         "macro_t_gamma": float(args.macro_t_gamma),
         "macro_points": [float(x) for x in (args.macro_points or [])],
+        # Classifier-free guidance (CFG) training: destination dropout
+        "cfg_drop_dest_prob": float(args.cfg_drop_dest_prob),
+        "cfg_uncond_dest_mode": str(args.cfg_uncond_dest_mode),
         "prior_checkpoint": (str(args.prior_checkpoint) if args.prior_checkpoint else None),
         "residual_mode": bool(args.prior_checkpoint),
     }
@@ -373,6 +376,24 @@ def train(args):
             else:
                 target_action = action_full
 
+            # Classifier-free guidance (CFG) training: randomly drop destination condition.
+            # cond layout: [hour, day, o_y, o_x, d_y, d_x]
+            cond_model = cond
+            p_drop = float(args.cfg_drop_dest_prob)
+            if p_drop > 0.0:
+                if not (0.0 <= p_drop <= 1.0):
+                    raise ValueError(f"--cfg_drop_dest_prob must be in [0,1], got {p_drop}")
+                drop = torch.rand((cond.shape[0],), device=device) < p_drop
+                if drop.any():
+                    cond_model = cond.clone()
+                    mode = str(args.cfg_uncond_dest_mode)
+                    if mode == "origin":
+                        cond_model[drop, 4:6] = cond_model[drop, 2:4]
+                    elif mode == "zeros":
+                        cond_model[drop, 4:6].zero_()
+                    else:  # pragma: no cover
+                        raise ValueError(f"Unknown --cfg_uncond_dest_mode: {mode}")
+
             # Optional: displacement-aware weighting on diffusion loss (primary knob for v1.2).
             # We compute weights in denormalized (grid) units to keep semantics consistent across runs.
             gt_vel = action_full * vel_std + vel_mean  # (B, F, 2)
@@ -400,7 +421,7 @@ def train(args):
                 if args.model_type == 'physics':
                     diff_loss, x0_pred, timesteps = model.compute_loss(
                         obs,
-                        cond,
+                        cond_model,
                         target_action,
                         nav_patch=nav_patch,
                         sample_weight=sample_weight,
@@ -410,7 +431,7 @@ def train(args):
                 else:
                     diff_loss, x0_pred, timesteps = model.compute_loss(
                         obs,
-                        cond,
+                        cond_model,
                         target_action,
                         sample_weight=sample_weight,
                         return_x0_pred=True,
@@ -523,9 +544,9 @@ def train(args):
                 loss = diff_loss + float(args.lambda_rog) * macro_loss
             else:
                 if args.model_type == 'physics':
-                    diff_loss = model(obs, cond, target=target_action, nav_patch=nav_patch, sample_weight=sample_weight)
+                    diff_loss = model(obs, cond_model, target=target_action, nav_patch=nav_patch, sample_weight=sample_weight)
                 else:
-                    diff_loss = model(obs, cond, target=target_action, sample_weight=sample_weight)
+                    diff_loss = model(obs, cond_model, target=target_action, sample_weight=sample_weight)
                 macro_loss = None
                 loss = diff_loss
             
@@ -607,6 +628,10 @@ if __name__ == "__main__":
     parser.add_argument('--resume_from', type=str, default=None, help="explicit checkpoint path to resume from")
     parser.add_argument('--no_resume_optim', action='store_true', help="when resuming, do NOT load optimizer_state_dict (recommended when changing loss/weights)")
     parser.add_argument('--prior_checkpoint', type=str, default=None, help="Residual diffusion: frozen deterministic prior checkpoint (SeqBaseline last.pt)")
+
+    # CFG (classifier-free guidance) training: destination dropout
+    parser.add_argument('--cfg_drop_dest_prob', type=float, default=0.0, help="训练时对 destination 两维做 dropout 的概率（CFG 必需）。0 表示关闭。")
+    parser.add_argument('--cfg_uncond_dest_mode', type=str, choices=['origin', 'zeros'], default='origin', help="uncond 分支如何替换 destination：origin(用起点替代) / zeros(置零)")
 
     # Training-time macro regularization (paper-facing; cheap, no sampling)
     parser.add_argument('--lambda_rog', type=float, default=0.0, help="Macro Loss weight (0 disables)")

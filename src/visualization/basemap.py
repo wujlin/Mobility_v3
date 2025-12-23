@@ -133,5 +133,6 @@ def draw_geojson_basemap(
                 alpha=min(1.0, float(style.alpha) + 0.15),
                 ha="center",
                 va="center",
+                clip_on=True,
                 zorder=int(zorder_base) + 2,
             )

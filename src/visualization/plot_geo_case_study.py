@@ -280,6 +280,8 @@ def main() -> None:
         ax.set_xlim(x0, x1)
         ax.set_ylim(y0, y1)
         ax.set_aspect(aspect)
+        # Avoid scientific/offset notation like "+1.14e2" on lon/lat axes (journal style).
+        ax.ticklabel_format(axis="both", style="plain", useOffset=False)
         ax.set_title(f"Case #{int(si)}", fontsize=10, pad=2)
         ax.grid(True, ls="--", alpha=0.18)
         ax.tick_params(axis="both", which="major", labelsize=8)

@@ -175,6 +175,43 @@ python -m src.visualization.plot_geo_case_study \
 
 ---
 
+## 6.1（建议主图）Storytelling Grid（3 行 Case × 3 列 Model）
+
+> 这张图是“讲故事最强”的版本：  
+> **Prior（死板均值）→ CFG2（多模态炸开）→ CFG3（更守规矩/可控收束）**。  
+> 子刊写作/答辩时建议用这张替代“单面条堆叠”的大叠图。
+
+```bash
+python -m src.visualization.plot_geo_story_grid \
+  --stats_path data/processed_dt30/data_stats.json \
+  --basemap_geojson geo_map/Shenzhen_county.geojson \
+  --sample "Prior:data/experiments/prior_geo_viz_test/samples.npz" \
+  --sample "CFG2:data/experiments/phys_cfg_geo_viz_test_cfg2/samples.npz" \
+  --sample "CFG3:data/experiments/phys_cfg_geo_viz_test_cfg3/samples.npz" \
+  --out_dir essay/figures/stage_cfg \
+  --rows 3 --k_plot 12 --min_span_km 3 --scalebar_km 1 \
+  --stem fig_geo_story_grid \
+  --png_only --style paper
+```
+
+若要手动指定 case（推荐用 `top_cases.csv` 的 idx）：
+
+```bash
+python -m src.visualization.plot_geo_story_grid \
+  --stats_path data/processed_dt30/data_stats.json \
+  --basemap_geojson geo_map/Shenzhen_county.geojson \
+  --sample "Prior:data/experiments/prior_geo_viz_test/samples.npz" \
+  --sample "CFG2:data/experiments/phys_cfg_geo_viz_test_cfg2/samples.npz" \
+  --sample "CFG3:data/experiments/phys_cfg_geo_viz_test_cfg3/samples.npz" \
+  --out_dir essay/figures/stage_cfg \
+  --rows 3 --case_idx 191 --case_idx 190 --case_idx 192 \
+  --k_plot 12 --min_span_km 3 --scalebar_km 1 \
+  --stem fig_geo_story_grid_top \
+  --png_only --style paper
+```
+
+---
+
 ## 7) 动画（强烈建议：用“轨迹束随时间展开”展示多模态）
 
 > 动画是最直观的“杀手级证据”：同一 OD 条件下，Prior 是单条均值轨迹；CFG2/CFG3 会生成轨迹束并在关键路口分叉。
@@ -209,6 +246,8 @@ python -m src.visualization.animate_geo_case \
   --style talk \
   --seed 0
 ```
+
+> 若你看到经纬度轴出现 `+1.14e2` 之类的 offset/scientific 记法（不够子刊风格），请先 `git pull` 更新脚本：新版本已默认关闭 offset 记法。
 
 合成视频（在输出帧目录内执行；示例）：
 

@@ -269,6 +269,8 @@ def main() -> None:
         ax.set_xlim(extent[0], extent[1])
         ax.set_ylim(extent[2], extent[3])
         ax.set_aspect(aspect)
+        # Avoid scientific/offset notation like "+1.14e2" on lon/lat axes (talk/paper friendly).
+        ax.ticklabel_format(axis="both", style="plain", useOffset=False)
         ax.grid(True, ls="--", alpha=0.18)
         ax.tick_params(axis="both", which="major", labelsize=9)
         ax.set_xlabel("Longitude")

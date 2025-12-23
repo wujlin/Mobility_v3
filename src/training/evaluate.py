@@ -16,6 +16,8 @@ from src.models.seq.seq_baseline import SeqBaseline
 from src.models.seq.seq_cvae import SeqCVAE
 from src.models.diffusion.diffusion_model import DiffusionTrajectoryModel
 from src.models.physics.physics_condition_diffusion import PhysicsConditionDiffusion
+from src.models.flow.rectified_flow_model import RectifiedFlowTrajectoryModel
+from src.models.physics.physics_condition_flow import PhysicsConditionFlow
 from src.data.datasets_seq import SeqDataset
 from src.data.datasets_diffusion import DiffusionDataset
 from src.evaluation.micro_metrics import compute_dtw_per_sample, compute_frechet_per_sample
@@ -80,6 +82,10 @@ def _infer_ckpt_model_type(state_dict: dict) -> Optional[str]:
     keys = state_dict.keys()
     if any(str(k).startswith("obs_encoder.") for k in keys) and any(str(k).startswith("prior_mu.") for k in keys):
         return "cvae"
+    has_flow = any(str(k).endswith("rf_time_scale") for k in keys)
+    has_nav = any(str(k).startswith("nav_encoder.") for k in keys)
+    if has_flow:
+        return "physics_flow" if has_nav else "flow"
     if any(str(k).startswith("nav_encoder.") for k in keys):
         return "physics"
     if any(str(k).startswith("unet.") for k in keys):
@@ -106,6 +112,12 @@ def _infer_hidden_dim(model_type: str, state_dict: dict) -> Optional[int]:
         return int(w.shape[0]) if hasattr(w, "shape") and len(w.shape) == 3 else None
     if model_type == "physics":
         w = state_dict.get("diffusion.unet.init_conv.weight")
+        return int(w.shape[0]) if hasattr(w, "shape") and len(w.shape) == 3 else None
+    if model_type == "flow":
+        w = state_dict.get("unet.init_conv.weight")
+        return int(w.shape[0]) if hasattr(w, "shape") and len(w.shape) == 3 else None
+    if model_type == "physics_flow":
+        w = state_dict.get("flow.unet.init_conv.weight")
         return int(w.shape[0]) if hasattr(w, "shape") and len(w.shape) == 3 else None
     return None
 
@@ -134,6 +146,32 @@ def _infer_nav_gate_hidden(state_dict: dict) -> Optional[int]:
         # Linear(in_dim, hidden) -> weight shape (hidden, in_dim)
         return int(w.shape[0])
     return None
+
+
+def _infer_nav_emb_dim(model_type: str, state_dict: dict, obs_len: int, obs_dim: int = 4, base_cond_dim: int = 6) -> Optional[int]:
+    """
+    Infer nav_emb_dim from checkpoint by inspecting cond_encoder input dim.
+
+    For PhysicsConditionDiffusion:
+        key = diffusion.cond_encoder.0.weight  # shape (hidden*2, obs_len*obs_dim + cond_dim+nav_emb_dim)
+    For PhysicsConditionFlow:
+        key = flow.cond_encoder.0.weight
+    """
+    key = None
+    if model_type == "physics":
+        key = "diffusion.cond_encoder.0.weight"
+    if model_type == "physics_flow":
+        key = "flow.cond_encoder.0.weight"
+    if key is None:
+        return None
+    w = state_dict.get(key)
+    if not (hasattr(w, "shape") and len(w.shape) == 2):
+        return None
+    in_features = int(w.shape[1])
+    hist = int(obs_len) * int(obs_dim)
+    cond_total = in_features - hist
+    nav_dim = int(cond_total) - int(base_cond_dim)
+    return nav_dim if nav_dim > 0 else None
 
 
 def _resolve_pred_type(arg_pred_type: str, ckpt_cfg: dict) -> str:
@@ -233,7 +271,7 @@ def evaluate(args):
     print(f"Using device: {device}")
 
     if args.prior_checkpoint and args.model_type in ("baseline", "cvae"):
-        raise ValueError("--prior_checkpoint 仅用于 diffusion/physics 的 residual 评估（baseline/cvae 不需要 prior）")
+        raise ValueError("--prior_checkpoint 仅用于 diffusion/physics/flow 的 residual 评估（baseline/cvae 不需要 prior）")
     
     # 1. Load Data
     # Evaluation usually on 'test' split via mode='r'? 
@@ -254,8 +292,10 @@ def evaluate(args):
     elif args.model_type == 'cvae':
         dataset = SeqDataset(args.data_path, obs_len=args.obs_len, pred_len=args.pred_len, traj_ids=traj_ids)
     else:
-        # Physics or Diffusion
-        nav_file = args.nav_file if args.model_type == 'physics' else None
+        # Diffusion-like dataset (diffusion / physics / flow / physics_flow)
+        if args.model_type in ("physics", "physics_flow") and not args.nav_file:
+            raise ValueError("--nav_file is required for --model_type physics/physics_flow")
+        nav_file = args.nav_file if args.model_type in ('physics', 'physics_flow') else None
         dataset = DiffusionDataset(
             args.data_path, 
             obs_len=args.obs_len, 
@@ -306,7 +346,8 @@ def evaluate(args):
         args.latent_dim = int(ckpt_latent_dim)
 
     # Physics-only: auto-align optional nav_gate to checkpoint to avoid load mismatch.
-    if args.model_type == "physics":
+    nav_emb_dim = 32
+    if args.model_type in ("physics", "physics_flow"):
         ckpt_nav_gate_hidden = _infer_nav_gate_hidden(state_dict)
         ckpt_has_gate = ckpt_nav_gate_hidden is not None
         user_nav_gate = str(getattr(args, "nav_gate", "auto"))
@@ -323,6 +364,9 @@ def evaluate(args):
                 args.nav_gate = user_nav_gate
         if ckpt_has_gate:
             args.nav_gate_hidden = int(ckpt_nav_gate_hidden)
+        ckpt_nav_emb_dim = _infer_nav_emb_dim(str(args.model_type), state_dict, int(args.obs_len))
+        if ckpt_nav_emb_dim is not None:
+            nav_emb_dim = int(ckpt_nav_emb_dim)
     
     if args.model_type == 'baseline':
         model = SeqBaseline(
@@ -347,10 +391,41 @@ def evaluate(args):
         model = PhysicsConditionDiffusion(
             obs_dim=4, act_dim=2, cond_dim=6,
             nav_patch_size=args.patch_size,
+            nav_emb_dim=int(nav_emb_dim),
             obs_len=args.obs_len, pred_len=args.pred_len,
             hidden_dim=args.hidden_dim,
             diffusion_steps=args.diff_steps,
             prediction_type=str(getattr(args, "pred_type", "eps")),
+            nav_emb_scale=float(args.nav_emb_scale),
+            nav_gate=str(args.nav_gate),
+            nav_gate_hidden=int(getattr(args, "nav_gate_hidden", 32)),
+            nav_gate_dropout=float(getattr(args, "nav_gate_dropout", 0.0)),
+        )
+    elif args.model_type == "flow":
+        flow_steps = getattr(args, "flow_steps", None)
+        solver_steps = int(flow_steps) if flow_steps is not None else int(args.diff_steps)
+        model = RectifiedFlowTrajectoryModel(
+            obs_dim=4,
+            act_dim=2,
+            cond_dim=6,
+            obs_len=args.obs_len,
+            pred_len=args.pred_len,
+            hidden_dim=args.hidden_dim,
+            solver_steps=int(solver_steps),
+        )
+    elif args.model_type == "physics_flow":
+        flow_steps = getattr(args, "flow_steps", None)
+        solver_steps = int(flow_steps) if flow_steps is not None else int(args.diff_steps)
+        model = PhysicsConditionFlow(
+            obs_dim=4,
+            act_dim=2,
+            cond_dim=6,
+            nav_patch_size=args.patch_size,
+            nav_emb_dim=int(nav_emb_dim),
+            obs_len=args.obs_len,
+            pred_len=args.pred_len,
+            hidden_dim=args.hidden_dim,
+            solver_steps=int(solver_steps),
             nav_emb_scale=float(args.nav_emb_scale),
             nav_gate=str(args.nav_gate),
             nav_gate_hidden=int(getattr(args, "nav_gate_hidden", 32)),
@@ -419,12 +494,12 @@ def evaluate(args):
             obs = batch['obs'].to(device)
             cond = batch['cond'].to(device)
 
-            nav_patch = batch['nav_patch'].to(device) if args.model_type == 'physics' else None
+            nav_patch = batch['nav_patch'].to(device) if args.model_type in ('physics', 'physics_flow') else None
 
             # CFG inference: build unconditional condition by dropping destination (d_y, d_x)
             cond_uncond = None
             cfg_scale = float(getattr(args, "cfg_scale", 0.0))
-            if cfg_scale != 0.0 and args.model_type in ("diffusion", "physics"):
+            if cfg_scale != 0.0 and args.model_type in ("diffusion", "physics", "flow", "physics_flow"):
                 cond_uncond = cond.clone()
                 mode = str(getattr(args, "cfg_uncond_dest_mode", "origin"))
                 if mode == "origin":
@@ -482,7 +557,7 @@ def evaluate(args):
                     save_preds_k_by_k = [[] for _ in range(int(K))]
 
             for k in range(K):
-                if args.model_type == 'physics':
+                if args.model_type in ('physics', 'physics_flow'):
                     pred_vel_norm = model.sample_trajectory(
                         obs,
                         cond,
@@ -503,7 +578,7 @@ def evaluate(args):
                     )
 
                 # Residual mode: model predicts residual vel; add deterministic prior.
-                if prior_vel_norm is not None and args.model_type in ("diffusion", "physics"):
+                if prior_vel_norm is not None and args.model_type in ("diffusion", "physics", "flow", "physics_flow"):
                     pred_vel_norm = pred_vel_norm + prior_vel_norm
 
                 pred_vel = norm.denormalize_vel(pred_vel_norm.cpu().numpy())
@@ -659,7 +734,7 @@ def evaluate(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--exp_name', type=str, required=True)
-    parser.add_argument('--model_type', type=str, choices=['baseline', 'cvae', 'diffusion', 'physics'], required=True)
+    parser.add_argument('--model_type', type=str, choices=['baseline', 'cvae', 'diffusion', 'physics', 'flow', 'physics_flow'], required=True)
     parser.add_argument('--data_path', type=str, required=True)
     parser.add_argument('--checkpoint', type=str, required=True)
     parser.add_argument('--prior_checkpoint', type=str, default=None, help="Residual diffusion: frozen deterministic prior checkpoint (SeqBaseline last.pt)")
@@ -687,6 +762,7 @@ if __name__ == "__main__":
     parser.add_argument('--hidden_dim', type=int, default=128) # check defaults
     parser.add_argument('--pred_type', type=str, choices=['auto', 'eps', 'v'], default='auto', help="Diffusion 参数化：auto(默认，从 checkpoint 对齐)/eps/v")
     parser.add_argument('--diff_steps', type=int, default=100)
+    parser.add_argument('--flow_steps', type=int, default=None, help="Rectified Flow: ODE solver steps (Euler). 默认沿用 --diff_steps。")
     parser.add_argument('--latent_dim', type=int, default=16, help="CVAE latent dim (only for --model_type cvae)")
     parser.add_argument('--z_temperature', type=float, default=1.0, help="CVAE 采样温度（仅 cvae 生效）")
 

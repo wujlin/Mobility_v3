@@ -135,13 +135,15 @@ OGD/加速主要解决 **采样效率**。我们的当前瓶颈是 validity vs m
 
 ---
 
-### 2.6 Flow Matching（P3，高成本但潜力大）
+### 2.6 Rectified Flow / Flow Matching（P2，实验性 high-risk）
 
 **核心想法**  
 直接学习从噪声到数据的速度场，路径更“直”，对低频结构/方向持久性更友好。
 
 **定位**  
-v2 路线（需要较大重构），适合作为 future work 或下一篇文章。
+不是当前 diffusion 主线的“必做项”，但在 PI 批准下可做一个 **24h time-box 的 pilot**：  
+用 **Physics Residual RF** 做 A/B（20-step ODE vs 100-step diffusion），验证是否能更好地保留低频位移结构并显著加速推理。  
+细节与止损标准见：`docs/RF_PILOT.md`。
 
 ---
 
@@ -181,9 +183,10 @@ P1（优先，低成本、可归因）：
 P2（在 P1 结论明确后再做）：
 3) 采样加速（DPM-Solver/DDIM/OGD 思路）作为效率附录
 4) learnable initializer（LED 风格）
+5) Rectified Flow pilot（Physics Residual，24h time-box）
 
 P3（未来工作）：
-5) distributional diffusion / flow matching
+6) distributional diffusion（更系统的分布建模；v2 方向）
 
 ---
 

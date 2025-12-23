@@ -259,8 +259,7 @@ def plot_geo_overlays(
         extent = (lon_min - lon_pad, lon_max + lon_pad, lat_min - lat_pad, lat_max + lat_pad)
         extent = _ensure_min_span(extent, min_span_km=float(min_span_km))
 
-    handles = None
-    labels = None
+    legend_map: Dict[str, Any] = {}
 
     for ax, s in zip(axes, samples_list):
         draw_geojson_basemap(ax, basemap_geojson, basemap_style, zorder_base=0)
@@ -292,7 +291,12 @@ def plot_geo_overlays(
                 zorder=4,
             )
 
-        ax.set_title(f"{s.name} (N={take})")
+        n_total = int(s.preds.shape[0])
+        if n_total == int(take):
+            # Avoid "N=..." ambiguity: this is a plotted subset size, not necessarily dataset size.
+            ax.set_title(f"{s.name} (n_plot={take})")
+        else:
+            ax.set_title(f"{s.name} (n_plot={take}/{n_total})")
         if bool(axis_off):
             ax.set_xticks([])
             ax.set_yticks([])
@@ -316,15 +320,29 @@ def plot_geo_overlays(
             ax.tick_params(axis="both", which="major", labelsize=9)
         _add_scalebar(ax, extent or (grid.min_lon, grid.max_lon, grid.min_lat, grid.max_lat), scalebar_km=float(scalebar_km))
 
-        if handles is None:
-            handles, labels = ax.get_legend_handles_labels()
+        h, l = ax.get_legend_handles_labels()
+        for hh, ll in zip(h, l):
+            if ll and ll not in legend_map:
+                legend_map[str(ll)] = hh
 
-    if handles and labels:
+    if legend_map:
+        ordered_labels: List[str] = []
+        if "GT" in legend_map:
+            ordered_labels.append("GT")
+        for s in samples_list:
+            if s.name in legend_map and s.name not in ordered_labels:
+                ordered_labels.append(s.name)
+        # Fallback: include any extra labels not covered above.
+        for ll in legend_map.keys():
+            if ll not in ordered_labels:
+                ordered_labels.append(ll)
+
+        handles = [legend_map[ll] for ll in ordered_labels]
         fig.legend(
             handles,
-            labels,
+            ordered_labels,
             loc="upper center",
-            ncol=min(2, len(labels)),
+            ncol=min(3, len(handles)),
             frameon=False,
             bbox_to_anchor=(0.5, 0.995),
         )
@@ -466,6 +484,7 @@ def plot_geo_density(
         extent=extent,
         cmap="Blues",
         norm=norm,
+        interpolation="bilinear",
         alpha=0.98,
         zorder=2,
     )
@@ -481,6 +500,7 @@ def plot_geo_density(
             extent=extent,
             cmap="Blues",
             norm=norm,
+            interpolation="bilinear",
             alpha=0.98,
             zorder=2,
         )
@@ -529,6 +549,12 @@ def main() -> None:
     parser.add_argument("--num_trajs", type=int, default=60, help="number of trajectories to overlay per model")
     parser.add_argument("--bins", type=int, default=220, help="2D histogram bins for density plot")
     parser.add_argument("--density_sigma", type=float, default=1.4, help="Gaussian smoothing sigma in bin pixels (KDE-like).")
+    parser.add_argument(
+        "--overlay_keep",
+        action="append",
+        default=[],
+        help="Optional label filter for trajectory overlay (repeatable). Example: --overlay_keep CFG2",
+    )
     parser.add_argument(
         "--density_keep",
         action="append",
@@ -593,6 +619,13 @@ def main() -> None:
             "No samples provided. Use --sample 'Label:Path' (recommended) or legacy --baseline_samples/--diff_samples/--physics_samples."
         )
 
+    overlay_samples = samples_list
+    if args.overlay_keep:
+        keep = {str(x) for x in args.overlay_keep}
+        overlay_samples = [s for s in samples_list if s.name in keep]
+        if not overlay_samples:
+            raise ValueError(f"--overlay_keep provided but no samples matched: {sorted(keep)}")
+
     out_dir = Path(args.out_dir)
     basemap_geojson = Path(args.basemap_geojson) if args.basemap_geojson else None
     basemap_style = BasemapStyle(
@@ -606,7 +639,7 @@ def main() -> None:
     )
 
     plot_geo_overlays(
-        samples_list=samples_list,
+        samples_list=overlay_samples,
         grid=grid,
         out_dir=out_dir,
         num_trajs=int(args.num_trajs),

@@ -1,0 +1,37 @@
+{
+  "config": {
+    "use_all_k": true,
+    "k_max": 10,
+    "speed_bins": 120,
+    "accel_bins": 120,
+    "angle_bins": 60,
+    "turn_min_speed": 0.1,
+    "dcv_speed_pctl": 99.5,
+    "dcv_accel_pctl": 99.5,
+    "units": "grid/step (dt_s=1.0, meters_per_cell=None)"
+  },
+  "metrics": {
+    "CFG2": {
+      "JSD_Speed": 0.1428829753847071,
+      "JSD_Accel": 0.06459459915855723,
+      "JSD_TurnAngle": 0.07375907275125748,
+      "Vio_Speed_Rate": 0.010977272727272728,
+      "Vio_Accel_Rate": 0.012375,
+      "Thresh_Speed": 7.418032169342041,
+      "Thresh_Accel": 4.389984607696533,
+      "Pctl_Speed": 99.5,
+      "Pctl_Accel": 99.5
+    },
+    "CFG3": {
+      "JSD_Speed": 0.144782046143124,
+      "JSD_Accel": 0.055912273086564934,
+      "JSD_TurnAngle": 0.07281460776711149,
+      "Vio_Speed_Rate": 0.012386363636363636,
+      "Vio_Accel_Rate": 0.0206,
+      "Thresh_Speed": 7.418032169342041,
+      "Thresh_Accel": 4.389984607696533,
+      "Pctl_Speed": 99.5,
+      "Pctl_Accel": 99.5
+    }
+  }
+}

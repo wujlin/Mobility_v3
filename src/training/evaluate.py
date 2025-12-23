@@ -5,7 +5,7 @@ import argparse
 import json
 import numpy as np
 import random
-from typing import Optional, Tuple
+from typing import List, Optional, Tuple
 try:
     from tqdm import tqdm
 except Exception:  # pragma: no cover
@@ -219,6 +219,122 @@ def _integrate_positions(start_pos: np.ndarray, vel: np.ndarray) -> np.ndarray:
     return start_pos[:, None, :] + np.cumsum(vel, axis=1)
 
 
+def _build_cfg_uncond(cond: torch.Tensor, mode: str) -> torch.Tensor:
+    """
+    CFG inference helper: build unconditional condition by dropping destination (d_y, d_x).
+    """
+    cond_uncond = cond.clone()
+    mode = str(mode)
+    if mode == "origin":
+        cond_uncond[:, 4:6] = cond_uncond[:, 2:4]
+    elif mode == "zeros":
+        cond_uncond[:, 4:6].zero_()
+    else:  # pragma: no cover
+        raise ValueError(f"Unknown cfg_uncond_dest_mode: {mode}")
+    return cond_uncond
+
+
+def _resolve_oracle_waypoint_step(pred_len: int, idx: Optional[int], frac: float) -> int:
+    """
+    Resolve oracle waypoint step index.
+
+    Returns:
+        wp_step: int in [1, pred_len-1], representing stage-1 horizon length.
+    """
+    pred_len = int(pred_len)
+    if pred_len < 2:
+        raise ValueError(f"pred_len must be >= 2 for oracle waypoint, got {pred_len}")
+    if idx is not None:
+        wp_step = int(idx)
+    else:
+        wp_step = int(round(float(frac) * float(pred_len)))
+    return max(1, min(wp_step, pred_len - 1))
+
+
+def _make_obs_from_positions(pos_window: np.ndarray, norm) -> np.ndarray:
+    """
+    Build normalized obs tensor (pos+vel) from denormalized positions.
+
+    Args:
+        pos_window: (B, H, 2) in grid space
+    Returns:
+        obs_np: (B, H, 4) float32, in the same format as dataset output.
+    """
+    pos_window = np.asarray(pos_window, dtype=np.float32)
+    if pos_window.ndim != 3 or pos_window.shape[-1] != 2:
+        raise ValueError(f"Expected pos_window (B,H,2), got {pos_window.shape}")
+
+    vel = np.zeros_like(pos_window, dtype=np.float32)
+    if pos_window.shape[1] > 1:
+        vel[:, 1:] = pos_window[:, 1:] - pos_window[:, :-1]
+        vel[:, 0] = vel[:, 1]
+    pos_norm = norm.normalize_pos(pos_window)
+    vel_norm = norm.normalize_vel(vel)
+    return np.concatenate([pos_norm, vel_norm], axis=-1).astype(np.float32, copy=False)
+
+
+def _sample_model_vel_norm(
+    args: argparse.Namespace,
+    model,
+    obs: torch.Tensor,
+    cond: torch.Tensor,
+    horizon: int,
+    *,
+    nav_patch: Optional[torch.Tensor] = None,
+    cond_uncond: Optional[torch.Tensor] = None,
+    cfg_scale: float = 0.0,
+) -> torch.Tensor:
+    """Unified sampling wrapper across model types (returns normalized future vel)."""
+    if args.model_type in ("physics", "physics_flow"):
+        return model.sample_trajectory(
+            obs,
+            cond,
+            int(horizon),
+            nav_patch=nav_patch,
+            cond_uncond=cond_uncond,
+            cfg_scale=float(cfg_scale),
+        )
+    if args.model_type == "cvae":
+        return model.sample_trajectory(obs, cond, int(horizon), z_temperature=float(args.z_temperature))
+    return model.sample_trajectory(
+        obs,
+        cond,
+        int(horizon),
+        cond_uncond=cond_uncond,
+        cfg_scale=float(cfg_scale),
+    )
+
+
+def _make_nav_patch_from_centers(
+    centers: np.ndarray,
+    dataset: DiffusionDataset,
+    args: argparse.Namespace,
+    norm,
+) -> np.ndarray:
+    """
+    Recompute nav_patch for arbitrary centers (used by Oracle Waypoint stage-2).
+    """
+    nav_field = getattr(dataset, "nav_field", None)
+    if nav_field is None:
+        raise ValueError("Oracle Waypoint for physics requires dataset.nav_field (missing --nav_file?)")
+
+    channel2 = str(getattr(args, "nav_patch_channel2", "speed"))
+    patches = []
+    for c in np.asarray(centers, dtype=np.float32):
+        patch = nav_field.get_patch(c, int(args.patch_size), channel2=channel2)
+        if channel2 == "speed":
+            patch[2] = patch[2] / float(norm.config.nav_max_speed)
+        elif channel2 == "count":
+            count_log1p_max = float(getattr(dataset, "_nav_count_log1p_max", 1.0))
+            patch[2] = np.log1p(patch[2]) / max(count_log1p_max, 1e-6)
+        elif channel2 == "zeros":
+            patch[2].fill(0.0)
+        else:  # pragma: no cover
+            raise ValueError(f"Unknown nav_patch_channel2: {channel2}")
+        patches.append(patch.astype(np.float32, copy=False))
+    return np.stack(patches, axis=0).astype(np.float32, copy=False)
+
+
 def _speed_sum_and_count_from_vel(vel: np.ndarray) -> Tuple[float, int]:
     """
     Compute summed step speed and count.
@@ -351,6 +467,16 @@ def _run_samples_only(
     if existing_n >= target_total:
         print(f"[OK] samples_only: existing N={existing_n} >= target N={target_total}; nothing to do.")
         # Still write a lightweight metrics.json for bookkeeping.
+        oracle_enabled = bool(getattr(args, "oracle_waypoint", False))
+        oracle_step = (
+            _resolve_oracle_waypoint_step(
+                int(getattr(args, "pred_len", 0)),
+                getattr(args, "oracle_waypoint_idx", None),
+                float(getattr(args, "oracle_waypoint_frac", 0.5)),
+            )
+            if oracle_enabled
+            else None
+        )
         results = {
             "seed": int(args.seed),
             "split": str(args.split),
@@ -358,6 +484,10 @@ def _run_samples_only(
             "K": int(K_full),
             "cfg_scale": float(getattr(args, "cfg_scale", 0.0)) if args.model_type in ("diffusion", "physics") else None,
             "prior_checkpoint": (str(args.prior_checkpoint) if getattr(args, "prior_checkpoint", None) else None),
+            "oracle_waypoint": oracle_enabled,
+            "oracle_waypoint_step": oracle_step,
+            "oracle_waypoint_frac": (float(getattr(args, "oracle_waypoint_frac", 0.5)) if oracle_enabled else None),
+            "oracle_waypoint_idx": (int(getattr(args, "oracle_waypoint_idx")) if getattr(args, "oracle_waypoint_idx", None) is not None else None),
             "samples_only": True,
             "resume_samples": True,
         }
@@ -435,7 +565,8 @@ def _run_samples_only(
 
             # Deterministic prior (normalized vel)
             prior_vel_norm = None
-            if prior_model is not None:
+            use_oracle_wp = bool(getattr(args, "oracle_waypoint", False))
+            if prior_model is not None and (not use_oracle_wp):
                 prior_vel_norm = prior_model.sample_trajectory(obs, cond, int(args.pred_len))
 
             # GT future velocities
@@ -450,36 +581,101 @@ def _run_samples_only(
             if take <= 0:
                 break
 
+            use_oracle_wp = bool(getattr(args, "oracle_waypoint", False))
+            if use_oracle_wp and args.model_type in ("baseline", "cvae"):
+                raise ValueError("--oracle_waypoint 仅支持 diffusion/physics/flow（baseline/cvae 不适用）")
+
+            # Oracle Waypoint: stage-1 destination is GT waypoint, stage-2 destination is original d.
+            # This is a diagnosis tool (not a new model).
+            wp_step = None
+            cond_wp = None
+            cond_uncond_wp = None
+            prior_wp_stage1 = None
+            obs_pos_hist = None
+            if use_oracle_wp:
+                wp_step = _resolve_oracle_waypoint_step(
+                    int(args.pred_len),
+                    getattr(args, "oracle_waypoint_idx", None),
+                    float(getattr(args, "oracle_waypoint_frac", 0.5)),
+                )
+                wp_pos = gt_pos[:, int(wp_step) - 1]  # (B,2) in grid
+                wp_norm = norm.normalize_pos(wp_pos).astype(np.float32, copy=False)
+                wp_norm_t = torch.from_numpy(wp_norm).to(device=device, dtype=cond.dtype)
+                cond_wp = cond.clone()
+                cond_wp[:, 4:6] = wp_norm_t
+                if cfg_scale != 0.0 and args.model_type in ("diffusion", "physics", "flow", "physics_flow"):
+                    cond_uncond_wp = _build_cfg_uncond(cond_wp, str(getattr(args, "cfg_uncond_dest_mode", "origin")))
+                if prior_model is not None:
+                    prior_wp_stage1 = prior_model.sample_trajectory(obs, cond_wp, int(wp_step))
+                obs_pos_hist = norm.denormalize_pos(obs[:, :, :2].detach().cpu().numpy())  # (B,H,2)
+
             for k in range(int(K_sample)):
-                if args.model_type in ("physics", "physics_flow"):
-                    pred_vel_norm = model.sample_trajectory(
+                if not use_oracle_wp:
+                    pred_vel_norm = _sample_model_vel_norm(
+                        args,
+                        model,
                         obs,
                         cond,
-                        args.pred_len,
+                        int(args.pred_len),
                         nav_patch=nav_patch,
                         cond_uncond=cond_uncond,
                         cfg_scale=cfg_scale,
                     )
-                elif args.model_type == "cvae":
-                    pred_vel_norm = model.sample_trajectory(
-                        obs, cond, args.pred_len, z_temperature=float(args.z_temperature)
-                    )
+                    if prior_vel_norm is not None and args.model_type in ("diffusion", "physics", "flow", "physics_flow"):
+                        pred_vel_norm = pred_vel_norm + prior_vel_norm
+
+                    pred_vel = norm.denormalize_vel(pred_vel_norm.cpu().numpy()) * float(args.vel_scale)
+                    pred_pos = _integrate_positions(start_pos, pred_vel)
                 else:
-                    pred_vel_norm = model.sample_trajectory(
+                    assert wp_step is not None and cond_wp is not None and obs_pos_hist is not None
+                    # ---- stage 1: start -> waypoint ----
+                    vel1_norm = _sample_model_vel_norm(
+                        args,
+                        model,
                         obs,
+                        cond_wp,
+                        int(wp_step),
+                        nav_patch=nav_patch,
+                        cond_uncond=cond_uncond_wp,
+                        cfg_scale=cfg_scale,
+                    )
+                    if prior_wp_stage1 is not None and args.model_type in ("diffusion", "physics", "flow", "physics_flow"):
+                        vel1_norm = vel1_norm + prior_wp_stage1
+                    vel1 = norm.denormalize_vel(vel1_norm.cpu().numpy()) * float(args.vel_scale)  # (B,wp,2)
+
+                    # Build stage-2 obs window from (obs_pos_hist + pos1), then generate remaining horizon.
+                    pos1 = _integrate_positions(start_pos, vel1)  # (B,wp,2)
+                    pos_hist_plus = np.concatenate([obs_pos_hist, pos1], axis=1)
+                    pos2_window = pos_hist_plus[:, -int(args.obs_len) :]  # (B,H,2)
+                    obs2_np = _make_obs_from_positions(pos2_window, norm)
+                    obs2 = torch.from_numpy(obs2_np).to(device=device, dtype=obs.dtype)
+
+                    nav2 = None
+                    if args.model_type in ("physics", "physics_flow"):
+                        dataset = dataloader.dataset  # type: ignore[attr-defined]
+                        centers = pos2_window[:, -1]  # (B,2)
+                        nav2_np = _make_nav_patch_from_centers(centers, dataset, args, norm)
+                        nav2 = torch.from_numpy(nav2_np).to(device=device, dtype=obs.dtype)
+
+                    # ---- stage 2: (stage-1 end) -> destination d ----
+                    horizon2 = int(args.pred_len) - int(wp_step)
+                    vel2_norm = _sample_model_vel_norm(
+                        args,
+                        model,
+                        obs2,
                         cond,
-                        args.pred_len,
+                        int(horizon2),
+                        nav_patch=nav2,
                         cond_uncond=cond_uncond,
                         cfg_scale=cfg_scale,
                     )
+                    if prior_model is not None and args.model_type in ("diffusion", "physics", "flow", "physics_flow"):
+                        prior2 = prior_model.sample_trajectory(obs2, cond, int(horizon2))
+                        vel2_norm = vel2_norm + prior2
+                    vel2 = norm.denormalize_vel(vel2_norm.cpu().numpy()) * float(args.vel_scale)  # (B,h2,2)
 
-                # Residual mode: model predicts residual vel; add deterministic prior.
-                if prior_vel_norm is not None and args.model_type in ("diffusion", "physics", "flow", "physics_flow"):
-                    pred_vel_norm = pred_vel_norm + prior_vel_norm
-
-                pred_vel = norm.denormalize_vel(pred_vel_norm.cpu().numpy())
-                pred_vel = pred_vel * float(args.vel_scale)
-                pred_pos = _integrate_positions(start_pos, pred_vel)
+                    pred_vel = np.concatenate([vel1, vel2], axis=1)
+                    pred_pos = _integrate_positions(start_pos, pred_vel)
 
                 if k == 0:
                     save_preds.append(pred_pos[:take].astype(np.float32, copy=False))
@@ -516,6 +712,16 @@ def _run_samples_only(
 
     np.savez(samples_path, **npz_kwargs)
 
+    oracle_enabled = bool(getattr(args, "oracle_waypoint", False))
+    oracle_step = (
+        _resolve_oracle_waypoint_step(
+            int(getattr(args, "pred_len", 0)),
+            getattr(args, "oracle_waypoint_idx", None),
+            float(getattr(args, "oracle_waypoint_frac", 0.5)),
+        )
+        if oracle_enabled
+        else None
+    )
     results = {
         "seed": int(args.seed),
         "split": str(args.split),
@@ -525,6 +731,10 @@ def _run_samples_only(
         "cfg_uncond_dest_mode": str(getattr(args, "cfg_uncond_dest_mode", "origin")) if args.model_type in ("diffusion", "physics") else None,
         "vel_scale": float(args.vel_scale),
         "prior_checkpoint": (str(args.prior_checkpoint) if getattr(args, "prior_checkpoint", None) else None),
+        "oracle_waypoint": oracle_enabled,
+        "oracle_waypoint_step": oracle_step,
+        "oracle_waypoint_frac": (float(getattr(args, "oracle_waypoint_frac", 0.5)) if oracle_enabled else None),
+        "oracle_waypoint_idx": (int(getattr(args, "oracle_waypoint_idx")) if getattr(args, "oracle_waypoint_idx", None) is not None else None),
         "samples_only": True,
         "resume_samples": bool(getattr(args, "resume_samples", False)),
         "sample_offset": int(getattr(args, "sample_offset", 0)),
@@ -544,6 +754,9 @@ def evaluate(args):
 
     if args.prior_checkpoint and args.model_type in ("baseline", "cvae"):
         raise ValueError("--prior_checkpoint 仅用于 diffusion/physics/flow 的 residual 评估（baseline/cvae 不需要 prior）")
+
+    if bool(getattr(args, "oracle_waypoint", False)) and args.model_type in ("baseline", "cvae"):
+        raise ValueError("--oracle_waypoint 仅用于 diffusion/physics/flow 的诊断评估（baseline/cvae 不适用）")
     
     # 1. Load Data
     # Evaluation usually on 'test' split via mode='r'? 
@@ -833,33 +1046,92 @@ def evaluate(args):
                 if bool(getattr(args, "save_all_k", False)) and save_preds_k_by_k is None:
                     save_preds_k_by_k = [[] for _ in range(int(K))]
 
+            wp_step = None
+            cond_wp = None
+            cond_uncond_wp = None
+            prior_wp_stage1 = None
+            obs_pos_hist = None
+            if use_oracle_wp:
+                wp_step = _resolve_oracle_waypoint_step(
+                    int(args.pred_len),
+                    getattr(args, "oracle_waypoint_idx", None),
+                    float(getattr(args, "oracle_waypoint_frac", 0.5)),
+                )
+                wp_pos = gt_pos[:, int(wp_step) - 1]  # (B,2) in grid
+                wp_norm = norm.normalize_pos(wp_pos).astype(np.float32, copy=False)
+                wp_norm_t = torch.from_numpy(wp_norm).to(device=device, dtype=cond.dtype)
+                cond_wp = cond.clone()
+                cond_wp[:, 4:6] = wp_norm_t
+                if cfg_scale != 0.0 and args.model_type in ("diffusion", "physics", "flow", "physics_flow"):
+                    cond_uncond_wp = _build_cfg_uncond(cond_wp, str(getattr(args, "cfg_uncond_dest_mode", "origin")))
+                if prior_model is not None:
+                    prior_wp_stage1 = prior_model.sample_trajectory(obs, cond_wp, int(wp_step))
+                obs_pos_hist = norm.denormalize_pos(obs[:, :, :2].detach().cpu().numpy())  # (B,H,2)
+
             for k in range(K):
-                if args.model_type in ('physics', 'physics_flow'):
-                    pred_vel_norm = model.sample_trajectory(
+                if not use_oracle_wp:
+                    pred_vel_norm = _sample_model_vel_norm(
+                        args,
+                        model,
                         obs,
                         cond,
-                        args.pred_len,
+                        int(args.pred_len),
                         nav_patch=nav_patch,
                         cond_uncond=cond_uncond,
                         cfg_scale=cfg_scale,
                     )
-                elif args.model_type == 'cvae':
-                    pred_vel_norm = model.sample_trajectory(obs, cond, args.pred_len, z_temperature=float(args.z_temperature))
+                    # Residual mode: model predicts residual vel; add deterministic prior.
+                    if prior_vel_norm is not None and args.model_type in ("diffusion", "physics", "flow", "physics_flow"):
+                        pred_vel_norm = pred_vel_norm + prior_vel_norm
+                    pred_vel = norm.denormalize_vel(pred_vel_norm.cpu().numpy()) * float(args.vel_scale)
                 else:
-                    pred_vel_norm = model.sample_trajectory(
+                    assert wp_step is not None and cond_wp is not None and obs_pos_hist is not None
+                    # ---- stage 1: start -> waypoint ----
+                    vel1_norm = _sample_model_vel_norm(
+                        args,
+                        model,
                         obs,
+                        cond_wp,
+                        int(wp_step),
+                        nav_patch=nav_patch,
+                        cond_uncond=cond_uncond_wp,
+                        cfg_scale=cfg_scale,
+                    )
+                    if prior_wp_stage1 is not None and args.model_type in ("diffusion", "physics", "flow", "physics_flow"):
+                        vel1_norm = vel1_norm + prior_wp_stage1
+                    vel1 = norm.denormalize_vel(vel1_norm.cpu().numpy()) * float(args.vel_scale)  # (B,wp,2)
+
+                    # Build stage-2 obs window from (obs_pos_hist + pos1), then generate remaining horizon.
+                    pos1 = _integrate_positions(start_pos, vel1)
+                    pos_hist_plus = np.concatenate([obs_pos_hist, pos1], axis=1)
+                    pos2_window = pos_hist_plus[:, -int(args.obs_len) :]  # (B,H,2)
+                    obs2_np = _make_obs_from_positions(pos2_window, norm)
+                    obs2 = torch.from_numpy(obs2_np).to(device=device, dtype=obs.dtype)
+
+                    nav2 = None
+                    if args.model_type in ("physics", "physics_flow"):
+                        dataset = dataloader.dataset  # type: ignore[attr-defined]
+                        centers = pos2_window[:, -1]
+                        nav2_np = _make_nav_patch_from_centers(centers, dataset, args, norm)
+                        nav2 = torch.from_numpy(nav2_np).to(device=device, dtype=obs.dtype)
+
+                    # ---- stage 2: (stage-1 end) -> destination d ----
+                    horizon2 = int(args.pred_len) - int(wp_step)
+                    vel2_norm = _sample_model_vel_norm(
+                        args,
+                        model,
+                        obs2,
                         cond,
-                        args.pred_len,
+                        int(horizon2),
+                        nav_patch=nav2,
                         cond_uncond=cond_uncond,
                         cfg_scale=cfg_scale,
                     )
-
-                # Residual mode: model predicts residual vel; add deterministic prior.
-                if prior_vel_norm is not None and args.model_type in ("diffusion", "physics", "flow", "physics_flow"):
-                    pred_vel_norm = pred_vel_norm + prior_vel_norm
-
-                pred_vel = norm.denormalize_vel(pred_vel_norm.cpu().numpy())
-                pred_vel = pred_vel * float(args.vel_scale)
+                    if prior_model is not None and args.model_type in ("diffusion", "physics", "flow", "physics_flow"):
+                        prior2 = prior_model.sample_trajectory(obs2, cond, int(horizon2))
+                        vel2_norm = vel2_norm + prior2
+                    vel2 = norm.denormalize_vel(vel2_norm.cpu().numpy()) * float(args.vel_scale)  # (B,h2,2)
+                    pred_vel = np.concatenate([vel1, vel2], axis=1)
 
                 s_sum, s_cnt = _speed_sum_and_count_from_vel(pred_vel)
                 pred_speed_sum += s_sum
@@ -948,6 +1220,16 @@ def evaluate(args):
     msd_curve = (msd_sum / np.maximum(msd_count, 1)).astype(np.float64)
     gt_msd_curve = (gt_msd_sum / np.maximum(gt_msd_count, 1)).astype(np.float64)
 
+    oracle_enabled = bool(getattr(args, "oracle_waypoint", False))
+    oracle_step = (
+        _resolve_oracle_waypoint_step(
+            int(getattr(args, "pred_len", 0)),
+            getattr(args, "oracle_waypoint_idx", None),
+            float(getattr(args, "oracle_waypoint_frac", 0.5)),
+        )
+        if oracle_enabled
+        else None
+    )
     results = {
         "seed": int(args.seed),
         "split": args.split,
@@ -958,6 +1240,10 @@ def evaluate(args):
         "cfg_uncond_dest_mode": (str(getattr(args, "cfg_uncond_dest_mode", "origin")) if args.model_type in ("diffusion", "physics") else None),
         "vel_scale": float(args.vel_scale),
         "prior_checkpoint": (str(args.prior_checkpoint) if args.prior_checkpoint else None),
+        "oracle_waypoint": oracle_enabled,
+        "oracle_waypoint_step": oracle_step,
+        "oracle_waypoint_frac": (float(getattr(args, "oracle_waypoint_frac", 0.5)) if oracle_enabled else None),
+        "oracle_waypoint_idx": (int(getattr(args, "oracle_waypoint_idx")) if getattr(args, "oracle_waypoint_idx", None) is not None else None),
         "ADE_mean": ade_mean_sum / total_n,
         "ADE_std": ade_std_sum / total_n,
         "ADE_best": ade_best_sum / total_n,
@@ -1070,6 +1356,23 @@ if __name__ == "__main__":
     parser.add_argument('--vel_scale', type=float, default=1.0, help="对预测 future vel 做整体缩放（用于修正运动幅度偏小；与温度/噪声解耦）")
     parser.add_argument('--cfg_scale', type=float, default=0.0, help="CFG guidance scale（0 关闭；>0 放大 destination 条件影响）")
     parser.add_argument('--cfg_uncond_dest_mode', type=str, choices=['origin', 'zeros'], default='origin', help="CFG uncond 分支 destination 替换方式")
+    parser.add_argument(
+        '--oracle_waypoint',
+        action='store_true',
+        help="Oracle Waypoint 诊断：用 GT 的中间点做 stage-1 destination（start->wp->d，两段推理拼接）。",
+    )
+    parser.add_argument(
+        '--oracle_waypoint_frac',
+        type=float,
+        default=0.5,
+        help="Oracle Waypoint：waypoint 位置在 horizon 中的比例（用于计算 stage-1 长度）。",
+    )
+    parser.add_argument(
+        '--oracle_waypoint_idx',
+        type=int,
+        default=None,
+        help="Oracle Waypoint：直接指定 stage-1 长度（1..pred_len-1），优先于 --oracle_waypoint_frac。",
+    )
     parser.add_argument('--skip_dtw_frechet', action='store_true', help="跳过 Frechet/DTW 计算以加速评估（输出将置为 0；适合快速 smoke）")
     
     args = parser.parse_args()

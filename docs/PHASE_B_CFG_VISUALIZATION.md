@@ -182,6 +182,7 @@ python -m src.visualization.plot_geo_phase_b \
   --sample "Prior:data/experiments/prior_geo_viz_test/samples.npz" \
   --sample "CFG2:data/experiments/phys_cfg_geo_viz_test_cfg2/samples.npz" \
   --sample "CFG3:data/experiments/phys_cfg_geo_viz_test_cfg3/samples.npz" \
+  --overlay_keep Prior --overlay_keep CFG2 --overlay_keep CFG3 \
   --density_keep Prior --density_keep CFG2 \
   --density_sigma 1.6 \
   --out_dir essay/figures/stage_cfg \
@@ -197,6 +198,28 @@ python -m src.visualization.plot_geo_phase_b \
 输出：
 - 默认：`(png|pdf)` 两种格式都会输出；
 - 如需只输出 PNG：追加 `--png_only`。
+
+> 口径提示（避免“图里又出现 CFG3”）：  
+> `plot_geo_phase_b` 支持分别筛选两类输出：  
+> - 轨迹叠图：用 `--overlay_keep` 指定要画哪些模型；  
+> - 密度图：用 `--density_keep` 指定要画哪些模型（GT 面板永远保留）。  
+> 
+> 示例：如果你只想在宏观密度层面展示 `GT vs CFG2`（不画 Prior/CFG3），可以这样：
+> 
+> ```bash
+> python -m src.visualization.plot_geo_phase_b \
+>   --stats_path data/processed_dt30/data_stats.json \
+>   --basemap_geojson geo_map/Shenzhen_county.geojson \
+>   --sample "CFG2:data/experiments/phys_cfg2_geo_density_test/samples.npz" \
+>   --overlay_keep CFG2 \
+>   --density_keep CFG2 \
+>   --out_dir essay/figures/stage_cfg_density10k \
+>   --num_trajs 60 --bins 320 --density_sigma 1.8 \
+>   --extent data --axis_off --scalebar_km 2 --min_span_km 10 \
+>   --png_only --style paper
+> ```
+> 
+> 注意：轨迹叠图标题里的 `n_plot` 表示绘制子集大小（例如 60 条），不是“测试集总量”。如果样本文件里保存了 10000 条，则标题会显示 `n_plot=60/10000`。
 
 可选增强：
 - 加区名标签：`--basemap_labels --basemap_label_size 8`
@@ -369,3 +392,83 @@ python -m src.visualization.make_html_animation \
 ```
 
 输出：`<frames_dir>/anim.html`，用浏览器打开即可播放/暂停/拖动帧。
+
+---
+
+## 8) 物理统计图（主证据：用于“救论文叙事”）
+
+当地图密度/叠图难以区分 `Prior` 与 `CFG2`（宏观结构过于相似）时，不要硬拗“地图上更好看”。
+这在统计上是正常现象：密度图是强低通滤波，Prior 的 conditional mean 往往也落在高密度走廊上。
+
+更强的证据链应该切到 **Physical Statistics**：
+- **Speed distribution**：Prior 往往更“尖”（均值回归），CFG2 会恢复更宽的速度分布（慢堵/快行的长尾）。
+- **Turn-angle distribution**：Prior 更平滑（转角集中在 0），CFG2 会恢复转角纹理（更接近真实路口行为）。
+- **MSD curve**：展示宏观位移尺度（directional persistence）。
+
+进一步（对齐学术界 Generative Trajectory Prediction 的主流 validity 叙事）：
+- **Statistical Consistency**：用 `JSD`（Jensen–Shannon Divergence）量化 Pred/GT 在 `Speed/Accel/TurnAngle` 三个分布上的差异；
+- **Dynamic Constraint Violation (DCV)**：用速度/加速度的超限率做 feasibility 门槛（本仓库默认用 GT 的高分位作数据校准阈值，map-free 设定下更稳健）。
+
+脚本：`src/visualization/plot_physical_stats.py`（无 SciPy 依赖；可选输出 `JSD+DCV`）
+
+推荐做法：对生成模型使用 `samples.npz` 里的 `preds_k`（需要 eval 时 `--save_all_k`），
+并用 `--use_all_k --k_max 10` 展示多模态下的物理统计纹理。
+
+```bash
+python -m src.visualization.plot_physical_stats \
+  --inputs "Prior:data/experiments/prior_geo_viz_test/samples.npz" \
+           "CFG2:data/experiments/phys_cfg_geo_viz_test_cfg2/samples.npz" \
+  --use_all_k --k_max 10 \
+  --turn_min_speed 0.1 \
+  --dcv_speed_pctl 99.5 --dcv_accel_pctl 99.5 \
+  --save_metrics \
+  --stride 5 \
+  --output_dir essay/figures/stage_cfg \
+  --stem fig_physical_stats_cfg2
+```
+
+输出：
+- 图：`<out_dir>/<stem>.png`
+- 指标：`<out_dir>/<stem>_validity.json`（含 `JSD_Speed/JSD_Accel/JSD_TurnAngle` + `Vio_*`）
+
+### 8.1) Oracle Waypoint（诊断实验：看“给个点能不能弯”）
+
+如果你怀疑模型是 “straight line + jitter / destination gravity”，最强的控制变量实验是：
+用 **GT 的中间点** 做 `stage-1 destination`，跑两段推理 `start→wp→d` 拼接（不重新训练），
+然后看 `JSD_TurnAngle` 是否显著下降（更接近 GT）。
+
+示例（以 physics+CFG2 为例；生成一份 OracleWP 的 `samples.npz`）：
+
+```bash
+DATA=data/processed_dt30/trajectories/shenzhen_trajectories.h5
+NAV=data/processed_dt30/nav_field.npz
+PRIOR=data/experiments/baseline_b_dt30/last.pt
+CKPT=data/experiments/phys_residual_cfgp0.1_predeps_e20_mb200_s0/last.pt
+
+python -m src.training.evaluate \
+  --exp_name phys_cfg_geo_viz_test_cfg2_oracleWP \
+  --model_type physics \
+  --data_path $DATA --nav_file $NAV \
+  --checkpoint $CKPT --prior_checkpoint $PRIOR \
+  --split test --batch_size 32 --num_workers 8 \
+  --num_samples_per_condition 20 --diff_steps 100 --cfg_scale 2 \
+  --oracle_waypoint --oracle_waypoint_frac 0.5 \
+  --save_samples 400 --save_all_k --max_batches 13 --seed 0
+```
+
+然后把 OracleWP 也喂给 `plot_physical_stats`，看 `TurnAngle` 分布与 `JSD_TurnAngle`：
+
+```bash
+python -m src.visualization.plot_physical_stats \
+  --inputs "Prior:data/experiments/prior_geo_viz_test/samples.npz" \
+           "CFG2:data/experiments/phys_cfg_geo_viz_test_cfg2/samples.npz" \
+           "OracleWP:data/experiments/phys_cfg_geo_viz_test_cfg2_oracleWP/samples.npz" \
+  --use_all_k --k_max 10 \
+  --turn_min_speed 0.1 --save_metrics \
+  --output_dir essay/figures/stage_cfg \
+  --stem fig_physical_stats_cfg2_oracleWP
+```
+
+如果你只想做宏观密度专用的 10k 采样（K=1），也可以直接替换输入为：
+`prior_geo_density_test/samples.npz` 与 `phys_cfg2_geo_density_test/samples.npz`，
+但要注意：这会弱化“多模态优势”（因为 K=1）。

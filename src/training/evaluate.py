@@ -409,7 +409,10 @@ def evaluate(args):
     
     print("Running Inference...")
     with torch.no_grad():
-        for batch_idx, batch in enumerate(tqdm(dataloader)):
+        tqdm_total = len(dataloader)
+        if args.max_batches is not None:
+            tqdm_total = min(int(tqdm_total), int(args.max_batches))
+        for batch_idx, batch in enumerate(tqdm(dataloader, total=tqdm_total)):
             if args.max_batches is not None and batch_idx >= int(args.max_batches):
                 break
 

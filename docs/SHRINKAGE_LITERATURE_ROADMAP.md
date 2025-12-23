@@ -238,6 +238,75 @@ python -m src.training.evaluate \
   --data_path $DATA --nav_file $NAV \
   --checkpoint data/experiments/phys_residual_predV_e20_mb200_s0/last.pt \
   --prior_checkpoint $PRIOR \
+
+---
+
+## 7) 结合我们当前实证：哪些方向“有效”、哪些“先别碰”
+
+> 这节是为了 **减少重复踩坑**：把“文献可能有效”收敛为“我们实证上确实有效/暂时无效/不该在 v1 阶段做”的结论。
+
+### 7.1 我们已经验证为有效（P0）
+
+1) **Residual（Prior + Residual）是必要架构**  
+   - 事实：纯 diffusion/physics 在 dt30 上出现系统性 shrinkage；Residual 直接把尺度锚定到 prior，避免“走不动”。  
+   - 注意：Residual 的上限受 prior 质量影响（已被你们的 prior 位移加权实验确认）。
+
+2) **CFG（目的地引导）是有效的推理期旋钮**  
+   - 事实：cfg=2/3 在同一评估口径下呈现稳定的 micro–macro trade-off（并非偶然）。  
+   - 口径建议：不再扫 cfg 网格；固定两点：  
+     - 主表：cfg=2（micro-optimal within macro validity gate）  
+     - 附图：cfg=3（macro-validity-optimal，展示可调性）
+
+3) **Prior 的位移加权（clip, w>1）能显著抬升宏观尺度**  
+   - 事实：`disp_weight=clip(0.5,5)` 的 prior 在 test 上能把 speed/Rog/MSD10 从 <1 拉到 ≈1（甚至略过冲）。  
+   - 结论：v1.x 阶段的性价比最高做法是“先修 prior，再做 residual”。
+
+### 7.2 我们已验证收益有限/不稳定（P1，但谨慎）
+
+1) **v-prediction（eps→v）**  
+   - 状态：我们看到它更偏向“推宏观/牺牲微观”的方向（不保证双赢）。  
+   - 建议：作为低成本对照保留，但不要作为当前主线投入大量 sweep。
+
+2) **训练期 macro-loss（Rog/EPE/multi-point）**  
+   - 状态：无门控/无权重时容易出现 jitter 捷径；门控后改善有限。  
+   - 建议：除非有明确的 SNR 权重 + 多点约束组合（并且能在 fast check 中证伪/证实），否则优先级低于 CFG/修 prior。
+
+### 7.3 v1 阶段不建议主线投入（P2/P3）
+
+1) **OGD/采样加速（DPM-Solver/DDIM/减少 diff_steps）**  
+   - 定位：效率优化，不是质量突破；ds50 已观察到分布漂移风险（只能用于 fast check，不能用于“宣布更好”）。
+
+2) **LED learnable initializer / Distributional diffusion / Flow matching**  
+   - 定位：结构级升级（变量多、归因难），适合作为 v2 或 future work。
+
+---
+
+## 8) CFG 是否有泛化风险？（有，但可控）
+
+### 8.1 风险是什么（第一性原理）
+
+CFG 本质是在 **推理期改变采样分布**：不同 cfg 会生成不同的轨迹族。因此泛化风险主要来自：
+
+- **数据分布变化**：OD 距离分布、出行时段、区域交通走廊变化时，“固定 cfg”可能过激/过保守；
+- **条件强弱变化**：某些 OD 本身多模态很强（路口/高速出入口），cfg 过大容易把 micro 拉偏；
+- **与 nav_field 的耦合**：physics 条件本身是 mean-field prior，cfg 增强会放大“指向目的地”的趋势，可能导致过冲。
+
+### 8.2 如何把风险变成“可汇报、可复现”的协议
+
+1) **只在 val 上选 cfg，test 上固定**  
+   - 我们的推荐两点（cfg=2/3）就是这种协议：cfg=2 主表，cfg=3 作为“可调旋钮”附图。
+
+2) **用“宏观有效性 gate”选 cfg（避免为 ADE 过拟合）**  
+   - 规则：在 val 上选“满足 macro ratio 在区间内的最小 cfg”（例如 `Rog_R∈[0.95,1.05]` 且 `MSD10_R∈[0.95,1.05]`）。  
+   - 好处：把选择从“扫参”变成“满足物理有效性约束的最小干预”。
+
+3) **按 OD 距离分桶检查（短/中/长位移）**  
+   - 目的：确认 cfg=2/3 是否只对某一类 OD 有效。  
+   - 若发现偏差：再上 “Adaptive CFG（按 ||d−o|| 分桶选择 cfg）”，比继续全局 sweep 更可泛化。
+
+4) **CFG schedule（推理期随 t 递增）作为下一步突破 micro–macro 张力的低成本方案**  
+   - 直觉：高噪声段强 guidance 更伤 micro；后半链路增强更稳。  
+   - 这是“推前沿”而不是“扫参数”的关键方向（且不需要重训）。
   --split val --batch_size 256 --num_workers 0 --max_batches 200 \
   --num_samples_per_condition 10 --diff_steps 100 --save_samples 0 --seed 0 \
   --pred_type auto

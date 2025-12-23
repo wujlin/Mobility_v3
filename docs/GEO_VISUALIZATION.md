@@ -43,6 +43,8 @@ python -m src.visualization.plot_geo_phase_b \
 - 默认：`(png|pdf)` 两种格式都会输出；
 - 如需只输出 PNG（更快/更省空间）：追加 `--png_only`。
 
+> 区名标签语言：默认输出英文（避免 CJK 字体缺失告警）；如需保留 GeoJSON 原始中文：`--basemap_label_lang raw`。
+
 > 兼容说明：脚本仍保留旧参数 `--baseline_samples/--diff_samples/--physics_samples`，但已标记为 deprecated。
 
 > 说明（口径建议）：`fig_geo_density` 更适合作为 **宏观一致性 / 安全性** 证据（“分布没跑偏”），  

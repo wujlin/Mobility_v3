@@ -8,6 +8,17 @@
 
 ---
 
+## 0.1 最新主线指引（先看这个，避免“看错版本”）
+
+Phase B 在 2025-12 之后已经出现一个更清晰的主线：**Residual（Prior + Residual）+ CFG（Destination Guidance）**，用于直接对抗 shrinkage 与 macro–micro trade-off。
+
+- **子刊级可视化与一键出图口径**：`docs/PHASE_B_CFG_VISUALIZATION.md`
+  - 对齐子集 `samples.npz` 生成、深圳 geojson 底图叠加、Pareto（cfg 旋钮图）、spaghetti 微观案例图、动画
+- **路线图与“哪些坑已止损”**：`docs/SHRINKAGE_LITERATURE_ROADMAP.md`
+  - 包含：RF pilot 已证伪（按 time-box 止损）、CFG/位移加权/导航注入的现状与风险点
+
+本文件第 1–6 节主要记录 **dt30 strict 数据闭环** 与 **v1.0（baseline/diffusion/physics）** 的基础结果与排雷清单；如你当前在写 *CFG 版* 报告/论文，请把以上两份文档作为第一入口。
+
 ## 1. Phase B 的目标与主线（为什么必须做）
 
 Phase B 的主线很简单：把 Phase A 的“step-based 趋势验证”升级为 **物理时间语义明确** 的版本，避免审稿人质疑：
@@ -55,9 +66,15 @@ Phase B 的主线很简单：把 Phase A 的“step-based 趋势验证”升级�
 
 ### 3.1 三类模型（与 Phase A 一致）
 
-- **Deterministic L2 Regression（SeqBaseline, K=1）**：`src/models/seq/seq_baseline.py`
+> Baseline 口径说明（避免“类不对齐”）：
+>
+> - **SeqBaseline（deterministic regression）** 是我们的 *Anchor / Prior*（Residual 框架里冻结使用），用于提供 low-frequency mean path；
+>   它不是 generative competitor（不具备多模态），因此在主表中应作为 deterministic reference，而不是“必须 beat 的主要对手”。
+> - Paper-ready 的主对比应至少包含一个 **同类生成模型 baseline**（例如 CVAE），并使用相同的条件输入 `(obs, o, d, t0)` 与相同的 K-sampling 协议。
+
+- **Deterministic L2 Regression（SeqBaseline, K=1；同时作为 residual prior）**：`src/models/seq/seq_baseline.py`
 - **CVAE baseline（多模态，对位 Diffusion/Physics）**：`src/models/seq/seq_cvae.py`
-- Data-only Diffusion：`src/models/diffusion/diffusion_model.py`
+- Data-only Diffusion（ablation：无 nav_field）：`src/models/diffusion/diffusion_model.py`
 - Physics Diffusion（nav_patch 条件）：`src/models/physics/physics_condition_diffusion.py`
 
 ### 3.2 训练产物与超参（来自 checkpoint config）

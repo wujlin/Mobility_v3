@@ -25,6 +25,39 @@ class BasemapStyle:
     alpha: float = 0.55
     label: bool = False
     label_size: int = 8
+    # Keep all plot text in English by default.
+    # - "en": translate known Chinese district names to English and skip non-ASCII labels if unknown.
+    # - "raw": render raw properties[name_prop] as-is (may trigger missing-glyph warnings if fonts lack CJK).
+    label_lang: str = "en"
+
+
+_SHENZHEN_DISTRICT_EN = {
+    "光明区": "Guangming",
+    "坪山区": "Pingshan",
+    "龙华区": "Longhua",
+    "盐田区": "Yantian",
+    "龙岗区": "Longgang",
+    "宝安区": "Baoan",
+    "南山区": "Nanshan",
+    "福田区": "Futian",
+    "罗湖区": "Luohu",
+}
+
+
+def _translate_label(label: str, lang: str) -> str:
+    if not label:
+        return ""
+    if lang == "raw":
+        return label
+    # Default: English-only labels.
+    label = label.strip()
+    if label in _SHENZHEN_DISTRICT_EN:
+        return _SHENZHEN_DISTRICT_EN[label]
+    # Common suffix: "区" (district)
+    if label.endswith("区") and (label[:-1] in _SHENZHEN_DISTRICT_EN):
+        return _SHENZHEN_DISTRICT_EN[label[:-1]]
+    # Keep ASCII labels, skip non-ASCII to avoid CJK font warnings in journal figures.
+    return label if label.isascii() else ""
 
 
 def draw_geojson_basemap(
@@ -88,6 +121,9 @@ def draw_geojson_basemap(
     # Labels (optional)
     if style.label:
         for name, x, y in geojson_label_points(feats, name_prop=name_prop):
+            name = _translate_label(str(name), str(style.label_lang))
+            if not name:
+                continue
             ax.text(
                 x,
                 y,
@@ -99,4 +135,3 @@ def draw_geojson_basemap(
                 va="center",
                 zorder=int(zorder_base) + 2,
             )
-

@@ -426,6 +426,13 @@ def main() -> None:
     parser.add_argument("--basemap_alpha", type=float, default=0.55)
     parser.add_argument("--basemap_labels", action="store_true", help="Draw district labels from GeoJSON properties['name'].")
     parser.add_argument("--basemap_label_size", type=int, default=8)
+    parser.add_argument(
+        "--basemap_label_lang",
+        type=str,
+        choices=["en", "raw"],
+        default="en",
+        help="Basemap label language: 'en' translates known Shenzhen district names; 'raw' keeps GeoJSON labels.",
+    )
     args = parser.parse_args()
 
     grid = _load_grid_config(Path(args.stats_path))
@@ -455,6 +462,7 @@ def main() -> None:
         alpha=float(args.basemap_alpha),
         label=bool(args.basemap_labels),
         label_size=int(args.basemap_label_size),
+        label_lang=str(args.basemap_label_lang),
     )
 
     plot_geo_overlays(

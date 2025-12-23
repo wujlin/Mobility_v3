@@ -144,6 +144,13 @@ def main() -> None:
     parser.add_argument("--basemap_alpha", type=float, default=0.60)
     parser.add_argument("--basemap_labels", action="store_true")
     parser.add_argument("--basemap_label_size", type=int, default=7)
+    parser.add_argument(
+        "--basemap_label_lang",
+        type=str,
+        choices=["en", "raw"],
+        default="en",
+        help="Basemap label language: 'en' translates known Shenzhen district names; 'raw' keeps GeoJSON labels.",
+    )
 
     parser.add_argument("--title", type=str, default="Animated case study (geographic space)")
     parser.add_argument("--style", type=str, choices=["paper", "talk"], default="talk")
@@ -222,6 +229,7 @@ def main() -> None:
         alpha=float(args.basemap_alpha),
         label=bool(args.basemap_labels),
         label_size=int(args.basemap_label_size),
+        label_lang=str(args.basemap_label_lang),
     )
 
     # Create artists.
@@ -307,4 +315,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

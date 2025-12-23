@@ -123,6 +123,12 @@ def main() -> None:
     parser.add_argument("--out_dir", type=str, default="essay/figures/stage_cfg")
     parser.add_argument("--stem", type=str, default="fig_geo_case_study")
     parser.add_argument("--num_cases", type=int, default=9)
+    parser.add_argument(
+        "--case_idx",
+        action="append",
+        default=[],
+        help="Optional explicit case indices (repeatable). Overrides random sampling when provided.",
+    )
     parser.add_argument("--cols", type=int, default=3)
     parser.add_argument(
         "--k_plot",
@@ -141,6 +147,13 @@ def main() -> None:
     parser.add_argument("--basemap_alpha", type=float, default=0.60)
     parser.add_argument("--basemap_labels", action="store_true")
     parser.add_argument("--basemap_label_size", type=int, default=7)
+    parser.add_argument(
+        "--basemap_label_lang",
+        type=str,
+        choices=["en", "raw"],
+        default="en",
+        help="Basemap label language: 'en' translates known Shenzhen district names; 'raw' keeps GeoJSON labels.",
+    )
     parser.add_argument("--png_only", action="store_true", help="Only save PNG (skip PDF).")
 
     parser.add_argument("--title", type=str, default="Qualitative case studies (geographic space)")
@@ -184,8 +197,16 @@ def main() -> None:
     assert target_ref is not None
     n_total = int(target_ref.shape[0])
     k = min(int(args.num_cases), n_total)
-    rng = np.random.default_rng(int(args.seed))
-    idx = rng.choice(n_total, size=k, replace=False) if k > 0 else np.array([], dtype=np.int64)
+    if args.case_idx:
+        raw_idx = [int(x) for x in args.case_idx]
+        raw_idx = [i for i in raw_idx if 0 <= i < n_total]
+        if not raw_idx:
+            raise ValueError(f"--case_idx provided but all indices are out of range [0, {n_total-1}]")
+        idx = np.array(raw_idx[:k], dtype=np.int64)
+        k = int(idx.shape[0])
+    else:
+        rng = np.random.default_rng(int(args.seed))
+        idx = rng.choice(n_total, size=k, replace=False) if k > 0 else np.array([], dtype=np.int64)
 
     cols = max(1, int(args.cols))
     rows = int(np.ceil(k / cols)) if k > 0 else 1
@@ -200,6 +221,7 @@ def main() -> None:
         alpha=float(args.basemap_alpha),
         label=bool(args.basemap_labels),
         label_size=int(args.basemap_label_size),
+        label_lang=str(args.basemap_label_lang),
     )
 
     handles = None

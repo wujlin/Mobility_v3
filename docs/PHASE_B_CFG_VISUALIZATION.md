@@ -108,6 +108,7 @@ python -m src.visualization.plot_geo_phase_b \
 
 可选增强：
 - 加区名标签：`--basemap_labels --basemap_label_size 8`
+- 默认区名标签为英文（避免 CJK 字体缺失告警）；如需保留 GeoJSON 原始中文：`--basemap_label_lang raw`
 - 若发现南北翻转：`--flip_y`
 
 ---
@@ -136,6 +137,9 @@ python -m src.visualization.plot_cfg_pareto \
 这张图强调 micro 行为差异：同一个 OD 条件下，GT vs Prior vs CFG2 vs CFG3 的局部轨迹形状差异。
 （若 samples.npz 含 `preds_k`，则会自动画 spaghetti 轨迹束，用于展示多模态分叉。）
 
+> 小技巧（避免抽到“无聊样本”）：  
+> 你可以先用第 7 节的 `select_interesting_cases.py` 找到分叉最明显的 `case_idx`，再把这些 idx 直接喂给 `plot_geo_case_study.py` 的 `--case_idx`（可重复多次）。
+
 ```bash
 python -m src.visualization.plot_geo_case_study \
   --stats_path data/processed_dt30/data_stats.json \
@@ -148,6 +152,22 @@ python -m src.visualization.plot_geo_case_study \
   --k_plot 12 \
   --stem fig_geo_case_study_cfg \
   --style paper
+```
+
+例如（选 6 个最有分叉的 case）：
+
+```bash
+python -m src.visualization.plot_geo_case_study \
+  --stats_path data/processed_dt30/data_stats.json \
+  --basemap_geojson geo_map/Shenzhen_county.geojson \
+  --sample "Prior:data/experiments/prior_geo_viz_test/samples.npz" \
+  --sample "CFG2:data/experiments/phys_cfg_geo_viz_test_cfg2/samples.npz" \
+  --sample "CFG3:data/experiments/phys_cfg_geo_viz_test_cfg3/samples.npz" \
+  --out_dir essay/figures/stage_cfg \
+  --num_cases 6 --cols 3 --pad_frac 0.12 \
+  --case_idx 12 --case_idx 99 --case_idx 122 --case_idx 163 --case_idx 35 --case_idx 3 \
+  --k_plot 12 --stem fig_geo_case_study_cfg_top \
+  --png_only --style paper
 ```
 
 输出：

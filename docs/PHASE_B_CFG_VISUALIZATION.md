@@ -44,6 +44,14 @@ rsync -avP data/experiments/<EXP_DIR>/  jinlin@10.13.12.164:/home/jinlin/project
 - **Case study**：`save_samples=400`（带 `preds_k`，展示多模态分叉）
 - **Density**：`save_samples=10000~20000`（`K=1` 即可，重点是样本量而不是多模态）
 
+> 重要更新（省时间 + 断点续算）：  
+> `evaluate.py` 新增 `--samples_only/--resume_samples/--sample_offset`：  
+> - `--samples_only`：只生成 `samples.npz`，达到 `--save_samples` 就提前停止，不再计算 DTW/Frechet 等重指标；  
+> - `--resume_samples`：断点续算（同一 `exp_name` 下已有 `samples.npz` 就从已有 N 继续补齐）；  
+> - `--sample_offset`：跳过前 N 个 condition（用于分片并行：两张卡各跑一半，避免重复算）。  
+> 
+> 这三个参数只影响“出图采样”，不改变你论文/主表的评估口径。
+
 在工作站 A（GPU）执行：
 
 ```bash
@@ -90,6 +98,77 @@ python -m src.training.evaluate \
   --cfg_scale 3 --save_samples 400 --save_all_k --max_batches $MB --seed 0
 ```
 
+### 3.2（推荐）Density 专用：1000→10000 断点续算（避免重复计算）
+
+目标：先 10 分钟内看到“有没有流场质感”，确认没问题后再补到 10k。
+
+> 建议：density 只需要 `K=1`，并且用 `--samples_only` 跳过重指标。
+
+```bash
+DATA=data/processed_dt30/trajectories/shenzhen_trajectories.h5
+NAV=data/processed_dt30/nav_field.npz
+PRIOR=data/experiments/baseline_b_dt30/last.pt
+CKPT=data/experiments/phys_residual_cfgp0.1_predeps_e20_mb200_s0/last.pt
+
+# --- (A) 先生成 1000 条 ---
+python -m src.training.evaluate \
+  --exp_name prior_geo_density_test \
+  --model_type baseline --data_path $DATA --checkpoint $PRIOR \
+  --split test --batch_size 256 --num_workers 8 \
+  --save_samples 1000 --samples_only --seed 0
+
+python -m src.training.evaluate \
+  --exp_name phys_cfg2_geo_density_test \
+  --model_type physics --data_path $DATA --nav_file $NAV \
+  --checkpoint $CKPT --prior_checkpoint $PRIOR \
+  --split test --batch_size 256 --num_workers 8 \
+  --num_samples_per_condition 1 --diff_steps 100 --cfg_scale 2 \
+  --save_samples 1000 --samples_only --seed 0
+
+# --- (B) 确认效果 OK 后，补到 10000（断点续算，不会重算前 1000）---
+python -m src.training.evaluate \
+  --exp_name prior_geo_density_test \
+  --model_type baseline --data_path $DATA --checkpoint $PRIOR \
+  --split test --batch_size 256 --num_workers 8 \
+  --save_samples 10000 --samples_only --resume_samples --seed 0
+
+python -m src.training.evaluate \
+  --exp_name phys_cfg2_geo_density_test \
+  --model_type physics --data_path $DATA --nav_file $NAV \
+  --checkpoint $CKPT --prior_checkpoint $PRIOR \
+  --split test --batch_size 256 --num_workers 8 \
+  --num_samples_per_condition 1 --diff_steps 100 --cfg_scale 2 \
+  --save_samples 10000 --samples_only --resume_samples --seed 0
+```
+
+### 3.3（可选）两卡并行分片：0–4999 / 5000–9999（最快）
+
+如果你有两张 GPU（服务器 B），可以用 `--sample_offset` 分片并行生成，再合并/出图：
+
+```bash
+# GPU0: 前 5000
+CUDA_VISIBLE_DEVICES=0 python -m src.training.evaluate \
+  --exp_name phys_cfg2_geo_density_shard0 \
+  --model_type physics --data_path $DATA --nav_file $NAV \
+  --checkpoint $CKPT --prior_checkpoint $PRIOR \
+  --split test --batch_size 256 --num_workers 8 \
+  --num_samples_per_condition 1 --diff_steps 100 --cfg_scale 2 \
+  --save_samples 5000 --samples_only --sample_offset 0 --seed 0 &
+
+# GPU1: 后 5000
+CUDA_VISIBLE_DEVICES=1 python -m src.training.evaluate \
+  --exp_name phys_cfg2_geo_density_shard1 \
+  --model_type physics --data_path $DATA --nav_file $NAV \
+  --checkpoint $CKPT --prior_checkpoint $PRIOR \
+  --split test --batch_size 256 --num_workers 8 \
+  --num_samples_per_condition 1 --diff_steps 100 --cfg_scale 2 \
+  --save_samples 5000 --samples_only --sample_offset 5000 --seed 0 &
+
+wait
+```
+
+分片合并建议（KISS）：先把两份 `samples.npz` 拷到同一机器，再用一个小脚本 `np.concatenate` 拼接成 `N=10000` 的 `samples_merged.npz` 再画密度图。
+
 ---
 
 ## 4) 子刊级地图出图（叠加深圳 geojson 边界）
@@ -123,6 +202,10 @@ python -m src.visualization.plot_geo_phase_b \
 - 加区名标签：`--basemap_labels --basemap_label_size 8`
 - 默认区名标签为英文（避免 CJK 字体缺失告警）；如需保留 GeoJSON 原始中文：`--basemap_label_lang raw`
 - 若发现南北翻转：`--flip_y`
+
+> 重要细节（避免“看起来更密”其实是 K 放大）：  
+> 如果 `samples.npz` 里包含 `preds_k (N,K,F,2)`，密度图会使用 K 条样本来估计分布，但会对直方图按 `1/K` 做归一化，  
+> 使得密度反映的是“每个条件的一条采样轨迹的期望密度”，而不是把 trips 数量乘以 K。
 
 ---
 

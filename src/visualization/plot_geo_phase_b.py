@@ -424,6 +424,11 @@ def plot_geo_density(
             preds_ll[:, 0],
             bins=[lon_edges, lat_edges],
         )
+        # If preds_k exists (N,K,F,2), interpret density as the expected density of a single sampled trajectory:
+        # using K samples improves estimation of the distribution, but should NOT multiply total "trip count".
+        if s.preds_k is not None:
+            K = int(s.preds_k.shape[1])
+            pred_hist = pred_hist / max(K, 1)
         pred_smooth_list.append(_gaussian_smooth_fft(pred_hist, sigma=float(sigma)))
 
     # Shared LogNorm across all panels (GT + preds).

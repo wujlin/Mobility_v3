@@ -55,6 +55,13 @@ python -m src.visualization.plot_geo_phase_b \
 > 若你只想在 density 图里保留部分模型（例如只看 GT/Prior/CFG2），可用：
 > `--density_keep Prior --density_keep CFG2`（repeatable）。
 
+> 统计口径：若某个 `samples.npz` 带有 `preds_k`（K 条样本），密度图会使用 K 条样本估计分布，但会对 histogram 做 `1/K` 归一化，避免“因为 K>1 而显得更密”的假象。
+
+> 大样本密度图建议（省时间）：  
+> 生成密度图样本时，建议用 `evaluate.py --samples_only`（只生成 `samples.npz`，不算 DTW/Frechet 等重指标），并用 `--resume_samples` 断点续算：
+> - 先跑 `--save_samples 1000 --samples_only` 预览；
+> - 再跑 `--save_samples 10000 --samples_only --resume_samples` 补齐到 10k（不会重算前 1k）。
+
 ## 2.3（v1.1 Residual）Prior + Residual 的地图证据
 
 v1.1 的讲故事重点是：“prior 负责尺度与主走廊；residual 负责多模态偏离”。因此建议至少给两张图：

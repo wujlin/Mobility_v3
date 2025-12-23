@@ -263,6 +263,278 @@ def _accumulate_rog(pred_pos: np.ndarray) -> np.ndarray:
     sq = np.sum(diff * diff, axis=-1).mean(axis=1)
     return np.sqrt(sq)
 
+
+def _slice_batch(batch: dict, start: int) -> dict:
+    """
+    Slice a dataloader batch (dict of tensors/arrays) along the batch dimension.
+
+    Notes:
+      - We only slice keys used in evaluation/sample generation.
+      - `meta` (if present) is left untouched because it is not used downstream.
+    """
+    if start <= 0:
+        return batch
+    sliced = dict(batch)
+    for k in ("obs", "cond", "action", "target_vel", "nav_patch"):
+        v = batch.get(k)
+        if v is None:
+            continue
+        try:
+            sliced[k] = v[start:]
+        except Exception:
+            # Some keys (e.g., nested dict meta) are not sliceable; ignore.
+            pass
+    return sliced
+
+
+def _run_samples_only(
+    args: argparse.Namespace,
+    dataloader: DataLoader,
+    norm,
+    model,
+    prior_model: Optional[SeqBaseline],
+    device: torch.device,
+) -> None:
+    """
+    Generate `samples.npz` only (fast path) without computing full metrics.
+
+    This is intended for large-N geo visualizations (e.g., density maps) where
+    we want 1k/10k+ trajectories and must avoid unnecessary DTW/Frechet costs.
+
+    Behavior:
+      - Saves `preds` (k=0), `targets`, `start_pos`.
+      - If `--save_all_k` is enabled, also saves `preds_k` (N,K,F,2).
+      - Stops once `--save_samples` trajectories are saved (no need to run to `--max_batches`).
+      - Optional `--resume_samples`: continue filling an existing `samples.npz` in the same exp dir.
+      - Optional `--sample_offset`: skip the first N conditions before sampling (for sharding).
+    """
+    out_dir = Path(f"data/experiments/{args.exp_name}")
+    out_dir.mkdir(parents=True, exist_ok=True)
+    samples_path = out_dir / "samples.npz"
+
+    if bool(getattr(args, "resume_samples", False)) and int(getattr(args, "sample_offset", 0)) != 0:
+        raise ValueError("--resume_samples 与 --sample_offset 不能同时使用（避免语义歧义）")
+
+    K_full = 1 if args.model_type == "baseline" else int(args.num_samples_per_condition)
+    K_sample = int(K_full) if bool(getattr(args, "save_all_k", False)) else 1
+
+    target_total = int(args.save_samples)
+    if target_total <= 0:
+        raise ValueError("--samples_only 模式下 --save_samples 必须 > 0")
+
+    existing_preds = None
+    existing_targets = None
+    existing_start_pos = None
+    existing_preds_k = None
+    existing_n = 0
+
+    if bool(getattr(args, "resume_samples", False)) and samples_path.exists():
+        data = np.load(samples_path)
+        existing_preds = np.asarray(data["preds"], dtype=np.float32)
+        existing_targets = np.asarray(data["targets"], dtype=np.float32)
+        existing_start_pos = np.asarray(data["start_pos"], dtype=np.float32)
+        existing_n = int(existing_targets.shape[0])
+        if existing_preds.shape[0] != existing_n or existing_start_pos.shape[0] != existing_n:
+            raise RuntimeError(
+                f"Bad existing samples.npz: N mismatch preds={existing_preds.shape[0]} targets={existing_n} start_pos={existing_start_pos.shape[0]}"
+            )
+        if bool(getattr(args, "save_all_k", False)):
+            if "preds_k" not in data.files:
+                raise RuntimeError("--resume_samples 需要已有 samples.npz 含 preds_k（你启用了 --save_all_k）")
+            existing_preds_k = np.asarray(data["preds_k"], dtype=np.float32)
+            if existing_preds_k.shape[0] != existing_n:
+                raise RuntimeError(
+                    f"Bad existing samples.npz: preds_k N={existing_preds_k.shape[0]} != {existing_n}"
+                )
+        print(f"[OK] resume_samples: found existing samples.npz with N={existing_n}")
+
+    if existing_n >= target_total:
+        print(f"[OK] samples_only: existing N={existing_n} >= target N={target_total}; nothing to do.")
+        # Still write a lightweight metrics.json for bookkeeping.
+        results = {
+            "seed": int(args.seed),
+            "split": str(args.split),
+            "num_conditions": int(existing_n),
+            "K": int(K_full),
+            "cfg_scale": float(getattr(args, "cfg_scale", 0.0)) if args.model_type in ("diffusion", "physics") else None,
+            "prior_checkpoint": (str(args.prior_checkpoint) if getattr(args, "prior_checkpoint", None) else None),
+            "samples_only": True,
+            "resume_samples": True,
+        }
+        with open(out_dir / "metrics.json", "w") as f:
+            json.dump(results, f, indent=4)
+        return
+
+    # Determine skip (for sharding / resuming).
+    skip_conditions = existing_n if bool(getattr(args, "resume_samples", False)) else int(getattr(args, "sample_offset", 0))
+    need = int(target_total - existing_n) if bool(getattr(args, "resume_samples", False)) else int(target_total)
+
+    # Prepare buffers (append to existing if any).
+    save_preds: List[np.ndarray] = []
+    save_targets: List[np.ndarray] = []
+    save_start_pos: List[np.ndarray] = []
+    save_preds_k_by_k: Optional[List[List[np.ndarray]]] = None
+
+    if existing_n > 0:
+        save_preds.append(existing_preds)  # type: ignore[arg-type]
+        save_targets.append(existing_targets)  # type: ignore[arg-type]
+        save_start_pos.append(existing_start_pos)  # type: ignore[arg-type]
+        if bool(getattr(args, "save_all_k", False)) and existing_preds_k is not None:
+            # We store preds_k as a single chunk; later concatenate along axis=0.
+            save_preds_k_by_k = [[existing_preds_k[:, k]] for k in range(int(K_full))]
+    if bool(getattr(args, "save_all_k", False)) and save_preds_k_by_k is None:
+        save_preds_k_by_k = [[] for _ in range(int(K_full))]
+
+    # Sample loop
+    print(f"[SAMPLES_ONLY] target={target_total} (need={need}), K_sample={K_sample}, skip={skip_conditions}")
+    with torch.no_grad():
+        for batch_idx, batch in enumerate(dataloader):
+            if args.max_batches is not None and batch_idx >= int(args.max_batches):
+                break
+            if need <= 0:
+                break
+
+            obs = batch["obs"]
+            B = int(obs.shape[0])
+            if B <= 0:
+                continue
+
+            # Skip whole batches first (no inference).
+            if skip_conditions >= B:
+                skip_conditions -= B
+                continue
+
+            # Partial skip within this batch.
+            if skip_conditions > 0:
+                batch = _slice_batch(batch, int(skip_conditions))
+                skip_conditions = 0
+                obs = batch["obs"]
+                B = int(obs.shape[0])
+                if B <= 0:
+                    continue
+
+            obs = obs.to(device)
+            cond = batch["cond"].to(device)
+            nav_patch = batch["nav_patch"].to(device) if args.model_type in ("physics", "physics_flow") else None
+
+            # CFG inference: build unconditional condition by dropping destination (d_y, d_x)
+            cond_uncond = None
+            cfg_scale = float(getattr(args, "cfg_scale", 0.0))
+            if cfg_scale != 0.0 and args.model_type in ("diffusion", "physics", "flow", "physics_flow"):
+                cond_uncond = cond.clone()
+                mode = str(getattr(args, "cfg_uncond_dest_mode", "origin"))
+                if mode == "origin":
+                    cond_uncond[:, 4:6] = cond_uncond[:, 2:4]
+                elif mode == "zeros":
+                    cond_uncond[:, 4:6].zero_()
+                else:  # pragma: no cover
+                    raise ValueError(f"Unknown --cfg_uncond_dest_mode: {mode}")
+
+            start_pos_norm = obs[:, -1, :2]
+            start_pos = norm.denormalize_pos(start_pos_norm.cpu().numpy())
+
+            # Deterministic prior (normalized vel)
+            prior_vel_norm = None
+            if prior_model is not None:
+                prior_vel_norm = prior_model.sample_trajectory(obs, cond, int(args.pred_len))
+
+            # GT future velocities
+            if args.model_type in ("baseline", "cvae"):
+                gt_vel_norm = batch["target_vel"].cpu().numpy()
+            else:
+                gt_vel_norm = batch["action"].cpu().numpy()
+            gt_vel = norm.denormalize_vel(gt_vel_norm)
+            gt_pos = _integrate_positions(start_pos, gt_vel)  # (B, F, 2)
+
+            take = min(int(need), int(gt_pos.shape[0]))
+            if take <= 0:
+                break
+
+            for k in range(int(K_sample)):
+                if args.model_type in ("physics", "physics_flow"):
+                    pred_vel_norm = model.sample_trajectory(
+                        obs,
+                        cond,
+                        args.pred_len,
+                        nav_patch=nav_patch,
+                        cond_uncond=cond_uncond,
+                        cfg_scale=cfg_scale,
+                    )
+                elif args.model_type == "cvae":
+                    pred_vel_norm = model.sample_trajectory(
+                        obs, cond, args.pred_len, z_temperature=float(args.z_temperature)
+                    )
+                else:
+                    pred_vel_norm = model.sample_trajectory(
+                        obs,
+                        cond,
+                        args.pred_len,
+                        cond_uncond=cond_uncond,
+                        cfg_scale=cfg_scale,
+                    )
+
+                # Residual mode: model predicts residual vel; add deterministic prior.
+                if prior_vel_norm is not None and args.model_type in ("diffusion", "physics", "flow", "physics_flow"):
+                    pred_vel_norm = pred_vel_norm + prior_vel_norm
+
+                pred_vel = norm.denormalize_vel(pred_vel_norm.cpu().numpy())
+                pred_vel = pred_vel * float(args.vel_scale)
+                pred_pos = _integrate_positions(start_pos, pred_vel)
+
+                if k == 0:
+                    save_preds.append(pred_pos[:take].astype(np.float32, copy=False))
+                    save_targets.append(gt_pos[:take].astype(np.float32, copy=False))
+                    save_start_pos.append(start_pos[:take].astype(np.float32, copy=False))
+                if bool(getattr(args, "save_all_k", False)) and save_preds_k_by_k is not None:
+                    save_preds_k_by_k[int(k)].append(pred_pos[:take].astype(np.float32, copy=False))
+
+            need -= take
+            if need <= 0:
+                break
+
+    # Materialize outputs.
+    preds = np.concatenate(save_preds, axis=0) if save_preds else np.zeros((0, int(args.pred_len), 2), dtype=np.float32)
+    targets = np.concatenate(save_targets, axis=0) if save_targets else np.zeros((0, int(args.pred_len), 2), dtype=np.float32)
+    start_pos_arr = np.concatenate(save_start_pos, axis=0) if save_start_pos else np.zeros((0, 2), dtype=np.float32)
+
+    if preds.shape[0] != targets.shape[0] or preds.shape[0] != start_pos_arr.shape[0]:
+        raise RuntimeError(
+            f"Internal error: N mismatch preds={preds.shape[0]} targets={targets.shape[0]} start_pos={start_pos_arr.shape[0]}"
+        )
+
+    npz_kwargs = {"preds": preds, "targets": targets, "start_pos": start_pos_arr}
+    if bool(getattr(args, "save_all_k", False)) and save_preds_k_by_k is not None:
+        per_k = []
+        for k_list in save_preds_k_by_k:
+            if not k_list:
+                raise RuntimeError("save_all_k enabled but some k lists are empty; this indicates a bug in saving logic.")
+            per_k.append(np.concatenate(k_list, axis=0))
+        preds_k = np.stack(per_k, axis=1)  # (N, K, F, 2)
+        if preds_k.shape[0] != preds.shape[0]:
+            raise RuntimeError(f"save_all_k enabled but N mismatch: preds_k N={preds_k.shape[0]} vs preds N={preds.shape[0]}")
+        npz_kwargs["preds_k"] = preds_k.astype(np.float32, copy=False)
+
+    np.savez(samples_path, **npz_kwargs)
+
+    results = {
+        "seed": int(args.seed),
+        "split": str(args.split),
+        "num_conditions": int(preds.shape[0]),
+        "K": int(K_full),
+        "cfg_scale": float(getattr(args, "cfg_scale", 0.0)) if args.model_type in ("diffusion", "physics") else None,
+        "cfg_uncond_dest_mode": str(getattr(args, "cfg_uncond_dest_mode", "origin")) if args.model_type in ("diffusion", "physics") else None,
+        "vel_scale": float(args.vel_scale),
+        "prior_checkpoint": (str(args.prior_checkpoint) if getattr(args, "prior_checkpoint", None) else None),
+        "samples_only": True,
+        "resume_samples": bool(getattr(args, "resume_samples", False)),
+        "sample_offset": int(getattr(args, "sample_offset", 0)),
+    }
+    with open(out_dir / "metrics.json", "w") as f:
+        json.dump(results, f, indent=4)
+
+    print(f"[OK] samples_only saved: {samples_path} (N={preds.shape[0]})")
+    print(f"Results saved to {out_dir}")
+
 def evaluate(args):
     _set_seed(int(args.seed))
     print(f"Using seed: {int(args.seed)}")
@@ -440,6 +712,11 @@ def evaluate(args):
     if args.prior_checkpoint:
         prior_model = _load_baseline_prior(str(args.prior_checkpoint), device=device)
         print(f"[OK] Residual eval enabled: prior={args.prior_checkpoint}")
+
+    # Fast path: generate samples only (for geo visualizations / large-N density maps)
+    if bool(getattr(args, "samples_only", False)):
+        _run_samples_only(args=args, dataloader=dataloader, norm=norm, model=model, prior_model=prior_model, device=device)
+        return
     
     # 3. Inference Loop (streaming aggregation to avoid OOM)
     K = 1 if args.model_type == "baseline" else int(args.num_samples_per_condition)
@@ -599,10 +876,11 @@ def evaluate(args):
                 ade_list.append(ade.astype(np.float32))
                 fde_list.append(fde.astype(np.float32))
 
-                frechet = compute_frechet_per_sample(pred_pos, gt_pos)  # (B,)
-                dtw = compute_dtw_per_sample(pred_pos, gt_pos)  # (B,)
-                frechet_list.append(frechet.astype(np.float32))
-                dtw_list.append(dtw.astype(np.float32))
+                if not bool(getattr(args, "skip_dtw_frechet", False)):
+                    frechet = compute_frechet_per_sample(pred_pos, gt_pos)  # (B,)
+                    dtw = compute_dtw_per_sample(pred_pos, gt_pos)  # (B,)
+                    frechet_list.append(frechet.astype(np.float32))
+                    dtw_list.append(dtw.astype(np.float32))
 
                 # macro accumulation over generated samples
                 _accumulate_msd(pred_pos, msd_sum, msd_count)
@@ -621,8 +899,12 @@ def evaluate(args):
 
             ade_k = np.stack(ade_list, axis=0)  # (K, B)
             fde_k = np.stack(fde_list, axis=0)  # (K, B)
-            frechet_k = np.stack(frechet_list, axis=0)  # (K, B)
-            dtw_k = np.stack(dtw_list, axis=0)  # (K, B)
+            if bool(getattr(args, "skip_dtw_frechet", False)):
+                frechet_k = None
+                dtw_k = None
+            else:
+                frechet_k = np.stack(frechet_list, axis=0)  # (K, B)
+                dtw_k = np.stack(dtw_list, axis=0)  # (K, B)
 
             ade_mean = ade_k.mean(axis=0)
             ade_std = ade_k.std(axis=0)
@@ -630,12 +912,20 @@ def evaluate(args):
             fde_mean = fde_k.mean(axis=0)
             fde_std = fde_k.std(axis=0)
             fde_best = fde_k.min(axis=0)
-            frechet_mean = frechet_k.mean(axis=0)
-            frechet_std = frechet_k.std(axis=0)
-            frechet_best = frechet_k.min(axis=0)
-            dtw_mean = dtw_k.mean(axis=0)
-            dtw_std = dtw_k.std(axis=0)
-            dtw_best = dtw_k.min(axis=0)
+            if frechet_k is None or dtw_k is None:
+                frechet_mean = np.zeros((B,), dtype=np.float32)
+                frechet_std = np.zeros((B,), dtype=np.float32)
+                frechet_best = np.zeros((B,), dtype=np.float32)
+                dtw_mean = np.zeros((B,), dtype=np.float32)
+                dtw_std = np.zeros((B,), dtype=np.float32)
+                dtw_best = np.zeros((B,), dtype=np.float32)
+            else:
+                frechet_mean = frechet_k.mean(axis=0)
+                frechet_std = frechet_k.std(axis=0)
+                frechet_best = frechet_k.min(axis=0)
+                dtw_mean = dtw_k.mean(axis=0)
+                dtw_std = dtw_k.std(axis=0)
+                dtw_best = dtw_k.min(axis=0)
 
             B = int(ade_mean.shape[0])
             total_n += B
@@ -773,10 +1063,14 @@ if __name__ == "__main__":
     parser.add_argument('--num_samples_per_condition', type=int, default=20, help="K for diffusion/physics (baseline uses 1)")
     parser.add_argument('--save_samples', type=int, default=100, help="number of (pred,target) pairs to save")
     parser.add_argument('--save_all_k', action='store_true', help="when saving samples, also save all K predictions as preds_k (N,K,F,2)")
+    parser.add_argument('--samples_only', action='store_true', help="只生成 samples.npz（用于可视化/大样本密度图），不计算完整指标；会在达到 --save_samples 后提前停止")
+    parser.add_argument('--resume_samples', action='store_true', help="samples_only 模式：若 exp_dir/samples.npz 已存在，则从已有 N 继续补齐到 --save_samples（断点续算）")
+    parser.add_argument('--sample_offset', type=int, default=0, help="samples_only 模式：跳过前 N 个 conditions 后再开始采样（用于分片并行）")
     parser.add_argument('--max_batches', type=int, default=None, help="limit evaluation batches for quick runs")
     parser.add_argument('--vel_scale', type=float, default=1.0, help="对预测 future vel 做整体缩放（用于修正运动幅度偏小；与温度/噪声解耦）")
     parser.add_argument('--cfg_scale', type=float, default=0.0, help="CFG guidance scale（0 关闭；>0 放大 destination 条件影响）")
     parser.add_argument('--cfg_uncond_dest_mode', type=str, choices=['origin', 'zeros'], default='origin', help="CFG uncond 分支 destination 替换方式")
+    parser.add_argument('--skip_dtw_frechet', action='store_true', help="跳过 Frechet/DTW 计算以加速评估（输出将置为 0；适合快速 smoke）")
     
     args = parser.parse_args()
     evaluate(args)

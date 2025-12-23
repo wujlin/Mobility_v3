@@ -47,3 +47,5 @@ build/
 
 # Local artifacts
 backups/
+data/experiments/
+data/processed_dt30/

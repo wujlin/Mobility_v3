@@ -168,6 +168,21 @@ def _gaussian_smooth_fft(img: np.ndarray, sigma: float) -> np.ndarray:
     # Numerical noise may create tiny negatives.
     return np.clip(out, 0.0, None)
 
+
+def _quantile_contour_levels(img: np.ndarray, quantiles: List[float]) -> Optional[List[float]]:
+    pos = img[img > 0]
+    if pos.size < 16:
+        return None
+    qs = [float(q) for q in quantiles if 0.0 < float(q) < 1.0]
+    if not qs:
+        return None
+    levels = np.quantile(pos, qs).astype(np.float64, copy=False)
+    levels = np.unique(levels)
+    levels = levels[levels > 0]
+    if levels.size == 0:
+        return None
+    return levels.tolist()
+
 @dataclass(frozen=True)
 class Samples:
     name: str
@@ -338,15 +353,28 @@ def plot_geo_overlays(
                 ordered_labels.append(ll)
 
         handles = [legend_map[ll] for ll in ordered_labels]
-        fig.legend(
-            handles,
-            ordered_labels,
-            loc="upper center",
-            ncol=min(3, len(handles)),
-            frameon=False,
-            bbox_to_anchor=(0.5, 0.995),
-        )
-        fig.tight_layout(rect=(0, 0, 1, 0.92))
+        # For a single-panel figure, avoid reserving a huge top margin for a global legend.
+        if len(axes) == 1:
+            axes[0].legend(
+                handles,
+                ordered_labels,
+                loc="upper left",
+                ncol=1,
+                frameon=False,
+                bbox_to_anchor=(0.01, 0.99),
+                borderaxespad=0.0,
+            )
+            fig.tight_layout()
+        else:
+            fig.legend(
+                handles,
+                ordered_labels,
+                loc="upper center",
+                ncol=min(3, len(handles)),
+                frameon=False,
+                bbox_to_anchor=(0.5, 0.995),
+            )
+            fig.tight_layout(rect=(0, 0, 1, 0.92))
     else:
         fig.tight_layout()
 
@@ -359,6 +387,9 @@ def plot_geo_density(
     out_dir: Path,
     bins: int,
     sigma: float,
+    gt_contour_quantiles: List[float],
+    gt_contour_alpha: float,
+    gt_contour_lw: float,
     flip_y: bool,
     extent_mode: str,
     pad_frac: float,
@@ -492,7 +523,7 @@ def plot_geo_density(
     axes[0].set_title("GT: Density", pad=4)
 
     # Pred panels: Pred density + GT contour
-    levels = 7
+    contour_levels = _quantile_contour_levels(gt_smooth, quantiles=list(gt_contour_quantiles))
     for j, (ax, s, pred_smooth) in enumerate(zip(axes[1:], samples_list, pred_smooth_list), start=1):
         im = ax.imshow(
             pred_smooth.T,
@@ -505,15 +536,15 @@ def plot_geo_density(
             zorder=2,
         )
         ims.append(im)
-        if np.max(gt_smooth) > 0:
+        if contour_levels is not None and np.max(gt_smooth) > 0:
             ax.contour(
                 gt_smooth.T,
-                levels=levels,
+                levels=contour_levels,
                 origin="lower",
                 extent=extent,
                 colors="black",
-                linewidths=0.8,
-                alpha=0.45,
+                linewidths=float(gt_contour_lw),
+                alpha=float(gt_contour_alpha),
                 zorder=3,
             )
         ax.set_title(f"{s.name}: Density\n(GT contour)", pad=4)
@@ -546,9 +577,18 @@ def main() -> None:
     parser.add_argument("--diff_samples", type=str, default=None, help="[deprecated] .../samples.npz")
     parser.add_argument("--physics_samples", type=str, default=None, help="[deprecated] .../samples.npz")
     parser.add_argument("--out_dir", type=str, default="data/experiments/phase_b_report/figures_geo")
-    parser.add_argument("--num_trajs", type=int, default=60, help="number of trajectories to overlay per model")
+    parser.add_argument("--num_trajs", type=int, default=80, help="number of trajectories to overlay per model")
     parser.add_argument("--bins", type=int, default=220, help="2D histogram bins for density plot")
     parser.add_argument("--density_sigma", type=float, default=1.4, help="Gaussian smoothing sigma in bin pixels (KDE-like).")
+    parser.add_argument(
+        "--gt_contour_quantiles",
+        type=float,
+        nargs="+",
+        default=[0.85, 0.93, 0.98],
+        help="GT contour quantiles on smoothed GT density (e.g., 0.85 0.93 0.98). Use fewer high-quantile contours to avoid clutter.",
+    )
+    parser.add_argument("--gt_contour_alpha", type=float, default=0.35, help="Alpha for GT contour overlay.")
+    parser.add_argument("--gt_contour_lw", type=float, default=0.8, help="Line width for GT contour overlay.")
     parser.add_argument(
         "--overlay_keep",
         action="append",
@@ -669,6 +709,9 @@ def main() -> None:
         out_dir=out_dir,
         bins=int(args.bins),
         sigma=float(args.density_sigma),
+        gt_contour_quantiles=[float(x) for x in args.gt_contour_quantiles],
+        gt_contour_alpha=float(args.gt_contour_alpha),
+        gt_contour_lw=float(args.gt_contour_lw),
         flip_y=bool(args.flip_y),
         extent_mode=str(args.extent),
         pad_frac=float(args.pad_frac),

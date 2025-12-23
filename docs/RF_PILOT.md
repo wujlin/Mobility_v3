@@ -155,10 +155,29 @@ python -u -m src.training.evaluate \
 
 ---
 
-## 7) 备注：为什么 RF pilot 不做 CFG
+## 7) Pilot 结果与结论（2025-12）
+
+本次 pilot 已完成 **可比口径**的 A/B（Val, K=10, max\_batches=200, same prior）：
+
+| Model | ADE\_best | FDE\_best | Spd\_R | RoG\_R | MSD10\_R |
+|---|---:|---:|---:|---:|---:|
+| Diffusion + CFG2 | 4.07 | 5.38 | 0.9716 | 0.9290 | 0.8330 |
+| Diffusion + CFG3 | 4.17 | 5.49 | 1.0132 | 0.9620 | 0.8858 |
+| RF (Euler 20 steps, no-CFG) | 5.25 | 7.62 | 0.9462 | 0.8399 | 0.6852 |
+
+**事实链结论**（不掺主观）：
+- RF@20 steps 在 **micro（ADE/FDE best）** 与 **macro（RoG/MSD10 ratio）** 两侧均显著落后于 diffusion+CFG；
+- 这说明在当前实现与训练预算（E20 + max\_batches=200）下，RF 并未体现出“更直路径→更强低频结构”的优势。
+
+**决策（触发 time-box 止损）**：
+- 按 24h time-box 与 KISS 原则：RF 本轮 **止损/暂停**，不再投入大规模调参与扫参；
+- 后续若要重启 RF，必须先提出新的、可归因的改动点（例如 solver/目标/条件交互的明确改变），并重新定义最小验证。
+
+---
+
+## 8) 备注：为什么 RF pilot 不做 CFG
 
 CFG 会引入新的变量（训练 dropout + 推理双前向），且与 RF 的 ODE path/step size 强耦合；
 在我们当前目标（判定 RF 是否值得投入）下，CFG 只会降低归因清晰度，违反 KISS。
 
 RF 如果在 pilot 阶段证明“本体有效”，再讨论 CFG-on-RF 才有意义。
-

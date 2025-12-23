@@ -42,13 +42,22 @@ NAV=data/processed_dt30/nav_field.npz
 PRIOR=data/experiments/baseline_b_dt30/last.pt
 CKPT=data/experiments/phys_residual_cfgp0.1_predeps_e20_mb200_s0/last.pt
 
-# Prior（deterministic, K=1）
+# ===== 推荐：仅用于出图的“样本生成口径”（避免跑满 max_batches=200）=====
+# 关键点：
+# - 我们只需要 N=400 的对齐子集写入 samples.npz；
+# - evaluate.py 仍会对“跑过的 batch”计算指标，所以 max_batches 应该尽量小：
+#   max_batches ~= ceil(save_samples / batch_size)
+
+BS=32
+MB=13   # 32*13=416 >= 400
+
+# Prior（deterministic, K=1）——为对齐子集，也用相同的 BS/MB
 python -m src.training.evaluate \
   --exp_name prior_geo_viz_test \
   --model_type baseline \
   --data_path $DATA --checkpoint $PRIOR \
-  --split test --batch_size 256 --num_workers 8 \
-  --max_batches 200 --save_samples 400 --seed 0
+  --split test --batch_size $BS --num_workers 8 \
+  --max_batches $MB --save_samples 400 --seed 0
 
 # Physics residual + CFG2（主表）
 python -m src.training.evaluate \
@@ -56,9 +65,9 @@ python -m src.training.evaluate \
   --model_type physics \
   --data_path $DATA --nav_file $NAV \
   --checkpoint $CKPT --prior_checkpoint $PRIOR \
-  --split test --batch_size 256 --num_workers 8 \
+  --split test --batch_size $BS --num_workers 8 \
   --num_samples_per_condition 20 --diff_steps 100 \
-  --cfg_scale 2 --save_samples 400 --save_all_k --max_batches 200 --seed 0
+  --cfg_scale 2 --save_samples 400 --save_all_k --max_batches $MB --seed 0
 
 # Physics residual + CFG3（附图/讨论）
 python -m src.training.evaluate \
@@ -66,9 +75,9 @@ python -m src.training.evaluate \
   --model_type physics \
   --data_path $DATA --nav_file $NAV \
   --checkpoint $CKPT --prior_checkpoint $PRIOR \
-  --split test --batch_size 256 --num_workers 8 \
+  --split test --batch_size $BS --num_workers 8 \
   --num_samples_per_condition 20 --diff_steps 100 \
-  --cfg_scale 3 --save_samples 400 --save_all_k --max_batches 200 --seed 0
+  --cfg_scale 3 --save_samples 400 --save_all_k --max_batches $MB --seed 0
 ```
 
 ---
@@ -143,3 +152,52 @@ python -m src.visualization.plot_geo_case_study \
 
 输出：
 - `essay/figures/stage_cfg/fig_geo_case_study_cfg.(png|pdf)`
+
+---
+
+## 7) 动画（强烈建议：用“轨迹束随时间展开”展示多模态）
+
+> 动画是最直观的“杀手级证据”：同一 OD 条件下，Prior 是单条均值轨迹；CFG2/CFG3 会生成轨迹束并在关键路口分叉。
+> 建议先用 `--frames_only` 导出 PNG 帧（最稳，零依赖），再用 ffmpeg 合成 mp4/gif。
+
+先确保 `samples.npz` 里包含 `preds_k`（也就是 eval 时用了 `--save_all_k`）。
+
+### 7.1 先自动挑选“最有分叉”的案例（避免随机抽到无聊样本）
+
+```bash
+python -m src.visualization.select_interesting_cases \
+  --samples data/experiments/phys_cfg_geo_viz_test_cfg3/samples.npz \
+  --top_k 10
+```
+
+输出 `case_idx` 后，把它喂给动画脚本的 `--case_idx`（下一段）。
+
+### 7.2 生成动画帧（最稳）
+
+```bash
+python -m src.visualization.animate_geo_case \
+  --stats_path data/processed_dt30/data_stats.json \
+  --basemap_geojson geo_map/Shenzhen_county.geojson \
+  --sample "Prior:data/experiments/prior_geo_viz_test/samples.npz" \
+  --sample "CFG2:data/experiments/phys_cfg_geo_viz_test_cfg2/samples.npz" \
+  --sample "CFG3:data/experiments/phys_cfg_geo_viz_test_cfg3/samples.npz" \
+  --out_dir essay/figures/stage_cfg/anim \
+  --stem anim_cfg_bundle \
+  --case_idx 0 \
+  --k_plot 12 --fps 6 --dpi 150 \
+  --frames_only \
+  --style talk \
+  --seed 0
+```
+
+合成视频（在输出帧目录内执行；示例）：
+
+```bash
+# mp4
+ffmpeg -r 6 -i frame_%03d.png -vf "pad=ceil(iw/2)*2:ceil(ih/2)*2" anim.mp4
+
+# gif（可选，较大）
+ffmpeg -r 6 -i frame_%03d.png -vf "scale=960:-1:flags=lanczos" -loop 0 anim.gif
+```
+
+如果你环境里有 Pillow，也可以不加 `--frames_only` 直接输出 `.gif`（脚本会调用 PillowWriter）。

@@ -145,6 +145,9 @@ OGD/加速主要解决 **采样效率**。我们的当前瓶颈是 validity vs m
 用 **Physics Residual RF** 做 A/B（20-step ODE vs 100-step diffusion），验证是否能更好地保留低频位移结构并显著加速推理。  
 细节与止损标准见：`docs/RF_PILOT.md`。
 
+**阶段性结论（2025-12 pilot）**  
+在 `Val, K=10, max_batches=200` 的可比口径下，RF@20 steps（Euler, no-CFG）在 micro 与 macro 两侧均落后于 diffusion+CFG（详见 `docs/RF_PILOT.md`），因此本轮按 time-box 原则止损暂停，避免无归因扫参。
+
 ---
 
 ## 3) 是否需要引入多模态数据（遥感/POI/路网）

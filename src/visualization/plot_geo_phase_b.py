@@ -22,6 +22,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib.colors import LogNorm
 
 from src.visualization.style_config import get_color, set_style
 from src.visualization.basemap import BasemapStyle, draw_geojson_basemap
@@ -98,6 +99,75 @@ def _aspect_for_latlon(grid: GridConfig) -> float:
     return 1.0 / max(np.cos(np.deg2rad(mean_lat)), 1e-6)
 
 
+def _km_per_deg_lat() -> float:
+    return 111.32
+
+
+def _km_per_deg_lon(mean_lat: float) -> float:
+    return 111.32 * max(np.cos(np.deg2rad(mean_lat)), 1e-6)
+
+
+def _ensure_min_span(extent: Tuple[float, float, float, float], min_span_km: float) -> Tuple[float, float, float, float]:
+    if float(min_span_km) <= 0:
+        return extent
+    x0, x1, y0, y1 = extent  # lon_min, lon_max, lat_min, lat_max
+    cx = 0.5 * (x0 + x1)
+    cy = 0.5 * (y0 + y1)
+    mean_lat = float(cy)
+
+    dlon_req = float(min_span_km) / _km_per_deg_lon(mean_lat)
+    dlat_req = float(min_span_km) / _km_per_deg_lat()
+
+    w = float(x1 - x0)
+    h = float(y1 - y0)
+    w_new = max(w, dlon_req)
+    h_new = max(h, dlat_req)
+    return (cx - 0.5 * w_new, cx + 0.5 * w_new, cy - 0.5 * h_new, cy + 0.5 * h_new)
+
+
+def _add_scalebar(ax: plt.Axes, extent: Tuple[float, float, float, float], scalebar_km: float) -> None:
+    if float(scalebar_km) <= 0:
+        return
+    x0, x1, y0, y1 = extent
+    mean_lat = 0.5 * (y0 + y1)
+    dlon = float(scalebar_km) / _km_per_deg_lon(mean_lat)
+    mx = 0.06 * (x1 - x0)
+    my = 0.06 * (y1 - y0)
+    xs = x1 - mx - dlon
+    xe = x1 - mx
+    y = y0 + my
+    ax.plot([xs, xe], [y, y], color="black", lw=2.2, solid_capstyle="butt", zorder=10)
+    ax.text(
+        0.5 * (xs + xe),
+        y - 0.02 * (y1 - y0),
+        f"{float(scalebar_km):g} km",
+        ha="center",
+        va="top",
+        fontsize=10,
+        color="black",
+        zorder=10,
+    )
+
+
+def _gaussian_smooth_fft(img: np.ndarray, sigma: float) -> np.ndarray:
+    """
+    Dependency-free Gaussian smoothing via frequency-domain multiplication.
+    sigma is in pixel units of the histogram grid.
+    """
+    sigma = float(sigma)
+    if sigma <= 0:
+        return img
+    if img.ndim != 2:
+        raise ValueError(f"Expected 2D array, got {img.shape}")
+    ny, nx = img.shape
+    fy = np.fft.fftfreq(ny)
+    fx = np.fft.fftfreq(nx)
+    Fy, Fx = np.meshgrid(fy, fx, indexing="ij")
+    kernel_ft = np.exp(-2.0 * (np.pi**2) * (sigma**2) * (Fx**2 + Fy**2))
+    out = np.fft.ifftn(np.fft.fftn(img) * kernel_ft).real
+    # Numerical noise may create tiny negatives.
+    return np.clip(out, 0.0, None)
+
 @dataclass(frozen=True)
 class Samples:
     name: str
@@ -143,13 +213,16 @@ def plot_geo_overlays(
     flip_y: bool,
     extent_mode: str,
     pad_frac: float,
+    min_span_km: float,
+    axis_off: bool,
+    scalebar_km: float,
     style_context: str,
     basemap_geojson: Optional[Path],
     basemap_style: BasemapStyle,
     png_only: bool,
 ) -> None:
-    # Geo figures are multi-panel; use a slightly smaller scale to keep labels/legends proportionate.
-    set_style(context=str(style_context), font_scale=1.0)
+    # Geo figures are multi-panel; keep fonts readable for paper.
+    set_style(context=str(style_context), font_scale=1.15)
 
     rng = np.random.default_rng(int(seed))
     ncols = len(samples_list)
@@ -166,7 +239,7 @@ def plot_geo_overlays(
     idx = rng.choice(N, size=take, replace=False) if take > 0 else np.array([], dtype=np.int64)
 
     # Optional zoom: compute extent from the selected samples (union of GT + all preds).
-    extent = None
+    extent: Optional[Tuple[float, float, float, float]] = None
     if extent_mode == "data" and take > 0:
         lons = []
         lats = []
@@ -184,6 +257,7 @@ def plot_geo_overlays(
         lat_pad = float(pad_frac) * dlat
         lon_pad = float(pad_frac) * dlon
         extent = (lon_min - lon_pad, lon_max + lon_pad, lat_min - lat_pad, lat_max + lat_pad)
+        extent = _ensure_min_span(extent, min_span_km=float(min_span_km))
 
     handles = None
     labels = None
@@ -219,8 +293,17 @@ def plot_geo_overlays(
             )
 
         ax.set_title(f"{s.name} (N={take})")
-        ax.set_xlabel("Longitude")
-        ax.set_ylabel("Latitude")
+        if bool(axis_off):
+            ax.set_xticks([])
+            ax.set_yticks([])
+            ax.set_xlabel("")
+            ax.set_ylabel("")
+            ax.grid(False)
+            for spine in ax.spines.values():
+                spine.set_visible(False)
+        else:
+            ax.set_xlabel("Longitude")
+            ax.set_ylabel("Latitude")
         if extent is None:
             ax.set_xlim(grid.min_lon, grid.max_lon)
             ax.set_ylim(grid.min_lat, grid.max_lat)
@@ -228,8 +311,10 @@ def plot_geo_overlays(
             ax.set_xlim(extent[0], extent[1])
             ax.set_ylim(extent[2], extent[3])
         ax.set_aspect(aspect)
-        ax.grid(True, ls="--", alpha=0.25)
-        ax.tick_params(axis="both", which="major", labelsize=9)
+        if not bool(axis_off):
+            ax.grid(True, ls="--", alpha=0.25)
+            ax.tick_params(axis="both", which="major", labelsize=9)
+        _add_scalebar(ax, extent or (grid.min_lon, grid.max_lon, grid.min_lat, grid.max_lat), scalebar_km=float(scalebar_km))
 
         if handles is None:
             handles, labels = ax.get_legend_handles_labels()
@@ -255,22 +340,41 @@ def plot_geo_density(
     grid: GridConfig,
     out_dir: Path,
     bins: int,
+    sigma: float,
     flip_y: bool,
     extent_mode: str,
     pad_frac: float,
+    min_span_km: float,
+    axis_off: bool,
+    scalebar_km: float,
     style_context: str,
     basemap_geojson: Optional[Path],
     basemap_style: BasemapStyle,
     png_only: bool,
 ) -> None:
     """
-    Density plot: per model, draw Pred heatmap (log1p counts) + GT contour.
-    GT uses the same samples.npz targets (subset), so caption should state it's a subset.
-    """
-    # Geo figures are multi-panel; use a slightly smaller scale to keep labels/legends proportionate.
-    set_style(context=str(style_context), font_scale=1.0)
+    Density plot (macro, journal style):
+    - First panel: GT density (targets).
+    - Remaining panels: Pred density for each model, with GT contour as reference.
 
-    ncols = len(samples_list)
+    Rendering:
+    - High-res 2D histogram -> Gaussian smoothing (KDE-like) -> LogNorm color scaling.
+    - One shared colorbar across panels (consistent physical meaning).
+    """
+    # Density maps need larger fonts (journal readability).
+    set_style(context=str(style_context), font_scale=1.20)
+
+    if not samples_list:
+        return
+
+    # Use targets from the first sample as GT reference (require aligned subsets).
+    gt_ref = samples_list[0].targets
+    for s in samples_list[1:]:
+        if s.targets.shape != gt_ref.shape or np.max(np.abs(s.targets - gt_ref)) > 1e-6:
+            raise ValueError("targets mismatch across sample files; ensure evaluations saved aligned subsets.")
+
+    density_panels = ["GT"] + [s.name for s in samples_list]
+    ncols = len(density_panels)
     # Use manual layout + a single shared colorbar (per-panel colorbars cause overlaps and wasted space).
     fig, axes = plt.subplots(1, ncols, figsize=(5.2 * ncols, 4.8), constrained_layout=False)
     if ncols == 1:
@@ -280,12 +384,13 @@ def plot_geo_density(
     if extent_mode == "data":
         lons = []
         lats = []
+        # include GT + all preds for a tight extent, then enforce minimum span to keep visual scale stable.
+        gt = _grid_yx_to_latlon(gt_ref.reshape(-1, 2), grid, flip_y=flip_y)
+        lats.append(gt[:, 0]); lons.append(gt[:, 1])
         for s in samples_list:
             preds_for_extent = s.preds_k.reshape(-1, 2) if s.preds_k is not None else s.preds.reshape(-1, 2)
             pr = _grid_yx_to_latlon(preds_for_extent, grid, flip_y=flip_y)
-            gt = _grid_yx_to_latlon(s.targets.reshape(-1, 2), grid, flip_y=flip_y)
             lats.append(pr[:, 0]); lons.append(pr[:, 1])
-            lats.append(gt[:, 0]); lons.append(gt[:, 1])
         lat = np.concatenate(lats, axis=0)
         lon = np.concatenate(lons, axis=0)
         lat_min, lat_max = float(np.min(lat)), float(np.max(lat))
@@ -294,85 +399,105 @@ def plot_geo_density(
         dlon = max(lon_max - lon_min, 1e-6)
         lat_pad = float(pad_frac) * dlat
         lon_pad = float(pad_frac) * dlon
-        extent = [lon_min - lon_pad, lon_max + lon_pad, lat_min - lat_pad, lat_max + lat_pad]
+        extent = (lon_min - lon_pad, lon_max + lon_pad, lat_min - lat_pad, lat_max + lat_pad)
+        extent = _ensure_min_span(extent, min_span_km=float(min_span_km))
     else:
-        extent = [grid.min_lon, grid.max_lon, grid.min_lat, grid.max_lat]
+        extent = (grid.min_lon, grid.max_lon, grid.min_lat, grid.max_lat)
 
     # Precompute histograms so all panels share the same color scale.
-    pred_hists = []
-    gt_hists = []
+    # GT hist first
+    gt_ll = _grid_yx_to_latlon(gt_ref.reshape(-1, 2), grid, flip_y=flip_y)
+    gt_hist, lon_edges, lat_edges = np.histogram2d(
+        gt_ll[:, 1],
+        gt_ll[:, 0],
+        bins=int(bins),
+        range=[[extent[0], extent[1]], [extent[2], extent[3]]],
+    )
+    gt_smooth = _gaussian_smooth_fft(gt_hist, sigma=float(sigma))
+
+    pred_smooth_list: List[np.ndarray] = []
     for s in samples_list:
         preds_for_density = s.preds_k.reshape(-1, 2) if s.preds_k is not None else s.preds.reshape(-1, 2)
         preds_ll = _grid_yx_to_latlon(preds_for_density, grid, flip_y=flip_y)
-        targets_ll = _grid_yx_to_latlon(s.targets.reshape(-1, 2), grid, flip_y=flip_y)
-        pred_lon = preds_ll[:, 1]
-        pred_lat = preds_ll[:, 0]
-        gt_lon = targets_ll[:, 1]
-        gt_lat = targets_ll[:, 0]
-
-        pred_hist, lon_edges, lat_edges = np.histogram2d(
-            pred_lon,
-            pred_lat,
-            bins=int(bins),
-            range=[[extent[0], extent[1]], [extent[2], extent[3]]],
-        )
-        gt_hist, _, _ = np.histogram2d(
-            gt_lon,
-            gt_lat,
+        pred_hist, _, _ = np.histogram2d(
+            preds_ll[:, 1],
+            preds_ll[:, 0],
             bins=[lon_edges, lat_edges],
         )
-        pred_hists.append(pred_hist)
-        gt_hists.append(gt_hist)
+        pred_smooth_list.append(_gaussian_smooth_fft(pred_hist, sigma=float(sigma)))
 
-    vmax = 0.0
-    for h in pred_hists:
-        vmax = max(vmax, float(np.max(np.log1p(h))))
-    vmax = vmax if vmax > 0 else 1.0
+    # Shared LogNorm across all panels (GT + preds).
+    all_vals = np.concatenate([gt_smooth.reshape(-1), *[p.reshape(-1) for p in pred_smooth_list]], axis=0)
+    pos = all_vals[all_vals > 0]
+    vmax = float(np.max(pos)) if pos.size else 1.0
+    # Keep ~4 orders of dynamic range for long-tail mobility densities.
+    vmin = max(vmax / 1e4, 1e-2)
+    norm = LogNorm(vmin=vmin, vmax=vmax)
 
-    ims = []
-    for ax, s, pred_hist, gt_hist in zip(axes, samples_list, pred_hists, gt_hists):
+    ims: List[Any] = []
+    for ax in axes:
+        draw_geojson_basemap(ax, basemap_geojson, basemap_style, zorder_base=4)
+        ax.set_xlim(extent[0], extent[1])
+        ax.set_ylim(extent[2], extent[3])
+        ax.set_aspect(aspect)
+        ax.grid(False)
+        if bool(axis_off):
+            ax.set_xticks([])
+            ax.set_yticks([])
+            ax.set_xlabel("")
+            ax.set_ylabel("")
+            for spine in ax.spines.values():
+                spine.set_visible(False)
+        else:
+            ax.set_xlabel("Longitude")
+            ax.set_ylabel("Latitude")
+            ax.tick_params(axis="both", which="major", labelsize=9)
+        _add_scalebar(ax, extent, scalebar_km=float(scalebar_km))
+
+    # Panel 0: GT density
+    im0 = axes[0].imshow(
+        gt_smooth.T,
+        origin="lower",
+        extent=extent,
+        cmap="Blues",
+        norm=norm,
+        alpha=0.98,
+        zorder=2,
+    )
+    ims.append(im0)
+    axes[0].set_title("GT: Density", pad=4)
+
+    # Pred panels: Pred density + GT contour
+    levels = 7
+    for j, (ax, s, pred_smooth) in enumerate(zip(axes[1:], samples_list, pred_smooth_list), start=1):
         im = ax.imshow(
-            np.log1p(pred_hist).T,
+            pred_smooth.T,
             origin="lower",
             extent=extent,
             cmap="Blues",
-            alpha=0.95,
-            vmin=0.0,
-            vmax=vmax,
+            norm=norm,
+            alpha=0.98,
             zorder=2,
         )
         ims.append(im)
-        # GT contour as reference
-        levels = 6
-        if np.max(gt_hist) > 0:
+        if np.max(gt_smooth) > 0:
             ax.contour(
-                gt_hist.T,
+                gt_smooth.T,
                 levels=levels,
                 origin="lower",
                 extent=extent,
                 colors="black",
                 linewidths=0.8,
-                alpha=0.55,
+                alpha=0.45,
                 zorder=3,
             )
-
-        # Basemap boundaries on top of heatmap for readability.
-        draw_geojson_basemap(ax, basemap_geojson, basemap_style, zorder_base=4)
-
-        ax.set_title(f"{s.name}: Pred density\n(GT contour)", pad=4)
-        ax.set_xlabel("Longitude")
-        ax.set_ylabel("Latitude")
-        ax.set_xlim(extent[0], extent[1])
-        ax.set_ylim(extent[2], extent[3])
-        ax.set_aspect(aspect)
-        ax.grid(False)
-        ax.tick_params(axis="both", which="major", labelsize=9)
+        ax.set_title(f"{s.name}: Density\n(GT contour)", pad=4)
 
     # Layout: reserve right margin for a shared colorbar.
     fig.subplots_adjust(right=0.90, wspace=0.22)
     cax = fig.add_axes([0.915, 0.18, 0.015, 0.66])  # [left, bottom, width, height] in figure coords
     cbar = fig.colorbar(ims[0], cax=cax)
-    cbar.set_label("log(1 + count)", fontsize=10)
+    cbar.set_label("Smoothed density (count, log scale)", fontsize=10)
     cbar.ax.tick_params(labelsize=8)
 
     _save_fig(fig, out_dir, "fig_geo_density", png_only=bool(png_only))
@@ -398,6 +523,13 @@ def main() -> None:
     parser.add_argument("--out_dir", type=str, default="data/experiments/phase_b_report/figures_geo")
     parser.add_argument("--num_trajs", type=int, default=60, help="number of trajectories to overlay per model")
     parser.add_argument("--bins", type=int, default=220, help="2D histogram bins for density plot")
+    parser.add_argument("--density_sigma", type=float, default=1.4, help="Gaussian smoothing sigma in bin pixels (KDE-like).")
+    parser.add_argument(
+        "--density_keep",
+        action="append",
+        default=[],
+        help="Optional label filter for density plot (repeatable). Example: --density_keep Prior --density_keep CFG2",
+    )
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument(
         "--extent",
@@ -407,6 +539,9 @@ def main() -> None:
         help="Plot extent: 'full' uses dataset bbox; 'data' zooms to the saved samples (union of GT+pred).",
     )
     parser.add_argument("--pad_frac", type=float, default=0.08, help="Padding fraction when --extent=data.")
+    parser.add_argument("--min_span_km", type=float, default=0.0, help="Enforce a minimum map span (km) for consistent scale.")
+    parser.add_argument("--axis_off", action="store_true", help="Hide axes/ticks (map style).")
+    parser.add_argument("--scalebar_km", type=float, default=0.0, help="Draw a simple scale bar (km).")
     parser.add_argument("--style", type=str, choices=["paper", "talk"], default="paper", help="Matplotlib style preset.")
     parser.add_argument("--png_only", action="store_true", help="Only save PNG (skip PDF).")
     parser.add_argument(
@@ -474,19 +609,34 @@ def main() -> None:
         flip_y=bool(args.flip_y),
         extent_mode=str(args.extent),
         pad_frac=float(args.pad_frac),
+        min_span_km=float(args.min_span_km),
+        axis_off=bool(args.axis_off),
+        scalebar_km=float(args.scalebar_km),
         style_context=str(args.style),
         basemap_geojson=basemap_geojson,
         basemap_style=basemap_style,
         png_only=bool(args.png_only),
     )
+
+    density_samples = samples_list
+    if args.density_keep:
+        keep = {str(x) for x in args.density_keep}
+        density_samples = [s for s in samples_list if s.name in keep]
+        if not density_samples:
+            raise ValueError(f"--density_keep provided but no samples matched: {sorted(keep)}")
+
     plot_geo_density(
-        samples_list=samples_list,
+        samples_list=density_samples,
         grid=grid,
         out_dir=out_dir,
         bins=int(args.bins),
+        sigma=float(args.density_sigma),
         flip_y=bool(args.flip_y),
         extent_mode=str(args.extent),
         pad_frac=float(args.pad_frac),
+        min_span_km=float(args.min_span_km),
+        axis_off=bool(args.axis_off),
+        scalebar_km=float(args.scalebar_km),
         style_context=str(args.style),
         basemap_geojson=basemap_geojson,
         basemap_style=basemap_style,

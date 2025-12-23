@@ -33,6 +33,7 @@ python -m src.visualization.plot_geo_phase_b \
   --sample "Baseline:data/experiments/baseline_b_dt30_eval_quick/samples.npz" \
   --sample "Diffusion:data/experiments/diff_b_dt30_eval_quick/samples.npz" \
   --sample "Physics:data/experiments/physics_b_dt30_eval_quick/samples.npz" \
+  --density_sigma 1.6 \
   --out_dir data/experiments/phase_b_report/figures_geo_quick \
   --num_trajs 80 \
   --bins 220 \
@@ -49,6 +50,10 @@ python -m src.visualization.plot_geo_phase_b \
 
 > 说明（口径建议）：`fig_geo_density` 更适合作为 **宏观一致性 / 安全性** 证据（“分布没跑偏”），  
 > 多模态优势请用第 2.5 节的 spaghetti 图来讲（“会分叉、会覆盖多条可行路径”）。
+
+> 更新（PI 版口径）：密度图默认会包含 1 张 GT 密度图（第 1 列），其余列为各模型 Pred 密度（可叠加 GT contour）。
+> 若你只想在 density 图里保留部分模型（例如只看 GT/Prior/CFG2），可用：
+> `--density_keep Prior --density_keep CFG2`（repeatable）。
 
 ## 2.3（v1.1 Residual）Prior + Residual 的地图证据
 

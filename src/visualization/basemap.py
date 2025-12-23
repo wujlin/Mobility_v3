@@ -33,14 +33,23 @@ class BasemapStyle:
 
 _SHENZHEN_DISTRICT_EN = {
     "光明区": "Guangming",
+    "光明": "Guangming",
     "坪山区": "Pingshan",
+    "坪山": "Pingshan",
     "龙华区": "Longhua",
+    "龙华": "Longhua",
     "盐田区": "Yantian",
+    "盐田": "Yantian",
     "龙岗区": "Longgang",
+    "龙岗": "Longgang",
     "宝安区": "Baoan",
+    "宝安": "Baoan",
     "南山区": "Nanshan",
+    "南山": "Nanshan",
     "福田区": "Futian",
+    "福田": "Futian",
     "罗湖区": "Luohu",
+    "罗湖": "Luohu",
 }
 
 

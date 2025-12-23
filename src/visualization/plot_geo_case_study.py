@@ -28,6 +28,7 @@ from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib.ticker import ScalarFormatter
 
 from src.visualization.basemap import BasemapStyle, draw_geojson_basemap
 from src.visualization.style_config import get_color, set_style
@@ -114,6 +115,13 @@ def _compute_extent(latlon_list: List[np.ndarray], pad_frac: float) -> Tuple[flo
     lat_pad = float(pad_frac) * dlat
     lon_pad = float(pad_frac) * dlon
     return (lon_min - lon_pad, lon_max + lon_pad, lat_min - lat_pad, lat_max + lat_pad)
+
+
+def _disable_axis_offset(ax: plt.Axes) -> None:
+    for axis in (ax.xaxis, ax.yaxis):
+        fmt = ScalarFormatter(useOffset=False)
+        fmt.set_scientific(False)
+        axis.set_major_formatter(fmt)
 
 
 def main() -> None:
@@ -280,8 +288,7 @@ def main() -> None:
         ax.set_xlim(x0, x1)
         ax.set_ylim(y0, y1)
         ax.set_aspect(aspect)
-        # Avoid scientific/offset notation like "+1.14e2" on lon/lat axes (journal style).
-        ax.ticklabel_format(axis="both", style="plain", useOffset=False)
+        _disable_axis_offset(ax)
         ax.set_title(f"Case #{int(si)}", fontsize=10, pad=2)
         ax.grid(True, ls="--", alpha=0.18)
         ax.tick_params(axis="both", which="major", labelsize=8)

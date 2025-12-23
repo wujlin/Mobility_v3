@@ -34,6 +34,16 @@ rsync -avP data/experiments/<EXP_DIR>/  jinlin@10.13.12.164:/home/jinlin/project
 > 说明（重要）：为了展示 **多模态**，建议对生成模型开启 `--save_all_k`，额外保存 `preds_k (N,K,F,2)`。
 > 这样第 6 节的微观案例图可以画出“轨迹束（spaghetti）”，而不是单条随机采样。
 
+### 3.1 密度图的特殊要求（重要）
+
+密度图是**宏观统计图**，对样本量极度敏感。经验上：
+- `N=400` 只够做 **case study/面条图**；
+- 密度图建议至少 `N>=10000`（否则会显得稀疏、像“点云”而非“流场”）。
+
+因此建议你分两套样本：
+- **Case study**：`save_samples=400`（带 `preds_k`，展示多模态分叉）
+- **Density**：`save_samples=10000~20000`（`K=1` 即可，重点是样本量而不是多模态）
+
 在工作站 A（GPU）执行：
 
 ```bash
@@ -93,12 +103,15 @@ python -m src.visualization.plot_geo_phase_b \
   --sample "Prior:data/experiments/prior_geo_viz_test/samples.npz" \
   --sample "CFG2:data/experiments/phys_cfg_geo_viz_test_cfg2/samples.npz" \
   --sample "CFG3:data/experiments/phys_cfg_geo_viz_test_cfg3/samples.npz" \
+  --density_keep Prior --density_keep CFG2 \
+  --density_sigma 1.6 \
   --out_dir essay/figures/stage_cfg \
   --num_trajs 80 \
   --bins 220 \
   --seed 0 \
   --extent data \
   --pad_frac 0.08 \
+  --axis_off --scalebar_km 2 --min_span_km 10 \
   --style paper
 ```
 
@@ -242,7 +255,8 @@ python -m src.visualization.animate_geo_case \
   --stem anim_cfg_bundle \
   --case_idx 0 \
   --k_plot 12 --fps 6 --dpi 150 \
-  --frames_only \
+  --frames_only --encode_mp4 \
+  --axis_off --scalebar_km 1 --min_span_km 3 \
   --style talk \
   --seed 0
 ```
@@ -260,3 +274,15 @@ ffmpeg -r 6 -i frame_%03d.png -vf "scale=960:-1:flags=lanczos" -loop 0 anim.gif
 ```
 
 如果你环境里有 Pillow，也可以不加 `--frames_only` 直接输出 `.gif`（脚本会调用 PillowWriter）。
+
+### 7.3 无 ffmpeg 的应急方案：用 HTML 直接播放帧（零依赖）
+
+若你的环境没有 ffmpeg / Pillow（例如本地 WSL），可以直接把帧目录变成一个可播放的网页：
+
+```bash
+python -m src.visualization.make_html_animation \
+  --frames_dir essay/figures/stage_cfg/anim/anim_cfg_bundle_frames_case122 \
+  --fps 6 --title "CFG bundle (case 122)"
+```
+
+输出：`<frames_dir>/anim.html`，用浏览器打开即可播放/暂停/拖动帧。

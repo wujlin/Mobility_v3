@@ -62,32 +62,30 @@
   }%
 }
 
-\title{Physics-Informed (and Residual) Diffusion for\\OD-Conditioned Trajectory Generation}
+\title{Physics-Informed Residual Diffusion for\\OD-Conditioned Trajectory Generation}
 \author{Jinlin Wu}
 \date{\today}
 
 \begin{document}
 
-% ============================================================
-% 0) Title + Roadmap
-% ============================================================
-
 \begin{frame}
   \titlepage
 \end{frame}
 
-\begin{frame}{Roadmap (Phases)}
+\begin{frame}{Roadmap}
 \begin{itemize}
-  \item \textbf{Phase A (pipeline)}: build a leakage-free, dt-fixed protocol and sanity-check data products.
-  \item \textbf{Phase B v1.0 (models + diagnosis)}: baseline vs diffusion vs physics diffusion; identify the shrinkage failure mode.
-  \item \textbf{Phase B v1.1 (fix)}: introduce residual diffusion (frozen prior + stochastic residual) to recover macroscopic realism.
+  \item \textbf{Phase A (pipeline)}: strict, leakage-free dt-fixed protocol (split-first, train-only products).
+  \item \textbf{Phase B (what we built)}: physics-informed \textbf{residual diffusion} + inference-time CFG; strong OD alignment and micro realism (best-of-$K$).
+  \item \textbf{Phase C (what breaks)}: \textbf{Destination Gravity / topological collapse} --- detours are missing even with CFG.
+  \item \textbf{Phase D (pivot)}: reframe as \textbf{trip-level decision + execution}; follow SOTA hierarchical planning.
 \end{itemize}
 \end{frame}
 
 \begin{frame}{Task Definition}
 \begin{itemize}
-  \item Task: \textbf{KnownDestination} OD-conditioned trajectory generation (grid space).
+  \item Task: \textbf{KnownDestination} OD-conditioned trajectory generation (grid space, dt-fixed).
   \item Windows: history $H{=}8$, horizon $F{=}12$ (dt-fixed $\Delta t=30$s).
+  \item Key challenge: \textbf{multi-modal trip-level decision + continuous execution}.
   \item Goals:
     \begin{itemize}
       \item \textbf{Coverage}: best-of-$K$ (oracle) ADE/FDE, distribution metrics (Fr\'echet/DTW).
@@ -100,9 +98,6 @@
   \tableofcontents
 \end{frame}
 
-% ============================================================
-% Phase A
-% ============================================================
 \section{Phase A: Pipeline}
 
 \begin{frame}{Phase A (from raw data to strict pipeline)}
@@ -145,217 +140,143 @@
 \end{figure}
 \end{frame}
 
-% ============================================================
-% Phase B v1.0
-% ============================================================
-\section{Phase B v1.0: Models \& Diagnosis}
+\section{Phase B: Residual Diffusion (What Works)}
 
-\begin{frame}{Phase B v1.0 (what changes from Phase A?)}
-\textbf{Relation to Phase A:} with a strict dt-fixed pipeline, Phase B compares model families under the same protocol.
-
-\vspace{0.6em}
-\textbf{Phase B v1.0 question:} does diffusion provide better multi-modal coverage, and does nav\_field improve it?
-
-\vspace{0.6em}
-\textbf{Models compared:}
-\begin{itemize}
-  \item Baseline (deterministic L2 regression, $K{=}1$)
-  \item Diffusion (data-only, $K{=}20$)
-  \item Physics diffusion (nav\_field conditioning, $K{=}20$)
-\end{itemize}
-\end{frame}
-
-\begin{frame}{Phase B v1.0: What is ``Physics'' here? (Nav field prior)}
-\begin{columns}[T,onlytextwidth]
-  \begin{column}{0.52\linewidth}
-    \begin{itemize}
-      \item \textbf{Nav field} is estimated on the \textbf{train split only}: local mean-flow direction + count/speed statistics.
-      \item At inference we crop a local patch around the last observed position and encode it as conditioning.
-      \item Interpretation: a \textbf{local mean-field prior} that stabilizes directionality and improves best-of-$K$ coverage.
-    \end{itemize}
-  \end{column}
-  \begin{column}{0.46\linewidth}
-    \FitGraphic[height=0.62\textheight]{fig_geo_nav_field.png}
-  \end{column}
-\end{columns}
-\end{frame}
-
-\begin{frame}{Phase B v1.0: Micro-Level Performance (coverage)}
-\begin{itemize}
-  \item Deterministic baseline has strong mean ADE/FDE (as expected for L2 regression).
-  \item Diffusion/physics diffusion improve \textbf{best-of-$K$} (oracle) capability.
-  \item Physics improves oracle upper bound over data-only diffusion.
-\end{itemize}
-\vspace{0.4em}
-\begin{figure}
-  \centering
-  \FitGraphic{fig1_micro_metrics.png}
-  \caption*{\small Micro-level metrics (mean/std and best-of-$K$ where applicable).}
-\end{figure}
-\end{frame}
-
-\begin{frame}{Phase B v1.0: Macro-Level Failure (shrinkage)}
-\textbf{Key finding:} despite strong best-of-$K$, diffusion samples under-estimate displacement (low MSD/Rog).
-
-\vspace{0.6em}
-\begin{itemize}
-  \item This is a \textbf{systematic} low-frequency bias (not a single-case artifact).
-  \item It threatens the ``physics'' story: coverage without physical realism.
-\end{itemize}
-\vspace{0.4em}
-\begin{figure}
-  \centering
-  \FitGraphic{fig2_msd_curve.png}
-  \caption*{\small MSD curves (Pred vs. GT) under dt-fixed=30s.}
-\end{figure}
-\end{frame}
-
-\begin{frame}{Phase B v1.0: Interpretable Maps (Trajectory Overlay)}
-\scriptsize\textbf{Reading guide:} these are ``map-like'' visualizations via bbox projection (no road map-matching). Left/Mid/Right correspond to Baseline / Diffusion / Physics.
-\vspace{0.4em}
-\begin{figure}
-  \centering
-  \includegraphics[width=\linewidth,height=0.70\textheight,keepaspectratio]{fig_geo_traj_overlay.png}
-  \caption*{\small Trajectory overlay: GT vs predictions (N=80).}
-\end{figure}
-\end{frame}
-
-\begin{frame}{Phase B v1.0: Interpretable Maps (Density + GT contour)}
-\scriptsize\textbf{Reading guide:} darker blue indicates higher predicted occupancy; GT contour provides a shape reference. Left/Mid/Right: Baseline / Diffusion / Physics.
-\vspace{0.4em}
-\begin{figure}
-  \centering
-  \includegraphics[width=\linewidth,height=0.70\textheight,keepaspectratio]{fig_geo_density.png}
-  \caption*{\small Predicted density map (log-count) with GT contour.}
-\end{figure}
-\end{frame}
-
-\begin{frame}{Phase B v1.0: Qualitative Cases (grid space)}
-\scriptsize Each panel is a different OD-conditioned sample (GT vs Baseline vs Diffusion vs Physics). This helps visually connect micro-level coverage to the macro-level shrinkage diagnosis.
-\vspace{0.3em}
-\begin{figure}
-  \centering
-  \FitGraphicSmall[height=0.68\textheight]{fig3_traj_overlay.png}
-  \caption*{\small Saved-sample trajectory overlays in grid space (multiple cases).}
-\end{figure}
-\end{frame}
-
-\begin{frame}{Phase B v1.0: Distribution Diagnostics}
-\begin{columns}[T,onlytextwidth]
-  \begin{column}{0.50\linewidth}
-    \FitGraphicSmall{fig4_error_cdf.png}
-    \vspace{-0.2em}
-    \centering{\scriptsize Error CDF (saved samples)}
-  \end{column}
-  \begin{column}{0.48\linewidth}
-    \FitGraphicSmall{fig5_rog_boxplot.png}
-    \vspace{-0.2em}
-    \centering{\scriptsize Rog distribution (saved samples)}
-  \end{column}
-\end{columns}
-\end{frame}
-
-\begin{frame}{Phase B v1.0: Why macro-loss ablation is insufficient}
-\begin{itemize}
-  \item Adding a macro loss on $x_0^{pred}$ is conceptually valid, but \textbf{noisy} at large timesteps ($t \approx T$).
-  \item If not carefully gated/normalized, the model can satisfy macro loss with \textbf{high-frequency shortcuts} (jitter).
-  \item Empirically: limited improvements (plateau region), motivating an architectural pivot.
-\end{itemize}
-\end{frame}
-
-% ============================================================
-% Phase B v1.1
-% ============================================================
-\section{Phase B v1.1: Residual Diffusion Fix}
-
-\begin{frame}{Phase B v1.1 (link from v1.0 to fix)}
-\textbf{Relation to Phase B v1.0:} v1.0 reveals a low-frequency bias (shrinkage) that is hard to correct via noisy macro proxies.
-
-\vspace{0.6em}
-\textbf{Phase B v1.1 objective:} recover macroscopic displacement \emph{without} sacrificing diversity and best-of-$K$ coverage.
-
-\vspace{0.6em}
-\textbf{Key idea:} let a deterministic model handle low-frequency scale; let diffusion model only stochastic residuals.
-\end{frame}
-
-\begin{frame}{Residual Diffusion (v1.1): Method}
-\begin{block}{Decomposition}
-\[
-  \mathbf{v}_{1:F} = \mathbf{v}^{\mathrm{prior}}_{1:F} + \mathbf{v}^{\mathrm{res}}_{1:F},\qquad
-  \mathbf{v}^{\mathrm{prior}}_{1:F} = f_{\mathrm{base}}(\mathbf{X}, \mathbf{c})
-\]
-\end{block}
-\begin{itemize}
-  \item Freeze $f_{\mathrm{base}}$ (baseline) as a deterministic prior (no gradient leakage).
-  \item Train diffusion on residual targets: $\mathbf{v}^{\mathrm{res}} = \mathbf{v} - \mathbf{v}^{\mathrm{prior}}$.
-  \item Inference: sample $\mathbf{v}^{\mathrm{res}}$ then add back $\mathbf{v}^{\mathrm{prior}}$.
-\end{itemize}
-\end{frame}
-
-\begin{frame}{Residual Diffusion (v1.1): Framework Diagram}
+\begin{frame}{Our Method: Physics-Informed Residual Diffusion}
 \begin{figure}
   \centering
   \includegraphics[width=\linewidth,height=0.78\textheight,keepaspectratio]{fig1_framework.png}
-  \caption*{\small Stream A (deterministic prior) anchors low-frequency scale; Stream B (residual diffusion) adds stochastic deviations for multi-modal futures.}
+  \caption*{\small Deterministic prior anchors low-frequency scale; residual diffusion adds stochastic deviations (best-of-$K$) with nav\_field as local mean-flow prior.}
 \end{figure}
 \end{frame}
 
-\begin{frame}{Residual Diffusion (v1.1): Quick Validation}
-\scriptsize
+\begin{frame}{Macro: OD alignment in geographic space (Density, N=10k)}
+\scriptsize\textbf{Reading guide:} GT density on the left; model density on the right (with GT contour). High sample size reveals corridor-level structure.
+\vspace{0.2em}
+\begin{figure}
+  \centering
+  \FitGraphic{stage_cfg_density10k/fig_geo_density.png}
+  \caption*{\small Density map (log-count): model captures major corridors under OD conditioning.}
+\end{figure}
+\end{frame}
+
+\begin{frame}{Micro: Multi-modal local execution (best-of-$K$)}
+\scriptsize\textbf{Reading guide:} Left = deterministic prior (anchor), Mid/Right = residual diffusion samples under CFG ($K$ spaghetti). Residual adds local realism and diversity.
+\vspace{0.2em}
+\begin{figure}
+  \centering
+  \FitGraphic{stage_cfg/fig_geo_story_grid_top.png}
+  \caption*{\small Case studies: residual diffusion produces diverse, physically plausible deviations around the prior.}
+\end{figure}
+\end{frame}
+
+\begin{frame}{Physical Statistics (Validity): Speed/Turn/Accel + MSD}
+\begin{figure}
+  \centering
+  \FitGraphic{physical_stats/fig_physical_stats_density10k.png}
+  \caption*{\small Statistical consistency improves (JSD vs GT), but this alone does not guarantee correct trip-level topology.}
+\end{figure}
+\end{frame}
+
+\section{Phase C: Failure Mode (Destination Gravity)}
+
+\begin{frame}{The Defect: Destination Gravity / Premature Convergence}
+\scriptsize\textbf{Observation:} regardless of Prior vs CFG2/CFG3, many predicted trajectories are ``pulled'' straight to the destination; GT often detours (e.g., to reach a highway entrance).
+\vspace{0.2em}
+\begin{figure}
+  \centering
+  \FitGraphic{stage_cfg/fig_geo_traj_overlay.png}
+  \caption*{\small Trajectory overlays (Prior vs CFG2 vs CFG3): topology collapses towards a straight-to-goal path.}
+\end{figure}
+\end{frame}
+
+\begin{frame}{Why CFG cannot create detours (first-principles view)}
+\begin{itemize}
+  \item Conditioning on destination is like a \textbf{potential well} at the goal: without intermediate barriers/anchors, trajectories follow the steepest descent (``straight-to-goal'').
+  \item CFG scales this gradient at inference: it can change \textbf{tail/jitter/violations}, but it does \textbf{not} introduce new low-frequency topological modes.
+  \item Oracle diagnostics (workstation runs): even with GT mid-way waypoint, turn-angle distribution does not recover $\Rightarrow$ detour modes are largely absent from the model support.
+\end{itemize}
+\end{frame}
+
+\begin{frame}{Evidence snippet (validity metrics, dt-fixed)}
+\scriptsize\textbf{Example (N=10k, K=1):} statistical consistency improves, but topology can still collapse.
+\vspace{0.4em}
 \begin{table}
   \centering
-  \begin{tabular}{lrrrrrrr}
+  \begin{tabular}{lrrrrr}
     \toprule
-    Model & $K$ & ADE$_{\text{mean}}$ & ADE$_{\text{best}}$ & FDE$_{\text{mean}}$ & FDE$_{\text{best}}$ & MSD$_{10}$ & Rog \\
+    Method & JSD$_{\text{Turn}}$ & JSD$_{\text{Speed}}$ & JSD$_{\text{Accel}}$ & DCV$_{\text{Speed}}$ & DCV$_{\text{Accel}}$ \\
     \midrule
-    Baseline (prior, L2) & 1  & 4.602 & 4.602 & 7.239 & 7.239 & 507.712 & 5.345 \\
-    Residual Diffusion   & 20 & 5.735 & 2.496 & 9.680 & 3.053 & 576.014 & 6.225 \\
+    Prior & 0.0956 & 0.1423 & 0.2537 & 0.128\% & 0.002\% \\
+    Ours (CFG2) & 0.0503 & 0.0727 & 0.0531 & 0.580\% & 0.733\% \\
     \bottomrule
   \end{tabular}
 \end{table}
 \vspace{-0.2em}
 \begin{itemize}
-  \item Same conditions (val subset, 192 samples). Residual keeps strong best-of-$K$.
-  \item Macro recovery: Rog/GT $\approx 0.93$, MSD$_{10}$/GT $\approx 0.84$, speed ratio $\approx 0.95$.
-  \item Diversity check: ADE$_{\mathrm{std}}$ is non-zero (no residual collapse observed in quick eval).
+  \item JSD improves: generated trajectories look more realistic statistically.
+  \item But detour requires \textbf{low-frequency trip-level decisions}, not just local fluctuations.
 \end{itemize}
 \end{frame}
 
-\begin{frame}{Phase B v1.1: Interpretable Maps (Residual Diffusion) --- Overlay}
-\begin{figure}
-  \centering
-  \FitGraphic{fig_geo_traj_overlay_v11.png}
-  \caption*{\small Left: Baseline (prior). Right: Residual Diffusion (v1.1). \textbf{Note:} ``Diffusion'' label in figure refers to residual diffusion.}
-\end{figure}
-\end{frame}
+\section{Phase D: Pivot (Decision + Execution)}
 
-\begin{frame}{Phase B v1.1: Interpretable Maps (Residual Diffusion) --- Density}
-\begin{figure}
-  \centering
-  \FitGraphic{fig_geo_density_v11.png}
-  \caption*{\small Left: Baseline (prior). Right: Residual Diffusion (v1.1). Pred density heatmap with GT contour.}
-\end{figure}
-\end{frame}
-
-\begin{frame}{Residual Diffusion: What we learned}
-\begin{itemize}
-  \item The shrinkage is fundamentally a \textbf{low-frequency learning bias} (mean reversion).
-  \item Residual decomposition is a \textbf{principled fix}: it separates ``scale'' (prior) from ``uncertainty'' (residual).
-  \item Physics/nav\_field remains useful as a \textbf{directional guide} once scale is stabilized.
-\end{itemize}
-\end{frame}
-
-\begin{frame}{Takeaways \& Next Steps}
-\begin{itemize}
-  \item Phase A: strict, leakage-free dt-fixed pipeline enables fair comparisons.
-  \item Phase B v1.0: diffusion improves best-of-$K$ but fails macro realism (shrinkage).
-  \item Phase B v1.1: residual diffusion recovers macro scale while preserving diversity.
-  \item Next steps (paper-ready):
+\begin{frame}{Reframing: trip-level decision + continuous execution}
+\begin{columns}[T,onlytextwidth]
+  \begin{column}{0.56\linewidth}
     \begin{itemize}
-      \item Residual \textbf{physics diffusion} (nav\_field + residual prior).
-      \item Strong generative baselines (SeqCVAE; recent diffusion predictors).
-      \item Robustness: prior-swap test and additional geographic visualizations (zoomed regions / map tiles).
+      \item \textbf{Decision (macro)}: choose a route topology / a few waypoints (highway entrance, bridge, etc.).
+      \item \textbf{Execution (micro)}: generate a smooth, feasible trajectory that follows the chosen plan.
+      \item Our current end-to-end generator mixes them $\Rightarrow$ easy shortcut: ``straight-to-goal + jitter''.
     \end{itemize}
+  \end{column}
+  \begin{column}{0.42\linewidth}
+    \begin{figure}
+      \centering
+      \begin{tikzpicture}[
+        box/.style={draw, rounded corners, align=center, inner sep=4pt, font=\small},
+        arrow/.style={-{Latex[length=2mm]}, thick},
+        node distance=6mm and 8mm
+      ]
+        \node[box] (od) {OD + history};
+        \node[box, right=of od] (macro) {Macro planner\\(waypoints)};
+        \node[box, right=of macro] (micro) {Micro generator\\(segment execution)};
+        \node[box, right=of micro] (traj) {Trajectory};
+        \draw[arrow] (od) -- (macro);
+        \draw[arrow] (macro) -- (micro);
+        \draw[arrow] (micro) -- (traj);
+      \end{tikzpicture}
+      \caption*{\scriptsize Two-stage view: decision then execution.}
+    \end{figure}
+  \end{column}
+\end{columns}
+\end{frame}
+
+\begin{frame}{How SOTA addresses Destination Gravity}
+\begin{itemize}
+  \item \textbf{Graph/Map-based diffusion} (e.g., road graph generation): topology is constrained by the road network, detours become natural turns at intersections.
+  \item \textbf{Hierarchical / coarse-to-fine diffusion}: first generate a few waypoints (macro), then generate detailed paths between them (micro).
+\end{itemize}
+\vspace{0.4em}
+\begin{table}
+  \centering
+  \begin{tabular}{lccc}
+    \toprule
+    Family & Topology validity & Data requirement & Engineering cost \\
+    \midrule
+    Graph/Map-based & strong & high (road graph) & high \\
+    Hierarchical (waypoints) & strong detours & low (GPS only) & medium \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+\end{frame}
+
+\begin{frame}{Our next step: hierarchical decision + residual execution (KISS)}
+\begin{itemize}
+  \item \textbf{Macro stage (decision)}: predict a few waypoints (multi-modal) given OD + history.
+  \item \textbf{Micro stage (execution)}: residual diffusion conditioned on waypoints to generate smooth segment trajectories.
+  \item \textbf{Gate (avoid wrong turns)}: validate with detour-sensitive metrics (turn-angle distribution + low-frequency detour) + DCV.
+  \item \textbf{Fallback}: only if hierarchical is insufficient, consider road graph / map constraints.
 \end{itemize}
 \end{frame}
 
@@ -382,20 +303,17 @@ Salzmann, Ivanovic, Chakravarty, and Pavone.
 \newblock Trajectron++: Dynamically feasible trajectory forecasting with heterogeneous data.
 \newblock ECCV, 2020.
 
-\bibitem[Zhang et~al.(2015)]{zhang2015urbancps}
-Zhang, Zhao, Zhang, and He.
-\newblock UrbanCPS: A cyber-physical system based on multi-source big infrastructure data for heterogeneous model integration.
-\newblock ICCPS, 2015.
+\bibitem[DiffTraj(2023)]{difftraj2023}
+DiffTraj.
+\newblock SIGSPATIAL, 2023.
 
-\bibitem[Nag et~al.(2025)]{Nag2025ExploringDigitalTwinsTransportPlanning}
-Nag et~al.
-\newblock Exploring digital twins in transport planning: A PRISMA review.
-\newblock European Transport Research Review, 2025.
+\bibitem[G-Diff(2024)]{gdiff2024}
+G-Diff.
+\newblock KDD, 2024.
 
-\bibitem[Yan et~al.(2023)]{Yan2023DigitalTwinTransportationInfrastructureManagement}
-Yan et~al.
-\newblock Digital twins in transportation infrastructure management: A systematic review.
-\newblock Intelligent Transportation Infrastructure, 2023.
+\bibitem[Hierarchical Diffusion(2024)]{hierdiff2024}
+Hierarchical diffusion for mobility (waypoint-first generation).
+\newblock NeurIPS, 2024.
 \end{thebibliography}
 \end{frame}
 

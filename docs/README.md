@@ -12,9 +12,11 @@
 - **我要理解数据产物与字段**：`docs/DATA_STRUCTURE.md`
 - **我要写论文/essay 的 Phase A 素材**：`docs/PHASE_A_RESULTS.md`
 - **我要写论文/essay 的 Phase B 素材（dt30 严格版）**：`docs/PHASE_B_RESULTS.md`
+- **我要诊断 Destination Gravity / detour 缺失（止损线 + Oracle 诊断 + 一键出图）**：`docs/PHASE_B_CFG_VISUALIZATION.md`
 - **我要复盘“收缩/宏观偏小”的根因**：`docs/ROOT_CAUSE_ANALYSIS.md`
 - **我要跑/复现 v1.1（Residual Diffusion）**：`docs/RESIDUAL_DIFFUSION.md`
 - **我要做地理可视化（bbox 映射，不做 map-matching）**：`docs/GEO_VISUALIZATION.md`
+- **我要了解学术 SOTA（Map-based vs Hierarchical）与路线选择**：`docs/SOTA_TRAJECTORY_GENERATION.md`
 - **我要给教授/专家咨询（问题包）**：`docs/EXPERT_CONSULTATION_PACKET.md`（当前版）；`docs/PROFESSOR_QUERY_MACRO_LOSS.md`（历史备忘，可不读）
 - **我要给教授发“当前进展 + 待拍板问题”邮件**：`docs/PROFESSOR_QUERY_RESIDUAL_V11.md`
 - **我要准备汇报讲稿**：`docs/PPT_SPEAKER_NOTES.md`
@@ -45,6 +47,8 @@
 
 - `docs/ROOT_CAUSE_ANALYSIS.md`：问题机制与排雷证据链
 - `docs/RESIDUAL_DIFFUSION.md`：v1.1 结构性修复（prior + residual）
+- `docs/PHASE_B_CFG_VISUALIZATION.md`：CFG 可视化/物理统计/Oracle 诊断与止损线（Destination Gravity）
+- `docs/SOTA_TRAJECTORY_GENERATION.md`：学术 SOTA 两条路线（Graph-based / Hierarchical）
 - `docs/PHASE_B_REVIEW.md`：外部 review 记录与回应
 
 ### 2.4 写作/汇报层（不作为真相源）

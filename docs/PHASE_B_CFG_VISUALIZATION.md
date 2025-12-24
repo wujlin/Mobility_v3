@@ -2,14 +2,47 @@ Implementation Plan, Task List and Thought in Chinese：本文件记录 Phase B�
 
 # Phase B（CFG Destination Guidance）可视化与证据链
 
+## 0) 结论先行（止损线：避免再在 CFG/采样上浪费一周）
+
+**我们已经用“可证伪”的诊断把方向拍板了**：`prior + diffusion + CFG` 在当前设定下**无法生成“低频、平滑 detour”**，主要表现为 **Destination Gravity（直冲终点）+ 直线段抖动/折点**。因此不要再期待通过调 `cfg/temperature/diff_steps` 来“创造绕路”。
+
+关键证据（已在本 repo，可直接打开）：
+- 轨迹叠图：`essay/figures/stage_cfg_density10k/fig_geo_traj_overlay.png`（Prior 与 CFG2 都被终点“吸住”，GT 有明显绕路/先逆行再上高速）
+- 物理统计（JSD+DCV）：`essay/figures/physical_stats/fig_physical_stats_density10k_validity.json`、`essay/figures/physical_stats/fig_physical_stats_cfg2_vs_cfg3_validity.json`
+
+**数值快照（越小越好；DCV 为超限率）**：
+
+| Setting | JSD_Turn | JSD_Speed | JSD_Accel | DCV_speed | DCV_accel |
+|---|---:|---:|---:|---:|---:|
+| Prior（N=10k, K=1） | 0.0956 | 0.1423 | 0.2537 | 0.128% | 0.002% |
+| Ours(CFG2)（N=10k, K=1） | 0.0503 | 0.0727 | 0.0531 | 0.580% | 0.733% |
+| CFG2（N=400, use_all_k, k≤10） | 0.0738 | 0.1429 | 0.0646 | 1.098% | 1.238% |
+| CFG3（N=400, use_all_k, k≤10） | 0.0728 | 0.1448 | 0.0559 | 1.239% | 2.060% |
+
+解释（务实版）：
+- CFG2/CFG3 在 `JSD_TurnAngle` 上差异极小，但 **CFG3 的 DCV 更差** → “把 cfg 拉大”不是解。
+- `JSD_TurnAngle` 也可能被 **高频 jitter** “刷好看”，不等价于 detour；因此需要 Oracle 类诊断来确认 support（见第 8 节）。
+
+> 工作站上我们已跑完 `OracleWP / OracleSel`，结论为：`JSD_TurnAngle` 不降反升（且 OracleSel 的偏离往往伴随更高 DCV）→ detour 基本不在 support。  
+> 建议把工作站产物 rsync 回来（`samples.npz` + `<stem>_validity.json/png`），把证据链落在仓库路径上。
+
+同步模板（示例；在本 repo 根目录执行）：
+
+```bash
+# 工作站 -> 本机（按你的 ssh alias/路径替换 wsA:/...）
+rsync -avP --relative wsA:/home/jinlin/projects/Mobility_v3/./data/experiments/phys_cfg_geo_viz_test_cfg2_oracleWP/ ./data/experiments/
+rsync -avP --relative wsA:/home/jinlin/projects/Mobility_v3/./data/experiments/phys_cfg_geo_viz_test_cfg2_oracleSel/ ./data/experiments/
+rsync -avP --relative wsA:/home/jinlin/projects/Mobility_v3/./essay/figures/physical_stats/./fig_physical_stats_cfg2_oracle* ./essay/figures/physical_stats/
+```
+
 ## 1) 目标（写在图注/汇报里的三句话）
 
 1. **Residual+Physics** 把宏观尺度锚定在合理区间（MSD/Rog/Speed 接近 GT），避免 shrinkage。
-2. **CFG 是推理期可控旋钮**：`cfg=2` 偏 micro（best-of-K 更优），`cfg=3` 偏 macro-validity（MSD/Rog 更贴近或略过冲）。
-3. 在深圳地理空间上，模型不仅“误差更小”，还能生成更符合真实城市走廊结构的多模态轨迹集合。
+2. **CFG 是推理期可控旋钮**，但它放大的是“终点势能梯度”：会影响抖动/尾部/违例率，**不能凭空产生 detour**（Destination Gravity 仍然存在）。
+3. 本文档的核心产出是 **证据链与止损线**：用 `地理叠图 + JSD(Speed/Accel/Turn) + DCV + Oracle 诊断`，快速判断“还能不能救/是否必须换范式”。
 
 > PI 建议（caption 必写）：  
-> “cfg=2 is micro-optimal within macro validity gate; cfg=3 demonstrates the model can be tuned towards macro-validity at the cost of micro-precision.”
+> “CFG mainly amplifies the destination gradient; we use JSD+DCV as the validity gate and run oracle diagnostics to decide whether detour exists in the model support.”
 
 ---
 
@@ -214,10 +247,16 @@ python -m src.visualization.plot_geo_phase_b \
 >   --overlay_keep CFG2 \
 >   --density_keep CFG2 \
 >   --out_dir essay/figures/stage_cfg_density10k \
->   --num_trajs 60 --bins 320 --density_sigma 1.8 \
+>   --num_trajs 80 \
+>   --bins 320 --density_sigma 1.6 \
+>   --gt_contour_quantiles 0.90 0.96 0.99 \
 >   --extent data --axis_off --scalebar_km 2 --min_span_km 10 \
 >   --png_only --style paper
 > ```
+>
+> 说明（避免误读）：
+> - 标题里的 `n_plot=80/10000` 表示“绘制用的子集数量/总样本量”，不是训练集大小。
+> - 密度图的 GT contour 默认改为 **分位数等值线**（高分位、少量线），避免低密度区域的“满屏条纹/底纹”。如需更少线，可只用 `0.95 0.99`。
 > 
 > 注意：轨迹叠图标题里的 `n_plot` 表示绘制子集大小（例如 60 条），不是“测试集总量”。如果样本文件里保存了 10000 条，则标题会显示 `n_plot=60/10000`。
 
@@ -468,6 +507,59 @@ python -m src.visualization.plot_physical_stats \
   --output_dir essay/figures/stage_cfg \
   --stem fig_physical_stats_cfg2_oracleWP
 ```
+
+#### 8.1.1) 已证伪结论（务必止损，避免再浪费一周）
+
+我们在相同评估口径下得到的结论是：
+
+- **OracleWP 并未改善 “能不能弯/能不能绕”**：`JSD_TurnAngle` 不降反升（更偏离 GT）。  
+- OracleWP 的 **DCV_Bound**（拼接点加速度违规）确实上升，但即便排除拼接点，`JSD_Turn` 仍更差 → **不是边界污染导致失败**。
+
+因此可以拍板：**当前生成器的 support 里基本没有“低频、平滑 detour”模态；主要是直线段 + 高频抖动/折点。**  
+继续在 `prior+diffusion+CFG` 这条线上调参（温度/噪声/cfg）不会“创造 detour”，只会改变尾部与 DCV。
+
+> 证据入口（本地/工作站产物，需按机器同步）：  
+> - `essay/figures/physical_stats/fig_physical_stats_density10k_validity.json`（Prior vs Ours(CFG2), N=10k, K=1）  
+> - `essay/figures/physical_stats/fig_physical_stats_cfg2_vs_cfg3_validity.json`（CFG2 vs CFG3, N=400, use_all_k）  
+> - `essay/figures/physical_stats/fig_physical_stats_cfg2_oracleWP_validity.json`（CFG2 vs OracleWP, N=400, use_all_k）  
+
+### 8.2) Oracle Selection（更干净的诊断：support 里有没有 detour）
+
+OracleWP 会引入 “两段拼接” 的新分布（可能带 jerk），为了更干净地回答：
+
+> “detour 模态是否已经存在于 `preds_k` 的 support，只是我们没抽到？”
+
+我们提供一个 **post-hoc oracle selection**（不重新采样、不改条件，只在保存的 K 条里选最像 GT detour 的那条）：
+
+- 脚本：`src/visualization/oracle_waypoint_select.py`
+- 输出：`<out_dir>/<stem>.npz`（oracle 选出的 `preds`） + `<out_dir>/<stem>.json`（JSD+DCV 对比）
+
+示例（从 CFG2 的 `preds_k` 里选 “最大直线偏离” 的样本）：
+
+```bash
+python -m src.visualization.oracle_waypoint_select \
+  --input_npz data/experiments/phys_cfg_geo_viz_test_cfg2/samples.npz \
+  --out_dir data/experiments/phys_cfg_geo_viz_test_cfg2_oracleSel \
+  --stem cfg2_oracleSel_maxdev \
+  --k_max 10 \
+  --waypoint_mode max_dev \
+  --turn_min_speed 0.1 \
+  --dcv_speed_pctl 99.5 --dcv_accel_pctl 99.5
+```
+
+判据（止损线）：
+- 若 `oracle_selected.JSD_TurnAngle` **显著下降**（更接近 GT），说明 detour 模态在 support 里 → 未来可以考虑 inference-time rerank；
+- 若 `oracle_selected.JSD_TurnAngle` **不降反升**（我们已观测到该情形），说明 detour 模态基本不存在 → **立刻停止在采样/CFG 上耗时，必须换范式**。
+
+### 8.3) 结论与下一步（避免“走错路一周”）
+
+结论（拍板）：
+- `CFG` / `temperature` / “更强 residual” **不能解决 detour（Destination Gravity）**，最多改变抖动与尾部（并恶化 DCV）。
+- 若目标是学术界认可的 trajectory validity（statistical consistency + feasibility），当前路线应当止损并 pivot。
+
+下一步（KISS，推荐优先级）：
+1. **Hierarchical / Coarse-to-Fine（waypoint predictor + segment generator）**：把 detour 变成“中间目标”问题，而不是让一步式生成器自己学全局规划。
+2. 只有当层级路线被证伪，才考虑 **road graph / map constraints**（工程量级更大）。
 
 如果你只想做宏观密度专用的 10k 采样（K=1），也可以直接替换输入为：
 `prior_geo_density_test/samples.npz` 与 `phys_cfg2_geo_density_test/samples.npz`，

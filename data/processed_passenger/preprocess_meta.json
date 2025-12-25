@@ -1,0 +1,50 @@
+{
+  "created_at": "2025-12-25T16:43:15.397243+08:00",
+  "raw_gps_dir": "data/raw/gps",
+  "output_dir": "data/processed_passenger",
+  "config": {
+    "keep_status": 1,
+    "max_gap_s": 300,
+    "max_speed_kmh": 120.0,
+    "min_points": 10,
+    "min_od_m": 500.0,
+    "time_zone": "shanghai",
+    "flip_y": false,
+    "train_ratio": 0.7,
+    "val_ratio": 0.15
+  },
+  "grid_config": {
+    "H": 400,
+    "W": 800,
+    "min_lat": 22.45,
+    "max_lat": 22.85,
+    "min_lon": 113.75,
+    "max_lon": 114.65
+  },
+  "counts": {
+    "raw_points": 13774876,
+    "break_gap": 7429,
+    "flush_gap": 7429,
+    "break_oob": 7223,
+    "flush_oob": 1496,
+    "flush_status_end": 211698,
+    "break_overspeed": 17352,
+    "flush_overspeed": 17352,
+    "flush_eof": 356,
+    "segments_all": 238331,
+    "drop_too_short_points": 93287,
+    "trips_out": 140914,
+    "drop_too_short_od": 4130
+  },
+  "splits": {
+    "train": 98640,
+    "val": 21137,
+    "test": 21137
+  },
+  "time_range": {
+    "start_time_min": 1303056000,
+    "start_time_max": 1303791359,
+    "start_time_min_iso": "2011-04-18T00:00:00+08:00",
+    "start_time_max_iso": "2011-04-26T12:15:59+08:00"
+  }
+}

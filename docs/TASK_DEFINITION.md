@@ -252,6 +252,57 @@ python -m src.training.evaluate \
   - `data/processed_dt30/data_stats.json`（train-only）
   - `data/processed_dt30/nav_field.npz`（train-only）
 
+#### 7.2.1 “异常数据 / inactive 数据”处理口径（避免评估口径混乱）
+
+这里把“会被剔除的异常”与“不会被剔除的 inactive”明确分开（非常关键：否则会误以为 GT 已过滤，导致错误归因）。
+
+- **会被 dt-fixed 产物构建阶段剔除的异常（trajectory-level drop）**：
+  - 非单调时间戳（`dt<0`）→ 丢弃该轨迹
+  - 去重后仍出现 `dt<=0` → 丢弃该轨迹
+  - 存在超大 gap（`max_gap`，默认 300s）→ **丢弃整条轨迹**（保持 trip-level OD 语义一致性）
+  - 总时长不足以支撑 `min_length`（默认 10）→ 丢弃该轨迹
+  - 事实证据：`data/processed_dt30/resample_meta.json` 会记录 drop 统计；实现代码在 `src/data/build_dt_fixed_dataset.py`（函数 `_resample_one`）。
+
+- **不会被剔除的 inactive（窗口/局部静止）**：
+  - “近静止/低位移”的片段不会在数据集层面被删除；`SeqDataset/DiffusionDataset` 只是滑窗切片，不按速度/位移阈值过滤（见 `src/data/datasets_seq.py`、`src/data/datasets_diffusion.py`）。
+  - **因此：训练用的 GT 与评估用的 GT 都包含这些窗口**；这也是 macro loss 可能被“低位移窗口稀释”的原因之一（见 `docs/PROFESSOR_UPDATE_BATCH_EPE.md`）。
+  - 但在某些统计指标里会做 *metric-level mask*：例如 Turn Angle 统计通常会对 `speed < turn_min_speed` 的 step 做忽略，以避免 “速度≈0 时航向角不稳定” 造成的数值污染（这是指标计算口径，不等价于删数据）。
+
+- **关于 raw 数据的 `status`（是否载客/有效）字段**：
+  - 当前 HDF5 产物格式不保存 `status`，训练/评估链路无法按 `status` 过滤（见 `src/data/trajectories.py` 中的字段定义）。
+  - 若未来要按 `status` 做“载客/非载客”剔除，必须在 `raw → processed` 阶段把该规则写入产物合同并落地到数据转换脚本中（否则无法复现）。
+
+#### 7.2.2 raw→processed（Passenger Trip）推荐实现（status==1）
+
+若你要从 `data/raw/gps/*.txt` 重新构建更“干净的导航意图”数据集，推荐按 Passenger Trip（`status==1`）抽取：
+
+- 只保留 `status==1`（Passenger Trip），避免把 `status==0` 的 Search Policy 混入导航分布
+- `max_gap_s=300`：gap 视为因果断裂，不跨 gap 插值（切段）
+- `max_speed_kmh=120`：超速边界视为 GPS 漂移/时间戳错误（切段）
+
+脚本（依赖 `h5py`，无 pandas）：
+
+```bash
+python -m src.data.build_passenger_dataset_from_raw_txt \
+  --raw_gps_dir data/raw/gps \
+  --output_dir data/processed_passenger \
+  --keep_status 1 \
+  --max_gap_s 300 \
+  --max_speed_kmh 120 \
+  --min_points 10 \
+  --min_od_m 500 \
+  --time_zone shanghai
+```
+
+> `--time_zone` 说明：本项目的深圳出租车 `data/raw/gps/*.txt` 的 `time` 已确认是北京时间（UTC+8），因此默认使用 `shanghai`。
+
+生成完成后，务必跑 strict(train-only) 产物以避免泄漏并补齐 `data_stats.json/nav_field.npz`：
+
+```bash
+python -m src.data.build_strict_products --processed_dir data/processed_passenger --backup
+python -m src.utils.sanity_check --data_path data/processed_passenger --strict
+```
+
 ### 7.3 工程落地（当前缺口与可复现闭环）
 
 1) **生成 dt-fixed 数据集（已实现）**：输入 Phase A 的 HDF5 + splits，输出新的 HDF5 + splits，并写入可复现合同（`resample_meta.json` + old/new id 映射）：

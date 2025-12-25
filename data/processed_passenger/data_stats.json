@@ -1,0 +1,105 @@
+{
+  "created_at": "2025-12-25T17:00:16.629145+08:00",
+  "source": {
+    "split": "train",
+    "trajectory_ids_file": "splits/train_ids.npy",
+    "trajectory_ids_sha256": "ff7786c259472474",
+    "trajectories_h5_file": "processed_passenger/trajectories/shenzhen_trajectories.h5",
+    "trajectories_h5_sha256": "4b08bf51c44807d7",
+    "date_range": [
+      "2011-04-18T00:00:00+08:00",
+      "2011-04-25T09:57:53+08:00"
+    ]
+  },
+  "grid_config": {
+    "H": 400,
+    "W": 800,
+    "min_lat": 22.45,
+    "max_lat": 22.85,
+    "min_lon": 113.75,
+    "max_lon": 114.65
+  },
+  "normalization": {
+    "pos_min": [
+      11.338582038879395,
+      0.0745733305811882
+    ],
+    "pos_max": [
+      398.91619873046875,
+      796.7183837890625
+    ],
+    "vel_mean": [
+      0.08612951636314392,
+      -0.05361269414424896
+    ],
+    "vel_std": [
+      2.1872239112854004,
+      2.829845428466797
+    ],
+    "nav_scale": 1.0,
+    "nav_max_speed": 20.0
+  },
+  "trip_length_stats": {
+    "min": 10,
+    "max": 3727,
+    "mean": 29.295711678832117
+  },
+  "time_stats": {
+    "train_start_time_min": 1303056000,
+    "train_end_time_max": 1303696673,
+    "train_date_range": [
+      "2011-04-18T00:00:00+08:00",
+      "2011-04-25T09:57:53+08:00"
+    ],
+    "dt_stats_sample": {
+      "count": 13509,
+      "min": 1,
+      "max": 297,
+      "p50": 30.0,
+      "p95": 55.0,
+      "p99": 90.0,
+      "top_dt": [
+        [
+          30,
+          3702
+        ],
+        [
+          55,
+          2092
+        ],
+        [
+          28,
+          1715
+        ],
+        [
+          20,
+          1247
+        ],
+        [
+          26,
+          1151
+        ],
+        [
+          8,
+          1007
+        ],
+        [
+          6,
+          403
+        ],
+        [
+          22,
+          266
+        ],
+        [
+          1,
+          245
+        ],
+        [
+          56,
+          231
+        ]
+      ]
+    }
+  }
+}

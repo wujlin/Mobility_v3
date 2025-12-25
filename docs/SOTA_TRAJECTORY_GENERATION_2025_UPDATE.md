@@ -51,9 +51,9 @@
 
 ---
 
-## 3. 我们的方案：Data-driven Hierarchical Waypoint
+## 3. 本方案：Data-driven Hierarchical Waypoint
 
-我们结合了 **流派二 (Anchor)** 和 **流派三 (Hierarchy)** 的优势，提出 **Map-free Hierarchical Framework**。
+本方案结合了 **流派二 (Anchor)** 和 **流派三 (Hierarchy)** 的优势，提出 **Map-free Hierarchical Framework**。
 
 ### 3.1 架构定义
 
@@ -67,9 +67,9 @@
 这是本方案的核心创新点（Paper Contribution）：
 
 *   **Explicit Map (传统方法)**：推理时需要加载 Road Graph 文件，依赖 A* 搜索。泛化差，依赖地图数据质量。
-*   **Implicit Map Learning (我们的方法)**：
-    *   我们不给模型地图。
-    *   模型通过观察海量轨迹，**自动涌现 (Emerge)** 出对关键节点的认知。
+*   **Implicit Map Learning (本方案)**：
+    *   模型不依赖地图输入。
+    *   通过观察海量轨迹，**自动涌现 (Emerge)** 出对关键节点的认知。
     *   Waypoint 是**从数据中蒸馏出来的隐式地图知识**。
     *   **结论**：这是 **Strict Map-free**，且具备更强的泛化性和鲁棒性。
 
@@ -77,16 +77,58 @@
 
 ## 4. 验证计划 (Action Plan)
 
-为了证明这套逻辑的有效性，我们不需要立刻重新训练所有模型，而是先进行 **Oracle 验证**：
+为了避免再走 “看起来合理但实际上是同义反复” 的弯路，分层路线必须先通过两个 **Go/No-Go Gate**（CPU-only，不烧卡），再做 Oracle 执行能力诊断。
 
-1.  **Oracle Extraction (GT)**：
-    *   从测试集 GT 轨迹中提取 `Max Deviation Point` 作为 $W^*$。
-2.  **Segmented Inference**：
-    *   使用现有的 Phase B Diffusion 模型。
-    *   分别推理 $O \to W^*$ 和 $W^* \to D$。
-3.  **Metrics Check**：
-    *   如果 `JSD_TurnAngle` 显著下降（更接近 GT），且轨迹不再是一条直线。
-    *   **证明**：瓶颈确实在于 Decision 层，分层方案可行。
+> **硬约束协议（必读）**：`docs/HIERARCHICAL_VALIDATION_PROTOCOL.md`
+
+### 4.0 Waypoint Gate（Go/No-Go；先跑这个）
+
+> 目的：验证“粗层 waypoint/skeleton”这套表征是否 **(a) 可行** 且 **(b) 有信息量/可学**。  
+> 如果连这一步都过不了，就不要进入 hierarchical（否则宏观层学不到因果信号，微观层也无法被正确引导）。
+
+**A) 物理合法性检验（Validity Check）：Skeleton 碰撞率**
+- 从 GT 提取少量 waypoints（如 `max_dev / max_turn`；并用 `time/random` 做基线）。
+- 生成 skeleton：`start → waypoint(s) → end` 直接连线（可选 spline 仅作诊断）。
+- 在弱图（map-free proxy）上做碰撞检测：默认用 `nav_field.npz` 的 `count` 构建 drivable mask（`count>=thr`），并允许小范围 `close/dilate` 以抵消离散化/稀疏采样误差。
+- **硬阈值**：若 `collision_rate_any > 10%`，直接 **否决该 waypoint 定义/该 coarse 表示**（不用再看 MSE/ADE）。
+
+**B) 信息量检验（Learnability Check）：几何特征相关性**
+- 计算 waypoint 与几何特征点（路口/瓶颈的 proxy）的相关性：例如 waypoint 到 corner/junction proxy 的距离分布；并与 `time/random` 基线对比。
+- 判据：若与基线无差异（或相关性≈0），说明 waypoint 更像“均匀时间点”，宏观层很难学到可泛化的导航策略。
+
+脚本：`src/evaluation/waypoint_gate.py`（依赖 SciPy，CPU-only）
+
+```bash
+~/miniconda3/envs/emotion/bin/python -m src.evaluation.waypoint_gate \
+  --samples_npz data/experiments/prior_geo_density_test/samples.npz \
+  --nav_file data/processed_dt30/nav_field.npz \
+  --waypoint_mode max_turn --num_waypoints 1 \
+  --skeleton linear+pchip \
+  --count_thr 1 --close 0 --dilate 0 \
+  --out_json data/experiments/waypoint_gate/prior_density10k_maxturn_k1_thr1.json
+```
+
+> 现状快照（基于 `prior_geo_density_test/samples.npz`, N=10k）：  
+> - `count_thr=1, close=0, dilate=0`：linear ≈ 6–8%（<10%），pchip ≈ 12–16%（>10%，对 mask 很敏感）  
+> - `count_thr=1, close=1, dilate=1`：linear/pchip 均显著下降（<10%）  
+> - Learnability（corner 距离/相关性）当前接近基线（≈0）→ **仍需更强的“几何特征 proxy”或更合适的宏观变量定义（不一定是单点 waypoint）**。
+
+### 4.1 Oracle Execution（诊断 micro 是否具备“执行 detour”的能力）
+
+注意：**仅做 “GT waypoint → 插值回 GT” 是同义反复**；真正有效的 Oracle 是把 waypoint 当作条件喂给现有生成器跑推理。
+
+1. **Oracle Extraction (GT)**：从测试集 GT 轨迹中提取 $W^*$（如 `max_dev`）。
+2. **Segmented Inference**：使用现有 Phase B Diffusion/Physics 模型，分别推理 $O \to W^*$ 与 $W^* \to D$（无需重训）。
+3. **Metrics Check**：看 `JSD_TurnAngle` 是否下降（更接近 GT），并结合 DCV/可视化。
+
+> 当前结论：OracleWP 已被证伪（详见 `docs/PHASE_B_CFG_VISUALIZATION.md#8.1.1`），说明现有生成器的 support 基本没有“低频、平滑 detour”模态。  
+> 因此：hierarchical 若要成立，**不能只补宏观层**，还需要重训/重构 segment-level executor（更短 horizon / 更强条件 / 更结构化 latent）。
+
+### 4.2 进入训练前的决策树（避免再浪费一周）
+
+- 若 **4.0(A) Validity fail**：分层 coarse 表征不可用 → 直接考虑 weak map / road graph（工程量级更大，但方向更对）。
+- 若 **4.0 pass 但 4.1 fail**：宏观层可行但微观执行不具备 → 优先修 executor（不要先训 waypoint predictor）。
+- 若 **4.0 pass 且 4.1 pass**：才进入 Learned Macro（训练 waypoint predictor / route code），并用 micro executor 组合评估。
 
 ---
 
@@ -185,4 +227,4 @@
 
 ## 7. 总结：Hierarchical Waypoint 的“2025 对齐结论”
 
-综上所述，2025 年轨迹生成领域的主流趋势集中于强化**“拓扑/出行模式的显式决策变量”（如 Waypoint、Segment、Pattern 或 Map Condition）**，并结合更强大的生成器（如 Transformer-Diffusion、Flow Matching）以实现高保真的细节执行。这一趋势与本文提出的 **“Decision / Execution 解耦”** 及 **“Hierarchical Waypoint”** 方案高度契合，确立了该方案在当前技术前沿中的合理定位。
+综上所述，2025 年轨迹生成领域的主流趋势集中于强化**“拓扑/出行模式的显式决策变量”（如 Waypoint、Segment、Pattern 或 Map Condition）**，并结合更强大的生成器（如 Transformer-Diffusion、Flow Matching）以实现高保真的细节执行。启示：这一趋势与本文提出的 **“Decision / Execution 解耦”** 及 **“Hierarchical Waypoint”** 方案高度契合，确立了该方案在当前技术前沿中的合理定位。

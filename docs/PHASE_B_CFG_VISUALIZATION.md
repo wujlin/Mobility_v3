@@ -558,6 +558,7 @@ python -m src.visualization.oracle_waypoint_select \
 - 若目标是学术界认可的 trajectory validity（statistical consistency + feasibility），当前路线应当止损并 pivot。
 
 下一步（KISS，推荐优先级）：
+0. **先跑 Waypoint Gate（Go/No-Go）**：用 `src/evaluation/waypoint_gate.py` 做 skeleton 碰撞率 + 可学性检验，避免“同义反复”的验证；细节见 `docs/SOTA_TRAJECTORY_GENERATION_2025_UPDATE.md#4`。
 1. **Hierarchical / Coarse-to-Fine（waypoint predictor + segment generator）**：把 detour 变成“中间目标”问题，而不是让一步式生成器自己学全局规划。
 2. 只有当层级路线被证伪，才考虑 **road graph / map constraints**（工程量级更大）。
 

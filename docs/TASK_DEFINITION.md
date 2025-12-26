@@ -303,6 +303,20 @@ python -m src.data.build_strict_products --processed_dir data/processed_passenge
 python -m src.utils.sanity_check --data_path data/processed_passenger --strict
 ```
 
+如果你要进入 Phase B（论文版 dt=30s），再从 passenger 版本生成 dt-fixed 版本：
+
+```bash
+python -m src.data.build_dt_fixed_dataset \
+  --input_processed_dir data/processed_passenger \
+  --output_processed_dir data/processed_passenger_dt30 \
+  --dt_fixed 30 \
+  --max_gap 300 \
+  --min_length 10
+
+python -m src.data.build_strict_products --processed_dir data/processed_passenger_dt30 --backup
+python -m src.utils.sanity_check --data_path data/processed_passenger_dt30 --strict --expected_dt 30 --dt_require_constant
+```
+
 ### 7.3 工程落地（当前缺口与可复现闭环）
 
 1) **生成 dt-fixed 数据集（已实现）**：输入 Phase A 的 HDF5 + splits，输出新的 HDF5 + splits，并写入可复现合同（`resample_meta.json` + old/new id 映射）：

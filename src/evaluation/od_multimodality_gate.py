@@ -26,16 +26,24 @@ def _load_gt(path: Path, *, max_n: Optional[int]) -> Tuple[np.ndarray, np.ndarra
         raise ValueError(f"Bad samples.npz: require keys ['targets','start_pos'], got {data.files}")
     targets = np.asarray(data["targets"], dtype=np.float32)
     start_pos = np.asarray(data["start_pos"], dtype=np.float32)
+    dest_pos = np.asarray(data["dest_pos"], dtype=np.float32) if "dest_pos" in data.files else None
     if max_n is not None:
         targets = targets[: int(max_n)]
         start_pos = start_pos[: int(max_n)]
+        if dest_pos is not None:
+            dest_pos = dest_pos[: int(max_n)]
     if targets.ndim != 3 or targets.shape[-1] != 2:
         raise ValueError(f"Expected targets (N,F,2), got {targets.shape}")
     if start_pos.ndim != 2 or start_pos.shape[-1] != 2:
         raise ValueError(f"Expected start_pos (N,2), got {start_pos.shape}")
     if targets.shape[0] != start_pos.shape[0]:
         raise ValueError("N mismatch between targets and start_pos")
-    return targets, start_pos
+    if dest_pos is not None:
+        if dest_pos.ndim != 2 or dest_pos.shape[-1] != 2:
+            raise ValueError(f"Expected dest_pos (N,2), got {dest_pos.shape}")
+        if dest_pos.shape[0] != targets.shape[0]:
+            raise ValueError("N mismatch between dest_pos and targets")
+    return targets, start_pos, dest_pos
 
 
 def _od_key(start_pos: np.ndarray, end_pos: np.ndarray, *, od_bin: float) -> np.ndarray:
@@ -87,6 +95,53 @@ def _polyline_features(start_pos: np.ndarray, targets: np.ndarray) -> Tuple[np.n
     len_ratio = path_len / chord
 
     return signed_dev_ratio.astype(np.float32), s_frac.astype(np.float32), len_ratio.astype(np.float32)
+
+
+def _polyline_features_to_dest(
+    start_pos: np.ndarray,
+    targets: np.ndarray,
+    dest_pos: np.ndarray,
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """
+    Extract coarse geometry features for clustering with *global destination* as the OD endpoint.
+
+    This is closer to the real task setting where condition includes trip-level destination.
+    Features:
+      - signed_dev_ratio: signed max lateral deviation to chord (start->dest) / chord_len
+      - progress_ratio: signed progress along chord, normalized by chord length
+      - len_ratio: segment path_len / chord_len
+    """
+    start_pos = np.asarray(start_pos, dtype=np.float32)
+    targets = np.asarray(targets, dtype=np.float32)
+    dest_pos = np.asarray(dest_pos, dtype=np.float32)
+    N, F, _ = targets.shape
+    poly = np.concatenate([start_pos[:, None, :], targets], axis=1)  # (N,F+1,2)
+
+    a = start_pos.astype(np.float64)
+    b = dest_pos.astype(np.float64)
+    ab = b - a
+    chord = np.linalg.norm(ab, axis=1) + 1e-12
+
+    ap = poly.astype(np.float64) - a[:, None, :]
+    cross = ab[:, None, 0] * ap[:, :, 1] - ab[:, None, 1] * ap[:, :, 0]
+    dist_signed = cross / chord[:, None]
+    dist_signed[:, 0] = 0.0
+    idx = np.argmax(np.abs(dist_signed), axis=1)
+    dev_signed = dist_signed[np.arange(N), idx]
+    signed_dev_ratio = dev_signed / chord
+
+    # Progress along chord direction (negative => moving away from destination).
+    end_seg = poly[:, -1, :].astype(np.float64)
+    proj = np.sum((end_seg - a) * ab, axis=1) / (chord * chord)
+    progress_ratio = proj.astype(np.float32)
+
+    # Segment path length (not full trip).
+    seg = poly[:, 1:, :] - poly[:, :-1, :]
+    seg_len = np.linalg.norm(seg, axis=2).astype(np.float64)
+    path_len = np.sum(seg_len, axis=1)
+    len_ratio = (path_len / chord).astype(np.float32)
+
+    return signed_dev_ratio.astype(np.float32), progress_ratio, len_ratio
 
 
 def _kmeans2(x: np.ndarray, *, seed: int, iters: int = 25) -> Tuple[np.ndarray, np.ndarray]:
@@ -176,12 +231,17 @@ def _cluster_gate(
 
 
 def run_gate(*, samples_npz: Path, cfg: GateConfig) -> Dict[str, object]:
-    targets, start_pos = _load_gt(samples_npz, max_n=cfg.max_n)
-    end_pos = targets[:, -1, :]
+    targets, start_pos, dest_pos = _load_gt(samples_npz, max_n=cfg.max_n)
+    use_dest = dest_pos is not None
+    end_pos = dest_pos if dest_pos is not None else targets[:, -1, :]
     keys = _od_key(start_pos, end_pos, od_bin=float(cfg.od_bin))
 
-    sd, sf, lr = _polyline_features(start_pos, targets)
-    feats = np.stack([sd, sf, lr], axis=1)  # (N,3)
+    if use_dest:
+        sd, pr, lr = _polyline_features_to_dest(start_pos, targets, dest_pos=dest_pos)  # type: ignore[arg-type]
+        feats = np.stack([sd, pr, lr], axis=1)  # (N,3)
+    else:
+        sd, sf, lr = _polyline_features(start_pos, targets)
+        feats = np.stack([sd, sf, lr], axis=1)  # (N,3)
 
     # group by key
     buckets: Dict[Tuple[int, int, int, int], List[int]] = {}
@@ -219,6 +279,7 @@ def run_gate(*, samples_npz: Path, cfg: GateConfig) -> Dict[str, object]:
         "inputs": {"samples_npz": str(samples_npz)},
         "config": {
             "od_bin": float(cfg.od_bin),
+            "od_end": ("dest_pos" if use_dest else "segment_end"),
             "min_bucket_n": int(cfg.min_bucket_n),
             "min_cluster_frac": float(cfg.min_cluster_frac),
             "sep_thr": float(cfg.sep_thr),
@@ -280,4 +341,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

@@ -16,9 +16,39 @@
 
 ---
 
+## 当前事实快照（避免重复烧卡）
+
+> 这一节只记录“已跑出的硬事实”，用于同步进度与止损。
+
+- 数据版本：`data/processed_passenger_dt30`（Passenger-only，dt=30s，strict sanity check PASS）。
+- GT windows：`data/experiments/gt_passenger_dt30_test/samples.npz`（默认 N=20000, obs=8, pred=12）。
+- Go/No-Go 1（GT，OD 多模态证据）：
+  - `od_bin=12`：`weighted_multimodal_ratio ≈ 0.109`
+  - `od_bin=16`：`weighted_multimodal_ratio ≈ 0.197`
+- Go/No-Go 2（GT，Oracle waypoint 的 skeleton-only）：
+  - `Waypoint Gate (rdp_dev, K=2, linear)`：`collision_rate_any ≈ 0.0884 < 0.10`（通过硬可行性门槛）
+  - `detour_validity`：`RDPK2` 在 overall + detour subset 上显著优于 `StraightK0`（粗拓扑可由 2 个 waypoint 承载）
+- 下一步：Go/No-Go 3（Oracle waypoint 条件下的 micro executability，三对照）。
+
 ## 主线三步 Go/No-Go（最短实验序列）
 
 > 这三步的设计目标是：**先把积分打开（Oracle z）**，把风险压到最低，再决定是否进入训练。
+
+### 准备：导出 GT windows 为 `samples.npz`（CPU-only）
+
+本协议默认所有 gate/validity 都以**同一份 GT windows**为基准，避免“拿模型输出当 GT”导致的同义反复。
+
+```bash
+~/miniconda3/envs/emotion/bin/python -m src.evaluation.dump_gt_windows_npz \
+  --processed_dir data/processed_passenger_dt30 \
+  --split test \
+  --out_npz data/experiments/gt_passenger_dt30_test/samples.npz \
+  --obs_len 8 --pred_len 12 \
+  --num_samples 20000 \
+  --seed 0
+```
+
+输出字段（最小闭环）：`origin_pos/dest_pos/start_pos/targets/traj_idx/start_t`。
 
 ### Go/No-Go 1：OD 条件下是否存在“稳定多模态混合”？
 
@@ -30,9 +60,9 @@
 
 ```bash
 ~/miniconda3/envs/emotion/bin/python -m src.evaluation.od_multimodality_gate \
-  --samples_npz data/experiments/prior_geo_density_test/samples.npz \
+  --samples_npz data/experiments/gt_passenger_dt30_test/samples.npz \
   --od_bin 12 --min_bucket_n 50 --sep_thr 2.0 \
-  --out_json data/experiments/od_gate/gt_odbin12.json
+  --out_json data/experiments/gt_passenger_dt30_test/od_gate_dest_odbin12.json
 ```
 
 **判读**（经验口径，避免过拟合阈值）：
@@ -50,26 +80,37 @@
 生成 skeleton-only 的 `samples.npz`（便于统一后续评估）：
 ```bash
 ~/miniconda3/envs/emotion/bin/python -m src.evaluation.make_oracle_skeleton \
-  --samples_npz data/experiments/prior_geo_density_test/samples.npz \
-  --out_npz data/experiments/skeleton_oracle/rdp_k2_linear.npz \
+  --samples_npz data/experiments/gt_passenger_dt30_test/samples.npz \
+  --out_npz data/experiments/gt_passenger_dt30_test/skeleton_rdp_k2_linear.npz \
   --waypoint_mode rdp_dev --num_waypoints 2 --skeleton linear
 ```
 
 对照（0 waypoint 的 straight skeleton）：
 ```bash
 ~/miniconda3/envs/emotion/bin/python -m src.evaluation.make_oracle_skeleton \
-  --samples_npz data/experiments/prior_geo_density_test/samples.npz \
-  --out_npz data/experiments/skeleton_oracle/straight_k0_linear.npz \
+  --samples_npz data/experiments/gt_passenger_dt30_test/samples.npz \
+  --out_npz data/experiments/gt_passenger_dt30_test/skeleton_straight_k0_linear.npz \
   --waypoint_mode time --num_waypoints 0 --skeleton linear
+```
+
+硬可行性（Waypoint Gate：碰撞率/越界率，<10% 才讨论后续）：
+```bash
+~/miniconda3/envs/emotion/bin/python -m src.evaluation.waypoint_gate \
+  --samples_npz data/experiments/gt_passenger_dt30_test/samples.npz \
+  --nav_file data/processed_passenger_dt30/nav_field.npz \
+  --waypoint_mode rdp_dev --num_waypoints 2 \
+  --skeleton linear \
+  --out_json data/experiments/gt_passenger_dt30_test/waypoint_gate_rdp_k2.json
 ```
 
 评估（空间尺度 turn + max_dev_ratio + len_ratio；含 CI+noise floor）：
 ```bash
 ~/miniconda3/envs/emotion/bin/python -m src.evaluation.detour_validity \
-  --inputs "StraightK0:data/experiments/skeleton_oracle/straight_k0_linear.npz" \
-           "RDPK2:data/experiments/skeleton_oracle/rdp_k2_linear.npz" \
+  --inputs "StraightK0:data/experiments/gt_passenger_dt30_test/skeleton_straight_k0_linear.npz" \
+           "RDPK2:data/experiments/gt_passenger_dt30_test/skeleton_rdp_k2_linear.npz" \
   --ds 0.5 --lags 1 2 4 8 --offset_fracs 0 0.25 0.5 0.75 \
-  --detour_pct 10 --bootstrap 200 --noise_splits 200
+  --detour_pct 10 --bootstrap 200 --noise_splits 200 \
+  --out_json data/experiments/gt_passenger_dt30_test/detour_validity_skeleton_k2.json
 ```
 
 **Go/No-Go**：

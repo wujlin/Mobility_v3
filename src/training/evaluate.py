@@ -441,6 +441,8 @@ def _run_samples_only(
     existing_preds = None
     existing_targets = None
     existing_start_pos = None
+    existing_origin_pos = None
+    existing_dest_pos = None
     existing_preds_k = None
     existing_n = 0
 
@@ -450,6 +452,13 @@ def _run_samples_only(
         existing_targets = np.asarray(data["targets"], dtype=np.float32)
         existing_start_pos = np.asarray(data["start_pos"], dtype=np.float32)
         existing_n = int(existing_targets.shape[0])
+        if "origin_pos" in data.files and "dest_pos" in data.files:
+            existing_origin_pos = np.asarray(data["origin_pos"], dtype=np.float32)
+            existing_dest_pos = np.asarray(data["dest_pos"], dtype=np.float32)
+            if existing_origin_pos.shape[0] != existing_n or existing_dest_pos.shape[0] != existing_n:
+                raise RuntimeError(
+                    f"Bad existing samples.npz: origin/dest N mismatch origin={existing_origin_pos.shape[0]} dest={existing_dest_pos.shape[0]} targets={existing_n}"
+                )
         if existing_preds.shape[0] != existing_n or existing_start_pos.shape[0] != existing_n:
             raise RuntimeError(
                 f"Bad existing samples.npz: N mismatch preds={existing_preds.shape[0]} targets={existing_n} start_pos={existing_start_pos.shape[0]}"
@@ -503,12 +512,22 @@ def _run_samples_only(
     save_preds: List[np.ndarray] = []
     save_targets: List[np.ndarray] = []
     save_start_pos: List[np.ndarray] = []
+    save_origin_pos: List[np.ndarray] = []
+    save_dest_pos: List[np.ndarray] = []
     save_preds_k_by_k: Optional[List[List[np.ndarray]]] = None
 
     if existing_n > 0:
         save_preds.append(existing_preds)  # type: ignore[arg-type]
         save_targets.append(existing_targets)  # type: ignore[arg-type]
         save_start_pos.append(existing_start_pos)  # type: ignore[arg-type]
+        if existing_origin_pos is not None and existing_dest_pos is not None:
+            save_origin_pos.append(existing_origin_pos)
+            save_dest_pos.append(existing_dest_pos)
+        elif existing_origin_pos is None and existing_dest_pos is None:
+            # Backward-compat: old samples.npz might not include origin/dest; skip saving OD fields on resume.
+            pass
+        else:  # pragma: no cover
+            raise RuntimeError("Bad existing samples.npz: only one of origin_pos/dest_pos exists.")
         if bool(getattr(args, "save_all_k", False)) and existing_preds_k is not None:
             # We store preds_k as a single chunk; later concatenate along axis=0.
             save_preds_k_by_k = [[existing_preds_k[:, k]] for k in range(int(K_full))]
@@ -546,6 +565,10 @@ def _run_samples_only(
             obs = obs.to(device)
             cond = batch["cond"].to(device)
             nav_patch = batch["nav_patch"].to(device) if args.model_type in ("physics", "physics_flow") else None
+
+            # Trip-level OD in grid coordinates (consistent with condition definition).
+            origin_pos = norm.denormalize_pos(cond[:, 2:4].detach().cpu().numpy())
+            dest_pos = norm.denormalize_pos(cond[:, 4:6].detach().cpu().numpy())
 
             # CFG inference: build unconditional condition by dropping destination (d_y, d_x)
             cond_uncond = None
@@ -681,6 +704,10 @@ def _run_samples_only(
                     save_preds.append(pred_pos[:take].astype(np.float32, copy=False))
                     save_targets.append(gt_pos[:take].astype(np.float32, copy=False))
                     save_start_pos.append(start_pos[:take].astype(np.float32, copy=False))
+                    # Only save OD fields if we are not resuming from an old file without them.
+                    if existing_n == 0 or (existing_origin_pos is not None and existing_dest_pos is not None):
+                        save_origin_pos.append(origin_pos[:take].astype(np.float32, copy=False))
+                        save_dest_pos.append(dest_pos[:take].astype(np.float32, copy=False))
                 if bool(getattr(args, "save_all_k", False)) and save_preds_k_by_k is not None:
                     save_preds_k_by_k[int(k)].append(pred_pos[:take].astype(np.float32, copy=False))
 
@@ -692,6 +719,8 @@ def _run_samples_only(
     preds = np.concatenate(save_preds, axis=0) if save_preds else np.zeros((0, int(args.pred_len), 2), dtype=np.float32)
     targets = np.concatenate(save_targets, axis=0) if save_targets else np.zeros((0, int(args.pred_len), 2), dtype=np.float32)
     start_pos_arr = np.concatenate(save_start_pos, axis=0) if save_start_pos else np.zeros((0, 2), dtype=np.float32)
+    origin_pos_arr = np.concatenate(save_origin_pos, axis=0) if save_origin_pos else None
+    dest_pos_arr = np.concatenate(save_dest_pos, axis=0) if save_dest_pos else None
 
     if preds.shape[0] != targets.shape[0] or preds.shape[0] != start_pos_arr.shape[0]:
         raise RuntimeError(
@@ -699,6 +728,13 @@ def _run_samples_only(
         )
 
     npz_kwargs = {"preds": preds, "targets": targets, "start_pos": start_pos_arr}
+    if origin_pos_arr is not None and dest_pos_arr is not None:
+        if origin_pos_arr.shape[0] != preds.shape[0] or dest_pos_arr.shape[0] != preds.shape[0]:
+            raise RuntimeError(
+                f"Internal error: N mismatch origin={origin_pos_arr.shape[0]} dest={dest_pos_arr.shape[0]} preds={preds.shape[0]}"
+            )
+        npz_kwargs["origin_pos"] = origin_pos_arr.astype(np.float32, copy=False)
+        npz_kwargs["dest_pos"] = dest_pos_arr.astype(np.float32, copy=False)
     if bool(getattr(args, "save_all_k", False)) and save_preds_k_by_k is not None:
         per_k = []
         for k_list in save_preds_k_by_k:
@@ -971,6 +1007,8 @@ def evaluate(args):
     save_preds_k_by_k = None  # optional: list[list[np.ndarray]] for saving all K samples
     save_targets = []
     save_start_pos = []
+    save_origin_pos = []
+    save_dest_pos = []
     
     print("Running Inference...")
     with torch.no_grad():
@@ -1045,6 +1083,9 @@ def evaluate(args):
                 take = min(remaining, int(gt_pos.shape[0]))
                 if bool(getattr(args, "save_all_k", False)) and save_preds_k_by_k is None:
                     save_preds_k_by_k = [[] for _ in range(int(K))]
+                # Trip-level OD in grid coordinates (consistent with condition definition).
+                origin_pos = norm.denormalize_pos(cond[:, 2:4].detach().cpu().numpy())
+                dest_pos = norm.denormalize_pos(cond[:, 4:6].detach().cpu().numpy())
 
             wp_step = None
             cond_wp = None
@@ -1166,6 +1207,8 @@ def evaluate(args):
                         save_preds.extend(pred_pos[:take].astype(np.float32, copy=False))
                         save_targets.extend(gt_pos[:take].astype(np.float32, copy=False))
                         save_start_pos.extend(start_pos[:take].astype(np.float32, copy=False))
+                        save_origin_pos.extend(origin_pos[:take].astype(np.float32, copy=False))
+                        save_dest_pos.extend(dest_pos[:take].astype(np.float32, copy=False))
                     if bool(getattr(args, "save_all_k", False)) and save_preds_k_by_k is not None:
                         save_preds_k_by_k[int(k)].append(pred_pos[:take].astype(np.float32, copy=False))
 
@@ -1289,6 +1332,13 @@ def evaluate(args):
             "targets": np.stack(save_targets, axis=0),
             "start_pos": np.stack(save_start_pos, axis=0),
         }
+        if save_origin_pos and save_dest_pos:
+            if len(save_origin_pos) != len(save_targets) or len(save_dest_pos) != len(save_targets):
+                raise RuntimeError(
+                    f"Internal error: N mismatch origin={len(save_origin_pos)} dest={len(save_dest_pos)} targets={len(save_targets)}"
+                )
+            npz_kwargs["origin_pos"] = np.stack(save_origin_pos, axis=0)
+            npz_kwargs["dest_pos"] = np.stack(save_dest_pos, axis=0)
         if bool(getattr(args, "save_all_k", False)) and save_preds_k_by_k is not None:
             per_k = []
             for k_list in save_preds_k_by_k:

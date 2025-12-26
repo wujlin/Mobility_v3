@@ -1,51 +1,24 @@
-# Data
-data/raw/
-!data/experiments/
-track_data/
-*.npz
-!data/processed/**/*.npz
-!data/processed_dt30/**/*.npz
-
-# Keep processed data (for sharing)
-!data/processed/
-!data/processed/**
-!data/processed_dt30/
-!data/processed_dt30/**
-
-# Ignore model weight files under experiments (allow other experiment artifacts)
-# Keep the experiments directory tracked but exclude large .pt weight files
-data/experiments/**/*.pt
-data/experiments/*.pt
-data/experiments/**/.last.pt.*
-data/experiments/.last.pt.*
-
-# Logs
-logs/
-old_logs/
-
-# Backups (auto-generated)
-data/processed/**/*.legacy.*
-data/processed_dt30/**/*.legacy.*
 # Python
 __pycache__/
-*.pyc
-.venv/
-.venv-wsl/
-.env
+*.py[cod]
+*$py.class
+*.so
 
-# OS
-.DS_Store
+# Data (Keep data local, do not commit)
+data/
+track_data/
+*.h5
+*.npy
+*.npz
+*.csv
+*.txt
 
-# IDE
-.idea/
-.vscode/
-
-# Build
-dist/
-build/
-*.egg-info/
-
-# Local artifacts
+# Logs & Output
+logs/
+*.log
+experiments/
 backups/
-data/experiments/
-data/processed_dt30/
+
+# System
+.DS_Store
+Thumbs.db

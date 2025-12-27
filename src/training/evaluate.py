@@ -406,7 +406,7 @@ def _slice_batch(batch: dict, start: int) -> dict:
 
     Notes:
       - We only slice keys used in evaluation/sample generation.
-      - `meta` (if present) is left untouched because it is not used downstream.
+      - `meta` is sliced when present (used for stable window alignment in validity checks).
     """
     if start <= 0:
         return batch
@@ -419,6 +419,21 @@ def _slice_batch(batch: dict, start: int) -> dict:
             sliced[k] = v[start:]
         except Exception:
             # Some keys (e.g., nested dict meta) are not sliceable; ignore.
+            pass
+    meta = batch.get("meta")
+    if meta is not None:
+        try:
+            if isinstance(meta, dict):
+                meta_s = {}
+                for mk, mv in meta.items():
+                    try:
+                        meta_s[mk] = mv[start:]
+                    except Exception:
+                        meta_s[mk] = mv
+                sliced["meta"] = meta_s
+            else:
+                sliced["meta"] = meta[start:]
+        except Exception:
             pass
     return sliced
 
@@ -473,6 +488,8 @@ def _run_samples_only(
     existing_start_pos = None
     existing_origin_pos = None
     existing_dest_pos = None
+    existing_traj_idx = None
+    existing_start_t = None
     existing_preds_k = None
     existing_n = 0
 
@@ -482,6 +499,13 @@ def _run_samples_only(
         existing_targets = np.asarray(data["targets"], dtype=np.float32)
         existing_start_pos = np.asarray(data["start_pos"], dtype=np.float32)
         existing_n = int(existing_targets.shape[0])
+        if "traj_idx" in data.files and "start_t" in data.files:
+            existing_traj_idx = np.asarray(data["traj_idx"], dtype=np.int64)
+            existing_start_t = np.asarray(data["start_t"], dtype=np.int64)
+            if existing_traj_idx.shape[0] != existing_n or existing_start_t.shape[0] != existing_n:
+                raise RuntimeError(
+                    f"Bad existing samples.npz: traj_idx/start_t N mismatch traj_idx={existing_traj_idx.shape[0]} start_t={existing_start_t.shape[0]} targets={existing_n}"
+                )
         if "origin_pos" in data.files and "dest_pos" in data.files:
             existing_origin_pos = np.asarray(data["origin_pos"], dtype=np.float32)
             existing_dest_pos = np.asarray(data["dest_pos"], dtype=np.float32)
@@ -548,12 +572,17 @@ def _run_samples_only(
     save_start_pos: List[np.ndarray] = []
     save_origin_pos: List[np.ndarray] = []
     save_dest_pos: List[np.ndarray] = []
+    save_traj_idx: List[np.ndarray] = []
+    save_start_t: List[np.ndarray] = []
     save_preds_k_by_k: Optional[List[List[np.ndarray]]] = None
 
     if existing_n > 0:
         save_preds.append(existing_preds)  # type: ignore[arg-type]
         save_targets.append(existing_targets)  # type: ignore[arg-type]
         save_start_pos.append(existing_start_pos)  # type: ignore[arg-type]
+        if existing_traj_idx is not None and existing_start_t is not None:
+            save_traj_idx.append(existing_traj_idx)
+            save_start_t.append(existing_start_t)
         if existing_origin_pos is not None and existing_dest_pos is not None:
             save_origin_pos.append(existing_origin_pos)
             save_dest_pos.append(existing_dest_pos)
@@ -763,6 +792,17 @@ def _run_samples_only(
                     save_preds.append(pred_pos[:take].astype(np.float32, copy=False))
                     save_targets.append(gt_pos[:take].astype(np.float32, copy=False))
                     save_start_pos.append(start_pos[:take].astype(np.float32, copy=False))
+                    meta = batch.get("meta")
+                    if meta is not None and isinstance(meta, dict) and ("traj_idx" in meta) and ("start_t" in meta):
+                        try:
+                            tid = np.asarray(meta["traj_idx"][:take].detach().cpu().numpy(), dtype=np.int64)
+                            t0 = np.asarray(meta["start_t"][:take].detach().cpu().numpy(), dtype=np.int64)
+                            if existing_n == 0 or (existing_traj_idx is not None and existing_start_t is not None):
+                                save_traj_idx.append(tid)
+                                save_start_t.append(t0)
+                        except Exception:
+                            # If meta is not a tensor batch (unexpected), just skip saving ids.
+                            pass
                     # Only save OD fields if we are not resuming from an old file without them.
                     if origin_pos is not None and dest_pos is not None:
                         if existing_n == 0 or (existing_origin_pos is not None and existing_dest_pos is not None):
@@ -781,6 +821,8 @@ def _run_samples_only(
     start_pos_arr = np.concatenate(save_start_pos, axis=0) if save_start_pos else np.zeros((0, 2), dtype=np.float32)
     origin_pos_arr = np.concatenate(save_origin_pos, axis=0) if save_origin_pos else None
     dest_pos_arr = np.concatenate(save_dest_pos, axis=0) if save_dest_pos else None
+    traj_idx_arr = np.concatenate(save_traj_idx, axis=0) if save_traj_idx else None
+    start_t_arr = np.concatenate(save_start_t, axis=0) if save_start_t else None
 
     if preds.shape[0] != targets.shape[0] or preds.shape[0] != start_pos_arr.shape[0]:
         raise RuntimeError(
@@ -788,6 +830,13 @@ def _run_samples_only(
         )
 
     npz_kwargs = {"preds": preds, "targets": targets, "start_pos": start_pos_arr}
+    if traj_idx_arr is not None and start_t_arr is not None:
+        if traj_idx_arr.shape[0] != preds.shape[0] or start_t_arr.shape[0] != preds.shape[0]:
+            raise RuntimeError(
+                f"Internal error: N mismatch traj_idx={traj_idx_arr.shape[0]} start_t={start_t_arr.shape[0]} preds={preds.shape[0]}"
+            )
+        npz_kwargs["traj_idx"] = traj_idx_arr.astype(np.int64, copy=False)
+        npz_kwargs["start_t"] = start_t_arr.astype(np.int64, copy=False)
     if origin_pos_arr is not None and dest_pos_arr is not None:
         if origin_pos_arr.shape[0] != preds.shape[0] or dest_pos_arr.shape[0] != preds.shape[0]:
             raise RuntimeError(
@@ -1123,6 +1172,8 @@ def evaluate(args):
     save_start_pos = []
     save_origin_pos = []
     save_dest_pos = []
+    save_traj_idx = []
+    save_start_t = []
     
     print("Running Inference...")
     with torch.no_grad():
@@ -1338,6 +1389,15 @@ def evaluate(args):
                         save_preds.extend(pred_pos[:take].astype(np.float32, copy=False))
                         save_targets.extend(gt_pos[:take].astype(np.float32, copy=False))
                         save_start_pos.extend(start_pos[:take].astype(np.float32, copy=False))
+                        meta = batch.get("meta")
+                        if meta is not None and isinstance(meta, dict) and ("traj_idx" in meta) and ("start_t" in meta):
+                            try:
+                                tid = meta["traj_idx"][:take].detach().cpu().numpy().astype(np.int64, copy=False)
+                                t0 = meta["start_t"][:take].detach().cpu().numpy().astype(np.int64, copy=False)
+                                save_traj_idx.extend(tid.tolist())
+                                save_start_t.extend(t0.tolist())
+                            except Exception:
+                                pass
                         if origin_pos is not None and dest_pos is not None:
                             save_origin_pos.extend(origin_pos[:take].astype(np.float32, copy=False))
                             save_dest_pos.extend(dest_pos[:take].astype(np.float32, copy=False))
@@ -1468,6 +1528,13 @@ def evaluate(args):
             "targets": np.stack(save_targets, axis=0),
             "start_pos": np.stack(save_start_pos, axis=0),
         }
+        if save_traj_idx and save_start_t:
+            if len(save_traj_idx) != npz_kwargs["preds"].shape[0] or len(save_start_t) != npz_kwargs["preds"].shape[0]:
+                raise RuntimeError(
+                    f"Internal error: N mismatch traj_idx={len(save_traj_idx)} start_t={len(save_start_t)} preds={npz_kwargs['preds'].shape[0]}"
+                )
+            npz_kwargs["traj_idx"] = np.asarray(save_traj_idx, dtype=np.int64)
+            npz_kwargs["start_t"] = np.asarray(save_start_t, dtype=np.int64)
         if save_origin_pos and save_dest_pos:
             if len(save_origin_pos) != len(save_targets) or len(save_dest_pos) != len(save_targets):
                 raise RuntimeError(

@@ -36,7 +36,7 @@ def _parse_inputs(items: Sequence[str]) -> Dict[str, str]:
 def _load_npz(path: Path) -> Dict[str, np.ndarray]:
     data = np.load(str(path), allow_pickle=True)
     out: Dict[str, np.ndarray] = {}
-    for k in ["preds", "preds_k", "targets", "start_pos"]:
+    for k in ["preds", "preds_k", "targets", "start_pos", "traj_idx", "start_t"]:
         if k in data.files:
             out[k] = np.asarray(data[k])
     if "targets" not in out:
@@ -44,6 +44,78 @@ def _load_npz(path: Path) -> Dict[str, np.ndarray]:
     if "preds" not in out and "preds_k" not in out:
         raise ValueError(f"{path} missing required key 'preds' or 'preds_k'. keys={list(data.files)}")
     return out
+
+
+def _window_keys(data: Dict[str, np.ndarray]) -> Optional[np.ndarray]:
+    """
+    Stable window identifier for alignment across methods.
+    key = (traj_idx << 32) | start_t
+    """
+    if "traj_idx" not in data or "start_t" not in data:
+        return None
+    traj_idx = np.asarray(data["traj_idx"], dtype=np.int64).reshape(-1)
+    start_t = np.asarray(data["start_t"], dtype=np.int64).reshape(-1)
+    if traj_idx.shape[0] != start_t.shape[0]:
+        raise ValueError(f"Bad traj_idx/start_t shapes: traj_idx={traj_idx.shape} start_t={start_t.shape}")
+    return (traj_idx << np.int64(32)) | (start_t & np.int64(0xFFFFFFFF))
+
+
+def _align_loaded_by_window_ids(loaded: Dict[str, Dict[str, np.ndarray]]) -> Tuple[Dict[str, Dict[str, np.ndarray]], Dict[str, object]]:
+    """
+    Align different method npz files to the common set of (traj_idx,start_t) windows.
+    Preserves the order of the first input.
+    """
+    names = list(loaded.keys())
+    if not names:
+        raise ValueError("No inputs.")
+
+    keys_by_name: Dict[str, np.ndarray] = {}
+    for name in names:
+        keys = _window_keys(loaded[name])
+        if keys is None:
+            raise ValueError(f"Missing traj_idx/start_t in {name}; cannot align.")
+        keys = np.asarray(keys, dtype=np.int64).reshape(-1)
+        if int(np.unique(keys).size) != int(keys.size):
+            raise ValueError(f"Duplicate window ids detected in {name}; cannot align safely.")
+        keys_by_name[name] = keys
+
+    common = keys_by_name[names[0]]
+    for name in names[1:]:
+        common = np.intersect1d(common, keys_by_name[name], assume_unique=False)
+
+    if common.size == 0:
+        raise ValueError("No common windows across inputs (traj_idx/start_t intersection is empty).")
+
+    # Preserve reference order (the first input).
+    ref_keys = keys_by_name[names[0]]
+    keep_mask = np.isin(ref_keys, common)
+    order = ref_keys[keep_mask]
+
+    stats: Dict[str, object] = {
+        "aligned_by": "traj_idx_start_t",
+        "common_N": int(order.size),
+        "dropped": {},
+    }
+
+    aligned: Dict[str, Dict[str, np.ndarray]] = {}
+    for name in names:
+        data = loaded[name]
+        keys = keys_by_name[name]
+        idx_map = {int(k): int(i) for i, k in enumerate(keys)}
+        idx = np.asarray([idx_map[int(k)] for k in order], dtype=np.int64)
+        stats["dropped"][name] = int(keys.size - idx.size)
+
+        out: Dict[str, np.ndarray] = {}
+        for k, v in data.items():
+            if k in ("preds", "targets", "start_pos", "traj_idx", "start_t"):
+                out[k] = np.asarray(v)[idx]
+            elif k == "preds_k":
+                out[k] = np.asarray(v)[idx]
+            else:
+                out[k] = v
+        aligned[name] = out
+
+    return aligned, stats
 
 
 def _targets_hash(targets: np.ndarray) -> str:
@@ -335,10 +407,7 @@ def compute_report(
     max_n: Optional[int],
 ) -> Dict[str, object]:
     loaded: Dict[str, Dict[str, np.ndarray]] = {}
-    gt_targets: Optional[np.ndarray] = None
-    gt_start: Optional[np.ndarray] = None
-    gt_hash: Optional[str] = None
-    gt_start_hash: Optional[str] = None
+    targets_hash_by_name: Dict[str, str] = {}
 
     for name, path_str in inputs.items():
         data = _load_npz(Path(path_str))
@@ -351,24 +420,58 @@ def compute_report(
                 data["preds"] = np.asarray(data["preds"][:n])
             if "preds_k" in data:
                 data["preds_k"] = np.asarray(data["preds_k"][:n])
+            if "traj_idx" in data:
+                data["traj_idx"] = np.asarray(data["traj_idx"][:n])
+            if "start_t" in data:
+                data["start_t"] = np.asarray(data["start_t"][:n])
         loaded[name] = data
 
-        th = _targets_hash(data["targets"])
-        if gt_targets is None:
-            gt_targets = np.asarray(data["targets"], dtype=np.float32)
-            gt_start = np.asarray(data.get("start_pos", gt_targets[:, 0]), dtype=np.float32)
-            gt_hash = th
-            if "start_pos" in data:
-                gt_start_hash = _array_hash(np.asarray(data["start_pos"], dtype=np.float32))
-        else:
-            if th != gt_hash:
-                raise ValueError(f"GT mismatch: {name} targets hash={th} != {gt_hash}")
-            if gt_start_hash is not None and "start_pos" in data:
-                sh = _array_hash(np.asarray(data["start_pos"], dtype=np.float32))
-                if sh != gt_start_hash:
-                    raise ValueError(f"start_pos mismatch: {name} start_pos hash={sh} != {gt_start_hash}")
+        targets_hash_by_name[name] = _targets_hash(data["targets"])
 
-    assert gt_targets is not None and gt_start is not None
+    # If targets mismatch, try aligning by (traj_idx,start_t) when available.
+    unique_hashes = set(targets_hash_by_name.values())
+    align_stats: Optional[Dict[str, object]] = None
+    if len(unique_hashes) != 1:
+        if all(("traj_idx" in d and "start_t" in d) for d in loaded.values()):
+            loaded, align_stats = _align_loaded_by_window_ids(loaded)
+            # Recompute hashes after alignment; allow tiny float noise but catch real mismatches.
+            ref_name = next(iter(loaded.keys()))
+            ref_targets = np.asarray(loaded[ref_name]["targets"], dtype=np.float32)
+            ref_start = np.asarray(loaded[ref_name].get("start_pos", ref_targets[:, 0]), dtype=np.float32)
+            ref_hash = _targets_hash(ref_targets)
+            for name, data in loaded.items():
+                cur_targets = np.asarray(data["targets"], dtype=np.float32)
+                cur_hash = _targets_hash(cur_targets)
+                if cur_hash != ref_hash:
+                    max_abs = float(np.max(np.abs(cur_targets - ref_targets)))
+                    raise ValueError(
+                        "Aligned by (traj_idx,start_t) but targets still differ "
+                        f"(method={name}, max|Δ|={max_abs:.6g}). "
+                        "This usually means different processed data or inconsistent normalization stats."
+                    )
+                if "start_pos" in data:
+                    cur_start = np.asarray(data["start_pos"], dtype=np.float32)
+                    max_abs_s = float(np.max(np.abs(cur_start - ref_start)))
+                    if max_abs_s > 1e-3:
+                        raise ValueError(
+                            "Aligned by (traj_idx,start_t) but start_pos differs "
+                            f"(method={name}, max|Δ|={max_abs_s:.6g}). "
+                            "This usually means different processed data or inconsistent normalization stats."
+                        )
+            targets_hash_by_name = {k: _targets_hash(v["targets"]) for k, v in loaded.items()}
+        else:
+            detail = {k: v for k, v in targets_hash_by_name.items()}
+            raise ValueError(
+                "GT mismatch across inputs (different sampled windows).\n"
+                f"targets_hash={json.dumps(detail, ensure_ascii=False)}\n"
+                "Fix: re-dump samples.npz with stable ids (traj_idx/start_t) and ensure all methods use the same window set."
+            )
+
+    # Set GT from the first input (after optional alignment).
+    first_name = next(iter(loaded.keys()))
+    gt_targets = np.asarray(loaded[first_name]["targets"], dtype=np.float32)
+    gt_start = np.asarray(loaded[first_name].get("start_pos", gt_targets[:, 0]), dtype=np.float32)
+    gt_hash = targets_hash_by_name[first_name]
     N = int(gt_targets.shape[0])
 
     # --- Build GT polylines + per-condition scalar scores (for detour subset) ---
@@ -469,6 +572,8 @@ def compute_report(
         "noise_floor": noise,
         "metrics": {},
     }
+    if align_stats is not None:
+        out["stats"]["alignment"] = align_stats
 
     # --- Evaluate each method vs GT (overall + detour subset) ---
     for name, data in loaded.items():

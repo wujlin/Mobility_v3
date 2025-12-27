@@ -50,6 +50,8 @@ python -m src.evaluation.dump_gt_windows_npz \
 
 输出字段（最小闭环）：`origin_pos/dest_pos/start_pos/targets/traj_idx/start_t`。
 
+> Sanity：若后续 `detour_validity` 报 `GT mismatch`，基本意味着不同方法的 `samples.npz` 不是同一批窗口。请先确认输入文件都含 `traj_idx/start_t`（用于对齐）；新版脚本会自动写入，并在报告里给出 `stats.alignment`（若发生对齐/丢弃非交集窗口）。
+
 ### Go/No-Go 1：OD 条件下是否存在“稳定多模态混合”？
 
 **目的**：确认直线坍缩是否真的来自“混合分布的梯度平均”。  

@@ -90,6 +90,8 @@ def main() -> None:
     preds: list[np.ndarray] = []
     targets: list[np.ndarray] = []
     start_pos_list: list[np.ndarray] = []
+    traj_idx_list: list[np.ndarray] = []
+    start_t_list: list[np.ndarray] = []
     origin_pos_list: list[np.ndarray] = []
     dest_pos_list: list[np.ndarray] = []
 
@@ -130,6 +132,15 @@ def main() -> None:
             preds.append(prior_pos[:take])
             targets.append(gt_pos[:take])
             start_pos_list.append(start_pos[:take])
+            meta = batch.get("meta")
+            if meta is not None and isinstance(meta, dict) and ("traj_idx" in meta) and ("start_t" in meta):
+                try:
+                    tid = np.asarray(meta["traj_idx"][:take].detach().cpu().numpy(), dtype=np.int64)
+                    t0 = np.asarray(meta["start_t"][:take].detach().cpu().numpy(), dtype=np.int64)
+                    traj_idx_list.append(tid)
+                    start_t_list.append(t0)
+                except Exception:
+                    pass
 
             if "trip_o" in batch and "trip_d" in batch:
                 origin_pos = norm.denormalize_pos(batch["trip_o"][:take].detach().cpu().numpy()).astype(np.float32, copy=False)
@@ -147,6 +158,9 @@ def main() -> None:
         "targets": np.concatenate(targets, axis=0) if targets else np.zeros((0, int(args.pred_len), 2), dtype=np.float32),
         "start_pos": np.concatenate(start_pos_list, axis=0) if start_pos_list else np.zeros((0, 2), dtype=np.float32),
     }
+    if traj_idx_list and start_t_list:
+        npz["traj_idx"] = np.concatenate(traj_idx_list, axis=0).astype(np.int64, copy=False)
+        npz["start_t"] = np.concatenate(start_t_list, axis=0).astype(np.int64, copy=False)
     if origin_pos_list and dest_pos_list:
         npz["origin_pos"] = np.concatenate(origin_pos_list, axis=0)
         npz["dest_pos"] = np.concatenate(dest_pos_list, axis=0)
@@ -171,4 +185,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

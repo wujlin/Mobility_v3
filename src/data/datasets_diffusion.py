@@ -7,6 +7,7 @@ from typing import Optional
 from src.data.trajectories import TrajectoryStorage
 from src.data.preprocess import Normalizer
 from src.features.nav_field import NavField
+from src.features.waypoints import WaypointConfig, extract_oracle_waypoints_from_future
 from src.config.settings import NORM
 
 TZ_SHANGHAI = timezone(timedelta(hours=8))
@@ -21,7 +22,10 @@ class DiffusionDataset(Dataset):
                  nav_patch_size: int = 32,
                  nav_patch_channel2: str = "speed",
                  normalizer: Normalizer = None,
-                 traj_ids: Optional[np.ndarray] = None):
+                 traj_ids: Optional[np.ndarray] = None,
+                 cond_mode: str = "trip_od",
+                 waypoint_mode: str = "rdp_dev",
+                 num_waypoints: int = 2):
         
         self.storage = TrajectoryStorage(data_file, mode='r')
         self.obs_len = obs_len
@@ -38,6 +42,9 @@ class DiffusionDataset(Dataset):
             self.normalizer = Normalizer.from_stats_json(stats_path) if stats_path.exists() else Normalizer(NORM)
 
         self.traj_ids = traj_ids.astype(np.int64) if traj_ids is not None else None
+
+        self.cond_mode = str(cond_mode)
+        self.waypoint_cfg = WaypointConfig(mode=str(waypoint_mode), num_waypoints=int(num_waypoints))
         
         # Load Nav Field if provided
         self.nav_field = None
@@ -99,14 +106,40 @@ class DiffusionDataset(Dataset):
         hour = dt0.hour / 23.0
         day = dt0.weekday() / 6.0
         
-        trip_o = self.normalizer.normalize_pos(full_traj['pos'][0])
-        trip_d = self.normalizer.normalize_pos(full_traj['pos'][-1])
-        
-        cond_vec = torch.tensor([
-            hour, day, 
-            trip_o[0], trip_o[1], 
-            trip_d[0], trip_d[1]
-        ], dtype=torch.float32)
+        trip_o = self.normalizer.normalize_pos(full_traj['pos'][0]).astype(np.float32, copy=False)
+        trip_d = self.normalizer.normalize_pos(full_traj['pos'][-1]).astype(np.float32, copy=False)
+
+        if self.cond_mode == "trip_od":
+            cond_vec = torch.tensor(
+                [hour, day, float(trip_o[0]), float(trip_o[1]), float(trip_d[0]), float(trip_d[1])],
+                dtype=torch.float32,
+            )
+        elif self.cond_mode == "oracle_wp_end":
+            # Oracle waypoints from GT future (geometry-only); end anchor is the GT window end.
+            start_pos_grid = pos_window[self.obs_len - 1].astype(np.float32, copy=False)  # (2,)
+            future_pos_grid = pos_window[self.obs_len :].astype(np.float32, copy=False)  # (F,2)
+            _, wp = extract_oracle_waypoints_from_future(start_pos=start_pos_grid, future_pos=future_pos_grid, cfg=self.waypoint_cfg)
+            end_grid = future_pos_grid[-1]
+
+            wp_norm = self.normalizer.normalize_pos(wp).astype(np.float32, copy=False).reshape(-1)
+            end_norm = self.normalizer.normalize_pos(end_grid).astype(np.float32, copy=False).reshape(-1)
+            if wp_norm.size != 4 or end_norm.size != 2:
+                raise RuntimeError(f"Bad waypoint/end shapes: wp={wp_norm.shape}, end={end_norm.shape}")
+            cond_vec = torch.tensor(
+                [
+                    hour,
+                    day,
+                    float(wp_norm[0]),
+                    float(wp_norm[1]),
+                    float(wp_norm[2]),
+                    float(wp_norm[3]),
+                    float(end_norm[0]),
+                    float(end_norm[1]),
+                ],
+                dtype=torch.float32,
+            )
+        else:
+            raise ValueError(f"Unknown cond_mode: {self.cond_mode} (expected: trip_od|oracle_wp_end)")
         
         # Combined Obs
         obs_combined = torch.cat([obs_pos, obs_vel], dim=-1) # (H, 4)
@@ -114,7 +147,10 @@ class DiffusionDataset(Dataset):
         result = {
             "obs": obs_combined,      # (H, 4)
             "action": future_vel,     # (F, 2)
-            "cond": cond_vec,         # (6,)
+            "cond": cond_vec,         # (C,)
+            "trip_o": torch.from_numpy(trip_o).float(),  # (2,)
+            "trip_d": torch.from_numpy(trip_d).float(),  # (2,)
+            "meta": {"traj_idx": int(traj_idx), "start_t": int(start_t)},
         }
         
         # Nav Patch (if enabled)

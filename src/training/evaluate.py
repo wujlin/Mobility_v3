@@ -21,6 +21,7 @@ from src.models.physics.physics_condition_flow import PhysicsConditionFlow
 from src.data.datasets_seq import SeqDataset
 from src.data.datasets_diffusion import DiffusionDataset
 from src.evaluation.micro_metrics import compute_dtw_per_sample, compute_frechet_per_sample
+from src.features.skeleton_prior import CondSpec, build_skeleton_prior_vel_norm_k2
 
 
 def _set_seed(seed: int) -> None:
@@ -69,7 +70,19 @@ def _load_baseline_prior(prior_checkpoint: str, device: torch.device) -> SeqBase
     if hidden_dim is None:
         raise ValueError(f"Cannot infer prior hidden_dim from checkpoint: {prior_checkpoint}")
 
-    model = SeqBaseline(obs_dim=4, act_dim=2, cond_dim=6, hidden_dim=int(hidden_dim))
+    # Infer cond_dim from checkpoint when possible (default=6 for backward compatibility).
+    cond_dim = None
+    w_enc = state_dict.get("encoder.weight_ih_l0")
+    if hasattr(w_enc, "shape") and len(w_enc.shape) == 2:
+        cond_dim = int(w_enc.shape[1]) - 4
+    if cond_dim is None or cond_dim <= 0:
+        w_dec = state_dict.get("decoder_cell.weight_ih")
+        if hasattr(w_dec, "shape") and len(w_dec.shape) == 2:
+            cond_dim = int(w_dec.shape[1]) - 2
+    if cond_dim is None or cond_dim <= 0:
+        cond_dim = 6
+
+    model = SeqBaseline(obs_dim=4, act_dim=2, cond_dim=int(cond_dim), hidden_dim=int(hidden_dim))
     model.load_state_dict(state_dict)
     model.to(device)
     model.eval()
@@ -148,7 +161,14 @@ def _infer_nav_gate_hidden(state_dict: dict) -> Optional[int]:
     return None
 
 
-def _infer_nav_emb_dim(model_type: str, state_dict: dict, obs_len: int, obs_dim: int = 4, base_cond_dim: int = 6) -> Optional[int]:
+def _infer_nav_emb_dim(
+    model_type: str,
+    state_dict: dict,
+    obs_len: int,
+    *,
+    cond_dim: int,
+    obs_dim: int = 4,
+) -> Optional[int]:
     """
     Infer nav_emb_dim from checkpoint by inspecting cond_encoder input dim.
 
@@ -170,7 +190,7 @@ def _infer_nav_emb_dim(model_type: str, state_dict: dict, obs_len: int, obs_dim:
     in_features = int(w.shape[1])
     hist = int(obs_len) * int(obs_dim)
     cond_total = in_features - hist
-    nav_dim = int(cond_total) - int(base_cond_dim)
+    nav_dim = int(cond_total) - int(cond_dim)
     return nav_dim if nav_dim > 0 else None
 
 
@@ -424,6 +444,16 @@ def _run_samples_only(
       - Optional `--resume_samples`: continue filling an existing `samples.npz` in the same exp dir.
       - Optional `--sample_offset`: skip the first N conditions before sampling (for sharding).
     """
+    cond_spec = CondSpec(cond_mode=str(getattr(args, "cond_mode", "trip_od")), num_waypoints=int(getattr(args, "num_waypoints", 2)))
+    arg_prior_mode = getattr(args, "prior_mode", None)
+    prior_mode = ("checkpoint" if getattr(args, "prior_checkpoint", None) else "none") if arg_prior_mode is None else str(arg_prior_mode)
+    if prior_mode == "checkpoint" and str(cond_spec.cond_mode) != "trip_od":
+        raise ValueError("--prior_mode checkpoint 仅支持 --cond_mode trip_od（否则 cond 语义不一致）")
+    if prior_mode == "skeleton_wp" and str(cond_spec.cond_mode) != "oracle_wp_end":
+        raise ValueError("--prior_mode skeleton_wp 需要 --cond_mode oracle_wp_end")
+    if prior_mode == "skeleton_wp" and int(cond_spec.num_waypoints) != 2:
+        raise ValueError("--prior_mode skeleton_wp 当前仅支持 --num_waypoints 2")
+
     out_dir = Path(f"data/experiments/{args.exp_name}")
     out_dir.mkdir(parents=True, exist_ok=True)
     samples_path = out_dir / "samples.npz"
@@ -491,6 +521,10 @@ def _run_samples_only(
             "split": str(args.split),
             "num_conditions": int(existing_n),
             "K": int(K_full),
+            "cond_mode": str(cond_spec.cond_mode),
+            "waypoint_mode": str(getattr(args, "waypoint_mode", "rdp_dev")) if str(cond_spec.cond_mode) == "oracle_wp_end" else None,
+            "num_waypoints": int(cond_spec.num_waypoints) if str(cond_spec.cond_mode) == "oracle_wp_end" else None,
+            "prior_mode": str(prior_mode),
             "cfg_scale": float(getattr(args, "cfg_scale", 0.0)) if args.model_type in ("diffusion", "physics") else None,
             "prior_checkpoint": (str(args.prior_checkpoint) if getattr(args, "prior_checkpoint", None) else None),
             "oracle_waypoint": oracle_enabled,
@@ -536,6 +570,10 @@ def _run_samples_only(
 
     # Sample loop
     print(f"[SAMPLES_ONLY] target={target_total} (need={need}), K_sample={K_sample}, skip={skip_conditions}")
+    pos_min_t = torch.tensor(norm.pos_min, dtype=torch.float32, device=device)
+    pos_range_t = torch.tensor(norm.pos_range, dtype=torch.float32, device=device)
+    vel_mean_t = torch.tensor(norm.vel_mean, dtype=torch.float32, device=device)
+    vel_std_t = torch.tensor(norm.vel_std, dtype=torch.float32, device=device)
     with torch.no_grad():
         for batch_idx, batch in enumerate(dataloader):
             if args.max_batches is not None and batch_idx >= int(args.max_batches):
@@ -566,14 +604,22 @@ def _run_samples_only(
             cond = batch["cond"].to(device)
             nav_patch = batch["nav_patch"].to(device) if args.model_type in ("physics", "physics_flow") else None
 
-            # Trip-level OD in grid coordinates (consistent with condition definition).
-            origin_pos = norm.denormalize_pos(cond[:, 2:4].detach().cpu().numpy())
-            dest_pos = norm.denormalize_pos(cond[:, 4:6].detach().cpu().numpy())
+            # Trip-level OD in grid coordinates (independent of cond_mode).
+            origin_pos = None
+            dest_pos = None
+            if "trip_o" in batch and "trip_d" in batch:
+                origin_pos = norm.denormalize_pos(batch["trip_o"].detach().cpu().numpy())
+                dest_pos = norm.denormalize_pos(batch["trip_d"].detach().cpu().numpy())
+            elif str(cond_spec.cond_mode) == "trip_od":
+                origin_pos = norm.denormalize_pos(cond[:, 2:4].detach().cpu().numpy())
+                dest_pos = norm.denormalize_pos(cond[:, 4:6].detach().cpu().numpy())
 
             # CFG inference: build unconditional condition by dropping destination (d_y, d_x)
             cond_uncond = None
             cfg_scale = float(getattr(args, "cfg_scale", 0.0))
             if cfg_scale != 0.0 and args.model_type in ("diffusion", "physics", "flow", "physics_flow"):
+                if str(cond_spec.cond_mode) != "trip_od":
+                    raise ValueError("--cfg_scale 仅支持 --cond_mode trip_od")
                 cond_uncond = cond.clone()
                 mode = str(getattr(args, "cfg_uncond_dest_mode", "origin"))
                 if mode == "origin":
@@ -589,8 +635,21 @@ def _run_samples_only(
             # Deterministic prior (normalized vel)
             prior_vel_norm = None
             use_oracle_wp = bool(getattr(args, "oracle_waypoint", False))
+            if use_oracle_wp and prior_mode == "skeleton_wp":
+                raise ValueError("--oracle_waypoint 与 --prior_mode skeleton_wp 不能同时使用（避免语义冲突）")
             if prior_model is not None and (not use_oracle_wp):
                 prior_vel_norm = prior_model.sample_trajectory(obs, cond, int(args.pred_len))
+            elif prior_mode == "skeleton_wp":
+                prior_vel_norm = build_skeleton_prior_vel_norm_k2(
+                    obs=obs,
+                    cond=cond,
+                    pred_len=int(args.pred_len),
+                    num_waypoints=int(cond_spec.num_waypoints),
+                    pos_min=pos_min_t,
+                    pos_range=pos_range_t,
+                    vel_mean=vel_mean_t,
+                    vel_std=vel_std_t,
+                )
 
             # GT future velocities
             if args.model_type in ("baseline", "cvae"):
@@ -644,7 +703,7 @@ def _run_samples_only(
                         cond_uncond=cond_uncond,
                         cfg_scale=cfg_scale,
                     )
-                    if prior_vel_norm is not None and args.model_type in ("diffusion", "physics", "flow", "physics_flow"):
+                    if prior_vel_norm is not None and args.model_type in ("baseline", "diffusion", "physics", "flow", "physics_flow"):
                         pred_vel_norm = pred_vel_norm + prior_vel_norm
 
                     pred_vel = norm.denormalize_vel(pred_vel_norm.cpu().numpy()) * float(args.vel_scale)
@@ -705,9 +764,10 @@ def _run_samples_only(
                     save_targets.append(gt_pos[:take].astype(np.float32, copy=False))
                     save_start_pos.append(start_pos[:take].astype(np.float32, copy=False))
                     # Only save OD fields if we are not resuming from an old file without them.
-                    if existing_n == 0 or (existing_origin_pos is not None and existing_dest_pos is not None):
-                        save_origin_pos.append(origin_pos[:take].astype(np.float32, copy=False))
-                        save_dest_pos.append(dest_pos[:take].astype(np.float32, copy=False))
+                    if origin_pos is not None and dest_pos is not None:
+                        if existing_n == 0 or (existing_origin_pos is not None and existing_dest_pos is not None):
+                            save_origin_pos.append(origin_pos[:take].astype(np.float32, copy=False))
+                            save_dest_pos.append(dest_pos[:take].astype(np.float32, copy=False))
                 if bool(getattr(args, "save_all_k", False)) and save_preds_k_by_k is not None:
                     save_preds_k_by_k[int(k)].append(pred_pos[:take].astype(np.float32, copy=False))
 
@@ -763,6 +823,10 @@ def _run_samples_only(
         "split": str(args.split),
         "num_conditions": int(preds.shape[0]),
         "K": int(K_full),
+        "cond_mode": str(cond_spec.cond_mode),
+        "waypoint_mode": str(getattr(args, "waypoint_mode", "rdp_dev")) if str(cond_spec.cond_mode) == "oracle_wp_end" else None,
+        "num_waypoints": int(cond_spec.num_waypoints) if str(cond_spec.cond_mode) == "oracle_wp_end" else None,
+        "prior_mode": str(prior_mode),
         "cfg_scale": float(getattr(args, "cfg_scale", 0.0)) if args.model_type in ("diffusion", "physics") else None,
         "cfg_uncond_dest_mode": str(getattr(args, "cfg_uncond_dest_mode", "origin")) if args.model_type in ("diffusion", "physics") else None,
         "vel_scale": float(args.vel_scale),
@@ -793,6 +857,12 @@ def evaluate(args):
 
     if bool(getattr(args, "oracle_waypoint", False)) and args.model_type in ("baseline", "cvae"):
         raise ValueError("--oracle_waypoint 仅用于 diffusion/physics/flow 的诊断评估（baseline/cvae 不适用）")
+
+    cond_spec = CondSpec(cond_mode=str(getattr(args, "cond_mode", "trip_od")), num_waypoints=int(getattr(args, "num_waypoints", 2)))
+    if bool(getattr(args, "oracle_waypoint", False)) and str(cond_spec.cond_mode) != "trip_od":
+        raise ValueError("--oracle_waypoint 仅支持 --cond_mode trip_od（当前实现依赖 destination 维度）")
+    if float(getattr(args, "cfg_scale", 0.0)) != 0.0 and str(cond_spec.cond_mode) != "trip_od":
+        raise ValueError("--cfg_scale 仅支持 --cond_mode trip_od（当前实现依赖 destination 维度）")
     
     # 1. Load Data
     # Evaluation usually on 'test' split via mode='r'? 
@@ -809,9 +879,25 @@ def evaluate(args):
         print(f"Using split={args.split}: {len(traj_ids)} trajectories ({split_file})")
 
     if args.model_type == 'baseline':
-        dataset = SeqDataset(args.data_path, obs_len=args.obs_len, pred_len=args.pred_len, traj_ids=traj_ids)
+        dataset = SeqDataset(
+            args.data_path,
+            obs_len=args.obs_len,
+            pred_len=args.pred_len,
+            traj_ids=traj_ids,
+            cond_mode=str(cond_spec.cond_mode),
+            waypoint_mode=str(getattr(args, "waypoint_mode", "rdp_dev")),
+            num_waypoints=int(cond_spec.num_waypoints),
+        )
     elif args.model_type == 'cvae':
-        dataset = SeqDataset(args.data_path, obs_len=args.obs_len, pred_len=args.pred_len, traj_ids=traj_ids)
+        dataset = SeqDataset(
+            args.data_path,
+            obs_len=args.obs_len,
+            pred_len=args.pred_len,
+            traj_ids=traj_ids,
+            cond_mode=str(cond_spec.cond_mode),
+            waypoint_mode=str(getattr(args, "waypoint_mode", "rdp_dev")),
+            num_waypoints=int(cond_spec.num_waypoints),
+        )
     else:
         # Diffusion-like dataset (diffusion / physics / flow / physics_flow)
         if args.model_type in ("physics", "physics_flow") and not args.nav_file:
@@ -825,6 +911,9 @@ def evaluate(args):
             nav_patch_size=args.patch_size,
             nav_patch_channel2=args.nav_patch_channel2,
             traj_ids=traj_ids,
+            cond_mode=str(cond_spec.cond_mode),
+            waypoint_mode=str(getattr(args, "waypoint_mode", "rdp_dev")),
+            num_waypoints=int(cond_spec.num_waypoints),
         )
         
     # IMPORTANT: denormalization must use the same stats as the dataset.
@@ -885,24 +974,24 @@ def evaluate(args):
                 args.nav_gate = user_nav_gate
         if ckpt_has_gate:
             args.nav_gate_hidden = int(ckpt_nav_gate_hidden)
-        ckpt_nav_emb_dim = _infer_nav_emb_dim(str(args.model_type), state_dict, int(args.obs_len))
+        ckpt_nav_emb_dim = _infer_nav_emb_dim(str(args.model_type), state_dict, int(args.obs_len), cond_dim=int(cond_spec.cond_dim))
         if ckpt_nav_emb_dim is not None:
             nav_emb_dim = int(ckpt_nav_emb_dim)
     
     if args.model_type == 'baseline':
         model = SeqBaseline(
-            obs_dim=4, act_dim=2, cond_dim=6,
+            obs_dim=4, act_dim=2, cond_dim=int(cond_spec.cond_dim),
             hidden_dim=args.hidden_dim
         )
     elif args.model_type == 'cvae':
         model = SeqCVAE(
-            obs_dim=4, act_dim=2, cond_dim=6,
+            obs_dim=4, act_dim=2, cond_dim=int(cond_spec.cond_dim),
             hidden_dim=args.hidden_dim,
             latent_dim=args.latent_dim,
         )
     elif args.model_type == 'diffusion':
         model = DiffusionTrajectoryModel(
-            obs_dim=4, act_dim=2, cond_dim=6,
+            obs_dim=4, act_dim=2, cond_dim=int(cond_spec.cond_dim),
             obs_len=args.obs_len, pred_len=args.pred_len,
             hidden_dim=args.hidden_dim,
             diffusion_steps=args.diff_steps,
@@ -910,7 +999,7 @@ def evaluate(args):
         )
     elif args.model_type == 'physics':
         model = PhysicsConditionDiffusion(
-            obs_dim=4, act_dim=2, cond_dim=6,
+            obs_dim=4, act_dim=2, cond_dim=int(cond_spec.cond_dim),
             nav_patch_size=args.patch_size,
             nav_emb_dim=int(nav_emb_dim),
             obs_len=args.obs_len, pred_len=args.pred_len,
@@ -928,7 +1017,7 @@ def evaluate(args):
         model = RectifiedFlowTrajectoryModel(
             obs_dim=4,
             act_dim=2,
-            cond_dim=6,
+            cond_dim=int(cond_spec.cond_dim),
             obs_len=args.obs_len,
             pred_len=args.pred_len,
             hidden_dim=args.hidden_dim,
@@ -940,7 +1029,7 @@ def evaluate(args):
         model = PhysicsConditionFlow(
             obs_dim=4,
             act_dim=2,
-            cond_dim=6,
+            cond_dim=int(cond_spec.cond_dim),
             nav_patch_size=args.patch_size,
             nav_emb_dim=int(nav_emb_dim),
             obs_len=args.obs_len,
@@ -957,16 +1046,41 @@ def evaluate(args):
     model.to(device)
     model.eval()
 
+    arg_prior_mode = getattr(args, "prior_mode", None)
+    prior_mode = ("checkpoint" if getattr(args, "prior_checkpoint", None) else "none") if arg_prior_mode is None else str(arg_prior_mode)
+    if prior_mode not in ("none", "checkpoint", "skeleton_wp"):
+        raise ValueError(f"Unknown --prior_mode: {prior_mode} (expected: none|checkpoint|skeleton_wp)")
+    if getattr(args, "prior_checkpoint", None) and prior_mode != "checkpoint":
+        raise ValueError("--prior_checkpoint 只能与 --prior_mode checkpoint 搭配使用")
+    if prior_mode == "checkpoint" and not getattr(args, "prior_checkpoint", None):
+        raise ValueError("--prior_mode checkpoint 需要 --prior_checkpoint")
+    if prior_mode == "checkpoint" and str(cond_spec.cond_mode) != "trip_od":
+        raise ValueError("--prior_mode checkpoint 仅支持 --cond_mode trip_od（否则 cond 语义不一致）")
+    if prior_mode == "skeleton_wp":
+        if str(cond_spec.cond_mode) != "oracle_wp_end":
+            raise ValueError("--prior_mode skeleton_wp 需要 --cond_mode oracle_wp_end")
+        if int(cond_spec.num_waypoints) != 2:
+            raise ValueError("--prior_mode skeleton_wp 当前仅支持 --num_waypoints 2")
+        if bool(getattr(args, "oracle_waypoint", False)):
+            raise ValueError("--oracle_waypoint 与 --prior_mode skeleton_wp 不能同时使用（避免语义冲突）")
+
     prior_model = None
-    if args.prior_checkpoint:
+    if prior_mode == "checkpoint":
         prior_model = _load_baseline_prior(str(args.prior_checkpoint), device=device)
         print(f"[OK] Residual eval enabled: prior={args.prior_checkpoint}")
+    elif prior_mode == "skeleton_wp":
+        print("[OK] Residual eval enabled: prior=skeleton_wp (oracle waypoints).")
 
     # Fast path: generate samples only (for geo visualizations / large-N density maps)
     if bool(getattr(args, "samples_only", False)):
         _run_samples_only(args=args, dataloader=dataloader, norm=norm, model=model, prior_model=prior_model, device=device)
         return
     
+    pos_min_t = torch.tensor(norm.pos_min, dtype=torch.float32, device=device)
+    pos_range_t = torch.tensor(norm.pos_range, dtype=torch.float32, device=device)
+    vel_mean_t = torch.tensor(norm.vel_mean, dtype=torch.float32, device=device)
+    vel_std_t = torch.tensor(norm.vel_std, dtype=torch.float32, device=device)
+
     # 3. Inference Loop (streaming aggregation to avoid OOM)
     K = 1 if args.model_type == "baseline" else int(args.num_samples_per_condition)
 
@@ -1044,6 +1158,17 @@ def evaluate(args):
             prior_vel_norm = None
             if prior_model is not None:
                 prior_vel_norm = prior_model.sample_trajectory(obs, cond, int(args.pred_len))
+            elif str(prior_mode) == "skeleton_wp":
+                prior_vel_norm = build_skeleton_prior_vel_norm_k2(
+                    obs=obs,
+                    cond=cond,
+                    pred_len=int(args.pred_len),
+                    num_waypoints=int(cond_spec.num_waypoints),
+                    pos_min=pos_min_t,
+                    pos_range=pos_range_t,
+                    vel_mean=vel_mean_t,
+                    vel_std=vel_std_t,
+                )
 
             # GT future velocities
             if args.model_type in ('baseline', 'cvae'):
@@ -1083,9 +1208,15 @@ def evaluate(args):
                 take = min(remaining, int(gt_pos.shape[0]))
                 if bool(getattr(args, "save_all_k", False)) and save_preds_k_by_k is None:
                     save_preds_k_by_k = [[] for _ in range(int(K))]
-                # Trip-level OD in grid coordinates (consistent with condition definition).
-                origin_pos = norm.denormalize_pos(cond[:, 2:4].detach().cpu().numpy())
-                dest_pos = norm.denormalize_pos(cond[:, 4:6].detach().cpu().numpy())
+                # Trip-level OD in grid coordinates (independent of cond_mode).
+                origin_pos = None
+                dest_pos = None
+                if "trip_o" in batch and "trip_d" in batch:
+                    origin_pos = norm.denormalize_pos(batch["trip_o"].detach().cpu().numpy())
+                    dest_pos = norm.denormalize_pos(batch["trip_d"].detach().cpu().numpy())
+                elif str(cond_spec.cond_mode) == "trip_od":
+                    origin_pos = norm.denormalize_pos(cond[:, 2:4].detach().cpu().numpy())
+                    dest_pos = norm.denormalize_pos(cond[:, 4:6].detach().cpu().numpy())
 
             wp_step = None
             cond_wp = None
@@ -1122,7 +1253,7 @@ def evaluate(args):
                         cfg_scale=cfg_scale,
                     )
                     # Residual mode: model predicts residual vel; add deterministic prior.
-                    if prior_vel_norm is not None and args.model_type in ("diffusion", "physics", "flow", "physics_flow"):
+                    if prior_vel_norm is not None and args.model_type in ("baseline", "diffusion", "physics", "flow", "physics_flow"):
                         pred_vel_norm = pred_vel_norm + prior_vel_norm
                     pred_vel = norm.denormalize_vel(pred_vel_norm.cpu().numpy()) * float(args.vel_scale)
                 else:
@@ -1207,8 +1338,9 @@ def evaluate(args):
                         save_preds.extend(pred_pos[:take].astype(np.float32, copy=False))
                         save_targets.extend(gt_pos[:take].astype(np.float32, copy=False))
                         save_start_pos.extend(start_pos[:take].astype(np.float32, copy=False))
-                        save_origin_pos.extend(origin_pos[:take].astype(np.float32, copy=False))
-                        save_dest_pos.extend(dest_pos[:take].astype(np.float32, copy=False))
+                        if origin_pos is not None and dest_pos is not None:
+                            save_origin_pos.extend(origin_pos[:take].astype(np.float32, copy=False))
+                            save_dest_pos.extend(dest_pos[:take].astype(np.float32, copy=False))
                     if bool(getattr(args, "save_all_k", False)) and save_preds_k_by_k is not None:
                         save_preds_k_by_k[int(k)].append(pred_pos[:take].astype(np.float32, copy=False))
 
@@ -1278,6 +1410,10 @@ def evaluate(args):
         "split": args.split,
         "num_conditions": int(total_n),
         "K": int(K),
+        "cond_mode": str(cond_spec.cond_mode),
+        "waypoint_mode": str(getattr(args, "waypoint_mode", "rdp_dev")) if str(cond_spec.cond_mode) == "oracle_wp_end" else None,
+        "num_waypoints": int(cond_spec.num_waypoints) if str(cond_spec.cond_mode) == "oracle_wp_end" else None,
+        "prior_mode": str(prior_mode),
         "pred_type": (str(getattr(args, "pred_type", "eps")) if args.model_type in ("diffusion", "physics") else None),
         "cfg_scale": (float(getattr(args, "cfg_scale", 0.0)) if args.model_type in ("diffusion", "physics") else None),
         "cfg_uncond_dest_mode": (str(getattr(args, "cfg_uncond_dest_mode", "origin")) if args.model_type in ("diffusion", "physics") else None),
@@ -1364,8 +1500,12 @@ if __name__ == "__main__":
     parser.add_argument('--data_path', type=str, required=True)
     parser.add_argument('--checkpoint', type=str, required=True)
     parser.add_argument('--prior_checkpoint', type=str, default=None, help="Residual diffusion: frozen deterministic prior checkpoint (SeqBaseline last.pt)")
+    parser.add_argument('--prior_mode', type=str, choices=['none', 'checkpoint', 'skeleton_wp'], default=None, help="Residual prior mode. Default: checkpoint if --prior_checkpoint else none.")
     parser.add_argument('--split', type=str, choices=['train', 'val', 'test', 'all'], default='test')
     parser.add_argument('--splits_dir', type=str, default=None, help="override splits dir (default: <processed_dir>/splits)")
+    parser.add_argument('--cond_mode', type=str, choices=['trip_od', 'oracle_wp_end'], default='trip_od', help="Condition format. oracle_wp_end is Phase-2 oracle mode.")
+    parser.add_argument('--waypoint_mode', type=str, choices=['rdp_dev'], default='rdp_dev', help="Oracle waypoint extraction mode (used when --cond_mode=oracle_wp_end).")
+    parser.add_argument('--num_waypoints', type=int, default=2, help="Number of oracle waypoints (Phase 2 default: 2).")
     
     # Physics args
     parser.add_argument('--nav_file', type=str, default=None)

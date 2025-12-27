@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Optional
 from src.data.trajectories import TrajectoryStorage
 from src.data.preprocess import Normalizer
+from src.features.waypoints import WaypointConfig, extract_oracle_waypoints_from_future
 from src.config.settings import NORM
 
 TZ_SHANGHAI = timezone(timedelta(hours=8))
@@ -18,7 +19,10 @@ class SeqDataset(Dataset):
                  step: int = 1,
                  normalizer: Normalizer = None,
                  traj_ids: Optional[np.ndarray] = None,
-                 mode: str = 'train'):
+                 mode: str = 'train',
+                 cond_mode: str = "trip_od",
+                 waypoint_mode: str = "rdp_dev",
+                 num_waypoints: int = 2):
         
         self.storage = TrajectoryStorage(data_file, mode='r')
         self.obs_len = obs_len
@@ -33,6 +37,8 @@ class SeqDataset(Dataset):
             self.normalizer = Normalizer.from_stats_json(stats_path) if stats_path.exists() else Normalizer(NORM)
 
         self.traj_ids = traj_ids.astype(np.int64) if traj_ids is not None else None
+        self.cond_mode = str(cond_mode)
+        self.waypoint_cfg = WaypointConfig(mode=str(waypoint_mode), num_waypoints=int(num_waypoints))
 
         # Build index of valid windows (traj_idx, start_t)
         self.samples = []
@@ -115,15 +121,39 @@ class SeqDataset(Dataset):
         # Current storage doesn't store dest coord in metadata efficiently.
         # We can take full_traj['pos'][-1] as destination.
         
-        trip_o = self.normalizer.normalize_pos(full_traj['pos'][0])
-        trip_d = self.normalizer.normalize_pos(full_traj['pos'][-1])
-        
-        cond_vec = torch.tensor([
-            hour, 
-            day, 
-            trip_o[0], trip_o[1], 
-            trip_d[0], trip_d[1]
-        ], dtype=torch.float32)
+        trip_o = self.normalizer.normalize_pos(full_traj['pos'][0]).astype(np.float32, copy=False)
+        trip_d = self.normalizer.normalize_pos(full_traj['pos'][-1]).astype(np.float32, copy=False)
+
+        if self.cond_mode == "trip_od":
+            cond_vec = torch.tensor(
+                [hour, day, float(trip_o[0]), float(trip_o[1]), float(trip_d[0]), float(trip_d[1])],
+                dtype=torch.float32,
+            )
+        elif self.cond_mode == "oracle_wp_end":
+            start_pos_grid = pos_window[self.obs_len - 1].astype(np.float32, copy=False)
+            future_pos_grid = pos_window[self.obs_len :].astype(np.float32, copy=False)  # (F,2)
+            _, wp = extract_oracle_waypoints_from_future(start_pos=start_pos_grid, future_pos=future_pos_grid, cfg=self.waypoint_cfg)
+            end_grid = future_pos_grid[-1]
+
+            wp_norm = self.normalizer.normalize_pos(wp).astype(np.float32, copy=False).reshape(-1)
+            end_norm = self.normalizer.normalize_pos(end_grid).astype(np.float32, copy=False).reshape(-1)
+            if wp_norm.size != 4 or end_norm.size != 2:
+                raise RuntimeError(f"Bad waypoint/end shapes: wp={wp_norm.shape}, end={end_norm.shape}")
+            cond_vec = torch.tensor(
+                [
+                    hour,
+                    day,
+                    float(wp_norm[0]),
+                    float(wp_norm[1]),
+                    float(wp_norm[2]),
+                    float(wp_norm[3]),
+                    float(end_norm[0]),
+                    float(end_norm[1]),
+                ],
+                dtype=torch.float32,
+            )
+        else:
+            raise ValueError(f"Unknown cond_mode: {self.cond_mode} (expected: trip_od|oracle_wp_end)")
         
         # Construct output
         # Obs usually combines state. [pos, vel]
@@ -133,7 +163,9 @@ class SeqDataset(Dataset):
             "obs": obs_combined,       # (H, 4)
             "target_pos": target_pos,  # (F, 2)
             "target_vel": target_vel,  # (F, 2)
-            "cond": cond_vec,          # (6,)
+            "cond": cond_vec,          # (C,)
+            "trip_o": torch.from_numpy(trip_o).float(),  # (2,)
+            "trip_d": torch.from_numpy(trip_d).float(),  # (2,)
             "meta": {
                 "traj_idx": traj_idx,
                 "start_t": start_t

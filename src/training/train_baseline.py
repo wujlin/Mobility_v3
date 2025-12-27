@@ -11,6 +11,7 @@ import random
 from src.models.seq.seq_baseline import SeqBaseline
 from src.data.datasets_seq import SeqDataset
 from src.config.settings import GRID, NORM
+from src.features.skeleton_prior import CondSpec, build_skeleton_prior_vel_norm_k2
 
 def _set_seed(seed: int) -> None:
     random.seed(int(seed))
@@ -37,10 +38,21 @@ def train(args):
         traj_ids = np.load(split_file).astype(np.int64)
         print(f"Using split={args.split}: {len(traj_ids)} trajectories ({split_file})")
 
-    train_dataset = SeqDataset(args.data_path, obs_len=args.obs_len, pred_len=args.pred_len, traj_ids=traj_ids)
+    cond_spec = CondSpec(cond_mode=str(getattr(args, "cond_mode", "trip_od")), num_waypoints=int(getattr(args, "num_waypoints", 2)))
+    train_dataset = SeqDataset(
+        args.data_path,
+        obs_len=args.obs_len,
+        pred_len=args.pred_len,
+        traj_ids=traj_ids,
+        cond_mode=str(cond_spec.cond_mode),
+        waypoint_mode=str(getattr(args, "waypoint_mode", "rdp_dev")),
+        num_waypoints=int(cond_spec.num_waypoints),
+    )
     # torch-friendly denorm constants for displacement-aware weighting (optional)
     vel_mean = torch.tensor(train_dataset.normalizer.vel_mean, dtype=torch.float32, device=device)
     vel_std = torch.tensor(train_dataset.normalizer.vel_std, dtype=torch.float32, device=device)
+    pos_min = torch.tensor(train_dataset.normalizer.pos_min, dtype=torch.float32, device=device)
+    pos_range = torch.tensor(train_dataset.normalizer.pos_range, dtype=torch.float32, device=device)
     g = torch.Generator()
     g.manual_seed(int(args.seed))
     pin_memory = bool(torch.cuda.is_available())
@@ -58,7 +70,7 @@ def train(args):
     model = SeqBaseline(
         obs_dim=4, # [pos, vel]
         act_dim=2, # [vel]
-        cond_dim=6,
+        cond_dim=int(cond_spec.cond_dim),
         hidden_dim=args.hidden_dim
     ).to(device)
     
@@ -73,6 +85,10 @@ def train(args):
         "data_path": args.data_path,
         "split": args.split,
         "splits_dir": args.splits_dir,
+        "cond_mode": str(cond_spec.cond_mode),
+        "waypoint_mode": str(getattr(args, "waypoint_mode", "rdp_dev")),
+        "num_waypoints": int(cond_spec.num_waypoints),
+        "prior_mode": str(getattr(args, "prior_mode", "none")),
         "obs_len": args.obs_len,
         "pred_len": args.pred_len,
         "hidden_dim": args.hidden_dim,
@@ -98,7 +114,7 @@ def train(args):
         for batch_idx, batch in enumerate(train_loader):
             obs = batch['obs'].to(device) # (B, H, 4)
             cond = batch['cond'].to(device) # (B, 6)
-            target_vel = batch['target_vel'].to(device) # (B, F, 2)
+            target_vel_full = batch['target_vel'].to(device) # (B, F, 2)
             
             optimizer.zero_grad()
             
@@ -106,7 +122,7 @@ def train(args):
             sample_weight = None
             if str(args.disp_weight) != "none":
                 # Denormalize velocities to keep weighting in physical grid units.
-                target_vel_denorm = target_vel * vel_std + vel_mean  # (B, F, 2)
+                target_vel_denorm = target_vel_full * vel_std + vel_mean  # (B, F, 2)
                 gt_disp = target_vel_denorm.sum(dim=1)  # (B, 2)
                 disp_norm = torch.linalg.norm(gt_disp, dim=-1)  # (B,)
                 if str(args.disp_weight) == "tanh":
@@ -125,6 +141,25 @@ def train(args):
                     raise ValueError(f"Unknown --disp_weight: {args.disp_weight}")
                 # Avoid exact zeros which can zero-out gradients for near-stationary windows.
                 sample_weight = torch.clamp_min(sample_weight, 1e-3)
+
+            target_vel = target_vel_full
+            prior_mode = str(getattr(args, "prior_mode", "none"))
+            if prior_mode != "none":
+                if prior_mode != "skeleton_wp":
+                    raise ValueError(f"Unknown --prior_mode: {prior_mode} (expected: none|skeleton_wp)")
+                if str(cond_spec.cond_mode) != "oracle_wp_end":
+                    raise ValueError("--prior_mode skeleton_wp 需要 --cond_mode oracle_wp_end")
+                prior_vel_norm = build_skeleton_prior_vel_norm_k2(
+                    obs=obs,
+                    cond=cond,
+                    pred_len=int(args.pred_len),
+                    num_waypoints=int(cond_spec.num_waypoints),
+                    pos_min=pos_min,
+                    pos_range=pos_range,
+                    vel_mean=vel_mean,
+                    vel_std=vel_std,
+                )
+                target_vel = target_vel_full - prior_vel_norm
 
             # Forward returns Loss directly
             loss = model(obs, cond, target=target_vel, sample_weight=sample_weight)
@@ -164,6 +199,10 @@ if __name__ == "__main__":
     parser.add_argument('--data_path', type=str, required=True)
     parser.add_argument('--split', type=str, choices=['train', 'val', 'test', 'all'], default='train')
     parser.add_argument('--splits_dir', type=str, default=None, help="override splits dir (default: <processed_dir>/splits)")
+    parser.add_argument('--cond_mode', type=str, choices=['trip_od', 'oracle_wp_end'], default='trip_od', help="Condition format. trip_od: [t,od]; oracle_wp_end: [t, waypoints, end] (Phase 2).")
+    parser.add_argument('--waypoint_mode', type=str, choices=['rdp_dev'], default='rdp_dev', help="Oracle waypoint extraction mode (used when --cond_mode=oracle_wp_end).")
+    parser.add_argument('--num_waypoints', type=int, default=2, help="Number of oracle waypoints (Phase 2 default: 2).")
+    parser.add_argument('--prior_mode', type=str, choices=['none', 'skeleton_wp'], default='none', help="Train baseline to predict residual w.r.t. a deterministic prior.")
     parser.add_argument('--obs_len', type=int, default=8)
     parser.add_argument('--pred_len', type=int, default=12)
     parser.add_argument('--hidden_dim', type=int, default=128)

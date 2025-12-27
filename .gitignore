@@ -3,6 +3,10 @@ __pycache__/
 *.py[cod]
 *$py.class
 *.so
+.venv/
+.venv-wsl/
+venv/
+env/
 
 # Data (Keep data local, do not commit)
 data/

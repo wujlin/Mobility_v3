@@ -132,6 +132,94 @@
 若 (A) 失败：优先怀疑 micro 表示/条件注入（或 residual 偷跑 macro）；不要继续堆层级。  
 若 (A) 成功但 (B) 失败：说明分层拆拓扑是对的，但 micro 物理建模不足（需要 Frenet residual / band-limit / kinematic 约束等）。
 
+**可直接运行的最小命令（Go/No-Go 3）**（注意：训练/评估需要 torch 环境；绘图/统计可在 `emotion` 跑）：
+
+0) 统一数据路径（按你的实际目录改 `PROC` 即可）：
+```bash
+export PROC=data/processed_passenger_dt30
+export DATA=$PROC/trajectories/shenzhen_trajectories.h5
+export NAV=$PROC/nav_field.npz
+```
+
+1) `skeleton-only`（oracle waypoints + linear + arclen resample；用于对照，**不训练**）：
+```bash
+python -m src.evaluation.dump_skeleton_prior_samples \
+  --exp_name phys_oracleWP_skeleton_k2 \
+  --model_type physics \
+  --data_path $DATA --nav_file $NAV \
+  --split test --obs_len 8 --pred_len 12 \
+  --batch_size 32 --num_workers 8 \
+  --save_samples 400 --max_batches 13 --seed 0
+```
+
+2) `deterministic residual`（SeqBaseline 预测 residual=GT−skeleton；快速证伪 residual 任务不可学）：
+```bash
+python -m src.training.train_baseline \
+  --exp_name phys_oracleWP_detres_k2 \
+  --data_path $DATA --split train \
+  --obs_len 8 --pred_len 12 \
+  --batch_size 256 --num_workers 8 \
+  --hidden_dim 128 --epochs 20 --max_batches 200 \
+  --cond_mode oracle_wp_end --waypoint_mode rdp_dev --num_waypoints 2 \
+  --prior_mode skeleton_wp --seed 0
+
+python -m src.training.evaluate \
+  --exp_name phys_oracleWP_detres_k2_eval \
+  --model_type baseline \
+  --data_path $DATA --split test \
+  --checkpoint data/experiments/phys_oracleWP_detres_k2/last.pt \
+  --cond_mode oracle_wp_end --waypoint_mode rdp_dev --num_waypoints 2 \
+  --prior_mode skeleton_wp \
+  --batch_size 32 --num_workers 8 \
+  --save_samples 400 --max_batches 13 --samples_only --seed 0
+```
+
+3) `diffusion residual`（主方案：PhysicsConditionDiffusion 预测 residual=GT−skeleton）：
+```bash
+python -m src.training.train_diffusion \
+  --exp_name phys_oracleWP_diffres_k2 \
+  --model_type physics \
+  --data_path $DATA --nav_file $NAV --split train \
+  --obs_len 8 --pred_len 12 \
+  --batch_size 128 --num_workers 8 \
+  --hidden_dim 128 --epochs 20 --max_batches 200 \
+  --diff_steps 100 --pred_type eps \
+  --cond_mode oracle_wp_end --waypoint_mode rdp_dev --num_waypoints 2 \
+  --prior_mode skeleton_wp --seed 0
+
+python -m src.training.evaluate \
+  --exp_name phys_oracleWP_diffres_k2_eval \
+  --model_type physics \
+  --data_path $DATA --nav_file $NAV --split test \
+  --checkpoint data/experiments/phys_oracleWP_diffres_k2/last.pt \
+  --cond_mode oracle_wp_end --waypoint_mode rdp_dev --num_waypoints 2 \
+  --prior_mode skeleton_wp \
+  --batch_size 32 --num_workers 8 \
+  --num_samples_per_condition 20 --save_all_k \
+  --diff_steps 100 \
+  --save_samples 400 --max_batches 13 --samples_only --seed 0
+```
+
+4) 指标/作图（同一批 windows，三对照；先看 (A) 再看 (B)）：
+```bash
+python -m src.evaluation.detour_validity \
+  --inputs "Skeleton:data/experiments/phys_oracleWP_skeleton_k2/samples.npz" \
+           "DetRes:data/experiments/phys_oracleWP_detres_k2_eval/samples.npz" \
+           "DiffRes:data/experiments/phys_oracleWP_diffres_k2_eval/samples.npz" \
+  --ds 0.5 --lags 1 2 4 8 --offset_fracs 0 0.25 0.5 0.75 \
+  --detour_pct 10 --bootstrap 200 --noise_splits 200 \
+  --out_json data/experiments/phys_oracleWP_go_nogo3_detour_validity.json
+
+python -m src.visualization.plot_physical_stats \
+  --inputs "Skeleton:data/experiments/phys_oracleWP_skeleton_k2/samples.npz" \
+           "DetRes:data/experiments/phys_oracleWP_detres_k2_eval/samples.npz" \
+           "DiffRes:data/experiments/phys_oracleWP_diffres_k2_eval/samples.npz" \
+  --use_all_k --k_max 10 \
+  --turn_min_speed 0.1 --dcv_speed_pctl 99.5 --dcv_accel_pctl 99.5 \
+  --save_metrics --output_dir essay/figures/physical_stats \
+  --stem fig_physical_stats_go_nogo3_oracleWP
+```
+
 ---
 
 ## 0) 三条必须写死的硬条款（写进所有计划/README）

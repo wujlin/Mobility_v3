@@ -12,6 +12,7 @@ from src.models.diffusion.diffusion_model import DiffusionTrajectoryModel
 from src.models.physics.physics_condition_diffusion import PhysicsConditionDiffusion
 from src.data.datasets_diffusion import DiffusionDataset
 from src.models.seq.seq_baseline import SeqBaseline
+from src.features.skeleton_prior import CondSpec, build_skeleton_prior_vel_norm_k2
 
 def _set_seed(seed: int) -> None:
     random.seed(int(seed))
@@ -47,7 +48,19 @@ def _load_baseline_prior(prior_checkpoint: str, device: torch.device) -> SeqBase
     if hidden_dim is None:
         raise ValueError(f"Cannot infer prior hidden_dim from checkpoint: {prior_checkpoint}")
 
-    model = SeqBaseline(obs_dim=4, act_dim=2, cond_dim=6, hidden_dim=int(hidden_dim)).to(device)
+    # Infer cond_dim from checkpoint when possible (default=6 for backward compatibility).
+    cond_dim = None
+    w_enc = state_dict.get("encoder.weight_ih_l0")
+    if hasattr(w_enc, "shape") and len(w_enc.shape) == 2:
+        cond_dim = int(w_enc.shape[1]) - 4
+    if cond_dim is None or cond_dim <= 0:
+        w_dec = state_dict.get("decoder_cell.weight_ih")
+        if hasattr(w_dec, "shape") and len(w_dec.shape) == 2:
+            cond_dim = int(w_dec.shape[1]) - 2
+    if cond_dim is None or cond_dim <= 0:
+        cond_dim = 6
+
+    model = SeqBaseline(obs_dim=4, act_dim=2, cond_dim=int(cond_dim), hidden_dim=int(hidden_dim)).to(device)
     model.load_state_dict(state_dict)
     model.eval()
     for p in model.parameters():
@@ -134,6 +147,7 @@ def train(args):
         traj_ids = np.load(split_file).astype(np.int64)
         print(f"Using split={args.split}: {len(traj_ids)} trajectories ({split_file})")
     
+    cond_spec = CondSpec(cond_mode=str(getattr(args, "cond_mode", "trip_od")), num_waypoints=int(getattr(args, "num_waypoints", 2)))
     dataset = DiffusionDataset(
         args.data_path, 
         obs_len=args.obs_len, 
@@ -142,6 +156,9 @@ def train(args):
         nav_patch_size=args.patch_size,
         nav_patch_channel2=args.nav_patch_channel2,
         traj_ids=traj_ids,
+        cond_mode=str(cond_spec.cond_mode),
+        waypoint_mode=str(getattr(args, "waypoint_mode", "rdp_dev")),
+        num_waypoints=int(cond_spec.num_waypoints),
     )
     # torch-friendly normalization constants (avoid numpy<->torch ops in training loop)
     pos_min = torch.tensor(dataset.normalizer.pos_min, dtype=torch.float32, device=device)
@@ -166,7 +183,7 @@ def train(args):
     if args.model_type == 'physics':
         print("Initializing PhysicsConditionDiffusion...")
         model = PhysicsConditionDiffusion(
-            obs_dim=4, act_dim=2, cond_dim=6,
+            obs_dim=4, act_dim=2, cond_dim=int(cond_spec.cond_dim),
             nav_patch_size=args.patch_size,
             nav_emb_scale=args.nav_emb_scale,
             nav_emb_dropout=args.nav_emb_dropout,
@@ -181,7 +198,7 @@ def train(args):
     else:
         print("Initializing Standard DiffusionTrajectoryModel...")
         model = DiffusionTrajectoryModel(
-            obs_dim=4, act_dim=2, cond_dim=6,
+            obs_dim=4, act_dim=2, cond_dim=int(cond_spec.cond_dim),
             obs_len=args.obs_len, pred_len=args.pred_len,
             hidden_dim=args.hidden_dim,
             diffusion_steps=args.diff_steps,
@@ -203,11 +220,18 @@ def train(args):
         if candidate.exists():
             resume_from = str(candidate)
 
+    arg_prior_mode = getattr(args, "prior_mode", None)
+    prior_mode = ("checkpoint" if args.prior_checkpoint else "none") if arg_prior_mode is None else str(arg_prior_mode)
+
     run_config = {
         "model_type": args.model_type,
         "data_path": args.data_path,
         "split": args.split,
         "splits_dir": args.splits_dir,
+        "cond_mode": str(cond_spec.cond_mode),
+        "waypoint_mode": str(getattr(args, "waypoint_mode", "rdp_dev")),
+        "num_waypoints": int(cond_spec.num_waypoints),
+        "prior_mode": str(prior_mode),
         "nav_file": args.nav_file,
         "patch_size": args.patch_size,
         "nav_patch_channel2": str(args.nav_patch_channel2),
@@ -247,8 +271,8 @@ def train(args):
         # Classifier-free guidance (CFG) training: destination dropout
         "cfg_drop_dest_prob": float(args.cfg_drop_dest_prob),
         "cfg_uncond_dest_mode": str(args.cfg_uncond_dest_mode),
-        "prior_checkpoint": (str(args.prior_checkpoint) if args.prior_checkpoint else None),
-        "residual_mode": bool(args.prior_checkpoint),
+        "prior_checkpoint": (str(args.prior_checkpoint) if str(prior_mode) == "checkpoint" else None),
+        "residual_mode": (str(prior_mode) != "none"),
     }
     
     model.train()
@@ -281,7 +305,7 @@ def train(args):
                     model = PhysicsConditionDiffusion(
                         obs_dim=4,
                         act_dim=2,
-                        cond_dim=6,
+                        cond_dim=int(cond_spec.cond_dim),
                         nav_patch_size=args.patch_size,
                         nav_emb_scale=args.nav_emb_scale,
                         nav_emb_dropout=args.nav_emb_dropout,
@@ -338,12 +362,32 @@ def train(args):
             new_prior = run_config.get("prior_checkpoint")
             if old_prior is not None and new_prior is not None and str(old_prior) != str(new_prior):
                 print(f"[WARN] resume 配置不一致：prior_checkpoint: ckpt={old_prior} vs args={new_prior}（Residual 模式必须一致）")
+            old_prior_mode = ckpt_cfg.get("prior_mode")
+            new_prior_mode = run_config.get("prior_mode")
+            if old_prior_mode is not None and new_prior_mode is not None and str(old_prior_mode) != str(new_prior_mode):
+                print(f"[WARN] resume 配置不一致：prior_mode: ckpt={old_prior_mode} vs args={new_prior_mode}（Residual 模式必须一致）")
         print(f"[OK] Resumed from {resume_from} (start_epoch={start_epoch})")
 
+    prior_mode = str(prior_mode)
+    if prior_mode not in ("none", "checkpoint", "skeleton_wp"):
+        raise ValueError(f"Unknown --prior_mode: {prior_mode} (expected: none|checkpoint|skeleton_wp)")
+    if prior_mode == "checkpoint" and not args.prior_checkpoint:
+        raise ValueError("--prior_mode checkpoint 需要 --prior_checkpoint")
+    if prior_mode == "checkpoint" and str(cond_spec.cond_mode) != "trip_od":
+        raise ValueError("--prior_mode checkpoint 仅支持 --cond_mode trip_od（否则 cond 语义不一致）")
+    if prior_mode == "skeleton_wp" and args.prior_checkpoint:
+        raise ValueError("--prior_mode skeleton_wp 与 --prior_checkpoint 不能同时使用")
+    if prior_mode == "skeleton_wp" and str(cond_spec.cond_mode) != "oracle_wp_end":
+        raise ValueError("--prior_mode skeleton_wp 需要 --cond_mode oracle_wp_end")
+    if prior_mode == "skeleton_wp" and int(cond_spec.num_waypoints) != 2:
+        raise ValueError("--prior_mode skeleton_wp 当前仅支持 --num_waypoints 2")
+
     prior_model = None
-    if args.prior_checkpoint:
+    if prior_mode == "checkpoint":
         prior_model = _load_baseline_prior(str(args.prior_checkpoint), device=device)
         print(f"[OK] Residual mode enabled: prior={args.prior_checkpoint}")
+    if prior_mode == "skeleton_wp":
+        print("[OK] Residual mode enabled: prior=skeleton_wp (oracle waypoints).")
 
     if start_epoch >= int(args.epochs):
         print(f"[DONE] start_epoch({start_epoch}) >= --epochs({int(args.epochs)}), nothing to train.")
@@ -369,18 +413,31 @@ def train(args):
 
             # Residual target: vel_residual = vel_full - vel_prior
             prior_vel_norm = None
+            target_action = action_full
             if prior_model is not None:
                 with torch.no_grad():
                     prior_vel_norm = prior_model.sample_trajectory(obs, cond, int(args.pred_len))
                 target_action = action_full - prior_vel_norm
-            else:
-                target_action = action_full
+            elif prior_mode == "skeleton_wp":
+                prior_vel_norm = build_skeleton_prior_vel_norm_k2(
+                    obs=obs,
+                    cond=cond,
+                    pred_len=int(args.pred_len),
+                    num_waypoints=int(cond_spec.num_waypoints),
+                    pos_min=pos_min,
+                    pos_range=pos_range,
+                    vel_mean=vel_mean,
+                    vel_std=vel_std,
+                )
+                target_action = action_full - prior_vel_norm
 
             # Classifier-free guidance (CFG) training: randomly drop destination condition.
             # cond layout: [hour, day, o_y, o_x, d_y, d_x]
             cond_model = cond
             p_drop = float(args.cfg_drop_dest_prob)
             if p_drop > 0.0:
+                if str(cond_spec.cond_mode) != "trip_od":
+                    raise ValueError("--cfg_drop_dest_prob 仅支持 --cond_mode trip_od")
                 if not (0.0 <= p_drop <= 1.0):
                     raise ValueError(f"--cfg_drop_dest_prob must be in [0,1], got {p_drop}")
                 drop = torch.rand((cond.shape[0],), device=device) < p_drop
@@ -593,6 +650,9 @@ if __name__ == "__main__":
     parser.add_argument('--data_path', type=str, required=True)
     parser.add_argument('--split', type=str, choices=['train', 'val', 'test', 'all'], default='train')
     parser.add_argument('--splits_dir', type=str, default=None, help="override splits dir (default: <processed_dir>/splits)")
+    parser.add_argument('--cond_mode', type=str, choices=['trip_od', 'oracle_wp_end'], default='trip_od', help="Condition format. oracle_wp_end is Phase-2 oracle mode.")
+    parser.add_argument('--waypoint_mode', type=str, choices=['rdp_dev'], default='rdp_dev', help="Oracle waypoint extraction mode (used when --cond_mode=oracle_wp_end).")
+    parser.add_argument('--num_waypoints', type=int, default=2, help="Number of oracle waypoints (Phase 2 default: 2).")
     # Physics args
     parser.add_argument('--nav_file', type=str, default=None)
     parser.add_argument('--patch_size', type=int, default=32)
@@ -628,6 +688,7 @@ if __name__ == "__main__":
     parser.add_argument('--resume_from', type=str, default=None, help="explicit checkpoint path to resume from")
     parser.add_argument('--no_resume_optim', action='store_true', help="when resuming, do NOT load optimizer_state_dict (recommended when changing loss/weights)")
     parser.add_argument('--prior_checkpoint', type=str, default=None, help="Residual diffusion: frozen deterministic prior checkpoint (SeqBaseline last.pt)")
+    parser.add_argument('--prior_mode', type=str, choices=['none', 'checkpoint', 'skeleton_wp'], default=None, help="Residual prior mode. Default: checkpoint if --prior_checkpoint else none.")
 
     # CFG (classifier-free guidance) training: destination dropout
     parser.add_argument('--cfg_drop_dest_prob', type=float, default=0.0, help="训练时对 destination 两维做 dropout 的概率（CFG 必需）。0 表示关闭。")

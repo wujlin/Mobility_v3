@@ -434,21 +434,21 @@ def compute_report(
     if len(unique_hashes) != 1:
         if all(("traj_idx" in d and "start_t" in d) for d in loaded.values()):
             loaded, align_stats = _align_loaded_by_window_ids(loaded)
-            # Recompute hashes after alignment; allow tiny float noise but catch real mismatches.
+            # After alignment, allow tiny float noise (normalization/denorm + integration) but catch real mismatches.
             ref_name = next(iter(loaded.keys()))
             ref_targets = np.asarray(loaded[ref_name]["targets"], dtype=np.float32)
             ref_start = np.asarray(loaded[ref_name].get("start_pos", ref_targets[:, 0]), dtype=np.float32)
-            ref_hash = _targets_hash(ref_targets)
             for name, data in loaded.items():
                 cur_targets = np.asarray(data["targets"], dtype=np.float32)
-                cur_hash = _targets_hash(cur_targets)
-                if cur_hash != ref_hash:
-                    max_abs = float(np.max(np.abs(cur_targets - ref_targets)))
+                max_abs = float(np.max(np.abs(cur_targets - ref_targets)))
+                if max_abs > 1e-3:
                     raise ValueError(
                         "Aligned by (traj_idx,start_t) but targets still differ "
                         f"(method={name}, max|Δ|={max_abs:.6g}). "
                         "This usually means different processed data or inconsistent normalization stats."
                     )
+                # Canonicalize targets to the reference (targets are only used for GT / bookkeeping).
+                data["targets"] = ref_targets
                 if "start_pos" in data:
                     cur_start = np.asarray(data["start_pos"], dtype=np.float32)
                     max_abs_s = float(np.max(np.abs(cur_start - ref_start)))

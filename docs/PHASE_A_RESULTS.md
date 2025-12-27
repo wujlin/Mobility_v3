@@ -133,7 +133,7 @@ Phase A 的目标是 **快速验证方向**，而不是“论文版最终结论�
 
 ```bash
 MPLCONFIGDIR=/tmp/mplconfig \
-  ~/miniconda3/envs/emotion/bin/python -m src.visualization.plot_phase_a_report \
+  python -m src.visualization.plot_phase_a_report \
   --processed_dir data/processed \
   --split test \
   --obs_len 8 \
@@ -156,7 +156,7 @@ MPLCONFIGDIR=/tmp/mplconfig \
 >   --out_json data/experiments/phase_a_report/gt_macro.json
 >
 > MPLCONFIGDIR=/tmp/mplconfig \
->   ~/miniconda3/envs/emotion/bin/python -m src.visualization.plot_phase_a_report \
+>   python -m src.visualization.plot_phase_a_report \
 >   --gt_macro_json data/experiments/phase_a_report/gt_macro.json \
 >   --out_dir data/experiments/phase_a_report/figures
 > ```

@@ -175,7 +175,7 @@ Phase B 的“论文级图件”建议与 Phase A 保持同一风格，至少包
 
 ```bash
 MPLCONFIGDIR=/tmp/mplconfig \
-  ~/miniconda3/envs/emotion/bin/python -m src.visualization.plot_phase_b_report \
+  python -m src.visualization.plot_phase_b_report \
   --baseline_dir data/experiments/baseline_b_dt30_eval_quick \
   --diff_dir data/experiments/diff_b_dt30_eval_quick \
   --physics_dir data/experiments/physics_b_dt30_eval_quick \
@@ -231,7 +231,7 @@ MPLCONFIGDIR=/tmp/mplconfig \
 
 ```bash
 MPLCONFIGDIR=/tmp/mplconfig \
-  ~/miniconda3/envs/emotion/bin/python -m src.visualization.plot_phase_b_report \
+  python -m src.visualization.plot_phase_b_report \
   --baseline_dir data/experiments/baseline_b_dt30_eval_quick \
   --diff_dir data/experiments/diff_b_dt30_h128_b512_lr3e-4_e10_eval_quick \
   --physics_dir data/experiments/physics_b_dt30_h128_b512_lr3e-4_e10_eval_quick \

@@ -39,7 +39,7 @@
 本协议默认所有 gate/validity 都以**同一份 GT windows**为基准，避免“拿模型输出当 GT”导致的同义反复。
 
 ```bash
-~/miniconda3/envs/emotion/bin/python -m src.evaluation.dump_gt_windows_npz \
+python -m src.evaluation.dump_gt_windows_npz \
   --processed_dir data/processed_passenger_dt30 \
   --split test \
   --out_npz data/experiments/gt_passenger_dt30_test/samples.npz \
@@ -59,7 +59,7 @@
 - 推荐做法：扫一遍 `od_bin`（例如 8/12/16），看结论是否稳定；`od_bin` 越小越“严格”（但重复越少）。
 
 ```bash
-~/miniconda3/envs/emotion/bin/python -m src.evaluation.od_multimodality_gate \
+python -m src.evaluation.od_multimodality_gate \
   --samples_npz data/experiments/gt_passenger_dt30_test/samples.npz \
   --od_bin 12 --min_bucket_n 50 --sep_thr 2.0 \
   --out_json data/experiments/gt_passenger_dt30_test/od_gate_dest_odbin12.json
@@ -79,7 +79,7 @@
 
 生成 skeleton-only 的 `samples.npz`（便于统一后续评估）：
 ```bash
-~/miniconda3/envs/emotion/bin/python -m src.evaluation.make_oracle_skeleton \
+python -m src.evaluation.make_oracle_skeleton \
   --samples_npz data/experiments/gt_passenger_dt30_test/samples.npz \
   --out_npz data/experiments/gt_passenger_dt30_test/skeleton_rdp_k2_linear.npz \
   --waypoint_mode rdp_dev --num_waypoints 2 --skeleton linear
@@ -87,7 +87,7 @@
 
 对照（0 waypoint 的 straight skeleton）：
 ```bash
-~/miniconda3/envs/emotion/bin/python -m src.evaluation.make_oracle_skeleton \
+python -m src.evaluation.make_oracle_skeleton \
   --samples_npz data/experiments/gt_passenger_dt30_test/samples.npz \
   --out_npz data/experiments/gt_passenger_dt30_test/skeleton_straight_k0_linear.npz \
   --waypoint_mode time --num_waypoints 0 --skeleton linear
@@ -95,7 +95,7 @@
 
 硬可行性（Waypoint Gate：碰撞率/越界率，<10% 才讨论后续）：
 ```bash
-~/miniconda3/envs/emotion/bin/python -m src.evaluation.waypoint_gate \
+python -m src.evaluation.waypoint_gate \
   --samples_npz data/experiments/gt_passenger_dt30_test/samples.npz \
   --nav_file data/processed_passenger_dt30/nav_field.npz \
   --waypoint_mode rdp_dev --num_waypoints 2 \
@@ -105,7 +105,7 @@
 
 评估（空间尺度 turn + max_dev_ratio + len_ratio；含 CI+noise floor）：
 ```bash
-~/miniconda3/envs/emotion/bin/python -m src.evaluation.detour_validity \
+python -m src.evaluation.detour_validity \
   --inputs "StraightK0:data/experiments/gt_passenger_dt30_test/skeleton_straight_k0_linear.npz" \
            "RDPK2:data/experiments/gt_passenger_dt30_test/skeleton_rdp_k2_linear.npz" \
   --ds 0.5 --lags 1 2 4 8 --offset_fracs 0 0.25 0.5 0.75 \
@@ -297,7 +297,7 @@ python -m src.visualization.plot_physical_stats \
 
 示例：
 ```bash
-~/miniconda3/envs/emotion/bin/python -m src.evaluation.detour_validity \
+python -m src.evaluation.detour_validity \
   --inputs "Prior:data/experiments/prior_geo_density_test/samples.npz" \
            "Ours(CFG2):data/experiments/phys_cfg2_geo_density_test/samples.npz" \
   --ds 0.5 --lags 1 2 4 8 --offset_fracs 0 0.25 0.5 0.75 \

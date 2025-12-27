@@ -99,7 +99,7 @@
 脚本：`src/evaluation/waypoint_gate.py`（依赖 SciPy，CPU-only）
 
 ```bash
-~/miniconda3/envs/emotion/bin/python -m src.evaluation.waypoint_gate \
+python -m src.evaluation.waypoint_gate \
   --samples_npz data/experiments/prior_geo_density_test/samples.npz \
   --nav_file data/processed_dt30/nav_field.npz \
   --waypoint_mode max_turn --num_waypoints 1 \

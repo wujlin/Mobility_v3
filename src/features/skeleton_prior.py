@@ -132,8 +132,51 @@ def build_skeleton_prior_vel_norm_k2(
     if F > 1:
         vel[:, 1:, :] = pos[:, 1:, :] - pos[:, :-1, :]
 
+    # ---- Corner smoothing (KISS) ----
+    # Linear skeleton has sharp turns at waypoint connections, which can create
+    # impulsive acceleration profiles. We smooth velocities only in a 1-step
+    # neighborhood around segment boundaries, then apply a tiny global correction
+    # to keep the final endpoint fixed.
+    if F >= 3:
+        seg_id = m1.to(torch.int64) + (~(m0 | m1)).to(torch.int64) * 2  # 0/1/2 for seg0/seg1/seg2
+        boundary = seg_id[:, 1:] != seg_id[:, :-1]  # (B,F-1), boundary at pos index i in [1..F-1]
+        idx_pos = torch.arange(1, F, device=obs.device, dtype=torch.int64)[None, :]  # (1,F-1)
+        big = torch.full((B, F - 1), F + 1, device=obs.device, dtype=torch.int64)
+        idx1 = torch.where(boundary, idx_pos, big).min(dim=1).values  # (B,)
+        idx2 = torch.where(boundary & (idx_pos > idx1[:, None]), idx_pos, big).min(dim=1).values  # (B,)
+
+        vel_s = vel.clone()
+        b = torch.arange(B, device=obs.device, dtype=torch.int64)
+        valid_mask = total[:, 0] > float(eps)
+
+        def _smooth_at(step_idx: torch.Tensor) -> None:
+            # Smooth vel at step_idx and step_idx+1 using 3-tap averaging.
+            i = step_idx.to(torch.int64)
+
+            m = valid_mask & (i >= 1) & (i <= F - 2)
+            if bool(torch.any(m)):
+                bb = b[m]
+                ii = i[m]
+                vel_s[bb, ii] = (vel_s[bb, ii - 1] + vel_s[bb, ii] + vel_s[bb, ii + 1]) / 3.0
+
+            j = i + 1
+            m2 = valid_mask & (j >= 1) & (j <= F - 2)
+            if bool(torch.any(m2)):
+                bb2 = b[m2]
+                jj = j[m2]
+                vel_s[bb2, jj] = (vel_s[bb2, jj - 1] + vel_s[bb2, jj] + vel_s[bb2, jj + 1]) / 3.0
+
+        _smooth_at(idx1)
+        _smooth_at(idx2)
+
+        # Endpoint correction: distribute the residual displacement evenly.
+        desired_disp = end - start  # (B,2)
+        disp = vel_s.sum(dim=1)  # (B,2)
+        delta = (desired_disp - disp) / float(F)
+        delta = delta * valid_mask.to(dtype=vel_s.dtype)[:, None]
+        vel = vel_s + delta[:, None, :]
+
     # For degenerate cases (total length ~0), return zeros.
     valid = (total[:, 0] > float(eps)).to(dtype=vel.dtype)[:, None, None]
     vel = vel * valid
     return _normalize_vel(vel, vel_mean=vel_mean, vel_std=vel_std)
-

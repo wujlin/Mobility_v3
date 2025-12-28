@@ -14,6 +14,11 @@ import torch.optim as optim
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
 
+try:  # Optional dependency (already used by evaluation scripts); required for --offroad_field=dist.
+    from scipy import ndimage  # type: ignore
+except Exception:  # pragma: no cover
+    ndimage = None
+
 from src.data.datasets_diffusion import DiffusionDataset
 from src.models.physics.physics_condition_diffusion import PhysicsConditionDiffusion
 
@@ -63,6 +68,21 @@ def build_argparser() -> argparse.ArgumentParser:
     # Differentiable offroad penalty (segment-sampled, approximates G1 collision gate)
     p.add_argument("--offroad_weight", type=float, default=0.0, help="Weight for differentiable offroad penalty (0 disables).")
     p.add_argument("--offroad_samples_per_segment", type=int, default=16, help="Samples per segment for offroad penalty (>=2).")
+    p.add_argument(
+        "--offroad_field",
+        type=str,
+        choices=["count", "dist"],
+        default="count",
+        help="Field used by offroad penalty. "
+             "count: relu(count_thr - count). "
+             "dist: distance-to-road field (0 on drivable, >0 offroad), converted via tanh(dist/sigma).",
+    )
+    p.add_argument(
+        "--offroad_dist_sigma",
+        type=float,
+        default=3.0,
+        help="Sigma (in grid cells) for --offroad_field=dist: viol=tanh(dist/sigma) in [0,1].",
+    )
     p.add_argument(
         "--offroad_agg",
         type=str,
@@ -115,10 +135,12 @@ def _segment_offroad_penalty(
     *,
     start_pos_norm: torch.Tensor,  # (B,2) normalized pos in [-1,1]
     z_norm: torch.Tensor,  # (B,3,2) normalized pos in [-1,1]
-    nav_count: torch.Tensor,  # (1,1,H,W) raw count
+    nav_field: torch.Tensor,  # (1,1,H,W) raw count or dist-to-road
     pos_min: torch.Tensor,  # (2,)
     pos_range: torch.Tensor,  # (2,)
+    field: str,
     count_thr: float,
+    dist_sigma: float,
     samples_per_segment: int,
     agg: str,
     lse_beta: float,
@@ -129,12 +151,12 @@ def _segment_offroad_penalty(
     """
     if int(samples_per_segment) < 2:
         raise ValueError("--offroad_samples_per_segment must be >= 2")
-    if nav_count.ndim != 4:
-        raise ValueError(f"nav_count must be (1,1,H,W), got {tuple(nav_count.shape)}")
+    if nav_field.ndim != 4:
+        raise ValueError(f"nav_field must be (1,1,H,W), got {tuple(nav_field.shape)}")
 
     B = int(z_norm.shape[0])
-    H = int(nav_count.shape[2])
-    W = int(nav_count.shape[3])
+    H = int(nav_field.shape[2])
+    W = int(nav_field.shape[3])
 
     # normalized -> grid coords (y,x)
     start_grid = (start_pos_norm + 1.0) * 0.5 * pos_range[None, :] + pos_min[None, :]
@@ -156,11 +178,21 @@ def _segment_offroad_penalty(
     y_n = (y / max(float(H - 1), 1.0)) * 2.0 - 1.0
     grid = torch.stack([x_n, y_n], dim=-1).unsqueeze(2)  # (B,3S,1,2)
 
-    count_in = nav_count.expand(B, -1, -1, -1)
-    sampled = F.grid_sample(count_in, grid, mode="bilinear", padding_mode="zeros", align_corners=True)  # (B,1,3S,1)
+    field_in = nav_field.expand(B, -1, -1, -1)
+    sampled = F.grid_sample(field_in, grid, mode="bilinear", padding_mode="zeros", align_corners=True)  # (B,1,3S,1)
     sampled = sampled.squeeze(1).squeeze(-1)  # (B,3S)
 
-    viol = F.relu(float(count_thr) - sampled)  # (B,3S)
+    field = str(field)
+    if field == "count":
+        viol = F.relu(float(count_thr) - sampled)  # (B,3S) in [0,thr] for count>=0
+    elif field == "dist":
+        sigma = float(dist_sigma)
+        sigma = 1.0 if sigma <= 0.0 else sigma
+        # Distance-to-road: 0 on-road, >0 offroad. Convert to a bounded violation to keep scale stable.
+        viol = torch.tanh(sampled / sigma)  # (B,3S) in [0,1)
+    else:  # pragma: no cover
+        raise ValueError(f"Unknown offroad_field: {field} (expected count|dist)")
+
     agg = str(agg)
     if agg == "mean":
         return viol.mean(dim=1)  # (B,)
@@ -220,6 +252,22 @@ def main() -> None:
     nav_count_t = None
     if nav_count is not None:
         nav_count_t = torch.from_numpy(np.asarray(nav_count, dtype=np.float32))[None, None, :, :].to(device=device)
+
+    # Training-time offroad penalty field
+    nav_field_t = None
+    if float(args.offroad_weight) > 0.0:
+        if nav_count is None:
+            raise RuntimeError("--offroad_weight > 0 requires nav_field.npz with count.")
+        if str(args.offroad_field) == "count":
+            nav_field_t = nav_count_t
+        elif str(args.offroad_field) == "dist":
+            if ndimage is None:
+                raise ImportError("scipy is required for --offroad_field dist (missing scipy.ndimage).")
+            road = np.asarray(nav_count >= float(args.count_thr), dtype=bool)
+            dist = ndimage.distance_transform_edt(~road).astype(np.float32)  # 0 on-road, >0 offroad
+            nav_field_t = torch.from_numpy(dist)[None, None, :, :].to(device=device)
+        else:  # pragma: no cover
+            raise ValueError(f"Unknown --offroad_field: {args.offroad_field}")
 
     g = torch.Generator()
     g.manual_seed(int(args.seed))
@@ -287,6 +335,8 @@ def main() -> None:
         "offroad_weight": float(args.offroad_weight),
         "offroad_samples_per_segment": int(args.offroad_samples_per_segment),
         "offroad_weighting": "alpha2",
+        "offroad_field": str(args.offroad_field),
+        "offroad_dist_sigma": float(args.offroad_dist_sigma),
         "offroad_agg": str(args.offroad_agg),
         "offroad_lse_beta": float(args.offroad_lse_beta),
     }
@@ -322,17 +372,19 @@ def main() -> None:
             loss = diff_loss
             offroad_pen = None
             gt_offroad_pen = None
-            if float(args.offroad_weight) > 0.0 and nav_count_t is not None:
+            if float(args.offroad_weight) > 0.0 and nav_field_t is not None:
                 z_pred = x0_pred.permute(0, 2, 1)  # (B,3,2)
                 z_pred = torch.clamp(z_pred, -1.0, 1.0)
                 start_pos_norm = obs[:, -1, :2]  # (B,2)
                 per_sample = _segment_offroad_penalty(
                     start_pos_norm=start_pos_norm,
                     z_norm=z_pred,
-                    nav_count=nav_count_t,
+                    nav_field=nav_field_t,
                     pos_min=pos_min,
                     pos_range=pos_range,
+                    field=str(args.offroad_field),
                     count_thr=float(args.count_thr),
+                    dist_sigma=float(args.offroad_dist_sigma),
                     samples_per_segment=int(args.offroad_samples_per_segment),
                     agg=str(args.offroad_agg),
                     lse_beta=float(args.offroad_lse_beta),
@@ -343,10 +395,12 @@ def main() -> None:
                     gt_per_sample = _segment_offroad_penalty(
                         start_pos_norm=start_pos_norm,
                         z_norm=z,
-                        nav_count=nav_count_t,
+                        nav_field=nav_field_t,
                         pos_min=pos_min,
                         pos_range=pos_range,
+                        field=str(args.offroad_field),
                         count_thr=float(args.count_thr),
+                        dist_sigma=float(args.offroad_dist_sigma),
                         samples_per_segment=int(args.offroad_samples_per_segment),
                         agg=str(args.offroad_agg),
                         lse_beta=float(args.offroad_lse_beta),

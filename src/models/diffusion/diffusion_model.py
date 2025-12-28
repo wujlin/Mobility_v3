@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from typing import Optional, Tuple, Union
+from typing import Callable, Optional, Tuple, Union
 from src.models.base_model import BaseTrajectoryModel
 from src.models.diffusion.unet1d import UNet1D
 from src.models.diffusion.scheduler import DDPMScheduler
@@ -73,6 +73,7 @@ class DiffusionTrajectoryModel(BaseTrajectoryModel):
         target: torch.Tensor,
         *,
         sample_weight: Optional[torch.Tensor] = None,
+        cond_emb_extra_fn: Optional[Callable[[torch.Tensor, torch.Tensor], torch.Tensor]] = None,
         return_x0_pred: bool = False,
         return_timesteps: bool = False,
     ) -> Union[
@@ -108,6 +109,10 @@ class DiffusionTrajectoryModel(BaseTrajectoryModel):
         x_t = self.scheduler.add_noise(x_0, noise, timesteps)
 
         global_cond = self.get_global_cond(obs, cond)  # (B, emb_dim)
+        if cond_emb_extra_fn is not None:
+            extra = cond_emb_extra_fn(x_t, timesteps)
+            if extra is not None:
+                global_cond = global_cond + extra.to(device=device, dtype=global_cond.dtype)
         model_out = self.unet(x_t, timesteps, cond=global_cond)
 
         sqrt_alpha_prod = self.scheduler.sqrt_alphas_cumprod[timesteps].flatten()[:, None, None]
@@ -173,6 +178,7 @@ class DiffusionTrajectoryModel(BaseTrajectoryModel):
         *,
         cond_uncond: Optional[torch.Tensor] = None,
         cfg_scale: float = 0.0,
+        cond_emb_extra_fn: Optional[Callable[[torch.Tensor, torch.Tensor], torch.Tensor]] = None,
         **kwargs,
     ) -> torch.Tensor:
         """
@@ -205,14 +211,25 @@ class DiffusionTrajectoryModel(BaseTrajectoryModel):
         for t in reversed(range(self.scheduler.num_train_timesteps)):
             # Broadcast timestep
             ts = torch.full((B,), t, device=device, dtype=torch.long)
+            extra = None
+            if cond_emb_extra_fn is not None:
+                extra = cond_emb_extra_fn(x_t, ts)
+                if extra is not None:
+                    extra = extra.to(device=device, dtype=global_cond.dtype)
 
             if use_cfg:
                 # out = out_u + s*(out_c - out_u)
-                out_u = self.unet(x_t, ts, cond=global_cond_uncond)
-                out_c = self.unet(x_t, ts, cond=global_cond)
+                cond_u = global_cond_uncond
+                cond_c = global_cond
+                if extra is not None:
+                    cond_u = cond_u + extra
+                    cond_c = cond_c + extra
+                out_u = self.unet(x_t, ts, cond=cond_u)
+                out_c = self.unet(x_t, ts, cond=cond_c)
                 model_out = out_u + float(cfg_scale) * (out_c - out_u)
             else:
-                model_out = self.unet(x_t, ts, cond=global_cond)
+                cond_c = global_cond + extra if extra is not None else global_cond
+                model_out = self.unet(x_t, ts, cond=cond_c)
 
             # Convert v-prediction to epsilon for DDPM step (scheduler expects epsilon).
             if self.prediction_type == "v":

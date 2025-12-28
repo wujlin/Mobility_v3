@@ -49,6 +49,15 @@ def build_argparser() -> argparse.ArgumentParser:
     p.add_argument("--nav_gate", type=str, choices=["none", "obscond"], default="none")
     p.add_argument("--nav_gate_hidden", type=int, default=32)
     p.add_argument("--nav_gate_dropout", type=float, default=0.0)
+    p.add_argument(
+        "--nav_query",
+        type=str,
+        choices=["none", "global"],
+        default="none",
+        help="Scheme-2: query global nav field at the current noisy waypoints (dynamic conditioning).",
+    )
+    p.add_argument("--nav_query_field", type=str, choices=["dist", "count"], default="dist")
+    p.add_argument("--nav_query_dist_sigma", type=float, default=3.0)
 
     p.add_argument("--hidden_dim", type=int, default=128)
     p.add_argument("--diff_steps", type=int, default=20)
@@ -269,6 +278,22 @@ def main() -> None:
         else:  # pragma: no cover
             raise ValueError(f"Unknown --offroad_field: {args.offroad_field}")
 
+    # Scheme-2: global nav query field (avoid nav_patch->vector bottleneck collapse)
+    nav_query_global_t = None
+    if str(args.nav_query) != "none":
+        if nav_count is None:
+            raise RuntimeError("--nav_query requires nav_field.npz with count.")
+        if str(args.nav_query_field) == "count":
+            nav_query_global_t = nav_count_t
+        elif str(args.nav_query_field) == "dist":
+            if ndimage is None:
+                raise ImportError("scipy is required for --nav_query_field dist (missing scipy.ndimage).")
+            road = np.asarray(nav_count >= float(args.count_thr), dtype=bool)
+            dist = ndimage.distance_transform_edt(~road).astype(np.float32)  # 0 on-road, >0 offroad
+            nav_query_global_t = torch.from_numpy(dist)[None, None, :, :].to(device=device)
+        else:  # pragma: no cover
+            raise ValueError(f"Unknown --nav_query_field: {args.nav_query_field}")
+
     g = torch.Generator()
     g.manual_seed(int(args.seed))
     pin_memory = bool(torch.cuda.is_available())
@@ -293,6 +318,11 @@ def main() -> None:
         nav_gate=str(args.nav_gate),
         nav_gate_hidden=int(args.nav_gate_hidden),
         nav_gate_dropout=float(args.nav_gate_dropout),
+        nav_query=str(args.nav_query),
+        nav_query_field=str(args.nav_query_field),
+        nav_query_dist_sigma=float(args.nav_query_dist_sigma),
+        pos_min=tuple(float(x) for x in dataset.normalizer.pos_min),
+        pos_range=tuple(float(x) for x in dataset.normalizer.pos_range),
         obs_len=int(args.obs_len),
         pred_len=3,
         hidden_dim=int(args.hidden_dim),
@@ -322,6 +352,11 @@ def main() -> None:
         "nav_gate": str(args.nav_gate),
         "nav_gate_hidden": int(args.nav_gate_hidden),
         "nav_gate_dropout": float(args.nav_gate_dropout),
+        "nav_query": str(args.nav_query),
+        "nav_query_field": str(args.nav_query_field),
+        "nav_query_dist_sigma": float(args.nav_query_dist_sigma),
+        "pos_min": [float(x) for x in dataset.normalizer.pos_min],
+        "pos_range": [float(x) for x in dataset.normalizer.pos_range],
         "hidden_dim": int(args.hidden_dim),
         "diff_steps": int(args.diff_steps),
         "pred_type": str(args.pred_type),
@@ -366,6 +401,7 @@ def main() -> None:
                 cond=cond_trip_od,
                 target=z,
                 nav_patch=nav_patch,
+                nav_global=nav_query_global_t,
                 return_x0_pred=True,
                 return_timesteps=True,
             )

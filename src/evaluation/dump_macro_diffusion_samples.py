@@ -10,6 +10,11 @@ import numpy as np
 import torch
 from torch.utils.data import DataLoader, Subset
 
+try:  # Optional dependency (used in waypoint_gate.py); required for nav_query_field=dist.
+    from scipy import ndimage  # type: ignore
+except Exception:  # pragma: no cover
+    ndimage = None
+
 from src.data.datasets_diffusion import DiffusionDataset
 from src.features.skeleton_prior import CondSpec, build_skeleton_prior_vel_norm_k2
 from src.models.physics.physics_condition_diffusion import PhysicsConditionDiffusion
@@ -90,6 +95,17 @@ def _load_macro_model(
         if hasattr(w, "shape") and len(w.shape) == 2:
             nav_gate_hidden = int(w.shape[0])
 
+    nav_query = str(cfg.get("nav_query", "none"))
+    nav_query_field = str(cfg.get("nav_query_field", "dist"))
+    nav_query_dist_sigma = float(cfg.get("nav_query_dist_sigma", 3.0))
+    pos_min = cfg.get("pos_min", None)
+    pos_range = cfg.get("pos_range", None)
+    pos_min_t = None
+    pos_range_t = None
+    if isinstance(pos_min, (list, tuple)) and len(pos_min) == 2 and isinstance(pos_range, (list, tuple)) and len(pos_range) == 2:
+        pos_min_t = (float(pos_min[0]), float(pos_min[1]))
+        pos_range_t = (float(pos_range[0]), float(pos_range[1]))
+
     model = PhysicsConditionDiffusion(
         obs_dim=4,
         act_dim=2,
@@ -101,6 +117,11 @@ def _load_macro_model(
         nav_gate=str(nav_gate),
         nav_gate_hidden=int(nav_gate_hidden),
         nav_gate_dropout=float(cfg.get("nav_gate_dropout", 0.0)),
+        nav_query=str(nav_query),
+        nav_query_field=str(nav_query_field),
+        nav_query_dist_sigma=float(nav_query_dist_sigma),
+        pos_min=pos_min_t,
+        pos_range=pos_range_t,
         obs_len=int(obs_len),
         pred_len=3,
         hidden_dim=int(hidden_dim),
@@ -439,6 +460,24 @@ def main() -> None:
             f"count_thr={float(args.gate_count_thr)}, step={float(args.gate_sample_step)}"
         )
 
+    # Scheme-2: global nav query field (for dynamic conditioning inside diffusion)
+    nav_query_global_t = None
+    nav_query = str(cfg.get("nav_query", "none"))
+    if nav_query != "none":
+        nav_query_field = str(cfg.get("nav_query_field", "dist"))
+        count_thr = float(cfg.get("count_thr", 1.0))
+        count = _load_nav_count(str(args.nav_file))
+        if nav_query_field == "count":
+            nav_query_global_t = torch.from_numpy(np.asarray(count, dtype=np.float32))[None, None, :, :].to(device=device)
+        elif nav_query_field == "dist":
+            if ndimage is None:
+                raise ImportError("scipy is required for nav_query_field=dist (missing scipy.ndimage).")
+            road = np.asarray(count >= float(count_thr), dtype=bool)
+            dist = ndimage.distance_transform_edt(~road).astype(np.float32)  # 0 on-road, >0 offroad
+            nav_query_global_t = torch.from_numpy(dist)[None, None, :, :].to(device=device)
+        else:
+            raise ValueError(f"Unknown nav_query_field: {nav_query_field}")
+
     preds_k_list: list[np.ndarray] = []
     targets_list: list[np.ndarray] = []
     start_pos_list: list[np.ndarray] = []
@@ -508,7 +547,13 @@ def main() -> None:
             obs_rep_raw = obs.repeat_interleave(int(K_raw), dim=0)
             cond_rep_raw = cond_trip_od.repeat_interleave(int(K_raw), dim=0)
             nav_rep_raw = nav_patch.repeat_interleave(int(K_raw), dim=0)
-            z_rep = macro.sample_trajectory(obs_rep_raw, cond_rep_raw, horizon=3, nav_patch=nav_rep_raw)  # (B*K_raw,3,2)
+            z_rep = macro.sample_trajectory(
+                obs_rep_raw,
+                cond_rep_raw,
+                horizon=3,
+                nav_patch=nav_rep_raw,
+                nav_global=nav_query_global_t,
+            )  # (B*K_raw,3,2)
             z_k_raw = z_rep.view(int(take), int(K_raw), 3, 2)
 
             # Hard clip to the normalization box (prevents rare OOB).

@@ -8,7 +8,7 @@ from typing import Dict, Optional, Tuple
 
 import numpy as np
 import torch
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, Subset
 
 from src.data.datasets_diffusion import DiffusionDataset
 from src.features.skeleton_prior import CondSpec, build_skeleton_prior_vel_norm_k2
@@ -149,6 +149,68 @@ def _keys_from_ids(traj_idx: np.ndarray, start_t: np.ndarray) -> np.ndarray:
     return (traj_idx << np.int64(32)) + start_t
 
 
+def _subset_indices_from_windows_npz(
+    *,
+    dataset: DiffusionDataset,
+    windows_npz: str,
+    save_samples: int,
+    seed: int,
+) -> np.ndarray:
+    """
+    Map (traj_idx,start_t) in windows_npz to DiffusionDataset sample indices, then select up to save_samples.
+
+    This avoids scanning the full dataloader (which is prohibitively slow when windows are sparse).
+    """
+    win = np.load(str(windows_npz), allow_pickle=True)
+    if "traj_idx" not in win.files or "start_t" not in win.files:
+        raise ValueError(f"--windows_npz must contain traj_idx/start_t, got {win.files}")
+    traj_idx = np.asarray(win["traj_idx"], dtype=np.int64).reshape(-1)
+    start_t = np.asarray(win["start_t"], dtype=np.int64).reshape(-1)
+    if traj_idx.shape != start_t.shape:
+        raise ValueError("windows_npz: traj_idx/start_t shape mismatch")
+
+    if dataset.traj_ids is None:
+        raise ValueError("--windows_npz requires dataset.traj_ids (use split ids, not split=all).")
+    if int(dataset.step) != 1:
+        raise ValueError(f"--windows_npz mapping currently assumes step=1, got step={dataset.step}")
+
+    traj_ids = np.asarray(dataset.traj_ids, dtype=np.int64).reshape(-1)
+    ptr = np.asarray(dataset.storage._ptr, dtype=np.int64)
+    window_size = int(dataset.window_size)
+    length = (ptr[traj_ids + 1] - ptr[traj_ids]).astype(np.int64)
+    win_count = np.maximum(length - window_size + 1, 0).astype(np.int64)
+    offsets = np.concatenate([np.zeros((1,), dtype=np.int64), np.cumsum(win_count[:-1], dtype=np.int64)], axis=0)
+
+    pos_map = {int(tid): int(i) for i, tid in enumerate(traj_ids.tolist())}
+
+    idx_list: list[int] = []
+    for tid, t0 in zip(traj_idx.tolist(), start_t.tolist()):
+        p = pos_map.get(int(tid))
+        if p is None:
+            continue
+        t0_i = int(t0)
+        if t0_i < 0 or t0_i >= int(win_count[p]):
+            continue
+        idx_list.append(int(offsets[p] + t0_i))
+
+    if not idx_list:
+        raise RuntimeError("No windows from --windows_npz found in the specified split/dataset ordering.")
+
+    idx_arr = np.asarray(idx_list, dtype=np.int64)
+    idx_arr = np.unique(idx_arr)  # deduplicate repeated sampled windows
+
+    n_need = int(save_samples)
+    if n_need <= 0:
+        raise ValueError("--save_samples must be > 0")
+    if idx_arr.size <= n_need:
+        return idx_arr
+
+    rng = np.random.default_rng(int(seed))
+    pick = rng.choice(idx_arr, size=int(n_need), replace=False)
+    pick = np.sort(pick)
+    return pick.astype(np.int64, copy=False)
+
+
 def build_argparser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description="Dump macro-diffusion samples (z -> skeleton -> optional DetRes micro) into samples.npz.")
     p.add_argument("--exp_name", type=str, required=True)
@@ -184,14 +246,6 @@ def main() -> None:
     print(f"Using device: {device}")
     print(f"Using seed: {int(args.seed)}")
 
-    # Optional restriction to a predefined window set (e.g., test_detour_hard.npz)
-    desired_keys = None
-    if args.windows_npz:
-        win = np.load(str(args.windows_npz))
-        if "traj_idx" not in win.files or "start_t" not in win.files:
-            raise ValueError(f"--windows_npz must contain traj_idx/start_t, got {win.files}")
-        desired_keys = _keys_from_ids(np.asarray(win["traj_idx"]), np.asarray(win["start_t"]))
-
     traj_ids = None
     if str(args.split) != "all":
         processed_dir = Path(args.data_path).resolve().parents[1]
@@ -202,7 +256,7 @@ def main() -> None:
         traj_ids = np.load(split_file).astype(np.int64)
         print(f"Using split={args.split}: {len(traj_ids)} trajectories ({split_file})")
 
-    dataset = DiffusionDataset(
+    base_dataset = DiffusionDataset(
         args.data_path,
         obs_len=int(args.obs_len),
         pred_len=int(args.pred_len),
@@ -214,9 +268,19 @@ def main() -> None:
         waypoint_mode="rdp_dev",
         num_waypoints=2,
     )
-    norm = dataset.normalizer
+    norm = base_dataset.normalizer
 
-    loader = DataLoader(dataset, batch_size=int(args.batch_size), shuffle=False, num_workers=int(args.num_workers))
+    dataset_for_loader = base_dataset
+    if args.windows_npz:
+        subset_idx = _subset_indices_from_windows_npz(
+            dataset=base_dataset,
+            windows_npz=str(args.windows_npz),
+            save_samples=int(args.save_samples),
+            seed=int(args.seed),
+        )
+        dataset_for_loader = Subset(base_dataset, subset_idx.tolist())
+
+    loader = DataLoader(dataset_for_loader, batch_size=int(args.batch_size), shuffle=False, num_workers=int(args.num_workers))
 
     # Macro model config comes from checkpoint (to avoid mismatch)
     _state, cfg = _load_checkpoint(str(args.macro_checkpoint), device=device)
@@ -264,18 +328,6 @@ def main() -> None:
                 raise RuntimeError("Dataset must provide meta.traj_idx/start_t for alignment.")
             tid = np.asarray(meta["traj_idx"].detach().cpu().numpy(), dtype=np.int64)
             t0 = np.asarray(meta["start_t"].detach().cpu().numpy(), dtype=np.int64)
-
-            if desired_keys is not None:
-                keys = _keys_from_ids(tid, t0)
-                mask = np.isin(keys, desired_keys)
-                if not bool(np.any(mask)):
-                    continue
-                idx = np.nonzero(mask)[0]
-                batch = {k: (v[idx] if isinstance(v, torch.Tensor) else v) for k, v in batch.items() if k != "meta"}
-                # meta tensors need slicing too
-                meta = {"traj_idx": torch.from_numpy(tid[idx]), "start_t": torch.from_numpy(t0[idx])}
-                tid = tid[idx]
-                t0 = t0[idx]
 
             obs = batch["obs"].to(device)
             cond_trip_od = batch["cond"].to(device)  # (B,6)
@@ -407,4 +459,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from typing import Callable, Optional, Tuple, Union
+from typing import Any, Callable, Dict, Optional, Tuple, Union
 from src.models.base_model import BaseTrajectoryModel
 from src.models.diffusion.unet1d import UNet1D
 from src.models.diffusion.scheduler import DDPMScheduler
@@ -74,6 +74,7 @@ class DiffusionTrajectoryModel(BaseTrajectoryModel):
         *,
         sample_weight: Optional[torch.Tensor] = None,
         cond_emb_extra_fn: Optional[Callable[[torch.Tensor, torch.Tensor], torch.Tensor]] = None,
+        unet_kwargs_fn: Optional[Callable[[torch.Tensor, torch.Tensor], Dict[str, Any]]] = None,
         return_x0_pred: bool = False,
         return_timesteps: bool = False,
     ) -> Union[
@@ -113,7 +114,12 @@ class DiffusionTrajectoryModel(BaseTrajectoryModel):
             extra = cond_emb_extra_fn(x_t, timesteps)
             if extra is not None:
                 global_cond = global_cond + extra.to(device=device, dtype=global_cond.dtype)
-        model_out = self.unet(x_t, timesteps, cond=global_cond)
+        unet_kwargs: Dict[str, Any] = {}
+        if unet_kwargs_fn is not None:
+            extra_kwargs = unet_kwargs_fn(x_t, timesteps)
+            if extra_kwargs:
+                unet_kwargs.update(extra_kwargs)
+        model_out = self.unet(x_t, timesteps, cond=global_cond, **unet_kwargs)
 
         sqrt_alpha_prod = self.scheduler.sqrt_alphas_cumprod[timesteps].flatten()[:, None, None]
         sqrt_one_minus_alpha_prod = self.scheduler.sqrt_one_minus_alphas_cumprod[timesteps].flatten()[:, None, None]
@@ -179,6 +185,7 @@ class DiffusionTrajectoryModel(BaseTrajectoryModel):
         cond_uncond: Optional[torch.Tensor] = None,
         cfg_scale: float = 0.0,
         cond_emb_extra_fn: Optional[Callable[[torch.Tensor, torch.Tensor], torch.Tensor]] = None,
+        unet_kwargs_fn: Optional[Callable[[torch.Tensor, torch.Tensor], Dict[str, Any]]] = None,
         **kwargs,
     ) -> torch.Tensor:
         """
@@ -216,6 +223,11 @@ class DiffusionTrajectoryModel(BaseTrajectoryModel):
                 extra = cond_emb_extra_fn(x_t, ts)
                 if extra is not None:
                     extra = extra.to(device=device, dtype=global_cond.dtype)
+            unet_kwargs: Dict[str, Any] = {}
+            if unet_kwargs_fn is not None:
+                extra_kwargs = unet_kwargs_fn(x_t, ts)
+                if extra_kwargs:
+                    unet_kwargs.update(extra_kwargs)
 
             if use_cfg:
                 # out = out_u + s*(out_c - out_u)
@@ -224,12 +236,12 @@ class DiffusionTrajectoryModel(BaseTrajectoryModel):
                 if extra is not None:
                     cond_u = cond_u + extra
                     cond_c = cond_c + extra
-                out_u = self.unet(x_t, ts, cond=cond_u)
-                out_c = self.unet(x_t, ts, cond=cond_c)
+                out_u = self.unet(x_t, ts, cond=cond_u, **unet_kwargs)
+                out_c = self.unet(x_t, ts, cond=cond_c, **unet_kwargs)
                 model_out = out_u + float(cfg_scale) * (out_c - out_u)
             else:
                 cond_c = global_cond + extra if extra is not None else global_cond
-                model_out = self.unet(x_t, ts, cond=cond_c)
+                model_out = self.unet(x_t, ts, cond=cond_c, **unet_kwargs)
 
             # Convert v-prediction to epsilon for DDPM step (scheduler expects epsilon).
             if self.prediction_type == "v":

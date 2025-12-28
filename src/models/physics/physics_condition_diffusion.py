@@ -1,10 +1,11 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from typing import Optional, Tuple, Union
+from typing import Any, Dict, Optional, Tuple, Union
 from src.models.base_model import BaseTrajectoryModel
 from src.models.diffusion.diffusion_model import DiffusionTrajectoryModel
 from src.models.physics.cnn_encoder import CNNEncoder
+from src.models.physics.nav_controlnet import NavControlNet2D
 
 class PhysicsConditionDiffusion(BaseTrajectoryModel):
     """
@@ -25,6 +26,8 @@ class PhysicsConditionDiffusion(BaseTrajectoryModel):
                  nav_query: str = "none",
                  nav_query_field: str = "dist",
                  nav_query_dist_sigma: float = 3.0,
+                 nav_control: str = "none",
+                 nav_control_scale: float = 1.0,
                  pos_min: Optional[Tuple[float, float]] = None,
                  pos_range: Optional[Tuple[float, float]] = None,
                  obs_len: int = 8,
@@ -58,11 +61,24 @@ class PhysicsConditionDiffusion(BaseTrajectoryModel):
                 nn.SiLU(),
                 nn.Linear(hidden_dim * 2, hidden_dim * 4),
             )
-        self.pos_min_buf = None
-        self.pos_range_buf = None
+
+        nav_control = str(nav_control)
+        if nav_control not in ("none", "controlnet"):
+            raise ValueError(f"Unknown nav_control: {nav_control} (expected: none|controlnet)")
+        self.nav_control_mode = nav_control
+        self.nav_control_scale = float(nav_control_scale)
+        self.nav_controlnet: Optional[NavControlNet2D] = None
+        if self.nav_control_mode != "none":
+            # Match UNet1D down block channels: model_dim * (1,2,4)
+            base = int(hidden_dim)
+            self.nav_controlnet = NavControlNet2D(in_channels=3, channels=[base, base * 2, base * 4])
+        # Buffers used by nav_query to map normalized coords -> grid coords for global field sampling.
+        # Register first to avoid "attribute already exists" errors when later assigning.
+        self.register_buffer("pos_min_buf", None, persistent=True)
+        self.register_buffer("pos_range_buf", None, persistent=True)
         if pos_min is not None and pos_range is not None:
-            self.register_buffer("pos_min_buf", torch.tensor(pos_min, dtype=torch.float32))
-            self.register_buffer("pos_range_buf", torch.tensor(pos_range, dtype=torch.float32))
+            self.pos_min_buf = torch.tensor(pos_min, dtype=torch.float32)
+            self.pos_range_buf = torch.tensor(pos_range, dtype=torch.float32)
 
         nav_gate = str(nav_gate)
         if nav_gate not in ("none", "obscond"):
@@ -91,6 +107,83 @@ class PhysicsConditionDiffusion(BaseTrajectoryModel):
             diffusion_steps=diffusion_steps,
             prediction_type=str(prediction_type),
         )
+
+    def _control_down_mid(
+        self,
+        x_t: torch.Tensor,  # (B,2,L) normalized pos (noisy)
+        *,
+        start_grid: torch.Tensor,  # (B,2) [y,x] in grid coords
+        control_maps: Tuple[torch.Tensor, ...],  # list of (B,C,H,W) from nav_controlnet
+        patch_size: int,
+    ) -> Tuple[list[torch.Tensor], torch.Tensor]:
+        if self.nav_controlnet is None:
+            raise RuntimeError("_control_down_mid called but nav_controlnet is None")
+
+        B = int(x_t.shape[0])
+        L0 = int(x_t.shape[2])
+        z = x_t.permute(0, 2, 1)  # (B,L,2)
+        z = torch.clamp(z, -1.0, 1.0)
+
+        if self.pos_min_buf is None or self.pos_range_buf is None:
+            raise RuntimeError("nav_control requires pos_min/pos_range buffers (pass pos_min,pos_range when constructing the model).")
+        pos_min = self.pos_min_buf.to(device=x_t.device, dtype=z.dtype)
+        pos_range = self.pos_range_buf.to(device=x_t.device, dtype=z.dtype)
+        pos_grid = (z + 1.0) * 0.5 * pos_range[None, None, :] + pos_min[None, None, :]  # (B,L,2) [y,x]
+
+        # Global -> patch coordinates (centered at start)
+        r = float(int(patch_size) // 2)
+        rel = pos_grid - start_grid[:, None, :]  # (B,L,2)
+        patch_xy = rel + r  # (B,L,2) in patch pixel coords
+
+        # Compute expected UNet lengths at each down stage (matches Conv1d stride=2,k=3,p=1).
+        def _down_len(n: int) -> int:
+            return int((int(n) + 1) // 2)
+
+        stage_lens = [int(L0)]
+        for _ in range(len(control_maps)):
+            stage_lens.append(_down_len(stage_lens[-1]))
+
+        control_down: list[torch.Tensor] = []
+        for i, fmap in enumerate(control_maps):
+            # fmap: (B,C,H,W) where H,W ~= patch_size / 2^i
+            H = int(fmap.shape[2])
+            W = int(fmap.shape[3])
+            scale = float(2 ** i)
+            coords = patch_xy / scale  # (B,L,2) in fmap coords
+            x = coords[:, :, 1]
+            y = coords[:, :, 0]
+            x_n = (x / max(float(W - 1), 1.0)) * 2.0 - 1.0
+            y_n = (y / max(float(H - 1), 1.0)) * 2.0 - 1.0
+            grid = torch.stack([x_n, y_n], dim=-1).unsqueeze(2)  # (B,L,1,2)
+            sampled = F.grid_sample(fmap, grid, mode="bilinear", padding_mode="zeros", align_corners=True)  # (B,C,L,1)
+            ctrl = sampled.squeeze(-1)  # (B,C,L)
+            if int(ctrl.shape[2]) != int(stage_lens[i]):
+                ctrl = F.interpolate(ctrl, size=int(stage_lens[i]), mode="linear", align_corners=False)
+            control_down.append(ctrl)
+
+        # Mid control uses deepest fmap
+        mid_fmap = control_maps[-1]
+        Hm = int(mid_fmap.shape[2])
+        Wm = int(mid_fmap.shape[3])
+        scale_m = float(2 ** (len(control_maps) - 1))
+        coords_m = patch_xy / scale_m
+        xm = coords_m[:, :, 1]
+        ym = coords_m[:, :, 0]
+        xm_n = (xm / max(float(Wm - 1), 1.0)) * 2.0 - 1.0
+        ym_n = (ym / max(float(Hm - 1), 1.0)) * 2.0 - 1.0
+        grid_m = torch.stack([xm_n, ym_n], dim=-1).unsqueeze(2)
+        sampled_m = F.grid_sample(mid_fmap, grid_m, mode="bilinear", padding_mode="zeros", align_corners=True)  # (B,C,L,1)
+        ctrl_mid = sampled_m.squeeze(-1)  # (B,C,L)
+        mid_len = int(stage_lens[-1])
+        if int(ctrl_mid.shape[2]) != mid_len:
+            ctrl_mid = F.interpolate(ctrl_mid, size=mid_len, mode="linear", align_corners=False)
+
+        if self.nav_control_scale != 1.0:
+            s = float(self.nav_control_scale)
+            control_down = [c * s for c in control_down]
+            ctrl_mid = ctrl_mid * s
+
+        return control_down, ctrl_mid
 
     def _nav_query_emb(self, x_t: torch.Tensor, *, nav_global: torch.Tensor) -> torch.Tensor:
         if self.nav_query_mode == "none":
@@ -195,11 +288,32 @@ class PhysicsConditionDiffusion(BaseTrajectoryModel):
         full_cond = torch.cat([cond, nav_emb], dim=-1)
 
         cond_emb_extra_fn = None
+        unet_kwargs_fn = None
         if self.nav_query_mode != "none":
             if nav_global is None:
                 raise ValueError("nav_query is enabled but nav_global is None")
             def cond_emb_extra_fn(x_t: torch.Tensor, timesteps: torch.Tensor) -> torch.Tensor:
                 return self._nav_query_emb(x_t, nav_global=nav_global)
+        if self.nav_control_mode != "none":
+            if self.nav_controlnet is None:
+                raise RuntimeError("nav_control is enabled but nav_controlnet is None")
+            if self.pos_min_buf is None or self.pos_range_buf is None:
+                raise RuntimeError("nav_control requires pos_min/pos_range buffers.")
+            # Precompute control maps once (nav_patch is static per call); sample by x_t inside the closure.
+            control_maps = tuple(self.nav_controlnet(nav_patch))
+            start_norm = obs[:, -1, :2]  # (B,2) normalized pos
+            pos_min = self.pos_min_buf.to(device=obs.device, dtype=start_norm.dtype)
+            pos_range = self.pos_range_buf.to(device=obs.device, dtype=start_norm.dtype)
+            start_grid = (start_norm + 1.0) * 0.5 * pos_range[None, :] + pos_min[None, :]  # (B,2)
+
+            def unet_kwargs_fn(x_t: torch.Tensor, timesteps: torch.Tensor) -> Dict[str, Any]:
+                cd, cm = self._control_down_mid(
+                    x_t,
+                    start_grid=start_grid,
+                    control_maps=control_maps,
+                    patch_size=int(nav_patch.shape[-1]),
+                )
+                return {"control_down": cd, "control_mid": cm}
 
         return self.diffusion.compute_loss(
             obs,
@@ -207,6 +321,7 @@ class PhysicsConditionDiffusion(BaseTrajectoryModel):
             target,
             sample_weight=sample_weight,
             cond_emb_extra_fn=cond_emb_extra_fn,
+            unet_kwargs_fn=unet_kwargs_fn,
             return_x0_pred=return_x0_pred,
             return_timesteps=return_timesteps,
         )
@@ -257,11 +372,31 @@ class PhysicsConditionDiffusion(BaseTrajectoryModel):
             full_cond_uncond = torch.cat([cond_uncond, nav_emb_u], dim=-1)
 
         cond_emb_extra_fn = None
+        unet_kwargs_fn = None
         if self.nav_query_mode != "none":
             if nav_global is None:
                 raise ValueError("nav_query is enabled but nav_global is None")
             def cond_emb_extra_fn(x_t: torch.Tensor, timesteps: torch.Tensor) -> torch.Tensor:
                 return self._nav_query_emb(x_t, nav_global=nav_global)
+        if self.nav_control_mode != "none":
+            if self.nav_controlnet is None:
+                raise RuntimeError("nav_control is enabled but nav_controlnet is None")
+            if self.pos_min_buf is None or self.pos_range_buf is None:
+                raise RuntimeError("nav_control requires pos_min/pos_range buffers.")
+            control_maps = tuple(self.nav_controlnet(nav_patch))
+            start_norm = obs[:, -1, :2]
+            pos_min = self.pos_min_buf.to(device=obs.device, dtype=start_norm.dtype)
+            pos_range = self.pos_range_buf.to(device=obs.device, dtype=start_norm.dtype)
+            start_grid = (start_norm + 1.0) * 0.5 * pos_range[None, :] + pos_min[None, :]
+
+            def unet_kwargs_fn(x_t: torch.Tensor, timesteps: torch.Tensor) -> Dict[str, Any]:
+                cd, cm = self._control_down_mid(
+                    x_t,
+                    start_grid=start_grid,
+                    control_maps=control_maps,
+                    patch_size=int(nav_patch.shape[-1]),
+                )
+                return {"control_down": cd, "control_mid": cm}
 
         return self.diffusion.sample_trajectory(
             obs,
@@ -270,6 +405,7 @@ class PhysicsConditionDiffusion(BaseTrajectoryModel):
             cond_uncond=full_cond_uncond,
             cfg_scale=float(cfg_scale),
             cond_emb_extra_fn=cond_emb_extra_fn,
+            unet_kwargs_fn=unet_kwargs_fn,
             **kwargs,
         )
 

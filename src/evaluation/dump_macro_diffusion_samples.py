@@ -98,6 +98,8 @@ def _load_macro_model(
     nav_query = str(cfg.get("nav_query", "none"))
     nav_query_field = str(cfg.get("nav_query_field", "dist"))
     nav_query_dist_sigma = float(cfg.get("nav_query_dist_sigma", 3.0))
+    nav_control = str(cfg.get("nav_control", "none"))
+    nav_control_scale = float(cfg.get("nav_control_scale", 1.0))
     pos_min = cfg.get("pos_min", None)
     pos_range = cfg.get("pos_range", None)
     pos_min_t = None
@@ -120,6 +122,8 @@ def _load_macro_model(
         nav_query=str(nav_query),
         nav_query_field=str(nav_query_field),
         nav_query_dist_sigma=float(nav_query_dist_sigma),
+        nav_control=str(nav_control),
+        nav_control_scale=float(nav_control_scale),
         pos_min=pos_min_t,
         pos_range=pos_range_t,
         obs_len=int(obs_len),

@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import math
+from typing import Optional, Sequence
 
 class SinusoidalPosEmb(nn.Module):
     def __init__(self, dim):
@@ -133,12 +134,32 @@ class UNet1D(nn.Module):
             nn.Conv1d(model_dim, in_dim, 1)
         )
 
-    def forward(self, x, steps, cond=None):
+    def forward(
+        self,
+        x: torch.Tensor,
+        steps: torch.Tensor,
+        cond: Optional[torch.Tensor] = None,
+        control_down: Optional[Sequence[torch.Tensor]] = None,
+        control_mid: Optional[torch.Tensor] = None,
+    ) -> torch.Tensor:
         """
         x: (B, C, L)
         steps: (B,) time steps
         cond: (B, D) global condition
         """
+        def _add_control(h: torch.Tensor, ctrl: Optional[torch.Tensor]) -> torch.Tensor:
+            if ctrl is None:
+                return h
+            if ctrl.ndim == 2:
+                ctrl = ctrl[:, :, None]
+            elif ctrl.ndim != 3:
+                raise ValueError(f"control tensor must be (B,C) or (B,C,L), got {tuple(ctrl.shape)}")
+            if int(ctrl.shape[1]) != int(h.shape[1]):
+                raise ValueError(f"control channel mismatch: ctrl C={int(ctrl.shape[1])} vs h C={int(h.shape[1])}")
+            if int(ctrl.shape[2]) != int(h.shape[2]):
+                ctrl = F.interpolate(ctrl, size=int(h.shape[2]), mode="linear", align_corners=False)
+            return h + ctrl
+
         # Embed Time
         t = self.time_mlp(steps) # (B, emb_dim)
         
@@ -151,15 +172,18 @@ class UNet1D(nn.Module):
         skips = [h]
         
         # Down
-        for res1, res2, down in self.downs:
+        for i, (res1, res2, down) in enumerate(self.downs):
             h = res1(h, t)
             h = res2(h, t)
+            if control_down is not None and i < len(control_down):
+                h = _add_control(h, control_down[i])
             skips.append(h) # Save for skip
             h = down(h)
             
         # Mid
         h = self.mid_block1(h, t)
         h = self.mid_block2(h, t)
+        h = _add_control(h, control_mid)
         
         # Up
         for up, res1, res2 in self.ups:

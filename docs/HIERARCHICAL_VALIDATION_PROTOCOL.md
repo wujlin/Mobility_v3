@@ -433,6 +433,22 @@ python -m src.training.train_macro_diffusion \
   --offroad_agg lse --offroad_lse_beta 10 \
   --log_every 100
 
+# 若确认瓶颈在 “nav_patch -> 向量” 的信息塌缩：启用 Scheme-3（ControlNet 式多尺度注入），
+# 让 UNet1D 在每个 down-block 都能获得来自 nav_patch 的控制信号（zero-init，训练时逐步学会“看墙/看路”）。
+python -m src.training.train_macro_diffusion \
+  --exp_name macro_zdiff_k2_count_current_controlnet_offroad0p1_lse \
+  --data_path $DATA --nav_file $NAV --split train \
+  --obs_len 8 --pred_len 12 \
+  --patch_size 32 --nav_patch_channel2 count \
+  --hidden_dim 128 --diff_steps 20 --pred_type eps \
+  --batch_size 512 --num_workers 8 \
+  --epochs 20 --max_batches 200 --seed 0 \
+  --count_thr 1.0 \
+  --nav_control controlnet --nav_control_scale 1.0 \
+  --offroad_weight 0.1 --offroad_field dist --offroad_dist_sigma 3.0 \
+  --offroad_samples_per_segment 16 --offroad_agg lse --offroad_lse_beta 10 \
+  --log_every 100
+
 止损线（Macro 可行域学习）：
 - 风险 1：`offroad_pen_w`（lse）在早期爆炸（例如 >10）或明显震荡不下降 → 立刻停止，优先改架构（增强条件编码/提高 patch 可辨识度）。
 - 风险 2：`offroad_pen_w` 降到很低但 `collision_rate_any` 仍 >50% → proxy gap；可做一次增密（提高 `offroad_samples_per_segment`）验证，仍不行则改架构。

@@ -58,6 +58,14 @@ def build_argparser() -> argparse.ArgumentParser:
     )
     p.add_argument("--nav_query_field", type=str, choices=["dist", "count"], default="dist")
     p.add_argument("--nav_query_dist_sigma", type=float, default=3.0)
+    p.add_argument(
+        "--nav_control",
+        type=str,
+        choices=["none", "controlnet"],
+        default="none",
+        help="Scheme-3: ControlNet-style multi-scale injection of nav_patch into UNet1D.",
+    )
+    p.add_argument("--nav_control_scale", type=float, default=1.0, help="Scale for ControlNet injection (0 disables effect).")
 
     p.add_argument("--hidden_dim", type=int, default=128)
     p.add_argument("--diff_steps", type=int, default=20)
@@ -321,6 +329,8 @@ def main() -> None:
         nav_query=str(args.nav_query),
         nav_query_field=str(args.nav_query_field),
         nav_query_dist_sigma=float(args.nav_query_dist_sigma),
+        nav_control=str(args.nav_control),
+        nav_control_scale=float(args.nav_control_scale),
         pos_min=tuple(float(x) for x in dataset.normalizer.pos_min),
         pos_range=tuple(float(x) for x in dataset.normalizer.pos_range),
         obs_len=int(args.obs_len),
@@ -355,6 +365,8 @@ def main() -> None:
         "nav_query": str(args.nav_query),
         "nav_query_field": str(args.nav_query_field),
         "nav_query_dist_sigma": float(args.nav_query_dist_sigma),
+        "nav_control": str(args.nav_control),
+        "nav_control_scale": float(args.nav_control_scale),
         "pos_min": [float(x) for x in dataset.normalizer.pos_min],
         "pos_range": [float(x) for x in dataset.normalizer.pos_range],
         "hidden_dim": int(args.hidden_dim),

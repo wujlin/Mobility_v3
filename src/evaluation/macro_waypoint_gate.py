@@ -112,7 +112,20 @@ def run_gate(
     drv_wp = drivable[y_wp_c, x_wp_c]
     off_wp = (~inb_wp) | (~drv_wp)
     waypoint_offroad_rate = float(np.mean(off_wp))
+    waypoint_any_offroad_rate = float(np.mean(np.any(off_wp, axis=1)))
     waypoint_oob_rate = float(np.mean(~inb_wp))
+    wp1_offroad_rate = float(np.mean(off_wp[:, 0]))
+    wp2_offroad_rate = float(np.mean(off_wp[:, 1]))
+    end_offroad_rate = float(np.mean(off_wp[:, 2]))
+
+    # "Cut-only" collision: the polyline collides but all waypoints are on-road.
+    cut_only = collision_any & (~np.any(off_wp, axis=1))
+    cut_only_rate = float(np.mean(cut_only))
+
+    # Segment attribution: which segment(s) cause collision.
+    seg0_rate = float(np.mean(seg_bad[:, 0]))  # start->wp1
+    seg1_rate = float(np.mean(seg_bad[:, 1]))  # wp1->wp2
+    seg2_rate = float(np.mean(seg_bad[:, 2]))  # wp2->end
 
     stats = {"N": int(N), "K": int(K), "S": int(S)}
     results = {
@@ -122,7 +135,15 @@ def run_gate(
         "collision_rate_any": float(collision_rate_any),
         "collision_point_rate": float(collision_point_rate),
         "waypoint_offroad_rate": float(waypoint_offroad_rate),
+        "waypoint_any_offroad_rate": float(waypoint_any_offroad_rate),
         "waypoint_oob_rate": float(waypoint_oob_rate),
+        "wp1_offroad_rate": float(wp1_offroad_rate),
+        "wp2_offroad_rate": float(wp2_offroad_rate),
+        "end_offroad_rate": float(end_offroad_rate),
+        "cut_only_rate": float(cut_only_rate),
+        "collision_seg0_rate": float(seg0_rate),
+        "collision_seg1_rate": float(seg1_rate),
+        "collision_seg2_rate": float(seg2_rate),
     }
     return {"stats": stats, "results": results}
 
@@ -161,4 +182,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

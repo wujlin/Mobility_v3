@@ -39,6 +39,13 @@
     - `detour_validity`：overall 的 `turn@{1,2,4,8}` 与 `len_ratio/max_dev_ratio` 显著更差（micro 不可执行）
 - 决策（KISS + 可归因）：**micro 执行层先固定为 DetRes**，DiffRes micro 路线进入止损分支（不再烧卡），主线进入 Phase 3（学习 macro waypoint/anchor）。
 
+- Phase 3（Macro z-diffusion）当前阻塞点（detour-hard，N=400，K=20）：
+  - `MacroSkel`（无过滤，原生采样）：`collision_rate_any ≈ 0.3049`，`waypoint_offroad_rate ≈ 0.1765` → **G1 不通过**（模型尚未学会可行域约束）。
+  - `MacroSkel + FeasibleGate`（采样端 accept/reject，oversample=3）：`collision_rate_any ≈ 0.03`，`waypoint_offroad_rate ≈ 0.0591` → **仅说明分布中存在足够可行质量可被筛出**，不可当作“模型学会避障”的证据（会偏置模态与推理成本）。
+  - `MacroSkel (offroad_weight=0.1)` 在一次尝试中出现 **灾难性退化**（`collision_rate_any=1.0`，`waypoint_offroad_rate≈0.955`）：
+    - 这通常意味着：训练失稳 / 配置错误 / 数据版本不一致，而不是“约束项无效”。
+    - 新版 `train_macro_diffusion.py` 已在训练日志中加入 `gt_offroad_pen_w`（GT 线性骨架在该 proxy 下的惩罚下界）用于定位：若 `gt_offroad_pen_w` 很大，优先检查 `count_thr` 与 drivable proxy 是否一致；若 GT 很小但 pred 很大，才是模型没学会“看图”。
+
 ## 主线三步 Go/No-Go（最短实验序列）
 
 > 这三步的设计目标是：**先把积分打开（Oracle z）**，把风险压到最低，再决定是否进入训练。
@@ -399,6 +406,7 @@ python -m src.training.train_macro_diffusion \
 
 # 若 MacroSkel 的 G1 碰撞率过高（比如 >10%）：优先加训练期 OffRoad Penalty（不改架构）
 # 该项用 nav_count 在 start->wp1->wp2->end 折线上做可微采样，惩罚 count<thr（近似 G1 gate）。
+# 注意：OffRoad Penalty 默认按 alpha^2(=alphas_cumprod[t]) 做加权，避免在高噪声 timestep 上惩罚噪声主导的 x0_pred（防止训练不稳定）。
 python -m src.training.train_macro_diffusion \
   --exp_name macro_zdiff_k2_count_current_offroad0p1 \
   --data_path $DATA --nav_file $NAV --split train \

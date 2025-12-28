@@ -143,8 +143,8 @@ def _segment_offroad_penalty(
     sampled = F.grid_sample(count_in, grid, mode="bilinear", padding_mode="zeros", align_corners=True)  # (B,1,3S,1)
     sampled = sampled.squeeze(1).squeeze(-1)  # (B,3S)
 
-    viol = F.relu(float(count_thr) - sampled)
-    return viol.mean()
+    viol = F.relu(float(count_thr) - sampled)  # (B,3S)
+    return viol.mean(dim=1)  # (B,)
 
 
 def main() -> None:
@@ -258,6 +258,7 @@ def main() -> None:
         "count_thr": float(args.count_thr),
         "offroad_weight": float(args.offroad_weight),
         "offroad_samples_per_segment": int(args.offroad_samples_per_segment),
+        "offroad_weighting": "alpha2",
     }
     with open(save_dir / "config.json", "w") as f:
         json.dump(run_config, f, indent=2, ensure_ascii=False)
@@ -265,7 +266,8 @@ def main() -> None:
     model.train()
     for epoch in range(int(args.epochs)):
         start = time.time()
-        total = 0.0
+        total_diff = 0.0
+        total_all = 0.0
         nb = 0
 
         for bidx, batch in enumerate(loader):
@@ -289,10 +291,12 @@ def main() -> None:
             )
             loss = diff_loss
             offroad_pen = None
+            gt_offroad_pen = None
             if float(args.offroad_weight) > 0.0 and nav_count_t is not None:
                 z_pred = x0_pred.permute(0, 2, 1)  # (B,3,2)
+                z_pred = torch.clamp(z_pred, -1.0, 1.0)
                 start_pos_norm = obs[:, -1, :2]  # (B,2)
-                offroad_pen = _segment_offroad_penalty(
+                per_sample = _segment_offroad_penalty(
                     start_pos_norm=start_pos_norm,
                     z_norm=z_pred,
                     nav_count=nav_count_t,
@@ -301,13 +305,32 @@ def main() -> None:
                     count_thr=float(args.count_thr),
                     samples_per_segment=int(args.offroad_samples_per_segment),
                 )
+                # Sanity: penalty floor on GT z (oracle). If this is not small, your drivable proxy/threshold
+                # is inconsistent with GT or the linear polyline is too aggressive.
+                with torch.no_grad():
+                    gt_per_sample = _segment_offroad_penalty(
+                        start_pos_norm=start_pos_norm,
+                        z_norm=z,
+                        nav_count=nav_count_t,
+                        pos_min=pos_min,
+                        pos_range=pos_range,
+                        count_thr=float(args.count_thr),
+                        samples_per_segment=int(args.offroad_samples_per_segment),
+                    )
+                # Weight by denoising SNR proxy: alpha^2 = alphas_cumprod[t].
+                # High-noise timesteps produce very noisy x0_pred; weighting avoids destabilizing training.
+                w = model.diffusion.scheduler.alphas_cumprod[_t].to(dtype=per_sample.dtype)  # (B,)
+                w = torch.clamp(w, 0.0, 1.0)
+                offroad_pen = (per_sample * w).sum() / (w.sum() + 1e-6)
+                gt_offroad_pen = (gt_per_sample * w).sum() / (w.sum() + 1e-6)
                 loss = loss + float(args.offroad_weight) * offroad_pen
 
             loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
             optimizer.step()
 
-            total += float(diff_loss.item())
+            total_diff += float(diff_loss.item())
+            total_all += float(loss.item())
             nb += 1
 
             if int(args.log_every) > 0 and bidx % int(args.log_every) == 0:
@@ -321,21 +344,25 @@ def main() -> None:
                     )
                 msg = ", ".join(f"{k}={v:.4f}" for k, v in rates.items())
                 if offroad_pen is not None:
-                    msg = msg + f", offroad_pen={float(offroad_pen.item()):.4f}"
+                    msg = msg + f", offroad_pen_w={float(offroad_pen.item()):.4f}"
+                if gt_offroad_pen is not None:
+                    msg = msg + f", gt_offroad_pen_w={float(gt_offroad_pen.item()):.4f}"
+                msg = msg + f", loss={float(loss.item()):.4f}"
                 print(f"Epoch {epoch} | Batch {bidx} | DiffLoss {diff_loss.item():.4f} | {msg}")
 
             if args.max_batches is not None and int(args.max_batches) > 0 and nb >= int(args.max_batches):
                 break
 
-        avg = total / float(max(nb, 1))
+        avg_diff = total_diff / float(max(nb, 1))
+        avg_all = total_all / float(max(nb, 1))
         dur = time.time() - start
-        print(f"Epoch {epoch} Done. Avg DiffLoss: {avg:.4f}. Time: {dur:.1f}s")
+        print(f"Epoch {epoch} Done. Avg DiffLoss: {avg_diff:.4f}. Avg Loss: {avg_all:.4f}. Time: {dur:.1f}s")
 
         ckpt = {
             "epoch": int(epoch),
             "model_state_dict": model.state_dict(),
             "optimizer_state_dict": optimizer.state_dict(),
-            "loss": float(avg),
+            "loss": float(avg_all),
             "config": run_config,
         }
         torch.save(ckpt, save_dir / "last.pt")

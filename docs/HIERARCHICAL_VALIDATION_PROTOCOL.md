@@ -28,7 +28,16 @@
 - Go/No-Go 2（GT，Oracle waypoint 的 skeleton-only）：
   - `Waypoint Gate (rdp_dev, K=2, linear)`：`collision_rate_any ≈ 0.0884 < 0.10`（通过硬可行性门槛）
   - `detour_validity`：`RDPK2` 在 overall + detour subset 上显著优于 `StraightK0`（粗拓扑可由 2 个 waypoint 承载）
-- 下一步：Go/No-Go 3（Oracle waypoint 条件下的 micro executability，三对照）。
+- Go/No-Go 3（Oracle waypoint 条件下的 micro executability，三对照，N=400）：
+  - `skeleton-only`（prior=skeleton_wp）：
+    - `plot_physical_stats`：`JSD_Turn=0.0717, JSD_Speed=0.1786, JSD_Accel=0.2748; DCV_speed=0%, DCV_accel=0%`
+  - `deterministic residual (DetRes)`：**可学且显著改善分布一致性**（强证据）
+    - `plot_physical_stats`：`JSD_Turn=0.0368, JSD_Speed=0.1282, JSD_Accel=0.1872; DCV_speed=1.1818%, DCV_accel=0%`
+    - `detour_validity`：overall 的 `turn@{1,2,4,8}` 与 `max_dev_ratio` 更接近 GT；detour 子集也不劣于 skeleton-only（粗拓扑不被破坏）
+  - `diffusion residual (DiffRes)`：**灾难性失败（止损）**
+    - `plot_physical_stats`：`JSD_Turn=0.4552, JSD_Speed=0.3189, JSD_Accel=0.7207; DCV_speed=24.5386%, DCV_accel=73.3825%`
+    - `detour_validity`：overall 的 `turn@{1,2,4,8}` 与 `len_ratio/max_dev_ratio` 显著更差（micro 不可执行）
+- 决策（KISS + 可归因）：**micro 执行层先固定为 DetRes**，DiffRes micro 路线进入止损分支（不再烧卡），主线进入 Phase 3（学习 macro waypoint/anchor）。
 
 ## 主线三步 Go/No-Go（最短实验序列）
 
@@ -353,6 +362,112 @@ python -m src.evaluation.detour_validity \
 训练侧避免尾部被忽略：
 - detour subset oversample / reweight（成本敏感）
 - feasibility gate 不要用 KDE 硬过滤尾部
+
+### Phase 3 最小可证伪实现（Macro Diffusion + 弱图，不烧卡）
+
+> 目标：用 **Macro Diffusion（低维 z）** 回答 “z（waypoints+end_anchor）是否可从 (obs, trip_od, nav_patch[count]) 学到多模态分布”。  
+> 关键：把不确定性放在 Macro；micro 由 DetRes 确定性执行。  
+> 采样预算：`K=20, diff_steps=20`（6D/3-step 低维空间，训练与采样都很快）。
+
+0) 统一数据路径：
+```bash
+export PROC=data/processed_passenger_dt30
+export DATA=$PROC/trajectories/shenzhen_trajectories.h5
+```
+
+1) 生成 detour-hard 测试子集（避免 detour 被 overall 淹没；后续 G2 建议直接在该子集上跑 `detour_validity --detour_pct 100`）：
+```bash
+python -m src.evaluation.make_detour_hard_subset \
+  --in_npz data/experiments/gt_passenger_dt30_test/samples.npz \
+  --out_npz data/experiments/gt_passenger_dt30_test/test_detour_hard_top10.npz \
+  --score max_dev_ratio --top_pct 10 --max_n 5000 --seed 0
+```
+
+2) 训练 Macro Diffusion（监督信号来自 `oracle_wp_end`，输入：`obs + trip_od + nav_patch(count,current_only)`）：
+```bash
+export NAV=$PROC/nav_field.npz
+
+python -m src.training.train_macro_diffusion \
+  --exp_name macro_zdiff_k2_count_current \
+  --data_path $DATA --nav_file $NAV --split train \
+  --obs_len 8 --pred_len 12 \
+  --patch_size 32 --nav_patch_channel2 count \
+  --hidden_dim 128 --diff_steps 20 --pred_type eps \
+  --batch_size 512 --num_workers 8 \
+  --epochs 20 --max_batches 200 --seed 0 \
+  --count_thr 1.0 --log_every 100
+```
+
+3) 采样 Macro→Skeleton（不接 micro，先验证 G1/G2；建议在 detour-hard 子集上跑）：
+```bash
+python -m src.evaluation.dump_macro_diffusion_samples \
+  --exp_name phys_macroZdiff_skeleton_detourhard \
+  --macro_checkpoint data/experiments/macro_zdiff_k2_count_current/last.pt \
+  --data_path $DATA --nav_file $NAV --split test \
+  --obs_len 8 --pred_len 12 \
+  --patch_size 32 --nav_patch_channel2 count \
+  --k_samples 20 \
+  --save_samples 400 --max_batches 13 --seed 0 \
+  --windows_npz data/experiments/gt_passenger_dt30_test/test_detour_hard_top10.npz
+
+# G1：可行性（碰撞/越界）门槛：collision_rate_any <= 10%
+python -m src.evaluation.macro_waypoint_gate \
+  --samples_npz data/experiments/phys_macroZdiff_skeleton_detourhard/samples.npz \
+  --nav_file $NAV --count_thr 1.0 \
+  --out_json data/experiments/phys_macroZdiff_skeleton_detourhard/macro_waypoint_gate.json
+
+# G2：拓扑（建议 detour_pct=100，把整个子集当 detour 来检验稳定性）
+python -m src.evaluation.detour_validity \
+  --inputs "MacroSkel:data/experiments/phys_macroZdiff_skeleton_detourhard/samples.npz" \
+  --use_all_k --k_max 10 \
+  --ds 0.5 --lags 1 2 4 8 --offset_fracs 0 0.25 0.5 0.75 \
+  --detour_pct 100 --bootstrap 200 --noise_splits 200 \
+  --out_json data/experiments/phys_macroZdiff_skeleton_detourhard/detour_validity.json
+
+python -m src.visualization.plot_physical_stats \
+  --inputs "MacroSkel:data/experiments/phys_macroZdiff_skeleton_detourhard/samples.npz" \
+  --use_all_k --k_max 10 \
+  --turn_min_speed 0.1 --dcv_speed_pctl 99.5 --dcv_accel_pctl 99.5 \
+  --save_metrics --output_dir essay/figures/physical_stats \
+  --stem fig_physical_stats_macroSkel_zdiff_k2
+```
+
+4) 通过后再接 micro（DetRes executor）做闭环（G3）：
+```bash
+python -m src.evaluation.dump_macro_diffusion_samples \
+  --exp_name phys_macroZdiff_detres_detourhard \
+  --macro_checkpoint data/experiments/macro_zdiff_k2_count_current/last.pt \
+  --micro_checkpoint data/experiments/phys_oracleWP_detres_k2/last.pt \
+  --data_path $DATA --split test \
+  --obs_len 8 --pred_len 12 \
+  --batch_size 32 --num_workers 8 \
+  --patch_size 32 --nav_patch_channel2 count \
+  --k_samples 20 \
+  --save_samples 400 --max_batches 13 --seed 0 \
+  --windows_npz data/experiments/gt_passenger_dt30_test/test_detour_hard_top10.npz
+```
+
+然后用与 Go/No-Go 3 相同的两套指标（`detour_validity` + `plot_physical_stats`）评估：
+```bash
+python -m src.evaluation.detour_validity \
+  --inputs "Macro+DetRes:data/experiments/phys_macroZdiff_detres_detourhard/samples.npz" \
+  --use_all_k --k_max 10 \
+  --ds 0.5 --lags 1 2 4 8 --offset_fracs 0 0.25 0.5 0.75 \
+  --detour_pct 100 --bootstrap 200 --noise_splits 200 \
+  --out_json data/experiments/phys_macroZdiff_detres_detourhard/detour_validity.json
+
+python -m src.visualization.plot_physical_stats \
+  --inputs "Macro+DetRes:data/experiments/phys_macroZdiff_detres_detourhard/samples.npz" \
+  --use_all_k --k_max 10 \
+  --turn_min_speed 0.1 --dcv_speed_pctl 99.5 --dcv_accel_pctl 99.5 \
+  --save_metrics --output_dir essay/figures/physical_stats \
+  --stem fig_physical_stats_macroDetRes_zdiff_k2
+```
+
+**Go/No-Go（Phase 3）建议口径**：
+- detour 子集上，`MacroSkel` 的 `JSD_turn@4/8` 与 `JSD_max_dev_ratio` 相比 `StraightK0`（或 start→end 的朴素骨架）必须显著下降；
+- `Macro+DetRes` 不得破坏 `MacroSkel` 的 coarse 指标，同时 `JSD_Speed/JSD_Accel` 应显著优于 `MacroSkel`；
+- 若上述不成立：优先怀疑信息缺失（需要 weak-map/graph），而不是立刻换更重的 macro 生成器。
 
 ---
 

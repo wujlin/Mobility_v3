@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import random
 import time
 from pathlib import Path
@@ -62,6 +63,20 @@ def build_argparser() -> argparse.ArgumentParser:
     # Differentiable offroad penalty (segment-sampled, approximates G1 collision gate)
     p.add_argument("--offroad_weight", type=float, default=0.0, help="Weight for differentiable offroad penalty (0 disables).")
     p.add_argument("--offroad_samples_per_segment", type=int, default=16, help="Samples per segment for offroad penalty (>=2).")
+    p.add_argument(
+        "--offroad_agg",
+        type=str,
+        choices=["mean", "max", "lse"],
+        default="mean",
+        help="Aggregation over sampled points along the polyline. "
+             "mean: average violation; max: worst-case violation; lse: smooth max via logsumexp.",
+    )
+    p.add_argument(
+        "--offroad_lse_beta",
+        type=float,
+        default=10.0,
+        help="Temperature for --offroad_agg=lse (higher -> closer to max).",
+    )
     return p
 
 
@@ -105,6 +120,8 @@ def _segment_offroad_penalty(
     pos_range: torch.Tensor,  # (2,)
     count_thr: float,
     samples_per_segment: int,
+    agg: str,
+    lse_beta: float,
 ) -> torch.Tensor:
     """
     Differentiable proxy for G1 collision: sample nav_count along start->wp1->wp2->end polyline
@@ -144,7 +161,18 @@ def _segment_offroad_penalty(
     sampled = sampled.squeeze(1).squeeze(-1)  # (B,3S)
 
     viol = F.relu(float(count_thr) - sampled)  # (B,3S)
-    return viol.mean(dim=1)  # (B,)
+    agg = str(agg)
+    if agg == "mean":
+        return viol.mean(dim=1)  # (B,)
+    if agg == "max":
+        return viol.max(dim=1).values  # (B,)
+    if agg == "lse":
+        beta = float(lse_beta)
+        beta = 1.0 if beta <= 0.0 else beta
+        # Smooth approximation to max(viol): (1/beta) * (logsumexp(beta*viol) - log(n)).
+        n = float(viol.shape[1])
+        return (torch.logsumexp(viol * beta, dim=1) - math.log(max(n, 1.0))) / beta  # (B,)
+    raise ValueError(f"Unknown offroad_agg: {agg} (expected mean|max|lse)")
 
 
 def main() -> None:
@@ -259,6 +287,8 @@ def main() -> None:
         "offroad_weight": float(args.offroad_weight),
         "offroad_samples_per_segment": int(args.offroad_samples_per_segment),
         "offroad_weighting": "alpha2",
+        "offroad_agg": str(args.offroad_agg),
+        "offroad_lse_beta": float(args.offroad_lse_beta),
     }
     with open(save_dir / "config.json", "w") as f:
         json.dump(run_config, f, indent=2, ensure_ascii=False)
@@ -304,6 +334,8 @@ def main() -> None:
                     pos_range=pos_range,
                     count_thr=float(args.count_thr),
                     samples_per_segment=int(args.offroad_samples_per_segment),
+                    agg=str(args.offroad_agg),
+                    lse_beta=float(args.offroad_lse_beta),
                 )
                 # Sanity: penalty floor on GT z (oracle). If this is not small, your drivable proxy/threshold
                 # is inconsistent with GT or the linear polyline is too aggressive.
@@ -316,6 +348,8 @@ def main() -> None:
                         pos_range=pos_range,
                         count_thr=float(args.count_thr),
                         samples_per_segment=int(args.offroad_samples_per_segment),
+                        agg=str(args.offroad_agg),
+                        lse_beta=float(args.offroad_lse_beta),
                     )
                 # Weight by denoising SNR proxy: alpha^2 = alphas_cumprod[t].
                 # High-noise timesteps produce very noisy x0_pred; weighting avoids destabilizing training.

@@ -417,6 +417,26 @@ python -m src.training.train_macro_diffusion \
   --epochs 20 --max_batches 200 --seed 0 \
   --count_thr 1.0 --offroad_weight 0.1 --offroad_samples_per_segment 16 \
   --log_every 100
+
+# 若出现“penalty 下降但 gate 仍高”的 proxy gap：把聚合从 mean 切到更贴近 ANY/OR 的风险敏感形式。
+# - mean：平均违例（可能无法压低 collision_rate_any）
+# - max/lse：最坏点违例（更贴近 gate 的 any-point 碰撞判据）
+python -m src.training.train_macro_diffusion \
+  --exp_name macro_zdiff_k2_count_current_offroad0p1_lse \
+  --data_path $DATA --nav_file $NAV --split train \
+  --obs_len 8 --pred_len 12 \
+  --patch_size 32 --nav_patch_channel2 count \
+  --hidden_dim 128 --diff_steps 20 --pred_type eps \
+  --batch_size 512 --num_workers 8 \
+  --epochs 20 --max_batches 200 --seed 0 \
+  --count_thr 1.0 --offroad_weight 0.1 --offroad_samples_per_segment 16 \
+  --offroad_agg lse --offroad_lse_beta 10 \
+  --log_every 100
+
+止损线（Macro 可行域学习）：
+- 风险 1：`offroad_pen_w`（lse）在早期爆炸（例如 >10）或明显震荡不下降 → 立刻停止，优先改架构（增强条件编码/提高 patch 可辨识度）。
+- 风险 2：`offroad_pen_w` 降到很低但 `collision_rate_any` 仍 >50% → proxy gap；可做一次增密（提高 `offroad_samples_per_segment`）验证，仍不行则改架构。
+- 风险 3：训练到 20 epoch 仍无法把 `collision_rate_any` 压到 <10% → 认为达到表达极限，改架构。
 ```
 
 3) 采样 Macro→Skeleton（不接 micro，先验证 G1/G2；建议在 detour-hard 子集上跑）：

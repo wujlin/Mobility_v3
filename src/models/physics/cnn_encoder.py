@@ -1,6 +1,16 @@
 import torch
 import torch.nn as nn
 
+class _PoolTo4x4(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.pool = nn.MaxPool2d(2)
+        self.adapt = nn.AdaptiveAvgPool2d((4, 4))
+
+    def forward(self, x):
+        x = self.pool(x)
+        return self.adapt(x)
+
 class CNNEncoder(nn.Module):
     """
     Encodes local Navigation Patch (3, K, K) into a vector.
@@ -25,8 +35,9 @@ class CNNEncoder(nn.Module):
             nn.Conv2d(32, 64, 3, padding=1),
             nn.BatchNorm2d(64),
             nn.LeakyReLU(0.1),
-            nn.MaxPool2d(2), # 4x4
-            
+            # Make the encoder patch-size agnostic (e.g., 64x64 -> 8x8 after pooling),
+            # while keeping state_dict keys stable for older checkpoints.
+            _PoolTo4x4(), # -> 4x4
             nn.Flatten(),
             nn.Linear(64 * 4 * 4, output_dim),
             nn.LeakyReLU(0.1)

@@ -16,6 +16,16 @@ from src.models.physics.physics_condition_diffusion import PhysicsConditionDiffu
 from src.models.seq.seq_baseline import SeqBaseline
 
 
+def _load_nav_count(nav_file: str) -> np.ndarray:
+    data = np.load(str(nav_file), allow_pickle=True)
+    if "count" not in data.files:
+        raise ValueError(f"nav_file must contain 'count' for feasibility gate, got {data.files}")
+    count = np.asarray(data["count"], dtype=np.float32)
+    if count.ndim != 2:
+        raise ValueError(f"Expected nav count (H,W), got {count.shape}")
+    return count
+
+
 def _set_seed(seed: int) -> None:
     random.seed(int(seed))
     np.random.seed(int(seed))
@@ -149,6 +159,112 @@ def _keys_from_ids(traj_idx: np.ndarray, start_t: np.ndarray) -> np.ndarray:
     return (traj_idx << np.int64(32)) + start_t
 
 
+def _index_round(pos: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+    yy = np.rint(pos[..., 0]).astype(np.int64)
+    xx = np.rint(pos[..., 1]).astype(np.int64)
+    return yy, xx
+
+
+def _sample_segments(
+    a: np.ndarray,  # (S,2)
+    b: np.ndarray,  # (S,2)
+    *,
+    step: float,
+    max_samples: int,
+) -> Tuple[np.ndarray, np.ndarray]:
+    a = np.asarray(a, dtype=np.float32)
+    b = np.asarray(b, dtype=np.float32)
+    d = b - a
+    seg_len = np.linalg.norm(d, axis=-1)  # (S,)
+    n = np.ceil(seg_len / max(float(step), 1e-6)).astype(np.int64) + 1
+    n = np.clip(n, 2, int(max_samples))
+    m = int(np.max(n)) if int(n.size) else 0
+    if m <= 0:
+        return np.zeros((0, 0, 2), dtype=np.float32), np.zeros((0, 0), dtype=bool)
+    t = np.linspace(0.0, 1.0, num=int(m), dtype=np.float32)[None, :, None]  # (1,m,1)
+    pts = a[:, None, :] + t * d[:, None, :]  # (S,m,2)
+    valid = (np.arange(int(m), dtype=np.int64)[None, :] < n[:, None])  # (S,m)
+    return pts.astype(np.float32, copy=False), valid
+
+
+def _collision_any_mask(
+    *,
+    start_pos: np.ndarray,  # (B,2) grid
+    z_grid: np.ndarray,  # (B,K,3,2) grid
+    drivable: np.ndarray,  # (H,W) bool
+    sample_step: float,
+    max_samples_per_segment: int,
+) -> np.ndarray:
+    """
+    Collision check for skeleton polyline: start -> wp1 -> wp2 -> end.
+
+    Returns:
+      collided_any: (B,K) bool
+    """
+    start_pos = np.asarray(start_pos, dtype=np.float32)
+    z_grid = np.asarray(z_grid, dtype=np.float32)
+    if start_pos.ndim != 2 or start_pos.shape[-1] != 2:
+        raise ValueError(f"Expected start_pos (B,2), got {start_pos.shape}")
+    if z_grid.ndim != 4 or z_grid.shape[-2:] != (3, 2):
+        raise ValueError(f"Expected z_grid (B,K,3,2), got {z_grid.shape}")
+    if int(start_pos.shape[0]) != int(z_grid.shape[0]):
+        raise ValueError("B mismatch between start_pos and z_grid")
+
+    H, W = int(drivable.shape[0]), int(drivable.shape[1])
+    B, K = int(z_grid.shape[0]), int(z_grid.shape[1])
+
+    start_k = np.repeat(start_pos[:, None, :], repeats=int(K), axis=1)  # (B,K,2)
+    vertices = np.concatenate([start_k[:, :, None, :], z_grid], axis=2)  # (B,K,4,2)
+    S = int(B * K)
+    v = vertices.reshape(S, 4, 2)
+
+    a = np.concatenate([v[:, 0], v[:, 1], v[:, 2]], axis=0)  # (S*3,2)
+    b = np.concatenate([v[:, 1], v[:, 2], v[:, 3]], axis=0)
+
+    pts, valid = _sample_segments(a, b, step=float(sample_step), max_samples=int(max_samples_per_segment))
+    yy, xx = _index_round(pts)
+    inb = (yy >= 0) & (yy < H) & (xx >= 0) & (xx < W)
+    yy_c = np.clip(yy, 0, H - 1)
+    xx_c = np.clip(xx, 0, W - 1)
+    drv = drivable[yy_c, xx_c]
+    bad = valid & (~inb | ~drv)
+    seg_bad = np.any(bad, axis=1).reshape(3, S).T  # (S,3)
+    collided_any = np.any(seg_bad, axis=1).reshape(B, K)
+    return collided_any
+
+
+def _select_feasible_indices(
+    collided_any: np.ndarray,  # (B,K_raw)
+    *,
+    k_target: int,
+    rng: np.random.Generator,
+) -> np.ndarray:
+    """
+    Select K indices per sample preferring feasible (non-colliding) candidates.
+    If feasible candidates are insufficient, repeats feasible ones to fill K.
+    """
+    collided_any = np.asarray(collided_any, dtype=bool)
+    if collided_any.ndim != 2:
+        raise ValueError(f"Expected collided_any (B,K_raw), got {collided_any.shape}")
+    B, K_raw = int(collided_any.shape[0]), int(collided_any.shape[1])
+    if int(k_target) <= 0:
+        raise ValueError("k_target must be > 0")
+
+    out = np.zeros((B, int(k_target)), dtype=np.int64)
+    all_idx = np.arange(int(K_raw), dtype=np.int64)
+    for i in range(int(B)):
+        feasible = all_idx[~collided_any[i]]
+        if int(feasible.size) >= int(k_target):
+            pick = rng.choice(feasible, size=int(k_target), replace=False)
+        elif int(feasible.size) > 0:
+            extra = rng.choice(feasible, size=int(k_target) - int(feasible.size), replace=True)
+            pick = np.concatenate([feasible, extra], axis=0)
+        else:
+            pick = rng.choice(all_idx, size=int(k_target), replace=(int(K_raw) < int(k_target)))
+        out[i] = pick.astype(np.int64, copy=False)
+    return out
+
+
 def _subset_indices_from_windows_npz(
     *,
     dataset: DiffusionDataset,
@@ -235,6 +351,13 @@ def build_argparser() -> argparse.ArgumentParser:
     p.add_argument("--seed", type=int, default=0)
 
     p.add_argument("--windows_npz", type=str, default=None, help="Optional GT windows npz; restrict sampling to these (traj_idx,start_t).")
+
+    # Feasibility-aware macro sampling (G1 hard gate)
+    p.add_argument("--feasible_gate", action="store_true", help="Enable accept/reject to keep only drivable skeletons (count>=thr) in the output K set.")
+    p.add_argument("--gate_count_thr", type=float, default=1.0, help="Drivable mask threshold: count >= thr.")
+    p.add_argument("--gate_sample_step", type=float, default=0.5, help="Sampling step along segments (grid units).")
+    p.add_argument("--gate_max_samples_per_segment", type=int, default=256)
+    p.add_argument("--gate_oversample", type=int, default=3, help="Sample K_raw = K*oversample candidates then filter to K.")
     return p
 
 
@@ -305,6 +428,16 @@ def main() -> None:
     cond_spec = CondSpec(cond_mode="oracle_wp_end", num_waypoints=2)
     K = int(args.k_samples)
     need = int(args.save_samples)
+    rng = np.random.default_rng(int(args.seed))
+
+    drivable = None
+    if bool(args.feasible_gate):
+        count = _load_nav_count(str(args.nav_file))
+        drivable = np.asarray(count >= float(args.gate_count_thr), dtype=bool)
+        print(
+            f"[FEASIBLE_GATE] enabled: K={int(K)}, oversample={int(args.gate_oversample)}, "
+            f"count_thr={float(args.gate_count_thr)}, step={float(args.gate_sample_step)}"
+        )
 
     preds_k_list: list[np.ndarray] = []
     targets_list: list[np.ndarray] = []
@@ -367,23 +500,55 @@ def main() -> None:
             traj_idx_list.append(tid.astype(np.int64, copy=False))
             start_t_list.append(t0.astype(np.int64, copy=False))
 
-            # ---- Sample K macro z in one shot by replication ----
-            obs_rep = obs.repeat_interleave(int(K), dim=0)
-            cond_rep = cond_trip_od.repeat_interleave(int(K), dim=0)
-            nav_rep = nav_patch.repeat_interleave(int(K), dim=0)
-            z_rep = macro.sample_trajectory(obs_rep, cond_rep, horizon=3, nav_patch=nav_rep)  # (B*K,3,2) normalized pos
-            z_k = z_rep.view(int(take), int(K), 3, 2)
-            z_k_list.append(z_k.detach().cpu().numpy().astype(np.float32, copy=False))
+            # ---- Sample macro z candidates ----
+            K_raw = int(K)
+            if drivable is not None:
+                K_raw = int(K) * max(int(args.gate_oversample), 1)
+
+            obs_rep_raw = obs.repeat_interleave(int(K_raw), dim=0)
+            cond_rep_raw = cond_trip_od.repeat_interleave(int(K_raw), dim=0)
+            nav_rep_raw = nav_patch.repeat_interleave(int(K_raw), dim=0)
+            z_rep = macro.sample_trajectory(obs_rep_raw, cond_rep_raw, horizon=3, nav_patch=nav_rep_raw)  # (B*K_raw,3,2)
+            z_k_raw = z_rep.view(int(take), int(K_raw), 3, 2)
+
+            # Hard clip to the normalization box (prevents rare OOB).
+            z_k_raw = torch.clamp(z_k_raw, -1.0, 1.0)
 
             # denormalize z to grid for gates/inspection
-            z_grid = ((z_k + 1.0) * 0.5 * pos_range_t[None, None, None, :] + pos_min_t[None, None, None, :]).detach().cpu().numpy()
-            z_k_grid_list.append(np.asarray(z_grid, dtype=np.float32))
+            z_grid_raw = ((z_k_raw + 1.0) * 0.5 * pos_range_t[None, None, None, :] + pos_min_t[None, None, None, :]).detach().cpu().numpy()
+
+            # ---- Optional feasible gate: keep only non-colliding skeletons in output K ----
+            if drivable is not None:
+                collided_any = _collision_any_mask(
+                    start_pos=start_pos,
+                    z_grid=np.asarray(z_grid_raw, dtype=np.float32),
+                    drivable=drivable,
+                    sample_step=float(args.gate_sample_step),
+                    max_samples_per_segment=int(args.gate_max_samples_per_segment),
+                )
+                sel_idx = _select_feasible_indices(collided_any, k_target=int(K), rng=rng)  # (B,K)
+                sel_t = torch.from_numpy(sel_idx).to(device=device, dtype=torch.long)  # (B,K)
+                z_k = torch.gather(
+                    z_k_raw,
+                    dim=1,
+                    index=sel_t[:, :, None, None].expand(int(take), int(K), 3, 2),
+                )
+                sel_np = sel_idx[:, :, None, None]
+                sel_np = np.broadcast_to(sel_np, (int(take), int(K), 3, 2))
+                z_grid = np.take_along_axis(np.asarray(z_grid_raw, dtype=np.float32), sel_np, axis=1)
+            else:
+                z_k = z_k_raw
+                z_grid = np.asarray(z_grid_raw, dtype=np.float32)
+
+            z_k_list.append(z_k.detach().cpu().numpy().astype(np.float32, copy=False))
+            z_k_grid_list.append(np.asarray(z_grid, dtype=np.float32, copy=False))
 
             # ---- Build cond_wp_end for skeleton prior + DetRes executor ----
             td = cond_trip_od[:, :2][:, None, :].expand(int(take), int(K), 2)  # (B,K,2)
             z_flat = z_k.reshape(int(take), int(K), 6)
             cond_wp_end = torch.cat([td, z_flat], dim=-1).reshape(int(take * K), 8)  # (B*K,8)
 
+            obs_rep = obs.repeat_interleave(int(K), dim=0)
             prior_vel_norm = build_skeleton_prior_vel_norm_k2(
                 obs=obs_rep,
                 cond=cond_wp_end,
@@ -436,6 +601,11 @@ def main() -> None:
         "pred_type": str(pred_type),
         "seed": int(args.seed),
         "windows_npz": (str(args.windows_npz) if args.windows_npz else None),
+        "feasible_gate": bool(args.feasible_gate),
+        "gate_count_thr": float(args.gate_count_thr),
+        "gate_sample_step": float(args.gate_sample_step),
+        "gate_max_samples_per_segment": int(args.gate_max_samples_per_segment),
+        "gate_oversample": int(args.gate_oversample),
     }
 
     np.savez_compressed(

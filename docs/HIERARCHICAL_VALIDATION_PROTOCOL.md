@@ -396,6 +396,19 @@ python -m src.training.train_macro_diffusion \
   --batch_size 512 --num_workers 8 \
   --epochs 20 --max_batches 200 --seed 0 \
   --count_thr 1.0 --log_every 100
+
+# 若 MacroSkel 的 G1 碰撞率过高（比如 >10%）：优先加训练期 OffRoad Penalty（不改架构）
+# 该项用 nav_count 在 start->wp1->wp2->end 折线上做可微采样，惩罚 count<thr（近似 G1 gate）。
+python -m src.training.train_macro_diffusion \
+  --exp_name macro_zdiff_k2_count_current_offroad0p1 \
+  --data_path $DATA --nav_file $NAV --split train \
+  --obs_len 8 --pred_len 12 \
+  --patch_size 32 --nav_patch_channel2 count \
+  --hidden_dim 128 --diff_steps 20 --pred_type eps \
+  --batch_size 512 --num_workers 8 \
+  --epochs 20 --max_batches 200 --seed 0 \
+  --count_thr 1.0 --offroad_weight 0.1 --offroad_samples_per_segment 16 \
+  --log_every 100
 ```
 
 3) 采样 Macro→Skeleton（不接 micro，先验证 G1/G2；建议在 detour-hard 子集上跑）：
@@ -407,6 +420,19 @@ python -m src.evaluation.dump_macro_diffusion_samples \
   --obs_len 8 --pred_len 12 \
   --patch_size 32 --nav_patch_channel2 count \
   --k_samples 20 \
+  --save_samples 400 --max_batches 13 --seed 0 \
+  --windows_npz data/experiments/gt_passenger_dt30_test/test_detour_hard_top10.npz
+
+# 若 G1（碰撞率）不通过：启用 Feasible Gate（accept/reject）在采样端做硬可行性约束，
+# 等价于从 p(z|cond, feasible) 的截断分布采样；不依赖 KDE/典型性过滤。
+python -m src.evaluation.dump_macro_diffusion_samples \
+  --exp_name phys_macroZdiff_skeleton_detourhard_feasible \
+  --macro_checkpoint data/experiments/macro_zdiff_k2_count_current/last.pt \
+  --data_path $DATA --nav_file $NAV --split test \
+  --obs_len 8 --pred_len 12 \
+  --patch_size 32 --nav_patch_channel2 count \
+  --k_samples 20 \
+  --feasible_gate --gate_count_thr 1.0 --gate_sample_step 0.5 --gate_oversample 3 \
   --save_samples 400 --max_batches 13 --seed 0 \
   --windows_npz data/experiments/gt_passenger_dt30_test/test_detour_hard_top10.npz
 

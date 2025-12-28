@@ -10,6 +10,7 @@ from typing import Optional
 import numpy as np
 import torch
 import torch.optim as optim
+import torch.nn.functional as F
 from torch.utils.data import DataLoader
 
 from src.data.datasets_diffusion import DiffusionDataset
@@ -57,6 +58,10 @@ def build_argparser() -> argparse.ArgumentParser:
     # Training-time monitoring (G1 proxy)
     p.add_argument("--count_thr", type=float, default=1.0, help="Offroad proxy: count < thr treated as non-drivable.")
     p.add_argument("--log_every", type=int, default=100)
+
+    # Differentiable offroad penalty (segment-sampled, approximates G1 collision gate)
+    p.add_argument("--offroad_weight", type=float, default=0.0, help="Weight for differentiable offroad penalty (0 disables).")
+    p.add_argument("--offroad_samples_per_segment", type=int, default=16, help="Samples per segment for offroad penalty (>=2).")
     return p
 
 
@@ -89,6 +94,57 @@ def _oob_rates(
     bad_any_rate = float(np.mean(np.any(bad, axis=1)))
     out.update({"offroad_point_rate": bad_point_rate, "offroad_any_rate": bad_any_rate})
     return out
+
+
+def _segment_offroad_penalty(
+    *,
+    start_pos_norm: torch.Tensor,  # (B,2) normalized pos in [-1,1]
+    z_norm: torch.Tensor,  # (B,3,2) normalized pos in [-1,1]
+    nav_count: torch.Tensor,  # (1,1,H,W) raw count
+    pos_min: torch.Tensor,  # (2,)
+    pos_range: torch.Tensor,  # (2,)
+    count_thr: float,
+    samples_per_segment: int,
+) -> torch.Tensor:
+    """
+    Differentiable proxy for G1 collision: sample nav_count along start->wp1->wp2->end polyline
+    and penalize count < thr.
+    """
+    if int(samples_per_segment) < 2:
+        raise ValueError("--offroad_samples_per_segment must be >= 2")
+    if nav_count.ndim != 4:
+        raise ValueError(f"nav_count must be (1,1,H,W), got {tuple(nav_count.shape)}")
+
+    B = int(z_norm.shape[0])
+    H = int(nav_count.shape[2])
+    W = int(nav_count.shape[3])
+
+    # normalized -> grid coords (y,x)
+    start_grid = (start_pos_norm + 1.0) * 0.5 * pos_range[None, :] + pos_min[None, :]
+    z_grid = (z_norm + 1.0) * 0.5 * pos_range[None, None, :] + pos_min[None, None, :]
+
+    vertices = torch.cat([start_grid[:, None, :], z_grid], dim=1)  # (B,4,2)
+    a = vertices[:, 0:3, :]  # (B,3,2)
+    b = vertices[:, 1:4, :]  # (B,3,2)
+
+    t = torch.linspace(0.0, 1.0, steps=int(samples_per_segment), device=z_norm.device, dtype=z_norm.dtype)
+    t = t.view(1, 1, -1, 1)  # (1,1,S,1)
+    pts = a[:, :, None, :] + t * (b - a)[:, :, None, :]  # (B,3,S,2) [y,x]
+    pts = pts.reshape(B, 3 * int(samples_per_segment), 2)  # (B,3S,2)
+
+    # grid_sample expects (x,y) in [-1,1]
+    x = pts[:, :, 1]
+    y = pts[:, :, 0]
+    x_n = (x / max(float(W - 1), 1.0)) * 2.0 - 1.0
+    y_n = (y / max(float(H - 1), 1.0)) * 2.0 - 1.0
+    grid = torch.stack([x_n, y_n], dim=-1).unsqueeze(2)  # (B,3S,1,2)
+
+    count_in = nav_count.expand(B, -1, -1, -1)
+    sampled = F.grid_sample(count_in, grid, mode="bilinear", padding_mode="zeros", align_corners=True)  # (B,1,3S,1)
+    sampled = sampled.squeeze(1).squeeze(-1)  # (B,3S)
+
+    viol = F.relu(float(count_thr) - sampled)
+    return viol.mean()
 
 
 def main() -> None:
@@ -133,6 +189,9 @@ def main() -> None:
 
     pos_min = torch.tensor(dataset.normalizer.pos_min, dtype=torch.float32, device=device)
     pos_range = torch.tensor(dataset.normalizer.pos_range, dtype=torch.float32, device=device)
+    nav_count_t = None
+    if nav_count is not None:
+        nav_count_t = torch.from_numpy(np.asarray(nav_count, dtype=np.float32))[None, None, :, :].to(device=device)
 
     g = torch.Generator()
     g.manual_seed(int(args.seed))
@@ -197,6 +256,8 @@ def main() -> None:
         "num_workers": int(args.num_workers),
         "max_batches": (int(args.max_batches) if args.max_batches is not None else None),
         "count_thr": float(args.count_thr),
+        "offroad_weight": float(args.offroad_weight),
+        "offroad_samples_per_segment": int(args.offroad_samples_per_segment),
     }
     with open(save_dir / "config.json", "w") as f:
         json.dump(run_config, f, indent=2, ensure_ascii=False)
@@ -226,7 +287,23 @@ def main() -> None:
                 return_x0_pred=True,
                 return_timesteps=True,
             )
-            diff_loss.backward()
+            loss = diff_loss
+            offroad_pen = None
+            if float(args.offroad_weight) > 0.0 and nav_count_t is not None:
+                z_pred = x0_pred.permute(0, 2, 1)  # (B,3,2)
+                start_pos_norm = obs[:, -1, :2]  # (B,2)
+                offroad_pen = _segment_offroad_penalty(
+                    start_pos_norm=start_pos_norm,
+                    z_norm=z_pred,
+                    nav_count=nav_count_t,
+                    pos_min=pos_min,
+                    pos_range=pos_range,
+                    count_thr=float(args.count_thr),
+                    samples_per_segment=int(args.offroad_samples_per_segment),
+                )
+                loss = loss + float(args.offroad_weight) * offroad_pen
+
+            loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
             optimizer.step()
 
@@ -243,6 +320,8 @@ def main() -> None:
                         count_thr=float(args.count_thr),
                     )
                 msg = ", ".join(f"{k}={v:.4f}" for k, v in rates.items())
+                if offroad_pen is not None:
+                    msg = msg + f", offroad_pen={float(offroad_pen.item()):.4f}"
                 print(f"Epoch {epoch} | Batch {bidx} | DiffLoss {diff_loss.item():.4f} | {msg}")
 
             if args.max_batches is not None and int(args.max_batches) > 0 and nb >= int(args.max_batches):
@@ -264,4 +343,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

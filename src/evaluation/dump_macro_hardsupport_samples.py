@@ -58,6 +58,13 @@ def build_argparser() -> argparse.ArgumentParser:
     p.add_argument("--count_thr", type=float, default=1.0)
 
     p.add_argument("--k_samples", type=int, default=20)
+    p.add_argument(
+        "--sample_mode",
+        type=str,
+        choices=["multinomial", "argmax"],
+        default="multinomial",
+        help="How to select pixels from masked logits: multinomial sampling or argmax (deterministic).",
+    )
     p.add_argument("--save_samples", type=int, default=400)
     p.add_argument("--max_batches", type=int, default=13)
     p.add_argument("--batch_size", type=int, default=32)
@@ -231,8 +238,14 @@ def main() -> None:
 
             logits = model(obs=obs, cond=cond_trip_od, nav_patch=nav_patch)  # (B,3,K,K)
             logits = logits.masked_fill(~strict[:, None, :, :], -1e9)
-            probs = torch.softmax(logits.view(take * 3, K * K), dim=-1)
-            idx = torch.multinomial(probs, num_samples=int(args.k_samples), replacement=True)  # (B*3,Ks)
+            flat_logits = logits.view(take * 3, K * K)
+            if str(args.sample_mode) == "argmax":
+                idx = torch.argmax(flat_logits, dim=-1, keepdim=True)  # (B*3,1)
+                if int(args.k_samples) > 1:
+                    idx = idx.expand(-1, int(args.k_samples)).contiguous()
+            else:
+                probs = torch.softmax(flat_logits, dim=-1)
+                idx = torch.multinomial(probs, num_samples=int(args.k_samples), replacement=True)  # (B*3,Ks)
             idx = idx.view(take, 3, int(args.k_samples)).permute(0, 2, 1)  # (B,Ks,3)
             yy = (idx // K).to(torch.float32)
             xx = (idx % K).to(torch.float32)

@@ -51,13 +51,16 @@ class MacroHardSupportNet(nn.Module):
         )
 
         in_cond = self.obs_len * self.obs_dim + self.cond_dim
+        # Feature-wise Linear Modulation (FiLM): make conditioning actually affect spatial logits.
+        # Note: a pure additive broadcast bias would not change per-pixel ordering after the final 1x1 head.
         self.cond_mlp = nn.Sequential(
             nn.Linear(in_cond, h),
             nn.SiLU(),
-            nn.Linear(h, h),
+            nn.Linear(h, 2 * h),
         )
 
         self.head = nn.Conv2d(h, 3, 1)
+        self.post_act = nn.SiLU()
 
         self.register_buffer("_coord", None, persistent=False)
 
@@ -90,7 +93,9 @@ class MacroHardSupportNet(nn.Module):
 
         B = int(obs.shape[0])
         flat = torch.cat([obs.reshape(B, -1), cond], dim=-1)
-        g = self.cond_mlp(flat).view(B, int(self.hidden_dim), 1, 1)  # (B,h,1,1)
+        film = self.cond_mlp(flat).view(B, 2 * int(self.hidden_dim), 1, 1)  # (B,2h,1,1)
+        scale, shift = film.chunk(2, dim=1)
+        scale = torch.tanh(scale)  # (-1,1) => (1+scale) in (0,2)
 
         x = nav_patch
         if self.use_coord:
@@ -98,6 +103,6 @@ class MacroHardSupportNet(nn.Module):
             x = torch.cat([x, coord], dim=1)
 
         feat = self.nav_backbone(x)
-        feat = feat + g
+        feat = feat * (1.0 + scale) + shift
+        feat = self.post_act(feat)
         return self.head(feat)
-

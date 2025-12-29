@@ -367,6 +367,18 @@ def build_argparser() -> argparse.ArgumentParser:
     p.add_argument("--pred_len", type=int, default=12)
     p.add_argument("--patch_size", type=int, default=32)
     p.add_argument("--nav_patch_channel2", type=str, choices=["count", "speed", "zeros"], default="count")
+    p.add_argument(
+        "--nav_patch_override",
+        type=str,
+        choices=["none", "zeros", "shuffle", "dir_zero", "ch2_zero"],
+        default="none",
+        help="Ablation for 'map usage' diagnosis. "
+             "none: use dataset nav_patch; "
+             "zeros: zero all 3 channels; "
+             "shuffle: shuffle nav_patch across the batch (preserve marginal distribution, break alignment); "
+             "dir_zero: zero direction channels [0,1]; "
+             "ch2_zero: zero channel-2 only.",
+    )
 
     p.add_argument("--k_samples", type=int, default=20)
     p.add_argument("--save_samples", type=int, default=400)
@@ -454,6 +466,7 @@ def main() -> None:
     K = int(args.k_samples)
     need = int(args.save_samples)
     rng = np.random.default_rng(int(args.seed))
+    rng_patch = np.random.default_rng(int(args.seed) + 12345)
 
     drivable = None
     if bool(args.feasible_gate):
@@ -524,6 +537,24 @@ def main() -> None:
             trip_d = trip_d[:take]
             tid = tid[:take]
             t0 = t0[:take]
+
+            # ---- Optional nav_patch override (map usage ablation) ----
+            nav_patch_override = str(args.nav_patch_override)
+            if nav_patch_override != "none":
+                if nav_patch_override == "zeros":
+                    nav_patch = torch.zeros_like(nav_patch)
+                elif nav_patch_override == "shuffle":
+                    perm = rng_patch.permutation(int(take)).astype(np.int64, copy=False)
+                    perm_t = torch.from_numpy(perm).to(device=nav_patch.device, dtype=torch.long)
+                    nav_patch = nav_patch.index_select(0, perm_t)
+                elif nav_patch_override == "dir_zero":
+                    nav_patch = nav_patch.clone()
+                    nav_patch[:, 0:2].zero_()
+                elif nav_patch_override == "ch2_zero":
+                    nav_patch = nav_patch.clone()
+                    nav_patch[:, 2:3].zero_()
+                else:  # pragma: no cover
+                    raise ValueError(f"Unknown --nav_patch_override: {nav_patch_override}")
 
             # start_pos grid
             start_pos = norm.denormalize_pos(obs[:, -1, :2].detach().cpu().numpy()).astype(np.float32, copy=False)
@@ -645,6 +676,7 @@ def main() -> None:
         "pred_len": int(args.pred_len),
         "patch_size": int(args.patch_size),
         "nav_patch_channel2": str(args.nav_patch_channel2),
+        "nav_patch_override": str(args.nav_patch_override),
         "k_samples": int(args.k_samples),
         "diff_steps": int(diff_steps),
         "pred_type": str(pred_type),

@@ -187,8 +187,25 @@ def main() -> None:
             action = batch["action"]  # (B,F,2) vel_norm
             trip_o = batch["trip_o"].to(device)
             trip_d = batch["trip_d"].to(device)
-            tid = np.asarray([m["traj_idx"] for m in batch["meta"]], dtype=np.int64)
-            t0 = np.asarray([m["start_t"] for m in batch["meta"]], dtype=np.int64)
+            meta = batch.get("meta")
+            if isinstance(meta, dict):
+                if "traj_idx" not in meta or "start_t" not in meta:
+                    raise TypeError(f"batch['meta'] missing keys traj_idx/start_t: keys={list(meta.keys())}")
+                tid_v = meta["traj_idx"]
+                t0_v = meta["start_t"]
+                if isinstance(tid_v, torch.Tensor):
+                    tid = tid_v.detach().cpu().numpy().astype(np.int64, copy=False)
+                else:
+                    tid = np.asarray(tid_v, dtype=np.int64)
+                if isinstance(t0_v, torch.Tensor):
+                    t0 = t0_v.detach().cpu().numpy().astype(np.int64, copy=False)
+                else:
+                    t0 = np.asarray(t0_v, dtype=np.int64)
+            elif isinstance(meta, (list, tuple)):
+                tid = np.asarray([m["traj_idx"] for m in meta], dtype=np.int64)
+                t0 = np.asarray([m["start_t"] for m in meta], dtype=np.int64)
+            else:
+                raise TypeError(f"Expected batch['meta'] to be dict or list[dict], got: {type(meta)}")
 
             B = int(obs.shape[0])
             take = min(int(need), B)

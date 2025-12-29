@@ -265,6 +265,7 @@ def main() -> None:
             labels_y = torch.from_numpy(labels_yx[..., 0]).to(device=device, dtype=torch.long)
             labels_x = torch.from_numpy(labels_yx[..., 1]).to(device=device, dtype=torch.long)
             valid_t = torch.from_numpy(valid).to(device=device)
+            valid_global = valid_t.clone()
 
             # Mask from normalized count channel.
             strict = (nav_patch[:, 2] >= float(thr_norm))  # (B,K,K) bool
@@ -273,6 +274,18 @@ def main() -> None:
                 # Avoid NaNs: if strict mask is empty, ignore labels for those samples.
                 strict[empty] = True
                 valid_t[empty] = False
+                valid_global[empty] = False
+
+            # Ensure we never compute CE on a label whose class is masked out; that would create rare
+            # catastrophic loss spikes (label on ~strict => logit=-1e9 => loss~1e9).
+            by = torch.arange(B, device=device).view(B, 1).expand(B, 3)
+            ly = labels_y.clamp(0, K - 1)
+            lx = labels_x.clamp(0, K - 1)
+            label_in_strict = strict[by, ly, lx]  # (B,3) bool (safe indexing)
+            mismatch = valid_global & (~label_in_strict)
+            valid_t = valid_global & label_in_strict
+            if not bool(torch.any(valid_t)):
+                continue
 
             logits = model(obs=obs, cond=cond_trip_od, nav_patch=nav_patch)  # (B,3,K,K)
             logits = logits.masked_fill(~strict[:, None, :, :], -1e9)
@@ -292,9 +305,12 @@ def main() -> None:
             if int(args.log_every) > 0 and (bidx % int(args.log_every) == 0):
                 with torch.no_grad():
                     valid_rate = float(valid_t.to(torch.float32).mean().item())
+                    mismatch_rate = float(mismatch.to(torch.float32).mean().item())
+                    global_rate = float(valid_global.to(torch.float32).mean().item())
                     print(
                         f"Epoch {epoch} | Batch {bidx} | Loss {loss.item():.4f} | "
-                        f"thr_norm={thr_norm:.4f} valid_label_rate={valid_rate:.4f}"
+                        f"thr_norm={thr_norm:.4f} valid_label_rate={valid_rate:.4f} "
+                        f"(global={global_rate:.4f}, mismatch={mismatch_rate:.4f})"
                     )
 
             if args.max_batches is not None and int(bidx) + 1 >= int(args.max_batches):
@@ -314,4 +330,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

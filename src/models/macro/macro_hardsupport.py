@@ -23,6 +23,7 @@ class MacroHardSupportNet(nn.Module):
         in_channels: int = 3,
         hidden_dim: int = 64,
         use_coord: bool = True,
+        cond_mode: str = "film",
     ) -> None:
         super().__init__()
         self.obs_len = int(obs_len)
@@ -31,6 +32,9 @@ class MacroHardSupportNet(nn.Module):
         self.patch_size = int(patch_size)
         self.hidden_dim = int(hidden_dim)
         self.use_coord = bool(use_coord)
+        self.cond_mode = str(cond_mode)
+        if self.cond_mode not in {"film", "add"}:
+            raise ValueError(f"cond_mode must be one of {{'film','add'}}, got: {self.cond_mode}")
 
         cin = int(in_channels) + (2 if self.use_coord else 0)
         h = int(hidden_dim)
@@ -51,16 +55,24 @@ class MacroHardSupportNet(nn.Module):
         )
 
         in_cond = self.obs_len * self.obs_dim + self.cond_dim
-        # Feature-wise Linear Modulation (FiLM): make conditioning actually affect spatial logits.
-        # Note: a pure additive broadcast bias would not change per-pixel ordering after the final 1x1 head.
-        self.cond_mlp = nn.Sequential(
-            nn.Linear(in_cond, h),
-            nn.SiLU(),
-            nn.Linear(h, 2 * h),
-        )
+        if self.cond_mode == "film":
+            # Feature-wise Linear Modulation (FiLM): conditioning affects per-pixel ordering via channel-wise scale+shift.
+            self.cond_mlp = nn.Sequential(
+                nn.Linear(in_cond, h),
+                nn.SiLU(),
+                nn.Linear(h, 2 * h),
+            )
+            self.post_act = nn.SiLU()
+        else:
+            # Legacy additive conditioning (kept for backward-compatible checkpoint loading).
+            self.cond_mlp = nn.Sequential(
+                nn.Linear(in_cond, h),
+                nn.SiLU(),
+                nn.Linear(h, h),
+            )
+            self.post_act = None
 
         self.head = nn.Conv2d(h, 3, 1)
-        self.post_act = nn.SiLU()
 
         self.register_buffer("_coord", None, persistent=False)
 
@@ -93,9 +105,12 @@ class MacroHardSupportNet(nn.Module):
 
         B = int(obs.shape[0])
         flat = torch.cat([obs.reshape(B, -1), cond], dim=-1)
-        film = self.cond_mlp(flat).view(B, 2 * int(self.hidden_dim), 1, 1)  # (B,2h,1,1)
-        scale, shift = film.chunk(2, dim=1)
-        scale = torch.tanh(scale)  # (-1,1) => (1+scale) in (0,2)
+        if self.cond_mode == "film":
+            film = self.cond_mlp(flat).view(B, 2 * int(self.hidden_dim), 1, 1)  # (B,2h,1,1)
+            scale, shift = film.chunk(2, dim=1)
+            scale = torch.tanh(scale)  # (-1,1) => (1+scale) in (0,2)
+        else:
+            g = self.cond_mlp(flat).view(B, int(self.hidden_dim), 1, 1)  # (B,h,1,1)
 
         x = nav_patch
         if self.use_coord:
@@ -103,6 +118,10 @@ class MacroHardSupportNet(nn.Module):
             x = torch.cat([x, coord], dim=1)
 
         feat = self.nav_backbone(x)
-        feat = feat * (1.0 + scale) + shift
-        feat = self.post_act(feat)
+        if self.cond_mode == "film":
+            feat = feat * (1.0 + scale) + shift
+            if self.post_act is not None:
+                feat = self.post_act(feat)
+        else:
+            feat = feat + g
         return self.head(feat)

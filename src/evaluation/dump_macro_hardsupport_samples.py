@@ -33,6 +33,20 @@ def _load_checkpoint(path: str, device: torch.device) -> Tuple[dict, Dict[str, o
     return state, (cfg if isinstance(cfg, dict) else {})
 
 
+def _detect_cond_mode_from_state(state_dict: dict) -> str:
+    w = state_dict.get("cond_mlp.2.weight")
+    if not isinstance(w, torch.Tensor) or w.ndim != 2:
+        return "film"
+    out_features = int(w.shape[0])
+    in_features = int(w.shape[1])
+    # Legacy: (h, h); FiLM: (2h, h).
+    if out_features == in_features:
+        return "add"
+    if out_features == 2 * in_features:
+        return "film"
+    return "film"
+
+
 def _denorm_pos(pos_norm: torch.Tensor, *, pos_min: torch.Tensor, pos_range: torch.Tensor) -> torch.Tensor:
     return (pos_norm + 1.0) * 0.5 * pos_range + pos_min
 
@@ -139,6 +153,9 @@ def main() -> None:
     thr_norm = float(np.log1p(float(args.count_thr)) / float(getattr(dataset, "_nav_count_log1p_max", 1.0)))
 
     state_dict, cfg = _load_checkpoint(str(args.checkpoint), device=device)
+    cond_mode = str(cfg.get("cond_mode", "")).strip()
+    if cond_mode not in {"film", "add"}:
+        cond_mode = _detect_cond_mode_from_state(state_dict)
     model = MacroHardSupportNet(
         obs_len=int(cfg.get("obs_len", args.obs_len)),
         obs_dim=4,
@@ -147,6 +164,7 @@ def main() -> None:
         in_channels=3,
         hidden_dim=int(cfg.get("hidden_dim", 64)),
         use_coord=bool(cfg.get("use_coord", False)),
+        cond_mode=cond_mode,
     ).to(device=device)
     model.load_state_dict(state_dict)
     model.eval()

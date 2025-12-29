@@ -47,6 +47,7 @@ def build_argparser() -> argparse.ArgumentParser:
 
     p.add_argument("--hidden_dim", type=int, default=64)
     p.add_argument("--use_coord", action="store_true", help="Add CoordConv channels (y,x) in [-1,1] to nav_patch.")
+    p.add_argument("--cond_mode", type=str, choices=["film", "add"], default="film", help="Condition injection mode (film recommended).")
 
     p.add_argument("--batch_size", type=int, default=256)
     p.add_argument("--num_workers", type=int, default=8)
@@ -195,6 +196,7 @@ def main() -> None:
         in_channels=3,
         hidden_dim=int(args.hidden_dim),
         use_coord=bool(args.use_coord),
+        cond_mode=str(args.cond_mode),
     ).to(device=device)
 
     optimizer = optim.Adam(model.parameters(), lr=float(args.lr))
@@ -215,6 +217,7 @@ def main() -> None:
         "count_thr": float(args.count_thr),
         "hidden_dim": int(args.hidden_dim),
         "use_coord": bool(args.use_coord),
+        "cond_mode": str(args.cond_mode),
         "batch_size": int(args.batch_size),
         "epochs": int(args.epochs),
         "lr": float(args.lr),

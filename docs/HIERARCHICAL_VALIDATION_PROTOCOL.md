@@ -46,6 +46,33 @@
     - 这通常意味着：训练失稳 / 配置错误 / 数据版本不一致，而不是“约束项无效”。
     - 新版 `train_macro_diffusion.py` 已在训练日志中加入 `gt_offroad_pen_w`（GT 线性骨架在该 proxy 下的惩罚下界）用于定位：若 `gt_offroad_pen_w` 很大，优先检查 `count_thr` 与 drivable proxy 是否一致；若 GT 很小但 pred 很大，才是模型没学会“看图”。
 
+---
+
+## Phase 3（Macro Hard Support）离线审计（先做这 4 项，再写模型代码）
+
+> 目的：把 PI review 里提到的“量化误差/空 mask/coarse recall/输入相关性”用 CPU 离线审计一次性量化，避免边写边改走弯路。
+
+前置：准备一个包含 `start_pos/targets` 的 windows 文件（推荐直接复用你跑 macro 采样时的 `samples.npz`，例如 `data/experiments/phys_*detourhard*/samples.npz`）。
+
+```bash
+export PROC=data/processed_passenger_dt30
+export NAV=$PROC/nav_field.npz
+export IN=data/experiments/phys_mapuse_test_none/samples.npz   # <-- 改成你实际的 windows npz
+
+python -m src.evaluation.macro_hardsupport_offline_audit \
+  --in_samples_npz "$IN" \
+  --nav_file "$NAV" --count_thr 1.0 \
+  --patch_size 64 --coarse_g 16 \
+  --sample_step 0.5 --max_samples_per_segment 256 \
+  --out_dir data/experiments/macro_hardsupport_offline_audit \
+  --out_json data/experiments/macro_hardsupport_offline_audit/report.json
+```
+
+**只看 3 个输出就够**：
+- `nav_stats.empty_strict_patch_rate`：若非 0，需要定义 empty-mask fallback（skip / 回退到更宽松 mask / 全局投影）。
+- `gate.oracle_proj.cut_only_rate`：这是 `WP_ANY=0` 时的 CUT 下界（你们 Task 1 已测到约 0.0725）。
+- `gate.oracle_proj_coarse_only.cut_only_rate`：如果 coarse-only 也能 <0.10，可以考虑先不做 Stage2（更 KISS）；否则必须做 pixel-level（或 fine stage）。
+
 ## 主线三步 Go/No-Go（最短实验序列）
 
 > 这三步的设计目标是：**先把积分打开（Oracle z）**，把风险压到最低，再决定是否进入训练。

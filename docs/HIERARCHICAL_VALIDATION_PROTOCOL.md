@@ -46,6 +46,14 @@
     - 这通常意味着：训练失稳 / 配置错误 / 数据版本不一致，而不是“约束项无效”。
     - 新版 `train_macro_diffusion.py` 已在训练日志中加入 `gt_offroad_pen_w`（GT 线性骨架在该 proxy 下的惩罚下界）用于定位：若 `gt_offroad_pen_w` 很大，优先检查 `count_thr` 与 drivable proxy 是否一致；若 GT 很小但 pred 很大，才是模型没学会“看图”。
 
+- Phase 3（Macro Hard Support + AR，自回归连通性写回模型，detour-hard，N=400，K=1，**无事后筛选**）：
+  - 旧版（并行预测 wp1/wp2/end）：
+    - `WP_ANY=0` 但 `CUT/COLL≈0.145~0.176`（主要碰撞来自折线切墙，尤其 wp2→end 段）。
+  - AR 版（顺序生成 `wp1→wp2→end`，并把前序 one-hot map 作为条件）：
+    - `argmax (K=1)`：`collision_rate_any=0.060`，`cut_only_rate=0.060`，`WP_ANY=0`（seg0/1/2=0.0425/0.0225/0.0125）
+    - `multinomial (K=1)`：`collision_rate_any=0.085`，`cut_only_rate=0.085`，`WP_ANY=0`（seg0/1/2=0.0600/0.0250/0.0175）
+    - 结论：**G1 已通过**（1-shot，非 best-of-k），瓶颈从“点越界”转为“mask 内分布是否合理 + G2 真实性”。
+
 ---
 
 ## Phase 3（Macro Hard Support）离线审计（先做这 4 项，再写模型代码）
@@ -72,6 +80,72 @@ python -m src.evaluation.macro_hardsupport_offline_audit \
 - `nav_stats.empty_strict_patch_rate`：若非 0，需要定义 empty-mask fallback（skip / 回退到更宽松 mask / 全局投影）。
 - `gate.oracle_proj.cut_only_rate`：这是 `WP_ANY=0` 时的 CUT 下界（你们 Task 1 已测到约 0.0725）。
 - `gate.oracle_proj_coarse_only.cut_only_rate`：如果 coarse-only 也能 <0.10，可以考虑先不做 Stage2（更 KISS）；否则必须做 pixel-level（或 fine stage）。
+
+---
+
+## 争议点记录（PI Review）：Hard Support 会不会让 G2 失去意义？
+
+> 目的：把争议说清楚、把结论落到“可执行的审计”，避免团队在同一问题上反复循环。
+
+### 事实（硬成立）
+
+- Hard Support（masked softmax）把 Macro 的输出 support 限制在 `mask` 内，因此：
+  - `WP_ANY=0` 主要来自**结构约束**（不是模型“学会道路识别”）。
+- Hard Support **不是** test-time 事后筛选（不是 rejection/best-of-k）：
+  - 模型从一开始就建模 `p(z | cond, mask)`，而不是先采样 `p(z|cond)` 再丢掉不合法样本。
+  - 因此不存在“先生成一堆非法 → 事后擦屁股造成 selection bias”的伪提升。
+
+### PI 的核心担忧（必须正面回应）
+
+1) **特征层面未必学到道路语义（L1）**  
+模型 backbone 会看全 patch，但输出层只允许在 mask 内输出；若 mask 漏路，模型也无法“发现”漏掉的路。
+
+2) **Hard Support 与软语义（软约束）不是一回事**  
+Hard Support 解决“能不能”（合法性/支持集），软语义解决“选哪个更合理”（在 mask 内的概率质量分配、连通性、绕路）。
+
+3) **Raw vs Proj GT 的审计不够**  
+仅比较 Raw/Proj GT 只能发现“mask 剪掉 GT 太多”，不能发现“mask 内的分布是否错位/是否中心偏置”。
+
+4) **论文定位的 trade-off 必须写清楚**  
+接受 Hard Support 作为建模假设 → 论文应定位为 **map/weak-map 条件下的规划/预测**；  
+若要 claim “道路识别（L1）”，必须引入 OSM/分割监督/语义地图（另起工作量级）。
+
+### 当前裁决（主线推进口径）
+
+- 主线暂不做 L1（道路识别）。我们把 `mask` 视为 weak-map（外部输入），目标是验证 **trip-level 决策 + micro 执行** 是否能生成真实轨迹。
+- 为了避免“mask 内乱选/偏置”导致 G2 结论被质疑：**必须增加“mask 内分布对齐审计”**（见下一节）。
+
+---
+
+## 新增审计：Mask 内分布对齐（用于支撑 G2 的可信性）
+
+> 目标：回答“模型是否真的在 mask 内学到了合理分布”，而不是靠硬约束掩盖问题。
+
+### 审计输出（KISS：只看这三类）
+
+- **Heatmap 对齐（每个点：wp1/wp2/end）**：Pred vs GT 的 patch-heatmap 距离（JSD），只在 `mask==1` 的像素上归一化。
+- **Clearance 对齐**：点到最近 offroad 的距离分布（Pred vs GT）。
+- **中心偏置**：点到 patch center（start）距离分布（Pred vs GT），用于检测“都往安全中心挤”。
+
+### 运行命令（CPU-only）
+
+前置：你需要一个包含 `start_pos/targets/z_k_grid` 的 macro 采样文件（例如 `dump_macro_hardsupport_ar_samples.py` 的输出）。
+
+```bash
+export NAV=data/processed_passenger_dt30/nav_field.npz
+export IN=data/experiments/<your_macro_samples>/samples.npz
+
+python -m src.evaluation.macro_mask_alignment \
+  --samples_npz "$IN" \
+  --nav_file "$NAV" --count_thr 1.0 \
+  --patch_size 64 \
+  --out_json data/experiments/<your_macro_samples>/mask_alignment.json \
+  --out_png  data/experiments/<your_macro_samples>/mask_alignment.png
+```
+
+**关键判读**（建议写进汇报）：
+- 若 Pred vs GT 的 heatmap-JSD/clearance-JSD/center-JSD 都显著低于“随机 baseline”（脚本会给出），说明模型在 mask 内并非乱选。
+- 若 Pred 明显更贴边（clearance 更小）或明显更保守（clearance 更大/更中心），需在 G2 讨论中解释“可行性 vs 多样性”的偏置来源。
 
 ## 主线三步 Go/No-Go（最短实验序列）
 

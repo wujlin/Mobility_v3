@@ -11,7 +11,9 @@ import torch
 from torch.utils.data import DataLoader
 
 from src.data.datasets_diffusion import DiffusionDataset
+from src.features.skeleton_prior import CondSpec, build_skeleton_prior_vel_norm_k2
 from src.models.macro.macro_hardsupport_ar import MacroHardSupportARNet
+from src.models.seq.seq_baseline import SeqBaseline
 
 
 def _set_seed(seed: int) -> None:
@@ -31,6 +33,42 @@ def _load_checkpoint(path: str, device: torch.device) -> Tuple[dict, Dict[str, o
         raise KeyError(f"Checkpoint missing model_state_dict: {path}")
     cfg = ckpt.get("config", {})
     return state, (cfg if isinstance(cfg, dict) else {})
+
+
+def _load_micro_model(micro_checkpoint: str, device: torch.device) -> SeqBaseline:
+    ckpt = torch.load(micro_checkpoint, map_location=device)
+    if isinstance(ckpt, dict) and "model_state_dict" in ckpt:
+        state_dict = ckpt["model_state_dict"]
+        cfg = ckpt.get("config", {})
+        hidden_dim = cfg.get("hidden_dim") if isinstance(cfg, dict) else None
+    elif isinstance(ckpt, dict):
+        state_dict = ckpt
+        hidden_dim = None
+    else:
+        raise TypeError(f"Unsupported micro checkpoint format: {type(ckpt)}")
+
+    if hidden_dim is None:
+        w = state_dict.get("head.weight")
+        if hasattr(w, "shape") and len(w.shape) == 2:
+            hidden_dim = int(w.shape[1])
+    if hidden_dim is None:
+        raise ValueError(f"Cannot infer micro hidden_dim from checkpoint: {micro_checkpoint}")
+
+    # SeqBaseline encoder input size = obs_dim + cond_dim
+    # encoder.weight_ih_l0 has shape (4*hidden, obs_dim+cond_dim)
+    cond_dim = None
+    w_enc = state_dict.get("encoder.weight_ih_l0")
+    if hasattr(w_enc, "shape") and len(w_enc.shape) == 2:
+        cond_dim = int(w_enc.shape[1]) - 4
+    if cond_dim is None or cond_dim <= 0:
+        cond_dim = 8
+
+    model = SeqBaseline(obs_dim=4, act_dim=2, cond_dim=int(cond_dim), hidden_dim=int(hidden_dim)).to(device)
+    model.load_state_dict(state_dict)
+    model.eval()
+    for p in model.parameters():
+        p.requires_grad_(False)
+    return model
 
 
 def _denorm_pos(pos_norm: torch.Tensor, *, pos_min: torch.Tensor, pos_range: torch.Tensor) -> torch.Tensor:
@@ -76,6 +114,8 @@ def build_argparser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description="Dump Macro Hard Support AR samples: autoregressive z_k_grid for G1 gate.")
     p.add_argument("--exp_name", type=str, required=True)
     p.add_argument("--checkpoint", type=str, required=True)
+    p.add_argument("--micro_checkpoint", type=str, default=None, help="Optional: deterministic residual executor (DetRes). Requires --emit_traj.")
+    p.add_argument("--emit_traj", action="store_true", help="If set, also save preds/preds_k by running skeleton prior (+ optional DetRes).")
     p.add_argument("--data_path", type=str, required=True)
     p.add_argument("--nav_file", type=str, required=True)
     p.add_argument("--split", type=str, choices=["train", "val", "test", "all"], default="test")
@@ -107,6 +147,8 @@ def main() -> None:
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
     print(f"Using seed: {int(args.seed)}")
+    if args.micro_checkpoint and not bool(args.emit_traj):
+        raise ValueError("--micro_checkpoint requires --emit_traj (otherwise it is unused).")
 
     traj_ids = None
     if str(args.split) != "all":
@@ -153,6 +195,9 @@ def main() -> None:
     for p in model.parameters():
         p.requires_grad_(False)
 
+    micro = _load_micro_model(str(args.micro_checkpoint), device=device) if args.micro_checkpoint else None
+    cond_spec = CondSpec(cond_mode="oracle_wp_end", num_waypoints=2)
+
     pos_min = torch.tensor(dataset.normalizer.pos_min, dtype=torch.float32, device=device)
     pos_range = torch.tensor(dataset.normalizer.pos_range, dtype=torch.float32, device=device)
     vel_mean = torch.tensor(dataset.normalizer.vel_mean, dtype=torch.float32, device=device)
@@ -173,7 +218,9 @@ def main() -> None:
     out_dir = Path("data/experiments") / str(args.exp_name)
     out_dir.mkdir(parents=True, exist_ok=True)
 
+    preds_k_list = []
     z_k_grid_list = []
+    z_k_list = []
     start_pos_list = []
     targets_list = []
     origin_pos_list = []
@@ -299,6 +346,41 @@ def main() -> None:
             z_grid = center[:, None, None, :] + (z_patch - r)  # (B,Ks,3,2)
             z_k_grid_list.append(z_grid.detach().cpu().numpy().astype(np.float32, copy=False))
 
+            # normalized z for downstream skeleton/micro: map grid coords -> [-1,1]
+            z_norm = (z_grid - pos_min[None, None, None, :]) / pos_range[None, None, None, :]
+            z_norm = z_norm * 2.0 - 1.0
+            z_norm = torch.clamp(z_norm, -1.0, 1.0)
+            z_k_list.append(z_norm.detach().cpu().numpy().astype(np.float32, copy=False))
+
+            if bool(args.emit_traj):
+                # Build cond_wp_end: [hour,day] + [wp1/wp2/end] (normalized pos)
+                td = cond_trip_od[:, :2][:, None, :].expand(int(take), int(Ks), 2)  # (B,K,2)
+                z_flat = z_norm.reshape(int(take), int(Ks), 6)  # (B,K,6)
+                cond_wp_end = torch.cat([td, z_flat], dim=-1).reshape(int(take * Ks), 8)  # (B*K,8)
+
+                obs_rep = obs.repeat_interleave(int(Ks), dim=0)
+                prior_vel_norm = build_skeleton_prior_vel_norm_k2(
+                    obs=obs_rep,
+                    cond=cond_wp_end,
+                    pred_len=int(args.pred_len),
+                    num_waypoints=int(cond_spec.num_waypoints),
+                    pos_min=pos_min,
+                    pos_range=pos_range,
+                    vel_mean=vel_mean,
+                    vel_std=vel_std,
+                )
+                vel_norm = prior_vel_norm
+                if micro is not None:
+                    res = micro.sample_trajectory(obs_rep, cond_wp_end, int(args.pred_len))
+                    vel_norm = vel_norm + res
+
+                vel = (vel_norm * vel_std[None, None, :] + vel_mean[None, None, :]).detach().cpu().numpy().astype(np.float32, copy=False)
+                start_pos_rep = start_pos_grid.detach().cpu().numpy().astype(np.float32, copy=False)
+                start_pos_rep = np.repeat(start_pos_rep, repeats=int(Ks), axis=0)
+                pos_rep = _integrate_positions(start_pos_rep, vel).astype(np.float32, copy=False)
+                preds_k = pos_rep.reshape(int(take), int(Ks), int(args.pred_len), 2)
+                preds_k_list.append(preds_k)
+
             start_pos = start_pos_grid.detach().cpu().numpy().astype(np.float32, copy=False)
             start_pos_list.append(start_pos)
             gt_vel = (action.to(device) * vel_std[None, None, :] + vel_mean[None, None, :]).detach().cpu().numpy().astype(np.float32, copy=False)
@@ -315,6 +397,12 @@ def main() -> None:
             need -= int(take)
 
     z_k_grid = np.concatenate(z_k_grid_list, axis=0) if z_k_grid_list else np.zeros((0, int(args.k_samples), 3, 2), dtype=np.float32)
+    z_k = np.concatenate(z_k_list, axis=0) if z_k_list else np.zeros((0, int(args.k_samples), 3, 2), dtype=np.float32)
+    preds_k = None
+    preds = None
+    if bool(args.emit_traj):
+        preds_k = np.concatenate(preds_k_list, axis=0) if preds_k_list else np.zeros((0, int(args.k_samples), int(args.pred_len), 2), dtype=np.float32)
+        preds = preds_k[:, 0] if int(preds_k.shape[0]) > 0 and int(preds_k.shape[1]) > 0 else np.zeros((0, int(args.pred_len), 2), dtype=np.float32)
     start_pos = np.concatenate(start_pos_list, axis=0) if start_pos_list else np.zeros((0, 2), dtype=np.float32)
     targets = np.concatenate(targets_list, axis=0) if targets_list else np.zeros((0, int(args.pred_len), 2), dtype=np.float32)
     origin_pos = np.concatenate(origin_pos_list, axis=0) if origin_pos_list else np.zeros((0, 2), dtype=np.float32)
@@ -324,6 +412,8 @@ def main() -> None:
 
     meta = {
         "checkpoint": str(args.checkpoint),
+        "micro_checkpoint": (str(args.micro_checkpoint) if args.micro_checkpoint else None),
+        "emit_traj": bool(args.emit_traj),
         "data_path": str(args.data_path),
         "nav_file": str(args.nav_file),
         "split": str(args.split),
@@ -339,17 +429,21 @@ def main() -> None:
     }
 
     out_npz = out_dir / "samples.npz"
-    np.savez_compressed(
-        out_npz,
-        z_k_grid=z_k_grid,
-        start_pos=start_pos,
-        targets=targets,
-        origin_pos=origin_pos,
-        dest_pos=dest_pos,
-        traj_idx=traj_idx,
-        start_t=start_t,
-        meta=meta,
-    )
+    payload = {
+        "z_k_grid": z_k_grid,
+        "z_k": z_k,
+        "start_pos": start_pos,
+        "targets": targets,
+        "origin_pos": origin_pos,
+        "dest_pos": dest_pos,
+        "traj_idx": traj_idx,
+        "start_t": start_t,
+        "meta": meta,
+    }
+    if bool(args.emit_traj):
+        payload["preds"] = preds
+        payload["preds_k"] = preds_k
+    np.savez_compressed(out_npz, **payload)
     with open(out_dir / "meta.json", "w") as f:
         json.dump(meta, f, indent=2, ensure_ascii=False)
 
@@ -358,4 +452,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

@@ -147,6 +147,143 @@ python -m src.evaluation.macro_mask_alignment \
 - 若 Pred vs GT 的 heatmap-JSD/clearance-JSD/center-JSD 都显著低于“随机 baseline”（脚本会给出），说明模型在 mask 内并非乱选。
 - 若 Pred 明显更贴边（clearance 更小）或明显更保守（clearance 更大/更中心），需在 G2 讨论中解释“可行性 vs 多样性”的偏置来源。
 
+### 已跑事实快照（detour-hard，AR sample1，N=400，K=1）
+
+- `valid_rates`：`pred_valid_rate=1.000`，`gt_raw_valid_rate=0.962`，`gt_proj_valid_rate=0.985`，`avg_drivable_pixels_per_patch≈2662.9/4096`
+- `heatmap_jsd_pref (pred vs gt_proj)`：`wp1=0.4796`，`wp2=0.6360`，`end=0.7903`
+  - 对照 random baseline：`wp1≈0.9052`，`wp2≈0.9076`，`end≈0.9143`（显著更差）
+  - 结论：模型在 mask 内**不是随机选点**，但 end 的像素级偏好仍与 GT 有较大差距（G2 需要重点关注 end 相关的 detour/topology）。
+
+---
+
+## Phase 3（Macro Hard Support AR）G2：Macro→Skeleton→DetRes（K=1，无筛选）
+
+> 目的：在 **不做任何 best-of-k / rejection** 的前提下，验证端到端轨迹（Macro 决策 + Micro 执行）是否真实/合理。
+> 
+> 口径：detour-hard 子集，`K=1`（分别跑 `argmax` 与 `multinomial`）。
+
+### Step 1：采样 Macro（同时输出轨迹：skeleton-only）
+
+> 使用 `--emit_traj`：脚本会把 `z_k_grid` 直接接到 `skeleton prior`，输出 `preds/preds_k`，可直接跑 `detour_validity/plot_physical_stats`。
+
+```bash
+export PROC=data/processed_passenger_dt30
+export DATA=$PROC/trajectories/shenzhen_trajectories.h5
+export NAV=$PROC/nav_field.npz
+
+# 你的 MacroHardSupportAR 训练目录名（data/experiments/<EXP>/last.pt）
+export EXP=macro_hardsupport_ar_p64_thr1_s0
+
+# detour-hard windows
+export WINS=data/experiments/gt_passenger_dt30_test/test_detour_hard_top10.npz
+
+# ---- argmax (K=1) ----
+export OUT_SKEL=phys_macro_hardsupport_ar_detourhard_${EXP}_skel_argmax
+python -m src.evaluation.dump_macro_hardsupport_ar_samples \
+  --exp_name "$OUT_SKEL" \
+  --checkpoint "data/experiments/$EXP/last.pt" \
+  --data_path "$DATA" --nav_file "$NAV" --split test \
+  --obs_len 8 --pred_len 12 \
+  --patch_size 64 --count_thr 1.0 \
+  --k_samples 1 --sample_mode argmax \
+  --emit_traj \
+  --save_samples 400 --max_batches 13 --batch_size 32 --num_workers 8 --seed 0 \
+  --windows_npz "$WINS"
+```
+
+### Step 2：同一套 Macro 样本接 DetRes executor（macro+micro 闭环）
+
+```bash
+export MICRO=data/experiments/phys_oracleWP_detres_k2/last.pt
+export OUT_DETRES=phys_macro_hardsupport_ar_detourhard_${EXP}_detres_argmax
+python -m src.evaluation.dump_macro_hardsupport_ar_samples \
+  --exp_name "$OUT_DETRES" \
+  --checkpoint "data/experiments/$EXP/last.pt" \
+  --micro_checkpoint "$MICRO" \
+  --data_path "$DATA" --nav_file "$NAV" --split test \
+  --obs_len 8 --pred_len 12 \
+  --patch_size 64 --count_thr 1.0 \
+  --k_samples 1 --sample_mode argmax \
+  --emit_traj \
+  --save_samples 400 --max_batches 13 --batch_size 32 --num_workers 8 --seed 0 \
+  --windows_npz "$WINS"
+```
+
+> 若要跑 `multinomial`（K=1）：把两条命令里的 `--sample_mode argmax` 改成 `--sample_mode multinomial`，输出目录建议用后缀 `_sample1`。
+
+### Step 3：G2 评估（拓扑 + 物理纹理）
+
+```bash
+# detour_validity：建议 detour_pct=100，把整个 detour-hard 子集当 detour 来检验稳定性
+python -m src.evaluation.detour_validity \
+  --inputs "MacroSkel:data/experiments/$OUT_SKEL/samples.npz" \
+           "Macro+DetRes:data/experiments/$OUT_DETRES/samples.npz" \
+  --ds 0.5 --lags 1 2 4 8 --offset_fracs 0 0.25 0.5 0.75 \
+  --detour_pct 100 --bootstrap 200 --noise_splits 200 \
+  --out_json data/experiments/phys_macro_hardsupport_ar_detourhard_g2_detour_validity.json
+
+# physical_stats：看 speed/accel/turn 分布与 DCV
+python -m src.visualization.plot_physical_stats \
+  --inputs "MacroSkel:data/experiments/$OUT_SKEL/samples.npz" \
+           "Macro+DetRes:data/experiments/$OUT_DETRES/samples.npz" \
+  --turn_min_speed 0.1 --dcv_speed_pctl 99.5 --dcv_accel_pctl 99.5 \
+  --save_metrics --output_dir essay/figures/physical_stats \
+  --stem fig_physical_stats_macro_hs_ar_g2
+```
+
+### Step 4（可选、快速）：END 是否真的利用了 trip destination？
+
+> 用 `end` 的“向目的地靠近进展”做一个最小审计：如果与随机 baseline 接近，说明 end 没用好 destination（优先增强 destination conditioning，而不是立刻上语义/遥感）。
+
+```bash
+python - <<'PY'
+import os
+import numpy as np
+from pathlib import Path
+from src.features.nav_field import NavField
+
+nav = NavField(os.environ.get("NAV", "data/processed_passenger_dt30/nav_field.npz"))
+in_npz = Path(os.environ.get("IN", "data/experiments/phys_macro_hardsupport_ar_detourhard_macro_hardsupport_ar_p64_thr1_s0_argmax/samples.npz"))
+count_thr = float(os.environ.get("COUNT_THR", "1.0"))
+patch_size = int(os.environ.get("PATCH", "64"))
+r = patch_size // 2
+
+d = np.load(str(in_npz), allow_pickle=True)
+start = np.asarray(d["start_pos"], np.float32)
+dest = np.asarray(d["dest_pos"], np.float32)
+z = np.asarray(d["z_k_grid"], np.float32)  # (N,K,3,2)
+end = z[:, 0, 2]  # (N,2)
+
+dist0 = np.linalg.norm(start - dest, axis=-1)
+dist1 = np.linalg.norm(end - dest, axis=-1)
+prog = dist0 - dist1
+
+# random baseline: uniform over drivable pixels in each patch
+rand_end = np.zeros_like(end)
+rng = np.random.default_rng(0)
+for i in range(start.shape[0]):
+    patch = nav.get_patch(start[i], patch_size=patch_size, channel2="count")
+    drv = patch[2] >= count_thr
+    ys, xs = np.where(drv)
+    if ys.size == 0:
+        ys, xs = np.where(np.ones((patch_size, patch_size), dtype=bool))
+    j = int(rng.integers(0, ys.size))
+    center = np.floor(start[i]).astype(np.float32)
+    rand_end[i] = center + np.array([ys[j] - r, xs[j] - r], dtype=np.float32)
+
+dist1r = np.linalg.norm(rand_end - dest, axis=-1)
+progr = dist0 - dist1r
+
+def q(x):
+    return np.percentile(x, [10, 50, 90]).tolist()
+
+print("N:", int(start.shape[0]))
+print("PROGRESS (model)  p10/p50/p90:", q(prog))
+print("PROGRESS (random) p10/p50/p90:", q(progr))
+print("MEAN progress model/random:", float(np.mean(prog)), float(np.mean(progr)))
+PY
+```
+
 ## 主线三步 Go/No-Go（最短实验序列）
 
 > 这三步的设计目标是：**先把积分打开（Oracle z）**，把风险压到最低，再决定是否进入训练。

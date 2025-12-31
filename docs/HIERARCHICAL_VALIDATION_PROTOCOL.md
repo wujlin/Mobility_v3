@@ -231,6 +231,55 @@ python -m src.visualization.plot_physical_stats \
   --stem fig_physical_stats_macro_hs_ar_g2
 ```
 
+### Step 3.1（必做、补齐 PI 口径）：dev/len 的“方向性”审计（Pred 更直还是更绕？）
+
+> 背景：`detour_validity` 里 `JSD_max_dev_ratio/JSD_len_ratio` 只回答“和 GT 分布差多少”，**不回答偏差方向**（更直/更绕）。
+> 
+> 这个审计会同时打印 GT 与 Pred 的 raw 分位数，并输出 `Δp50`（Pred - GT）：
+> - `Δ>0`：Pred 比 GT 更绕/更长（更 detour）
+> - `Δ<0`：Pred 比 GT 更直/更短（更 straight）
+
+```bash
+python -m src.evaluation.detour_scalar_direction_audit \
+  --inputs "MacroSkel:data/experiments/$OUT_SKEL/samples.npz" \
+           "Macro+DetRes:data/experiments/$OUT_DETRES/samples.npz" \
+  --detour_pct 100 \
+  --out_json data/experiments/phys_macro_hardsupport_ar_detourhard_g2_scalar_direction.json
+```
+
+### Step 3.2（必做、补齐 PI 口径）：为什么 ORACLE_PROJ 也有 ~7% CUT？
+
+> 目的：区分两种根因
+> - **Mask 过严/有孔洞**：轻微膨胀 drivable 区域就能显著降低 CUT
+> - **Straight-line skeleton 上限**：即便膨胀，CUT 仍不怎么降（道路本身是弯的，直线连点天然切角）
+> 
+> 这里做两步：先导出 Oracle raw/proj（K=1）→ 再做 dilation sensitivity 审计。
+
+```bash
+export NAV=data/processed_passenger_dt30/nav_field.npz
+export GTW=data/experiments/gt_passenger_dt30_test/test_detour_hard_top10.npz
+
+# Oracle RAW（不投影）
+python -m src.evaluation.oracle_macro_z_gate \
+  --in_samples_npz "$GTW" \
+  --nav_file "$NAV" --count_thr 1.0 \
+  --out_npz data/experiments/gt_passenger_dt30_test/oracle_macro_z_raw.npz
+
+# Oracle PROJ（投影到 strict drivable）
+python -m src.evaluation.oracle_macro_z_gate \
+  --in_samples_npz "$GTW" \
+  --nav_file "$NAV" --count_thr 1.0 \
+  --project_strict \
+  --out_npz data/experiments/gt_passenger_dt30_test/oracle_macro_z_proj.npz
+
+# Dilation sensitivity（关键审计）
+python -m src.evaluation.oracle_cut_cause_audit \
+  --samples_npz data/experiments/gt_passenger_dt30_test/oracle_macro_z_proj.npz \
+  --nav_file "$NAV" --count_thr 1.0 \
+  --dilate_iters 0 1 2 \
+  --out_json data/experiments/gt_passenger_dt30_test/oracle_cut_cause_audit.json
+```
+
 ### Step 4（可选、快速）：END 是否真的利用了 trip destination？
 
 > 用 `end` 的“向目的地靠近进展”做一个最小审计：如果与随机 baseline 接近，说明 end 没用好 destination（优先增强 destination conditioning，而不是立刻上语义/遥感）。
@@ -282,6 +331,24 @@ print("PROGRESS (model)  p10/p50/p90:", q(prog))
 print("PROGRESS (random) p10/p50/p90:", q(progr))
 print("MEAN progress model/random:", float(np.mean(prog)), float(np.mean(progr)))
 PY
+```
+
+### Step 4.1（必做、补齐 PI 口径）：END “不精”到底是哪种不精？（距离/走廊/像素）
+
+> 目的：把“方向对但落点不精”拆成可行动的三类（对应不同修复方向）：
+> - `dist_error`：沿 start→dest 方向的距离偏差大（可能需要更强 destination conditioning）
+> - `corridor_error`：横向偏差大（可能是选错平行道路/走廊，可能需要更强拓扑/语义）
+> - `both_error`：两者都有
+> 
+> 注意：这里的 “GT end” 默认取 window end（`targets[-1]`），可选 `--use_gt_proj` 投影到 strict drivable 后再对齐口径。
+
+```bash
+python -m src.evaluation.end_imprecision_audit \
+  --samples_npz "data/experiments/$OUT_SKEL/samples.npz" \
+  --nav_file "$NAV" --count_thr 1.0 \
+  --use_gt_proj \
+  --thr_along 8 --thr_cross 4 \
+  --out_json data/experiments/phys_macro_hardsupport_ar_detourhard_end_imprecision.json
 ```
 
 ## 主线三步 Go/No-Go（最短实验序列）

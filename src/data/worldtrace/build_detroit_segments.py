@@ -30,9 +30,15 @@ class SegmentConfig:
     max_unmatched_ratio: float = 0.20
 
 
-def _truthy(v: str) -> bool:
+def _matched_type_available(v: str) -> bool:
+    """
+    WorldTrace 的 matched_type 在不同导出版本里可能不是布尔值（可能是字符串/类别/数字）。
+    这里做“可用性”判定：只要不是空/0/false/none/unmatched/nan，就认为有 matched 信息可参考。
+    """
     v = (v or "").strip().lower()
-    return v in {"1", "true", "t", "yes", "y"}
+    if not v:
+        return False
+    return v not in {"0", "false", "f", "no", "n", "none", "null", "unmatched", "nan"}
 
 
 def _safe_float(v: str) -> Optional[float]:
@@ -52,15 +58,19 @@ def _safe_int(v: str) -> Optional[int]:
 def _pick_coord(row: Dict[str, str], cfg: SegmentConfig) -> Tuple[Optional[float], Optional[float], int, Optional[float]]:
     """
     Return (lat, lon, is_matched, matched_distance).
-    Uses matched_* if matched_type is truthy and matched_distance<=threshold; otherwise fallback to raw lat/lon.
+    Uses matched_* if it is available and passes a conservative quality gate; otherwise fallback to raw lat/lon.
     """
     md = _safe_float(row.get("matched_distance", ""))
-    mt = _truthy(row.get("matched_type", ""))
-    if mt and md is not None and md <= cfg.matched_distance_max_m:
-        lat = _safe_float(row.get("matched_latitude", ""))
-        lon = _safe_float(row.get("matched_longitude", ""))
-        if lat is not None and lon is not None:
-            return lat, lon, 1, md
+    mt_avail = _matched_type_available(row.get("matched_type", ""))
+    lat_m = _safe_float(row.get("matched_latitude", ""))
+    lon_m = _safe_float(row.get("matched_longitude", ""))
+
+    # Prefer matched coords if:
+    # - matched coords exist, AND
+    # - (matched_distance exists and <= threshold) OR (matched_distance missing but matched_type says available)
+    if lat_m is not None and lon_m is not None:
+        if (md is not None and md <= cfg.matched_distance_max_m) or (md is None and mt_avail):
+            return lat_m, lon_m, 1, md
 
     lat = _safe_float(row.get("latitude", ""))
     lon = _safe_float(row.get("longitude", ""))
@@ -277,4 +287,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

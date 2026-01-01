@@ -17,6 +17,10 @@
 - **我要跑/复现 v1.1（Residual Diffusion）**：`docs/RESIDUAL_DIFFUSION.md`
 - **我要做地理可视化（bbox 映射，不做 map-matching）**：`docs/GEO_VISUALIZATION.md`
 - **我要了解学术 SOTA（Map-based vs Hierarchical）与路线选择**：`docs/SOTA_TRAJECTORY_GENERATION.md`
+- **我要跑 trip-level 分层验证（Macro→Skeleton→DetRes，含 G1/G2 审计命令）**：`docs/HIERARCHICAL_VALIDATION_PROTOCOL.md`
+- **我要读 Phase C 结果复盘（Hard Support + AR + DetRes）**：`docs/PHASE_C_RESULTS.md`
+- **我要看新的路线图（OSM 可行域 + 拓扑 + 城市语义 + Diffusion 多模态）**：`docs/PHASE_D_ROADMAP_OSM_TOPO_SEMANTICS.md`
+- **我要确认多源数据版本/坐标系/时间一致性（数据契约）**：`docs/DATA_CONTRACT.md`
 - **我要给教授/专家咨询（问题包）**：`docs/EXPERT_CONSULTATION_PACKET.md`（当前版）；`docs/PROFESSOR_QUERY_MACRO_LOSS.md`（历史备忘，可不读）
 - **我要给教授发“当前进展 + 待拍板问题”邮件**：`docs/PROFESSOR_QUERY_RESIDUAL_V11.md`
 - **我要准备汇报讲稿**：`docs/PPT_SPEAKER_NOTES.md`
@@ -33,11 +37,14 @@
   - dt-fixed（Phase B 必须 dt=30s）  
   - 无泄漏原则（train-only 产物合同）  
   - 评估协议（K、指标口径）
+- `docs/DATA_CONTRACT.md`
+  - Phase D 多源数据版本/时间/坐标系/road-type 口径（避免“数据对不齐导致指标漂移”）
 
 ### 2.2 事实层（只写“仓库里已有产物”）
 
 - `docs/PHASE_A_RESULTS.md`
 - `docs/PHASE_B_RESULTS.md`
+- `docs/PHASE_C_RESULTS.md`
 
 写作规则：
 - 只引用仓库内可点击路径（例如 `data/experiments/.../metrics.json`）
@@ -47,6 +54,8 @@
 
 - `docs/ROOT_CAUSE_ANALYSIS.md`：问题机制与排雷证据链
 - `docs/RESIDUAL_DIFFUSION.md`：v1.1 结构性修复（prior + residual）
+- `docs/HIERARCHICAL_VALIDATION_PROTOCOL.md`：分层验证协议（G1/G2 审计命令）
+- `docs/PHASE_D_ROADMAP_OSM_TOPO_SEMANTICS.md`：新路线图（OSM/拓扑/语义/Diffusion）
 - `docs/PHASE_B_CFG_VISUALIZATION.md`：CFG 可视化/物理统计/Oracle 诊断与止损线（Destination Gravity）
 - `docs/SOTA_TRAJECTORY_GENERATION.md`：学术 SOTA 两条路线（Graph-based / Hierarchical）
 - `docs/PHASE_B_REVIEW.md`：外部 review 记录与回应

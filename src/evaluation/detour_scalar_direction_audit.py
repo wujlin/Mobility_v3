@@ -172,6 +172,7 @@ def build_argparser() -> argparse.ArgumentParser:
     p.add_argument("--inputs", type=str, nargs="+", required=True, help="Repeatable: 'Label:/path/to/samples.npz'")
     p.add_argument("--detour_pct", type=float, default=10.0, help="Define detour subset as top pct by GT max_dev_ratio.")
     p.add_argument("--out_json", type=str, default=None)
+    p.add_argument("--quiet", action="store_true", help="Suppress console prints (write JSON only).")
     return p
 
 
@@ -262,27 +263,26 @@ def main() -> None:
         }
         out["methods"][name] = meth
 
-    # --- Print a compact summary (PI-friendly) ---
-    print("============================================================")
-    print("DET0UR SCALAR DIRECTION AUDIT (raw quantiles)")
-    print("============================================================")
-    print(f"N={N}  detour_pct={detour_pct}  detour_size={int(np.sum(detour_mask))}")
-    print("--- GT ---")
-    gt_o = out["gt"]["overall"]  # type: ignore[assignment]
-    print(f"GT max_dev_ratio p50={gt_o['max_dev_ratio']['p50']:.4f}  len_ratio p50={gt_o['len_ratio']['p50']:.4f}")
-    for name in inputs.keys():
-        m = out["methods"][name]["overall"]  # type: ignore[index]
-        d = m["delta_p50_vs_gt"]  # type: ignore[index]
-        print(f"- {name}: Δp50 max_dev_ratio={d['max_dev_ratio']:+.4f}  Δp50 len_ratio={d['len_ratio']:+.4f}")
-    print("Note: Δ>0 means 'more detour/longer' than GT; Δ<0 means 'straighter/shorter' than GT.")
+    if not bool(args.quiet):
+        print("============================================================")
+        print("DET0UR SCALAR DIRECTION AUDIT (raw quantiles)")
+        print("============================================================")
+        print(f"N={N}  detour_pct={detour_pct}  detour_size={int(np.sum(detour_mask))}")
+        print("--- GT ---")
+        gt_o = out["gt"]["overall"]  # type: ignore[assignment]
+        print(f"GT max_dev_ratio p50={gt_o['max_dev_ratio']['p50']:.4f}  len_ratio p50={gt_o['len_ratio']['p50']:.4f}")
+        for name in inputs.keys():
+            m = out["methods"][name]["overall"]  # type: ignore[index]
+            d = m["delta_p50_vs_gt"]  # type: ignore[index]
+            print(f"- {name}: Δp50 max_dev_ratio={d['max_dev_ratio']:+.4f}  Δp50 len_ratio={d['len_ratio']:+.4f}")
 
     if args.out_json:
         out_path = Path(args.out_json)
         out_path.parent.mkdir(parents=True, exist_ok=True)
         out_path.write_text(json.dumps(out, indent=2, ensure_ascii=False))
-        print(f"[OK] saved: {out_path}")
+        if not bool(args.quiet):
+            print(f"[OK] saved: {out_path}")
 
 
 if __name__ == "__main__":
     main()
-

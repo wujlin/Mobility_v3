@@ -8,9 +8,13 @@
 
 ---
 
-## 0.1 最新主线指引（先看这个，避免“看错版本”）
+## 0.1 Phase B 主线（历史）与当前主线（避免“看错版本”）
 
-Phase B 在 2025-12 之后已经出现一个更清晰的主线：**Residual（Prior + Residual）+ CFG（Destination Guidance）**，用于直接对抗 shrinkage 与 macro–micro trade-off。
+Phase B 的这份文档讨论的是 **dt30 窗口级（window-level）** 的 shrinkage / macro–micro trade-off。该阶段我们曾重点探索：**Residual（Prior + Residual）+ CFG（Destination Guidance）** 等路线，用于直接对抗 shrinkage 与宏观收缩。
+
+> 重要：后续在 **trip-level 分层诊断（Phase C）** 中，我们把主要瓶颈重新定位为“宏观决策/执行解耦 + 可行域/拓扑/语义信息缺失”，当前主线已转向：
+> - `docs/PHASE_C_RESULTS.md`（Hard Support + AR + DetRes 的已验证基线）
+> - `docs/PHASE_D_ROADMAP_OSM_TOPO_SEMANTICS.md`（OSM 可行域 + 拓扑 + 城市语义 + Diffusion 多模态）
 
 - **子刊级可视化与一键出图口径**：`docs/PHASE_B_CFG_VISUALIZATION.md`
   - 对齐子集 `samples.npz` 生成、深圳 geojson 底图叠加、Pareto（cfg 旋钮图）、spaghetti 微观案例图、动画

@@ -3,6 +3,9 @@
 > 目的：把 “trip-level 决策 + segment-level 执行” 的分层路线，变成**可执行、可止损、可归因**的工程流程。  
 > 原则：不为赶时间做 trivial 设计；不做无意义烧卡；所有止损线必须可复现（固定统计口径 + CI + 噪声地板）。
 
+> **阶段性结果解读**：见 `docs/PHASE_C_RESULTS.md`（Phase C：Macro Hard Support + AR + DetRes）。
+> **下一阶段路线图**：见 `docs/PHASE_D_ROADMAP_OSM_TOPO_SEMANTICS.md`（OSM 可行域 + 拓扑 + 城市语义 + Diffusion 多模态）。
+
 ---
 
 ## 主线结论（可证伪承诺）
@@ -78,7 +81,7 @@ python -m src.evaluation.macro_hardsupport_offline_audit \
 
 **只看 3 个输出就够**：
 - `nav_stats.empty_strict_patch_rate`：若非 0，需要定义 empty-mask fallback（skip / 回退到更宽松 mask / 全局投影）。
-- `gate.oracle_proj.cut_only_rate`：这是 `WP_ANY=0` 时的 CUT 下界（你们 Task 1 已测到约 0.0725）。
+- `gate.oracle_proj.cut_only_rate`：这是 `WP_ANY=0` 时的 CUT 下界（会随子集/N/采样细节波动；以你本次跑出的 gate JSON 为准，避免把某次快照数字写死）。
 - `gate.oracle_proj_coarse_only.cut_only_rate`：如果 coarse-only 也能 <0.10，可以考虑先不做 Stage2（更 KISS）；否则必须做 pixel-level（或 fine stage）。
 
 ---
@@ -139,6 +142,7 @@ python -m src.evaluation.macro_mask_alignment \
   --samples_npz "$IN" \
   --nav_file "$NAV" --count_thr 1.0 \
   --patch_size 64 \
+  --quiet \
   --out_json data/experiments/<your_macro_samples>/mask_alignment.json \
   --out_png  data/experiments/<your_macro_samples>/mask_alignment.png
 ```
@@ -244,6 +248,7 @@ python -m src.evaluation.detour_scalar_direction_audit \
   --inputs "MacroSkel:data/experiments/$OUT_SKEL/samples.npz" \
            "Macro+DetRes:data/experiments/$OUT_DETRES/samples.npz" \
   --detour_pct 100 \
+  --quiet \
   --out_json data/experiments/phys_macro_hardsupport_ar_detourhard_g2_scalar_direction.json
 ```
 
@@ -277,6 +282,7 @@ python -m src.evaluation.oracle_cut_cause_audit \
   --samples_npz data/experiments/gt_passenger_dt30_test/oracle_macro_z_proj.npz \
   --nav_file "$NAV" --count_thr 1.0 \
   --dilate_iters 0 1 2 \
+  --quiet \
   --out_json data/experiments/gt_passenger_dt30_test/oracle_cut_cause_audit.json
 ```
 
@@ -348,6 +354,7 @@ python -m src.evaluation.end_imprecision_audit \
   --nav_file "$NAV" --count_thr 1.0 \
   --use_gt_proj \
   --thr_along 8 --thr_cross 4 \
+  --quiet \
   --out_json data/experiments/phys_macro_hardsupport_ar_detourhard_end_imprecision.json
 ```
 

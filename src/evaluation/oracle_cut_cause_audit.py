@@ -173,6 +173,7 @@ def build_argparser() -> argparse.ArgumentParser:
     p.add_argument("--max_samples_per_segment", type=int, default=256)
     p.add_argument("--max_n", type=int, default=None)
     p.add_argument("--out_json", type=str, default=None)
+    p.add_argument("--quiet", action="store_true", help="Suppress console prints (write JSON only).")
     return p
 
 
@@ -237,28 +238,27 @@ def main() -> None:
                 out["cut_only_resolution"][f"resolved_by_dilate_{it}"] = float("nan")
                 out["cut_only_resolution"][f"remaining_by_dilate_{it}"] = float("nan")
 
-    # --- Print PI-friendly summary ---
-    print("============================================================")
-    print("ORACLE CUT CAUSE AUDIT (mask dilation sensitivity)")
-    print("============================================================")
-    print(f"N={out['N']}  count_thr={float(args.count_thr)}  sample_step={float(args.sample_step)}")
-    for k, v in out["results"].items():
-        print(f"- {k}: COLL={v['collision_rate_any']:.4f}  CUT={v['cut_only_rate']:.4f}")
-    if out["cut_only_resolution"]:
-        n_cut = out["cut_only_resolution"].get("base_cut_only_n", 0)
-        print(f"Base CUT-only N={n_cut}")
-        for it in [int(x) for x in args.dilate_iters if int(x) > 0]:
-            r = out["cut_only_resolution"].get(f"resolved_by_dilate_{it}", float("nan"))
-            print(f"  resolved_by_dilate_{it}: {r:.4f}")
-        print("Interpretation: if resolved_by_dilate_1 is high => mask too strict/holes; if low => straight-line skeleton limitation dominates.")
+    if not bool(args.quiet):
+        print("============================================================")
+        print("ORACLE CUT CAUSE AUDIT (mask dilation sensitivity)")
+        print("============================================================")
+        print(f"N={out['N']}  count_thr={float(args.count_thr)}  sample_step={float(args.sample_step)}")
+        for k, v in out["results"].items():
+            print(f"- {k}: COLL={v['collision_rate_any']:.4f}  CUT={v['cut_only_rate']:.4f}")
+        if out["cut_only_resolution"]:
+            n_cut = out["cut_only_resolution"].get("base_cut_only_n", 0)
+            print(f"Base CUT-only N={n_cut}")
+            for it in [int(x) for x in args.dilate_iters if int(x) > 0]:
+                r = out["cut_only_resolution"].get(f"resolved_by_dilate_{it}", float("nan"))
+                print(f"  resolved_by_dilate_{it}: {r:.4f}")
 
     if args.out_json:
         out_path = Path(args.out_json)
         out_path.parent.mkdir(parents=True, exist_ok=True)
         out_path.write_text(json.dumps(out, indent=2, ensure_ascii=False))
-        print(f"[OK] saved: {out_path}")
+        if not bool(args.quiet):
+            print(f"[OK] saved: {out_path}")
 
 
 if __name__ == "__main__":
     main()
-

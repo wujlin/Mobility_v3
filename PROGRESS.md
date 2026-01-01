@@ -5,7 +5,7 @@
 
 > **项目**：物理约束扩散模型 - 轨迹生成  
 > **数据**：深圳出租车 GPS（2011/04/18-26）  
-> **更新**：2025-12-13
+> **更新**：2025-12-31
 
 ---
 
@@ -17,6 +17,8 @@
 | 2 | 全量处理 | ⏳ 进行中 |
 | 3 | 模型训练 | ✅ 代码就绪，待真实数据训练 |
 | 4 | 评估验证 | ✅ 代码就绪，待真实数据验证 |
+| C | Macro Hard Support + AR + DetRes（trip-level 分层 baseline） | ✅ 完成（见 docs/PHASE_C_RESULTS.md） |
+| D | OSM 可行域 + 拓扑 + 城市语义 + Diffusion 多模态 | ⏳ 进行中（见 docs/PHASE_D_ROADMAP_OSM_TOPO_SEMANTICS.md） |
 
 ---
 

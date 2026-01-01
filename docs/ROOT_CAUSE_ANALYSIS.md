@@ -1,5 +1,10 @@
 # Phase B 性能问题深度复盘 (Root Cause Analysis)
 
+> **范围声明**：本文件只讨论 Phase B（dt30，窗口级 diffusion/physics）里的“收缩/宏观偏小”问题。  
+> 若你当前在跑 trip-level 的分层路线（Macro Hard Support + AR + DetRes）与后续 OSM/拓扑/语义路线，请转看：  
+> - `docs/PHASE_C_RESULTS.md`  
+> - `docs/PHASE_D_ROADMAP_OSM_TOPO_SEMANTICS.md`
+
 ## 1. 为了解决什么问题？
 Phase B 目前面临的核心矛盾是：**“扩容（h128）稳定了训练，微观最佳值（Best-of-K）超越 Baseline，但宏观指标（Rog/MSD）依然显著‘收缩’（Shrinkage），导致平均误差（Mean）不如 Baseline。”**
 

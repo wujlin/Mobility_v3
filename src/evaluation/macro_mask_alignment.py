@@ -185,6 +185,7 @@ def build_argparser() -> argparse.ArgumentParser:
 
     p.add_argument("--out_json", type=str, default=None)
     p.add_argument("--out_png", type=str, default=None)
+    p.add_argument("--quiet", action="store_true", help="Suppress console prints (write JSON/PNG only).")
     return p
 
 
@@ -507,23 +508,25 @@ def main() -> None:
             rand_counts=rand_counts,
         )
 
-    print("[OK] Macro mask alignment")
-    print(json.dumps(report["valid_rates"], indent=2, ensure_ascii=False))
-    # Print a compact summary (wp2/end usually most informative).
-    for name in stages:
-        m = report["metrics"][name]
-        print(
-            f"- {name}: "
-            f"JSD_pref(pred,gt_proj)={m['heatmap_jsd_pref']['pred_vs_gt_proj']:.4f}, "
-            f"JSD_rdist(pred,gt_proj)={m['JSD_Rdist_proj']:.4f}, "
-            f"JSD_logc(pred,gt_proj)={m['JSD_LogCount_proj']:.4f}"
-        )
+    if not bool(args.quiet):
+        print("[OK] Macro mask alignment")
+        print(json.dumps(report["valid_rates"], indent=2, ensure_ascii=False))
+        # Print a compact summary (wp2/end usually most informative).
+        for name in stages:
+            m = report["metrics"][name]
+            print(
+                f"- {name}: "
+                f"JSD_pref(pred,gt_proj)={m['heatmap_jsd_pref']['pred_vs_gt_proj']:.4f}, "
+                f"JSD_rdist(pred,gt_proj)={m['JSD_Rdist_proj']:.4f}, "
+                f"JSD_logc(pred,gt_proj)={m['JSD_LogCount_proj']:.4f}"
+            )
 
     if args.out_json:
         out = Path(args.out_json)
         out.parent.mkdir(parents=True, exist_ok=True)
-        out.write_text(json.dumps(report, indent=2, ensure_ascii=False))
-        print(f"[OK] saved: {out}")
+        out.write_text(json.dumps(report, indent=2, ensure_ascii=False), encoding="utf-8")
+        if not bool(args.quiet):
+            print(f"[OK] saved: {out}")
 
 
 if __name__ == "__main__":

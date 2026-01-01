@@ -52,12 +52,19 @@ def _sample_segments(
     b = np.asarray(b, dtype=np.float32)
     d = b - a
     seg_len = np.linalg.norm(d, axis=-1)  # (S,)
+    # NOTE:
+    # We must include the endpoint (t=1) for *every* segment, regardless of its sampled length.
+    # A common pitfall is to use a shared linspace with max(m) samples and then truncate,
+    # which causes short segments to miss their endpoints (under-counting collisions near b).
     n = np.ceil(seg_len / max(float(step), 1e-6)).astype(np.int64) + 1
     n = np.clip(n, 2, int(max_samples))
     m = int(np.max(n)) if int(n.size) else 0
     if m <= 0:
         return np.zeros((0, 0, 2), dtype=np.float32), np.zeros((0, 0), dtype=bool)
-    t = np.linspace(0.0, 1.0, num=int(m), dtype=np.float32)[None, :, None]  # (1,m,1)
+
+    idx = np.arange(int(m), dtype=np.float32)[None, :]  # (1,m)
+    denom = np.maximum(n.astype(np.float32) - 1.0, 1.0)[:, None]  # (S,1)
+    t = (idx / denom)[:, :, None]  # (S,m,1), ensures last valid index has t=1
     pts = a[:, None, :] + t * d[:, None, :]  # (S,m,2)
     valid = (np.arange(int(m), dtype=np.int64)[None, :] < n[:, None])  # (S,m)
     return pts.astype(np.float32, copy=False), valid

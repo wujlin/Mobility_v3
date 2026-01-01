@@ -84,6 +84,7 @@ def build_argparser() -> argparse.ArgumentParser:
     p.add_argument("--thr_along", type=float, default=8.0, help="Grid threshold for |Δalong| to call 'distance error'.")
     p.add_argument("--thr_cross", type=float, default=4.0, help="Grid threshold for |Δcross| to call 'corridor error'.")
     p.add_argument("--out_json", type=str, default=None)
+    p.add_argument("--quiet", action="store_true", help="Suppress console prints (write JSON only).")
     return p
 
 
@@ -178,25 +179,25 @@ def main() -> None:
         },
     }
 
-    print("============================================================")
-    print("END IMPRECISION AUDIT")
-    print("============================================================")
-    print(f"N={out['N']}  use_gt_proj={bool(args.use_gt_proj)}  thr_along={thr_a} thr_cross={thr_c}")
-    pr = out["stats"]["progress_to_trip_dest"]
-    er = out["stats"]["err_end_to_gt_end"]
-    print(f"Progress to trip dest (p10/p50/p90, mean): {pr['p10']:.2f}/{pr['p50']:.2f}/{pr['p90']:.2f}, mean={pr['mean']:.2f}")
-    print(f"Err to GT end (p10/p50/p90, mean):        {er['p10']:.2f}/{er['p50']:.2f}/{er['p90']:.2f}, mean={er['mean']:.2f}")
-    tp = out["types"]
-    print(f"Type rates: fine={tp['fine_rate']:.3f}  dist={tp['dist_error_rate']:.3f}  corridor={tp['corridor_error_rate']:.3f}  both={tp['both_error_rate']:.3f}")
-    print("Interpretation: 'corridor' => likely wrong parallel road; 'dist' => too short/too far along dest direction.")
+    if not bool(args.quiet):
+        print("============================================================")
+        print("END IMPRECISION AUDIT")
+        print("============================================================")
+        print(f"N={out['N']}  use_gt_proj={bool(args.use_gt_proj)}  thr_along={thr_a} thr_cross={thr_c}")
+        pr = out["stats"]["progress_to_trip_dest"]
+        er = out["stats"]["err_end_to_gt_end"]
+        print(f"Progress to trip dest (p10/p50/p90, mean): {pr['p10']:.2f}/{pr['p50']:.2f}/{pr['p90']:.2f}, mean={pr['mean']:.2f}")
+        print(f"Err to GT end (p10/p50/p90, mean):        {er['p10']:.2f}/{er['p50']:.2f}/{er['p90']:.2f}, mean={er['mean']:.2f}")
+        tp = out["types"]
+        print(f"Type rates: fine={tp['fine_rate']:.3f}  dist={tp['dist_error_rate']:.3f}  corridor={tp['corridor_error_rate']:.3f}  both={tp['both_error_rate']:.3f}")
 
     if args.out_json:
         out_path = Path(args.out_json)
         out_path.parent.mkdir(parents=True, exist_ok=True)
         out_path.write_text(json.dumps(out, indent=2, ensure_ascii=False))
-        print(f"[OK] saved: {out_path}")
+        if not bool(args.quiet):
+            print(f"[OK] saved: {out_path}")
 
 
 if __name__ == "__main__":
     main()
-

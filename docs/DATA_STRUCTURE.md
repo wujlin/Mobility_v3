@@ -135,7 +135,7 @@ V001,1672531260,31.2310,121.4745,10.2,50.0
 > [!NOTE]
 > 当前深圳出租车原始数据为 **GBK 编码的 txt/CSV**（例如 `data/raw/gps/粤BA0P65.txt`），字段为：
 > `name,time,jd,wd,status,v,angle,`
-> - `jd`/`wd`：经度/纬度（WGS84）
+> - `jd`/`wd`：经度/纬度（**坐标系待审计**，以 `docs/DATA_CONTRACT.md` 为准；可能为 WGS84 或 GCJ-02）
 > - `status`：0=空载/巡游（Search Policy），1=载客/导航（Passenger Trip, Navigation Policy）
 > - `time`：形如 `2011/04/18 00:04:09` 的字符串（已确认是北京时间，UTC+8）
 >

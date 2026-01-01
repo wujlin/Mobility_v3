@@ -2,6 +2,11 @@
 
 本说明用于解决 v1.0 中观察到的 **Mean-Reversion Shrinkage**：纯 diffusion / physics diffusion 的典型速度偏小（macro: MSD/Rog 偏低）。
 
+> **范围声明**：本文件讨论的是 Phase B（dt30，窗口级）里的 shrinkage 结构性修复（prior+residual）。  
+> 若你当前在跑 trip-level 的分层路线（Macro Hard Support + AR + DetRes）与后续 OSM/拓扑/语义路线，请转看：  
+> - `docs/PHASE_C_RESULTS.md`  
+> - `docs/PHASE_D_ROADMAP_OSM_TOPO_SEMANTICS.md`
+
 核心思路（KISS）：
 
 - 冻结一个确定性模型（`SeqBaseline`）作为 **prior**：$\hat{v}_{prior} = f_{base}(\text{obs}, \text{cond})$
@@ -259,7 +264,7 @@ python -m src.training.evaluate \
 | Concat\_k10 | 0.9692 | 0.9510 | 0.8777 | 4.14 | 5.53 |
 | NavGate\_k10 | 0.9584 | 0.9414 | 0.8600 | 4.11 | 5.50 |
 
-结论（事实）：NavGate 在该轮实验中 **macro 指标略降**（未达到 `≥0.01` 的回升要求），同时 micro 指标略有改善；因此 **不作为当前主线修复**，后续若继续探索需先定位 gate 的行为（gate 是否饱和、是否“关掉了”有用的 nav 信号）。
+结论（事实）：NavGate 在该轮实验中 **macro 指标略降**（未达到 `≥0.01` 的回升要求），同时 micro 指标略有改善；因此 **不作为 Phase B 窗口级主线修复**，后续若继续探索需先定位 gate 的行为（gate 是否饱和、是否“关掉了”有用的 nav 信号）。
 
 ---
 
@@ -294,7 +299,7 @@ Residual 的天花板很大程度取决于 prior（deterministic baseline）的�
 
 补充（PI/组内共识，KISS）：
 
-- **暂时不换 Transformer prior**：当前主线要证明的是 *Residual Framework*（scale vs stochasticity 解耦）与 *physics conditioning* 的作用机理。换成 Transformer 会引入大量新变量（收敛/过拟合/实现差异），导致无法归因。
+- **暂时不换 Transformer prior**：在 Phase B 的窗口级主线里，我们要证明的是 *Residual Framework*（scale vs stochasticity 解耦）与 *physics conditioning* 的作用机理。换成 Transformer 会引入大量新变量（收敛/过拟合/实现差异），导致无法归因。
 - **先“修目标函数”而不是“换架构”**：deterministic prior 的主要偏差来自 MSE 的均值回归（mean reversion），优先用 displacement-aware weighting 把宏观尺度抬起来，再让 residual 专注学习随机性。
 
 我们在 dt30 的 smoke→full prior 训练中已经看到非常明确的信号：

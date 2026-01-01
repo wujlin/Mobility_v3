@@ -9,8 +9,8 @@ venv/
 env/
 
 # Data (Keep data local, do not commit)
-data/
-track_data/
+/data/
+/track_data/
 *.h5
 *.npy
 *.npz

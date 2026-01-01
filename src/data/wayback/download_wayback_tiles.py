@@ -7,6 +7,7 @@ import os
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
+from datetime import date
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
@@ -24,6 +25,17 @@ class ReleaseInfo:
     release_id: int
     release_date: str
     item_url_template: str
+
+
+def _parse_iso_date(s: str) -> Optional[date]:
+    s = (s or "").strip()
+    if not s:
+        return None
+    # common: YYYY-MM-DD
+    try:
+        return date.fromisoformat(s[:10])
+    except Exception:
+        return None
 
 
 def _init_session() -> requests.Session:
@@ -87,6 +99,40 @@ def load_release_map(session: requests.Session, config_url: str) -> Dict[int, Re
     # value is either:
     # - dict containing releaseDate/itemURL (or similar), or
     # - direct URL template string.
+    def _iter_strings(obj) -> List[str]:
+        out: List[str] = []
+        if isinstance(obj, str):
+            out.append(obj)
+        elif isinstance(obj, dict):
+            for vv in obj.values():
+                out.extend(_iter_strings(vv))
+        elif isinstance(obj, list):
+            for vv in obj:
+                out.extend(_iter_strings(vv))
+        return out
+
+    def _looks_like_tile_template(s: str) -> bool:
+        s2 = s.lower()
+        if not (s2.startswith("http://") or s2.startswith("https://")):
+            return False
+        # ArcGIS tile endpoints typically contain "tile" + z/x/y placeholders.
+        if "tile" not in s2:
+            return False
+        if any(tok in s2 for tok in ("{level}", "{z}", "{zoom}", "{col}", "{x}", "{row}", "{y}")):
+            return True
+        # Some templates may already have concrete z/x/y for a sample; keep as fallback.
+        return "/tile/" in s2 or "/mapserver/tile/" in s2
+
+    def _pick_first_template(obj) -> str:
+        candidates = [s for s in _iter_strings(obj) if _looks_like_tile_template(s)]
+        # prefer "most structured" templates (more placeholders / longer)
+        def score(s: str) -> Tuple[int, int]:
+            num_placeholders = sum(s.count(tok) for tok in ("{level}", "{z}", "{zoom}", "{col}", "{x}", "{row}", "{y}"))
+            return (num_placeholders, len(s))
+
+        candidates.sort(key=score, reverse=True)
+        return candidates[0] if candidates else ""
+
     release_map: Dict[int, ReleaseInfo] = {}
     if not isinstance(data, dict):
         return release_map
@@ -114,6 +160,8 @@ def load_release_map(session: requests.Session, config_url: str) -> Dict[int, Re
                 or v.get("template")
                 or ""
             )
+            if not item_url:
+                item_url = _pick_first_template(v)
         else:
             continue
 
@@ -140,7 +188,8 @@ def get_tile_changes(
         if b"NoSuchBucket" in res.content:
             raise RuntimeError(
                 "Wayback metadata endpoint is invalid (S3 NoSuchBucket). "
-                "You likely need to update --metadata_url_tpl to the new endpoint."
+                "Please switch to --mode fixed_releases (use --list_releases to pick ids), "
+                "or update --metadata_url_tpl to the new endpoint once discovered."
             )
         return []
     res.raise_for_status()
@@ -160,12 +209,17 @@ def get_tile_changes(
 
 
 def _build_tile_url(info: ReleaseInfo, *, x: int, y: int, z: int) -> str:
-    # itemURL example: ".../{level}/{col}/{row}"
-    return (
-        info.item_url_template.replace("{level}", str(z))
-        .replace("{col}", str(x))
-        .replace("{row}", str(y))
-    )
+    # itemURL commonly uses placeholders like:
+    # - {level}/{col}/{row} (legacy)
+    # - {z}/{x}/{y} (common web mercator tile naming)
+    tpl = info.item_url_template
+    for k in ("{level}", "{z}", "{zoom}"):
+        tpl = tpl.replace(k, str(z))
+    for k in ("{col}", "{x}"):
+        tpl = tpl.replace(k, str(x))
+    for k in ("{row}", "{y}"):
+        tpl = tpl.replace(k, str(y))
+    return tpl
 
 
 def _download_one(session: requests.Session, url: str, out_path: Path) -> str:
@@ -199,6 +253,9 @@ def main() -> None:
     ap.add_argument("--dry_run", action="store_true", help="Only scan metadata and report task count (no downloads)")
     ap.add_argument("--config_url", type=str, default=CONFIG_URL_DEFAULT, help="Wayback config URL")
     ap.add_argument("--metadata_url_tpl", type=str, default=METADATA_URL_TPL_DEFAULT, help="Wayback metadata URL template with {z}/{y}/{x}")
+    ap.add_argument("--mode", choices=["metadata", "fixed_releases"], default="metadata", help="Download mode")
+    ap.add_argument("--release_ids", type=int, nargs="*", default=None, help="Release IDs for fixed_releases mode")
+    ap.add_argument("--list_releases", type=int, default=0, help="List first N releases (JSON) then exit")
     args = ap.parse_args()
 
     out_dir: Path = args.out_dir
@@ -214,29 +271,69 @@ def main() -> None:
             "Please inspect the downloaded JSON and update the parser."
         )
 
+    if args.list_releases:
+        n = int(args.list_releases)
+        items = list(release_map.values())
+        items.sort(key=lambda r: (_parse_iso_date(r.release_date) or date.min, r.release_id))
+        out = {
+            "num_releases_total": len(release_map),
+            "has_release_date": sum(1 for r in release_map.values() if bool(_parse_iso_date(r.release_date))),
+            "sample": [
+                {
+                    "release_id": r.release_id,
+                    "release_date": r.release_date,
+                    "item_url_template_head": r.item_url_template[:120],
+                }
+                for r in items[:n]
+            ],
+        }
+        print(json.dumps(out, ensure_ascii=False, indent=2))
+        return
+
     (x_min, x_max), (y_min, y_max) = bbox_to_tile_range(bbox, zoom)
     total_tiles_geo = (x_max - x_min + 1) * (y_max - y_min + 1)
 
-    # stage 1: scan metadata and build download queue
+    # stage 1: build download queue
     tasks: List[Tuple[str, Path]] = []
     scanned_tiles = 0
-    for x in range(x_min, x_max + 1):
-        for y in range(y_min, y_max + 1):
-            scanned_tiles += 1
+    if args.mode == "metadata":
+        for x in range(x_min, x_max + 1):
+            for y in range(y_min, y_max + 1):
+                scanned_tiles += 1
+                if args.max_tiles and scanned_tiles > int(args.max_tiles):
+                    break
+                rids = get_tile_changes(session, release_map, str(args.metadata_url_tpl), x=x, y=y, z=zoom)
+                if not rids:
+                    continue
+                for rid in rids:
+                    info = release_map[rid]
+                    url = _build_tile_url(info, x=x, y=y, z=zoom)
+                    rel_date = info.release_date or f"rid_{rid}"
+                    out_path = out_dir / f"z{zoom}" / f"{zoom}_{x}_{y}" / f"{rel_date}.jpg"
+                    tasks.append((url, out_path))
             if args.max_tiles and scanned_tiles > int(args.max_tiles):
                 break
-            rids = get_tile_changes(session, release_map, str(args.metadata_url_tpl), x=x, y=y, z=zoom)
-            if not rids:
-                continue
-            for rid in rids:
-                info = release_map[rid]
-                url = _build_tile_url(info, x=x, y=y, z=zoom)
-                # folder-per-tile, file-per-release-date
-                rel_date = info.release_date or f"rid_{rid}"
-                out_path = out_dir / f"z{zoom}" / f"{zoom}_{x}_{y}" / f"{rel_date}.jpg"
-                tasks.append((url, out_path))
-        if args.max_tiles and scanned_tiles > int(args.max_tiles):
-            break
+    else:
+        release_ids = args.release_ids or []
+        if not release_ids:
+            raise SystemExit("fixed_releases mode requires --release_ids (use --list_releases to inspect available ids).")
+        missing = [rid for rid in release_ids if rid not in release_map]
+        if missing:
+            raise SystemExit(f"Unknown release_ids (not in config): {missing[:20]}")
+
+        for x in range(x_min, x_max + 1):
+            for y in range(y_min, y_max + 1):
+                scanned_tiles += 1
+                if args.max_tiles and scanned_tiles > int(args.max_tiles):
+                    break
+                for rid in release_ids:
+                    info = release_map[rid]
+                    url = _build_tile_url(info, x=x, y=y, z=zoom)
+                    rel_date = info.release_date or f"rid_{rid}"
+                    out_path = out_dir / f"z{zoom}" / f"{zoom}_{x}_{y}" / f"{rel_date}.jpg"
+                    tasks.append((url, out_path))
+            if args.max_tiles and scanned_tiles > int(args.max_tiles):
+                break
 
     meta = {
         "bbox": {"min_lon": bbox[0], "min_lat": bbox[1], "max_lon": bbox[2], "max_lat": bbox[3]},
@@ -247,6 +344,7 @@ def main() -> None:
         "num_releases_total": len(release_map),
         "download_tasks": len(tasks),
         "dry_run": bool(args.dry_run),
+        "mode": str(args.mode),
     }
     out_dir.mkdir(parents=True, exist_ok=True)
     (out_dir / "wayback_scan_meta.json").write_text(json.dumps(meta, indent=2), encoding="utf-8")

@@ -143,10 +143,10 @@ OGD/加速主要解决 **采样效率**。我们的当前瓶颈是 validity vs m
 **定位**  
 不是当前 diffusion 主线的“必做项”，但在 PI 批准下可做一个 **24h time-box 的 pilot**：  
 用 **Physics Residual RF** 做 A/B（20-step ODE vs 100-step diffusion），验证是否能更好地保留低频位移结构并显著加速推理。  
-细节与止损标准见：`docs/RF_PILOT.md`。
+细节与止损标准见：`docs/archive/phase_b/RF_PILOT.md`。
 
 **阶段性结论（2025-12 pilot）**  
-在 `Val, K=10, max_batches=200` 的可比口径下，RF@20 steps（Euler, no-CFG）在 micro 与 macro 两侧均落后于 diffusion+CFG（详见 `docs/RF_PILOT.md`），因此本轮按 time-box 原则止损暂停，避免无归因扫参。
+在 `Val, K=10, max_batches=200` 的可比口径下，RF@20 steps（Euler, no-CFG）在 micro 与 macro 两侧均落后于 diffusion+CFG（详见 `docs/archive/phase_b/RF_PILOT.md`），因此本轮按 time-box 原则止损暂停，避免无归因扫参。
 
 ---
 
@@ -260,7 +260,7 @@ python -m src.training.evaluate \
 2) **CFG（目的地引导）是有效的推理期旋钮**  
    - 事实：cfg=2/3 在同一评估口径下呈现稳定的 micro–macro trade-off（并非偶然）。  
    - 重要边界：CFG 只能放大“朝目的地的平均梯度场”，**并不会凭空产生低频 detour/拓扑选择**；在 trip-level 诊断里容易表现为 Destination Gravity（直冲终点）+ 抖动。  
-     - 结论口径：CFG 可作为 Phase B/窗口级的对照旋钮与可视化素材，但**不应再作为 trip-level 主线去赌“调参能绕路”**（证据链见 `docs/PHASE_B_CFG_VISUALIZATION.md`、`docs/PHASE_C_RESULTS.md`）。  
+     - 结论口径：CFG 可作为 Phase B/窗口级的对照旋钮与可视化素材，但**不应再作为 trip-level 主线去赌“调参能绕路”**（证据链见 `docs/archive/phase_b/PHASE_B_CFG_VISUALIZATION.md`、`docs/PHASE_C_RESULTS.md`）。  
    - 口径建议：不再扫 cfg 网格；固定两点：  
      - 主表：cfg=2（micro-optimal within macro validity gate）  
      - 附图：cfg=3（macro-validity-optimal，展示可调性）

@@ -2,7 +2,7 @@
 
 Implementation Plan, Task List and Thought in Chinese：本文档用于把我们当前最硬的事实、已做过的实验与最需要教授判断的关键问题，整理成一份可直接发给教授的咨询材料（尽量自洽、可复现、可讨论）。
 
-> 注：本路线对应 Phase B（dt30 窗口级）里“macro loss 修 shrinkage”的阶段性探索，已触发止损（macro fine-tune 收益 <0.01 且容易引入高频捷径/保守收敛）。当时我们把窗口级主线转为 `prior + residual`（见 `docs/RESIDUAL_DIFFUSION.md`），并把剩余问题定位为 nav\_field 注入方式导致的 tether；而当前 trip-level 主线已转向 `docs/PHASE_C_RESULTS.md` 与 `docs/PHASE_D_ROADMAP_OSM_TOPO_SEMANTICS.md`。本文件保留用于回溯与未来 rebuttal/appendix 的背景说明。
+> 注：本路线对应 Phase B（dt30 窗口级）里“macro loss 修 shrinkage”的阶段性探索，已触发止损（macro fine-tune 收益 <0.01 且容易引入高频捷径/保守收敛）。当时我们把窗口级主线转为 `prior + residual`（见 `docs/archive/phase_b/RESIDUAL_DIFFUSION.md`），并把剩余问题定位为 nav\_field 注入方式导致的 tether；而当前 trip-level 主线已转向 `docs/PHASE_C_RESULTS.md` 与 `docs/PHASE_D_ROADMAP_OSM_TOPO_SEMANTICS.md`。本文件保留用于回溯与未来 rebuttal/appendix 的背景说明。
 
 ---
 

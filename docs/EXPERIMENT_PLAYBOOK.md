@@ -2,7 +2,8 @@ Implementation Plan, Task List and Thought in Chinese：本文件是一份“少
 
 # Experiment Playbook（少踩坑版）
 
-> 适用：Phase A/B 训练 + 评估 + 可视化。  
+> 适用：**legacy（深圳 dt30）** 的 Phase A/B/C 训练 + 评估 + 可视化。  
+> Phase D（WorldTrace×Detroit）请以 `docs/DATA_CONTRACT.md` 与 `docs/PHASE_D_ROADMAP_OSM_TOPO_SEMANTICS.md` 的口径为准（数据形态与路径不同）。  
 > 原则：先做 *fast check*，再做 *confirm*，最后才做 *full test*。
 
 ---
@@ -87,7 +88,7 @@ export OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1
 export HDF5_USE_FILE_LOCKING=FALSE
 ```
 
-### (B) `num_workers` 优先级 > `batch_size`
+### (B) `num_workers` 往往比 `batch_size` 更关键
 
 我们在 dt30 的 *physics* 训练上做过小基准（`--max_batches 200` 固定步数）：
 
@@ -96,7 +97,7 @@ export HDF5_USE_FILE_LOCKING=FALSE
 
 **建议默认值**：
 - 训练：`--num_workers 8`（不稳定再降到 4）
-- 评估：优先 `--num_workers 0`（避免多进程 + HDF5 的偶发锁/卡顿）
+- 评估：建议 `--num_workers 0`（避免多进程 + HDF5 的偶发锁/卡顿）
 
 ### (C) 说明：启用 `--max_batches` 时，batch_size 过大反而更慢
 

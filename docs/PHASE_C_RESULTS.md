@@ -2,6 +2,8 @@
 
 > **用途**：给 PI/组会的一份“事实链条 + 归因锚 + 下一步决策”的可读版本。  
 > **核心原则**：不靠“调参直觉”，只靠可证伪审计与可复现指标。
+>
+> **重要说明（数据口径）**：本文件记录的是旧数据（深圳出租车 Passenger Trip，dt=30s）上的 Phase C 结果，用于复现与方法论验证；当前主线数据已切换到 WorldTrace×Detroit（1Hz matched），新主线口径见 `docs/DATA_CONTRACT.md` 与 `docs/PHASE_D_ROADMAP_OSM_TOPO_SEMANTICS.md`。
 
 ---
 
@@ -139,14 +141,19 @@ end_imprecision_audit（N=400，use_gt_proj=True）：
 - **瓶颈 2（G2 关键子因）**：end 在 mask 内选点偏弱（corridor error 明显）。  
 - **瓶颈 3（评估代理误差）**：strict mask 孔洞导致 CUT 被抬高（oracle 也 CUT）。
 
-### 7.2 Go/No-Go 实验（按 ROI 排序）
+### 7.2 Go/No-Go 实验（可归因对照集，不用“先后顺序”讲故事）
 
-1) **训练分布修正（最便宜、最可能有效）**：Macro 训练对 detour 子集加权/重采样  
-   - 目标：scalar-direction 的 `Δp50 dev/len` 至少减少一半（更接近 0）。  
-2) **目的地附近辨别（针对 corridor error）**：做一个最小 destination-aware 条件增强（例如 dest-centered patch 或 per-pixel dest-delta 通道）  
-   - 目标：`corridor_error_rate` 从 ~0.21 降到 <0.10。  
-3) **语义信息是否“必要”**：用可证伪小实验验证（例如：仅加目的地周边 POI density）  
-   - 目标：`end` 的 `JSD_pref` 明显下降，且 G2 同步改善；否则语义先不进入主线。
+这 3 个实验不是“谁先谁后”，而是为了把三个潜在根因拆开验证：
+
+1) **训练分布修正**：Macro 训练对 detour-hard 子集加权/重采样  
+   - 要回答：under-detour 是不是主要来自训练分布（detour 事件太稀，模型学到“走直线更稳”）？  
+   - 判据：`detour_scalar_direction_audit` 的 `Δp50 dev/len` 明显向 0 靠近。  
+2) **目的地附近辨别（destination-aware）**：最小条件增强（例如 dest-centered patch 或 per-pixel dest-delta 通道）  
+   - 要回答：end 的 corridor error 是否主要来自“目的地附近缺少可辨识信号”而不是语义不足？  
+   - 判据：`end_imprecision_audit` 里 `corridor_error_rate` 显著下降（目标 <0.10）。  
+3) **语义信息是否带来可证伪增益**：最小语义注入（例如：目的地周边 POI density / 功能区 one-hot）  
+   - 要回答：end 的 mask 内分布偏弱、以及 under-detour 是否真的需要“城市语义”才能改善？  
+   - 判据：`macro_mask_alignment` 的 end `JSD_pref` 明显下降，并且 G2 的方向性/物理指标同步改善（避免只“看起来像”但不真实）。
 
 ---
 
@@ -159,11 +166,11 @@ end_imprecision_audit（N=400，use_gt_proj=True）：
 
 ## 9. Phase D（新转折点）
 
-本阶段已完成“可归因 baseline”（Hard Support + AR + DetRes）与关键审计；下一阶段的主线转向为：
-- **OSM 可行域替换 count mask（先把 CUT 指标变干净）**
-- **道路拓扑（corridor selection）**
-- **城市语义（POI/功能区/建成环境，用于解释 detour 动机）**
-- **Diffusion 只负责多模态（在单条路线质量够好之后）**
+本阶段已完成“可归因 baseline”（Hard Support + AR + DetRes）与关键审计；下一阶段转向为：
+- **OSM 不再作为 hard support**：把 OSM 道路信息作为**软先验特征**输入模型，同时把 `count_proxy` 与 `osm_proxy` 两套口径都纳入审计输出（避免 mask 黑箱与 proxy 污染）。
+- **道路拓扑（corridor selection）**：以距离场/可达性等形式输入，专门打 `corridor_error`。
+- **城市语义（POI/功能区/建成环境）**：作为解释“为什么要绕”的信息源，目标是把 under-detour 拉回。
+- **Diffusion 只负责多模态**：不再背“落点合法/走廊正确”的锅；多样性建立在单条路线质量已足够的前提上。
 
 详见：`docs/PHASE_D_ROADMAP_OSM_TOPO_SEMANTICS.md`
 

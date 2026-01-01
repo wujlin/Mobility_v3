@@ -14,11 +14,11 @@ Phase B 的这份文档讨论的是 **dt30 窗口级（window-level）** 的 shr
 
 > 重要：后续在 **trip-level 分层诊断（Phase C）** 中，我们把主要瓶颈重新定位为“宏观决策/执行解耦 + 可行域/拓扑/语义信息缺失”，当前主线已转向：
 > - `docs/PHASE_C_RESULTS.md`（Hard Support + AR + DetRes 的已验证基线）
-> - `docs/PHASE_D_ROADMAP_OSM_TOPO_SEMANTICS.md`（OSM 可行域 + 拓扑 + 城市语义 + Diffusion 多模态）
+> - `docs/PHASE_D_ROADMAP_OSM_TOPO_SEMANTICS.md`（OSM 道路先验（软） + 拓扑 + 城市语义 + AR + Diffusion 多模态）
 
-- **子刊级可视化与一键出图口径**：`docs/PHASE_B_CFG_VISUALIZATION.md`
+- **子刊级可视化与一键出图口径**：`docs/archive/phase_b/PHASE_B_CFG_VISUALIZATION.md`
   - 对齐子集 `samples.npz` 生成、深圳 geojson 底图叠加、Pareto（cfg 旋钮图）、spaghetti 微观案例图、动画
-- **路线图与“哪些坑已止损”**：`docs/SHRINKAGE_LITERATURE_ROADMAP.md`
+- **路线图与“哪些坑已止损”**：`docs/archive/phase_b/SHRINKAGE_LITERATURE_ROADMAP.md`
   - 包含：RF pilot 已证伪（按 time-box 止损）、CFG/位移加权/导航注入的现状与风险点
 
 本文件第 1–6 节主要记录 **dt30 strict 数据闭环** 与 **v1.0（baseline/diffusion/physics）** 的基础结果与排雷清单；如你当前在写 *CFG 版* 报告/论文，请把以上两份文档作为第一入口。
@@ -211,7 +211,7 @@ MPLCONFIGDIR=/tmp/mplconfig \
 
 ### 6.3 针对评审建议的快速验证（h=128, batch=512, lr=3e-4, epochs=10）
 
-评审意见见：`docs/PHASE_B_REVIEW.md`，核心假设是：
+评审意见见：`docs/archive/phase_b/PHASE_B_REVIEW.md`，核心假设是：
 - Phase B 下 Deterministic L2 更容易学到条件均值（strong baseline effect）；
 - Diffusion/Physics 可能因容量不足（`hidden_dim=64`）产生欠拟合与“收缩”。
 
@@ -503,7 +503,7 @@ python -m src.training.evaluate \
 
 ### 7.1 方案定义（单一入口）
 
-详见：`docs/RESIDUAL_DIFFUSION.md`
+详见：`docs/archive/phase_b/RESIDUAL_DIFFUSION.md`
 
 ### 7.2 已完成的 fast 证据（test, K=10，确认方向）
 
@@ -520,6 +520,6 @@ python -m src.training.evaluate \
 
 ### 7.3 下一步（时间成本可控的验证顺序）
 
-1) 先按 `docs/RESIDUAL_DIFFUSION.md` 的建议做两阶段评估（`K=1+B=50` → `K=10+B=200`）。  
+1) 先按 `docs/archive/phase_b/RESIDUAL_DIFFUSION.md` 的建议做两阶段评估（`K=1+B=50` → `K=10+B=200`）。  
 2) 只在“方向正确”的前提下再跑全量 test（否则纯属烧时间）。  
 3) 若 physics residual 仍偏保守，优先做 **conditioning 的低成本 ablation**（例如 `nav_emb_scale`），但避免无意义的大 sweep（已观察到收益快速饱和）。

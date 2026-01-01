@@ -1,30 +1,40 @@
 # docs 索引（单一真相源）
 
 > 目的：把“规范 / 结果 / 诊断 / 方案 / 写作素材”分层，避免文档互相打架，避免重复踩坑。  
-> 原则：**TASK_DEFINITION 是协议真相源**；其余文档要么是结果事实总结，要么是阶段性诊断与方案备忘。
+> 原则：**`docs/TASK_DEFINITION.md` + `docs/DATA_CONTRACT.md` 是协议真相源**；其余文档要么是结果事实总结，要么是阶段性诊断与方案备忘。
 
 ---
 
 ## 1) 先看哪份？（按需求）
 
 - **我要确认任务定义/无泄漏/评估协议**：`docs/TASK_DEFINITION.md`
+- **我要确认多源数据版本/坐标系/时间一致性（数据契约）**：`docs/DATA_CONTRACT.md`
 - **我要快速理解代码框架与模块关系**：`docs/CODE_STRUCTURE.md`
 - **我要理解数据产物与字段**：`docs/DATA_STRUCTURE.md`
 - **我要写论文/essay 的 Phase A 素材**：`docs/PHASE_A_RESULTS.md`
-- **我要写论文/essay 的 Phase B 素材（dt30 严格版）**：`docs/PHASE_B_RESULTS.md`
-- **我要诊断 Destination Gravity / detour 缺失（止损线 + Oracle 诊断 + 一键出图）**：`docs/PHASE_B_CFG_VISUALIZATION.md`
-- **我要复盘“收缩/宏观偏小”的根因**：`docs/ROOT_CAUSE_ANALYSIS.md`
-- **我要跑/复现 v1.1（Residual Diffusion）**：`docs/RESIDUAL_DIFFUSION.md`
 - **我要做地理可视化（bbox 映射，不做 map-matching）**：`docs/GEO_VISUALIZATION.md`
-- **我要了解学术 SOTA（Map-based vs Hierarchical）与路线选择**：`docs/SOTA_TRAJECTORY_GENERATION.md`
+- **我要了解学术 SOTA（Map-based vs Hierarchical）与路线选择**：`docs/SOTA_TRAJECTORY_GENERATION_2025_UPDATE.md`
 - **我要跑 trip-level 分层验证（Macro→Skeleton→DetRes，含 G1/G2 审计命令）**：`docs/HIERARCHICAL_VALIDATION_PROTOCOL.md`
 - **我要读 Phase C 结果复盘（Hard Support + AR + DetRes）**：`docs/PHASE_C_RESULTS.md`
-- **我要看新的路线图（OSM 可行域 + 拓扑 + 城市语义 + Diffusion 多模态）**：`docs/PHASE_D_ROADMAP_OSM_TOPO_SEMANTICS.md`
-- **我要确认多源数据版本/坐标系/时间一致性（数据契约）**：`docs/DATA_CONTRACT.md`
-- **我要给教授/专家咨询（问题包）**：`docs/EXPERT_CONSULTATION_PACKET.md`（当前版）；`docs/PROFESSOR_QUERY_MACRO_LOSS.md`（历史备忘，可不读）
-- **我要给教授发“当前进展 + 待拍板问题”邮件**：`docs/PROFESSOR_QUERY_RESIDUAL_V11.md`
+- **我要看新的路线图（OSM 道路先验（软） + 拓扑 + 城市语义 + AR + Diffusion 多模态）**：`docs/PHASE_D_ROADMAP_OSM_TOPO_SEMANTICS.md`
 - **我要准备汇报讲稿**：`docs/PPT_SPEAKER_NOTES.md`
 - **我要少踩坑地跑实验/同步多机器**：`docs/EXPERIMENT_PLAYBOOK.md`
+- **我要把主数据切换到 WorldTrace（UniTraj 底座）并做 Detroit 试点**：`docs/WORDTRACE_UNITRAJ.md`
+
+### （归档）Phase B / 窗口级材料（保留但不作为当前主线入口）
+
+- `docs/archive/phase_b/PHASE_B_RESULTS.md`
+- `docs/archive/phase_b/PHASE_B_CFG_VISUALIZATION.md`
+- `docs/archive/phase_b/ROOT_CAUSE_ANALYSIS.md`
+- `docs/archive/phase_b/RESIDUAL_DIFFUSION.md`
+- `docs/archive/phase_b/SHRINKAGE_LITERATURE_ROADMAP.md`
+- `docs/archive/phase_b/PHASE_B_REVIEW.md`
+- `docs/archive/phase_b/RF_PILOT.md`
+- `docs/archive/memos/EXPERT_CONSULTATION_PACKET.md`
+- `docs/archive/memos/PROFESSOR_QUERY_RESIDUAL_V11.md`
+- `docs/archive/memos/PROFESSOR_QUERY_MACRO_LOSS.md`
+- `docs/archive/memos/PROFESSOR_UPDATE_BATCH_EPE.md`
+- `docs/archive/sota/SOTA_TRAJECTORY_GENERATION.md`
 
 ---
 
@@ -43,7 +53,6 @@
 ### 2.2 事实层（只写“仓库里已有产物”）
 
 - `docs/PHASE_A_RESULTS.md`
-- `docs/PHASE_B_RESULTS.md`
 - `docs/PHASE_C_RESULTS.md`
 
 写作规则：
@@ -52,13 +61,9 @@
 
 ### 2.3 诊断与方案层（允许假设，但要可证伪）
 
-- `docs/ROOT_CAUSE_ANALYSIS.md`：问题机制与排雷证据链
-- `docs/RESIDUAL_DIFFUSION.md`：v1.1 结构性修复（prior + residual）
 - `docs/HIERARCHICAL_VALIDATION_PROTOCOL.md`：分层验证协议（G1/G2 审计命令）
 - `docs/PHASE_D_ROADMAP_OSM_TOPO_SEMANTICS.md`：新路线图（OSM/拓扑/语义/Diffusion）
-- `docs/PHASE_B_CFG_VISUALIZATION.md`：CFG 可视化/物理统计/Oracle 诊断与止损线（Destination Gravity）
-- `docs/SOTA_TRAJECTORY_GENERATION.md`：学术 SOTA 两条路线（Graph-based / Hierarchical）
-- `docs/PHASE_B_REVIEW.md`：外部 review 记录与回应
+- `docs/SOTA_TRAJECTORY_GENERATION_2025_UPDATE.md`：学术 SOTA（含 2025 更新）
 
 ### 2.4 写作/汇报层（不作为真相源）
 
@@ -71,5 +76,5 @@
 
 - **跨机器跑实验**：先确认 `DATA/NAV/PRIOR/CKPT` 在目标机器都存在；缺一个就会 `FileNotFoundError` 直接退出。
 - **tmux “没进度”**：不要用 `>log 2>&1 &` 隐藏；建议 `python -u ... |& tee logs/xxx.log`，另开窗口 `tail -f`。
-- **HDF5 多进程/锁**：多进程 dataloader/并行评估可能卡锁；优先 `HDF5_USE_FILE_LOCKING=FALSE`，必要时 `--num_workers 0`。
+- **HDF5 多进程/锁**：多进程 dataloader/并行评估可能卡锁；建议 `HDF5_USE_FILE_LOCKING=FALSE`，必要时 `--num_workers 0`。
 - **长时间 eval**：先做 `K=1 + max_batches=50` 粗筛，再做 `K=10 + max_batches=200` 精验，最后才跑 full test。

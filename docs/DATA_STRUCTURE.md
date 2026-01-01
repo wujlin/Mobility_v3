@@ -3,6 +3,9 @@
 > [!IMPORTANT]
 > 任务定义与实验协议以 `docs/TASK_DEFINITION.md` 为唯一准则；本文档仅描述数据格式，若与其冲突以其为准。
 
+> [!NOTE]
+> 当前主线数据为 **WorldTrace × Detroit（Phase D）**；深圳出租车 dt30 相关目录仍保留为 legacy 复现材料。
+
 目标：
 - 统一所有数据文件的格式、路径和坐标约定；
 - 分清 raw / processed / experiment 三个层级；
@@ -81,9 +84,10 @@ time_features = {
 ```text
 data/
 ├── raw/
+│   ├── worldtrace/        # WorldTrace 原始数据（Trajectory/Meta 解压；海量小文件，建议只在工作站落盘）
 │   ├── gps/              # 原始车辆 GPS 轨迹
 │   └── network/          # 路网 (OSM 等)
-├── processed/
+├── processed/            # legacy: 旧流水线产物（深圳等）
 │   ├── map_matched/      # 地图匹配后的轨迹
 │   ├── trajectories/     # 统一格式的 trip 序列
 │   ├── splits/           # train/val/test 切分
@@ -91,6 +95,16 @@ data/
 │   ├── nav_field.npz     # strict: train-only 导航场（含 metadata）
 │   ├── fields/           # legacy: 导航场 / 速度场等物理场（可选）
 │   └── macro_stats/      # 宏观统计指标（标度律等）
+├── processed_worldtrace_detroit/   # Phase D: WorldTrace × Detroit（建议命名按 city/bbox/grid 写死）
+│   ├── manifest.parquet            # 全局索引（从 Meta.zip 解析；用于筛选/抽样/统计）
+│   ├── segments.parquet            # Detroit core 连续段（bbox 内切片后产物）
+│   ├── splits/                     # train/val/test（按 traj_id 或 segment_id）
+│   ├── osm_road_mask.npy           # OSM 栅格（1024×1024，bool；proxy/特征）
+│   ├── osm_dist_to_road_m.npy      # 到最近道路距离（米；float）
+│   ├── osm_road_prob.npy           # road_prob（float；soft prior 特征）
+│   ├── poi_density_*.npy           # POI 多通道密度（按一级粗分类）
+│   ├── landuse_dom.npy             # 功能主导类型（int / one-hot）
+│   └── landuse_entropy.npy         # 功能混合度（float）
 └── experiments/
     └── {exp_name}/       # 各实验的中间结果与评估输出
 ```

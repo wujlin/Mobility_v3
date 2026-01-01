@@ -4,7 +4,12 @@
 > 原则：不为赶时间做 trivial 设计；不做无意义烧卡；所有止损线必须可复现（固定统计口径 + CI + 噪声地板）。
 
 > **阶段性结果解读**：见 `docs/PHASE_C_RESULTS.md`（Phase C：Macro Hard Support + AR + DetRes）。
-> **下一阶段路线图**：见 `docs/PHASE_D_ROADMAP_OSM_TOPO_SEMANTICS.md`（OSM 可行域 + 拓扑 + 城市语义 + Diffusion 多模态）。
+> **下一阶段路线图**：见 `docs/PHASE_D_ROADMAP_OSM_TOPO_SEMANTICS.md`（OSM 道路先验（软） + 拓扑 + 城市语义 + AR + Diffusion 多模态）。
+
+**重要说明（避免口径混淆）**
+- 本协议记录的是 **Phase C：Hard Support + AR + DetRes** 的已验证基线与审计方法（用于锁定归因/止损）。
+- Phase D 主线将把 OSM/拓扑/语义作为**软先验特征**进入模型，**不在训练环节使用 masked softmax/hard cut**；Hard Support 仅保留为诊断上界与审计工具，不作为“能力”宣称。
+- 本协议中的路径与命令示例默认基于旧数据（深圳出租车 dt=30s）；当主数据切换到 WorldTrace×Detroit（1Hz matched）时，需要按 `docs/DATA_CONTRACT.md` 与 `docs/WORDTRACE_UNITRAJ.md` 更新数据路径与窗口构造口径。
 
 ---
 
@@ -15,7 +20,7 @@
 
 因此我们把分层写成一个**可证伪承诺**（止损线）：
 - **只有当 Oracle(z) 条件下**（z=waypoints/anchors），micro 能在“不破坏 coarse 拓扑”的前提下显著改善物理纹理指标，分层才是主线；
-- 否则优先转向：weak-map/graph 或更强的 micro 物理约束/表示（而不是继续堆层级扩散）。
+- 否则更可能需要：weak-map/graph 或更强的 micro 物理约束/表示（而不是继续堆层级扩散）。
 
 ---
 
@@ -47,7 +52,7 @@
   - `MacroSkel + FeasibleGate`（采样端 accept/reject，oversample=3）：`collision_rate_any ≈ 0.03`，`waypoint_offroad_rate ≈ 0.0591` → **仅说明分布中存在足够可行质量可被筛出**，不可当作“模型学会避障”的证据（会偏置模态与推理成本）。
   - `MacroSkel (offroad_weight=0.1)` 在一次尝试中出现 **灾难性退化**（`collision_rate_any=1.0`，`waypoint_offroad_rate≈0.955`）：
     - 这通常意味着：训练失稳 / 配置错误 / 数据版本不一致，而不是“约束项无效”。
-    - 新版 `train_macro_diffusion.py` 已在训练日志中加入 `gt_offroad_pen_w`（GT 线性骨架在该 proxy 下的惩罚下界）用于定位：若 `gt_offroad_pen_w` 很大，优先检查 `count_thr` 与 drivable proxy 是否一致；若 GT 很小但 pred 很大，才是模型没学会“看图”。
+    - 新版 `train_macro_diffusion.py` 已在训练日志中加入 `gt_offroad_pen_w`（GT 线性骨架在该 proxy 下的惩罚下界）用于定位：若 `gt_offroad_pen_w` 很大，先检查 `count_thr` 与 drivable proxy 是否一致；若 GT 很小但 pred 很大，才是模型没学会“看图”。
 
 - Phase 3（Macro Hard Support + AR，自回归连通性写回模型，detour-hard，N=400，K=1，**无事后筛选**）：
   - 旧版（并行预测 wp1/wp2/end）：
@@ -288,7 +293,7 @@ python -m src.evaluation.oracle_cut_cause_audit \
 
 ### Step 4（可选、快速）：END 是否真的利用了 trip destination？
 
-> 用 `end` 的“向目的地靠近进展”做一个最小审计：如果与随机 baseline 接近，说明 end 没用好 destination（优先增强 destination conditioning，而不是立刻上语义/遥感）。
+> 用 `end` 的“向目的地靠近进展”做一个最小审计：如果与随机 baseline 接近，说明 end 没用好 destination（建议先做 destination conditioning 的可辨识增强；语义/遥感属于另一条假设，需要单独做 ablation）。
 
 ```bash
 python - <<'PY'
@@ -459,7 +464,7 @@ python -m src.evaluation.detour_validity \
 - (A) coarse 拓扑不被破坏：final 的 `turn@L / max_dev_ratio / len_ratio` **不差于 skeleton-only**
 - (B) 物理纹理显著改善：`speed/accel/DCV`（或更强的 kinematic 耦合指标）显著优于 skeleton-only
 
-若 (A) 失败：优先怀疑 micro 表示/条件注入（或 residual 偷跑 macro）；不要继续堆层级。  
+若 (A) 失败：更可能是 micro 表示/条件注入问题（或 residual 偷跑 macro）；不要继续堆层级。  
 若 (A) 成功但 (B) 失败：说明分层拆拓扑是对的，但 micro 物理建模不足（需要 Frenet residual / band-limit / kinematic 约束等）。
 
 **可直接运行的最小命令（Go/No-Go 3）**（注意：训练/评估需要 torch 环境；绘图/统计可在 `emotion` 跑）：
@@ -716,7 +721,7 @@ python -m src.training.train_macro_diffusion \
   --epochs 20 --max_batches 200 --seed 0 \
   --count_thr 1.0 --log_every 100
 
-# 若 MacroSkel 的 G1 碰撞率过高（比如 >10%）：优先加训练期 OffRoad Penalty（不改架构）
+# 若 MacroSkel 的 G1 碰撞率过高（比如 >10%）：建议加训练期 OffRoad Penalty（不改架构）
 # 该项用 nav_count 在 start->wp1->wp2->end 折线上做可微采样，惩罚 count<thr（近似 G1 gate）。
 # 注意：OffRoad Penalty 默认按 alpha^2(=alphas_cumprod[t]) 做加权，避免在高噪声 timestep 上惩罚噪声主导的 x0_pred（防止训练不稳定）。
 python -m src.training.train_macro_diffusion \
@@ -762,7 +767,7 @@ python -m src.training.train_macro_diffusion \
   --log_every 100
 
 止损线（Macro 可行域学习）：
-- 风险 1：`offroad_pen_w`（lse）在早期爆炸（例如 >10）或明显震荡不下降 → 立刻停止，优先改架构（增强条件编码/提高 patch 可辨识度）。
+- 风险 1：`offroad_pen_w`（lse）在早期爆炸（例如 >10）或明显震荡不下降 → 立刻停止，改架构（增强条件编码/提高 patch 可辨识度）。
 - 风险 2：`offroad_pen_w` 降到很低但 `collision_rate_any` 仍 >50% → proxy gap；可做一次增密（提高 `offroad_samples_per_segment`）验证，仍不行则改架构。
 - 风险 3：训练到 20 epoch 仍无法把 `collision_rate_any` 压到 <10% → 认为达到表达极限，改架构。
 ```
@@ -849,7 +854,7 @@ python -m src.visualization.plot_physical_stats \
 **Go/No-Go（Phase 3）建议口径**：
 - detour 子集上，`MacroSkel` 的 `JSD_turn@4/8` 与 `JSD_max_dev_ratio` 相比 `StraightK0`（或 start→end 的朴素骨架）必须显著下降；
 - `Macro+DetRes` 不得破坏 `MacroSkel` 的 coarse 指标，同时 `JSD_Speed/JSD_Accel` 应显著优于 `MacroSkel`；
-- 若上述不成立：优先怀疑信息缺失（需要 weak-map/graph），而不是立刻换更重的 macro 生成器。
+- 若上述不成立：更可能是信息缺失（需要 weak-map/graph），而不是立刻换更重的 macro 生成器。
 
 ---
 

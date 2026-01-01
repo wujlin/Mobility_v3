@@ -121,7 +121,7 @@ python -m src.evaluation.waypoint_gate \
 2. **Segmented Inference**：使用现有 Phase B Diffusion/Physics 模型，分别推理 $O \to W^*$ 与 $W^* \to D$（无需重训）。
 3. **Metrics Check**：看 `JSD_TurnAngle` 是否下降（更接近 GT），并结合 DCV/可视化。
 
-> 当前结论：OracleWP 已被证伪（详见 `docs/PHASE_B_CFG_VISUALIZATION.md#8.1.1`），说明现有生成器的 support 基本没有“低频、平滑 detour”模态。  
+> 当前结论：OracleWP 已被证伪（详见 `docs/archive/phase_b/PHASE_B_CFG_VISUALIZATION.md#8.1.1`），说明现有生成器的 support 基本没有“低频、平滑 detour”模态。  
 > 因此：hierarchical 若要成立，**不能只补宏观层**，还需要重训/重构 segment-level executor（更短 horizon / 更强条件 / 更结构化 latent）。
 
 ### 4.2 进入训练前的决策树（避免再浪费一周）

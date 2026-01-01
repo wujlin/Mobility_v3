@@ -31,7 +31,7 @@ Phase B 的核心问题已经从“跑不通/泄漏”转为“机制性偏差�
 4) **坐标范围合理**：pos 在 grid 范围内（抽样 PASS）  
 5) **nav_field 对齐不过分离谱**：`mean|cos|` 在可接受范围（考虑道路双向流，`mean_cos` 低并不一定是 bug）
 
-参考：`src/utils/sanity_check.py`，`docs/PHASE_B_RESULTS.md#2`
+参考：`src/utils/sanity_check.py`，`docs/archive/phase_b/PHASE_B_RESULTS.md#2`
 
 ---
 
@@ -47,7 +47,7 @@ Phase B 的核心问题已经从“跑不通/泄漏”转为“机制性偏差�
 
 > 我们也做过 `vel_scale` 诊断：能对齐速度/路径长度，但会放大微观方向误差（ADE/FDE/DTW/Fréchet 变差），且 MSD10 仍低于 GT，说明瓶颈不只在“尺度”，还在方向持久性/低频结构。
 
-参考：`docs/ROOT_CAUSE_ANALYSIS.md#4`
+参考：`docs/archive/phase_b/ROOT_CAUSE_ANALYSIS.md#4`
 
 ---
 
@@ -58,7 +58,7 @@ Phase B 的核心问题已经从“跑不通/泄漏”转为“机制性偏差�
 - **Residual Diffusion（data-only）**：speed/Rog 基本恢复到接近 1（宏观尺度恢复）  
 - **Residual Physics**：micro 更强，但 macro 仍略保守（MSD10 仍偏低）→ 指向 nav\_field mean-field tether
 
-参考：`docs/RESIDUAL_DIFFUSION.md#4.2`，`docs/PHASE_B_RESULTS.md#7`
+参考：`docs/archive/phase_b/RESIDUAL_DIFFUSION.md#4.2`，`docs/archive/phase_b/PHASE_B_RESULTS.md#7`
 
 ---
 

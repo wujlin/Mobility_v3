@@ -21,14 +21,14 @@ Implementation Plan, Task List and Thought in Chinese：本文件是一份“可
 - **预测形式**：窗口级预测 `obs_len=8, pred_len=12`，输出 future `vel`（语义为 step displacement）。  
 - **数据语义**：Phase B 固定 `dt=30s`，并且 `nav_field` 与 `data_stats` 均 **train-only** 生成并记录 source/hash（无泄漏）。
 
-参考：`docs/TASK_DEFINITION.md`、`docs/PHASE_B_RESULTS.md#2`
+参考：`docs/TASK_DEFINITION.md`、`docs/archive/phase_b/PHASE_B_RESULTS.md#2`
 
 ---
 
 ## 2) 已排除的工程问题（我们确认不是实现 bug）
 
 - split overlap / dt 语义 / train-only 产物来源：strict sanity check 已 PASS。  
-- normalization mismatch / padding 污染 / 模型容量不足：已逐项排雷（见 `docs/ROOT_CAUSE_ANALYSIS.md#2`）。
+- normalization mismatch / padding 污染 / 模型容量不足：已逐项排雷（见 `docs/archive/phase_b/ROOT_CAUSE_ANALYSIS.md#2`）。
 
 ---
 

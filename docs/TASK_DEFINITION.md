@@ -1,25 +1,29 @@
-# 任务定义与实验协议（两阶段：fast → paper）
+# 任务定义与实验协议（当前主线：WorldTrace × Detroit｜兼容 legacy dt30）
 
-> **适用范围**：本仓库所有训练/评估/数据产物必须遵循本规范  
-> **更新**：2025-12-13  
-> **核心目标**：消除“文档—代码—数据产物”不一致，保证 **KnownDestination + 无泄漏 + 可复现**
+> **适用范围**：本仓库所有训练/评估/数据产物必须遵循本规范。  
+> **更新**：2026-01-01  
+> **核心目标**：消除“文档—代码—数据产物”不一致，保证 **KnownDestination + 无泄漏 + 可复现**。  
+> **重要说明**：本仓库目前同时保留两条口径：
+> - **Phase D（当前主线）**：WorldTrace × Detroit（1Hz、WGS84、matched 坐标、OSM 软先验）
+> - **Phase C / Legacy**：深圳出租车 dt30（用于复现历史结论，不再作为主线）
 
 ---
 
-## 0. 两阶段路线（避免“先做错再重做”）
+## 0. 任务口径总览（避免“口径漂移导致无法归因”）
 
-**Phase A：fast validation（当前实现，1–2 周）**
-- **目的**：验证 pipeline 正确性 + Physics 是否有提升趋势 + 评估闭环是否完整
-- **任务定义**：KnownDestination；推理时 `d` 是合法输入，不属于泄漏
-- **建模对象**：窗口级未来段生成（带观测历史），而非“一次性生成整段 trip”
-- **`vel` 语义**：`step displacement`（步位移），`vel = pos[t] - pos[t-1]`，单位 `grid_cell/step`
-- **dt 处理**：不强制重采样；仅记录 dt 分布用于诊断（不能做严格物理时间结论）
-- **无泄漏**：训练/评估按 split 过滤；`data_stats.json/nav_field.npz` 仅用 train split 估计并记录 `source/metadata`
+### Phase D（当前主线）：WorldTrace × Detroit（端到端 + 软先验）
 
-**Phase B：paper strict（论文版，2–4 周，必须重训）**
-- **目的**：方法论严谨 + 实验可复现 + 结论站得住
-- **dt 处理**：必须重采样到固定 `dt_fixed=30s`
-- **其余保持一致**：KnownDestination + step displacement（每一步对应 30s）+ train-only 产物合同 + split-aware 训练/评估
+- **主目标**：学习“trip-level 决策 + 执行”的统一生成框架，但不把外部地图当真值。  
+- **任务定义**：KnownDestination（推理时 `d` 是合法输入，不属于泄漏）。
+- **坐标系**：WGS84 → 栅格坐标 `[y, x]`（Detroit core bbox + `1024×1024` grid；口径见 `docs/DATA_CONTRACT.md`）。
+- **时间分辨率**：1Hz（WorldTrace 标准化后）；`dt=1s` 可以做真实时间尺度的统计（例如速度/加速度/停留）。
+- **地图使用方式**：OSM 只作为输入特征（`road_prob/topo/...`）与 soft prior（例如 `L_offroad`），不做训练期 hard cut/masked softmax。
+- **训练增强**：ATR + STM（UniTraj 的数据级策略，必须作为独立开关进入消融矩阵；见 `docs/WORDTRACE_UNITRAJ.md`）。
+
+### Legacy（仅用于复现）：深圳 dt30（Phase C）
+
+- 旧设定（dt_fixed=30s）仍保留在仓库中用于复现与对照，但不再作为 Phase D 的任务合同来源。
+- 旧口径的命令与审计：见 `docs/HIERARCHICAL_VALIDATION_PROTOCOL.md` 与 `docs/PHASE_C_RESULTS.md`。
 
 ---
 
@@ -30,9 +34,29 @@
 | **KnownDestination** | 已知 `(o, d, t0)` | 路径生成 / 导航 / 条件生成 | 低（`d` 是输入） |
 | **UnknownDestination** | 只知 `(o, t0)` | 轨迹预测 / 异常检测 | 高（若训练使用了 `d`） |
 
-### 1.1 Phase A/B 共用：KnownDestination（带观测历史）
+### 1.1 KnownDestination（带观测历史；主线与 legacy 都适用）
 
-本仓库当前训练/推理的最小闭环任务是 **窗口级未来段生成**：
+本仓库在 KnownDestination 设定下允许两种“输出语义”，两者都必须在实验配置里写死并进入审计：
+
+**（D）Phase D 主线：Macro waypoint 生成（trip-level 决策）**
+
+给定：
+- `obs`：历史观测窗口（长度 `H`）
+- `o, d`：trip-level 起点/终点
+- `t0`：出发时间（建议用 Detroit 本地时区编码；跨城时用城市本地时区）
+- `env`：环境特征（例如 `road_prob/topo/poi/landuse`）
+
+学习：
+
+$$P(z \\mid \\mathrm{obs}, o, d, t_0, env)$$
+
+其中：
+- `z` 是少量决策点（例如 `z=[wp1, wp2, end]`，每个点是栅格坐标 `[y,x]`）
+- 不把 OSM/POI 当真值：它们是条件特征与 soft prior，而不是 hard cut
+
+**（Legacy）窗口级未来段生成（执行层/物理统计对齐）**
+
+在 legacy dt30 或需要对齐旧指标时，最小闭环任务仍可使用“未来段生成”：
 
 给定：
 - `obs`：历史观测窗口（长度 `H`），每步包含 `[pos, vel]`
@@ -51,7 +75,7 @@ $$P(\\mathrm{vel}_{t+1:t+F} \\mid \\mathrm{obs}_{t-H+1:t}, o, d, t_0, env)$$
 - 输出是未来 `F` 步 `vel` 序列；位置序列通过积分得到：
   - `pos_pred[k] = pos_last + sum_{i=1..k} vel_pred[i]`
 
-> **注意**：这不是“一次性生成整段 trip”。若要做整段路径生成（one-shot 或 autoregressive），属于后续版本扩展。
+> **注意**：Phase D 主线的目标是 trip-level 决策（waypoints/走廊/绕路动机）。如果你用 legacy 的“未来段生成”做 Phase D 主线，会很容易回到“Destination Gravity/平均梯度场”的老问题；因此 Phase D 的主要输出应优先用 `z` 表达宏观决策。
 
 ---
 
@@ -59,23 +83,21 @@ $$P(\\mathrm{vel}_{t+1:t+F} \\mid \\mathrm{obs}_{t-H+1:t}, o, d, t_0, env)$$
 
 ### 2.1 时间戳与时间特征（t0 encoding）
 
-- HDF5 中 `timestamps` 为 Unix 秒（`int64`）
-- 时间特征以 **Asia/Shanghai（UTC+8）** 计算（hour/weekday）
-- v1 strict 的时间条件向量目前保持 **cond_dim=6**，其中时间部分为 2 维：
+- **统一落盘口径**：所有 `processed_*` 数据中的时间戳统一存为 Unix 秒（`int64`）。
+- **WorldTrace（Phase D）**：
+  - 输入字段：轨迹 CSV 的 `time`（处理时转换/校验为 Unix 秒）
+  - 时间特征按 **城市本地时区**编码（Detroit：`America/Detroit`；跨城时按目标城市时区）
+- **Legacy 深圳（Phase C）**：时间特征按 `Asia/Shanghai (UTC+8)` 编码
+- **最小时间条件向量（KISS）**：2 维（可作为默认实现，后续可升级）
   - `hour_norm = hour / 23`
   - `weekday_norm = weekday / 6`（Monday=0）
 
-> 若需要更合理的周期编码（`sin/cos` + `is_weekend`），会改变 `cond_dim`，需要同步修改模型与重训（建议作为 v2 / v1.1）。
+> 若需要更合理的周期编码（`sin/cos` + `is_weekend`），会改变条件维度，需要同步修改模型与重训；必须作为显式开关进入消融矩阵，避免隐性口径漂移。
 
 ### 2.2 `dt` 的边界与论文版要求（关键）
 
-- 原始出租车 GPS 采样间隔 **不固定**（常见 10–60s，且存在更大 gap）
-- **Phase A（fast）**：不强制重采样；将每个点视为一个离散 step，并记录 `dt` 分布用于诊断（`data_stats.json.time_stats.dt_stats_sample`）
-  - 可以做 step-based 的 sanity 与趋势验证
-  - 不建议把 MSD 的横轴解释为真实 $\Delta t$，避免审稿质疑
-- **Phase B（paper）**：必须重采样到固定 `dt_fixed`（建议 30s）
-  - 这样 MSD 的 $\Delta t = k \\, dt_{fixed}$ 才有明确物理意义
-  - nav_field 的 speed（位移模长）也才可跨数据集/时间段对比
+- **WorldTrace（Phase D）**：标准化后为 1Hz（`dt=1s`），可直接做真实时间尺度的速度/加速度统计与约束（但仍要审计异常 gap 与时钟问题）。
+- **Legacy 深圳（Phase C）**：原始 GPS 采样间隔不固定；若需要严格物理解释，必须重采样到固定 `dt_fixed`（例如 30s）并重训。
 
 ### 2.3 `vel` 的唯一语义（决策 B）
 
@@ -112,30 +134,19 @@ data/processed/splits/
 
 ### 3.3 数据产物合同（实际落地字段）
 
-`data/processed/data_stats.json`（示例字段）：
+Phase D（WorldTrace×Detroit）不再把“深圳 HDF5 + nav_field”当作默认落盘形态；我们需要的合同要点是：
 
-```json
-{
-  "created_at": "...",
-  "source": {
-    "split": "train",
-    "trajectory_ids_file": "splits/train_ids.npy",
-    "trajectory_ids_sha256": "...",
-    "trajectories_h5_file": "processed/trajectories/shenzhen_trajectories.h5",
-    "trajectories_h5_sha256": "...",
-    "date_range": ["...", "..."]
-  },
-  "grid_config": {"H": 400, "W": 800, "...": "..."},
-  "normalization": {"pos_min": [...], "pos_max": [...], "vel_mean": [...], "vel_std": [...], "nav_scale": 1.0, "nav_max_speed": 20.0},
-  "time_stats": {"dt_stats_sample": {...}}
-}
-```
+- **可复现索引**：manifest（parquet/arrow）+ Detroit 子集切片规则（写入 `docs/DATA_CONTRACT.md`）
+- **可复现特征**：OSM/SafeGraph/landuse 等外部特征必须带版本与参数（bbox/grid/sigma/buffer/dilation…）
+- **train-only 统计**：任何用于训练的归一化/密度/先验统计（若存在）必须标注 `split=train` 与输入指纹（sha/版本）
 
-`data/processed/nav_field.npz`：
-- `direction`: `(2, H, W)`（内部统一为 `[dir_y, dir_x]`）
-- `speed`: `(H, W)`（平均步位移模长）
-- `count`: `(H, W)`（样本数）
-- `metadata`: dict（npz object，需要 `allow_pickle=True` 加载）
+推荐产物形态（示例，名称仅作约定，不限定实现）：
+- `data/processed_worldtrace_detroit/manifest.parquet`（全局索引，用于筛选/抽样/统计）
+- `data/processed_worldtrace_detroit/segments.parquet`（Detroit core 连续段，含 `traj_id/time/lat/lon/is_matched/...`）
+- `data/processed_worldtrace_detroit/osm_road_mask.npy` / `osm_dist_to_road_m.npy` / `osm_road_prob.npy`
+- `data/processed_worldtrace_detroit/poi_density_*.npy` / `landuse_dom.npy` / `landuse_entropy.npy`
+
+> Legacy（深圳 dt30）相关的 `nav_field.npz`/HDF5 产物合同与命令，统一放在 `docs/HIERARCHICAL_VALIDATION_PROTOCOL.md` 与 `docs/archive/`，避免与 Phase D 口径混淆。
 
 ---
 
@@ -265,7 +276,7 @@ python -m src.training.evaluate \
 
 - **不会被剔除的 inactive（窗口/局部静止）**：
   - “近静止/低位移”的片段不会在数据集层面被删除；`SeqDataset/DiffusionDataset` 只是滑窗切片，不按速度/位移阈值过滤（见 `src/data/datasets_seq.py`、`src/data/datasets_diffusion.py`）。
-  - **因此：训练用的 GT 与评估用的 GT 都包含这些窗口**；这也是 macro loss 可能被“低位移窗口稀释”的原因之一（见 `docs/PROFESSOR_UPDATE_BATCH_EPE.md`）。
+  - **因此：训练用的 GT 与评估用的 GT 都包含这些窗口**；这也是 macro loss 可能被“低位移窗口稀释”的原因之一（见 `docs/archive/memos/PROFESSOR_UPDATE_BATCH_EPE.md`）。
   - 但在某些统计指标里会做 *metric-level mask*：例如 Turn Angle 统计通常会对 `speed < turn_min_speed` 的 step 做忽略，以避免 “速度≈0 时航向角不稳定” 造成的数值污染（这是指标计算口径，不等价于删数据）。
 
 - **关于 raw 数据的 `status`（是否载客/有效）字段**：

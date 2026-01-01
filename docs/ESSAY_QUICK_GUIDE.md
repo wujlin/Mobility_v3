@@ -28,7 +28,7 @@ Implementation Plan, Task List and Thought in Chinese：本文件是“最后 1�
 
 ### 2.1 主表（Phase B quick, test, 320 conditions）
 
-直接引用：`docs/PHASE_B_RESULTS.md` 第 4 节的 quick 表格（已整理好）。
+直接引用：`docs/archive/phase_b/PHASE_B_RESULTS.md` 第 4 节的 quick 表格（已整理好）。
 
 你在正文里只需要抓 3 句话：
 - **确定性 baseline（K=1）**：`ADE_mean=5.467, FDE_mean=8.855`，宏观指标接近 GT（`Rog=5.494` vs `GT_Rog=5.247`，`MSD_10=304.099` vs `GT_MSD_10=349.740`）。
@@ -43,7 +43,7 @@ Implementation Plan, Task List and Thought in Chinese：本文件是“最后 1�
 ### 2.2 图 1：微观指标对比（mean + best-of-K）
 
 建议画法：同一张图里放 `ADE_mean/ADE_best/FDE_mean/FDE_best`（或分两张）。  
-如果来不及画，直接用现成脚本重出（见 `docs/PHASE_B_RESULTS.md` 第 5 节的命令），并在 caption 标注 quick=320。
+如果来不及画，直接用现成脚本重出（见 `docs/archive/phase_b/PHASE_B_RESULTS.md` 第 5 节的命令），并在 caption 标注 quick=320。
 
 ### 2.3 图 2：MSD(τ) 曲线叠图（Pred vs GT）
 
@@ -68,7 +68,7 @@ Implementation Plan, Task List and Thought in Chinese：本文件是“最后 1�
 - 因此 best-of-K、Fréchet/DTW、MSD/Rog 更能反映“风险感知与物理真实”。
 
 ### 3.2 Shrinkage（走不动）的根因与证据
-直接引用并压缩 `docs/ROOT_CAUSE_ANALYSIS.md`：
+直接引用并压缩 `docs/archive/phase_b/ROOT_CAUSE_ANALYSIS.md`：
 - 排除：统计量 mismatch / padding 污染 / 单纯欠拟合
 - 剩下：高不确定性下的均值回归倾向 + nav_field 的保守先验
 

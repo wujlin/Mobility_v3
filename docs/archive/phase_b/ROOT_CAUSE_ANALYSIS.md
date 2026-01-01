@@ -126,7 +126,7 @@ Phase B 目前面临的核心矛盾是：**“扩容（h128）稳定了训练，
 
 ## 6. 更新（v1.1 Residual Diffusion：结构性修复验证）
 
-Phase B v1.1 引入 **prior + residual decomposition**（详见 `docs/RESIDUAL_DIFFUSION.md`）后，fast test 证据显示：
+Phase B v1.1 引入 **prior + residual decomposition**（详见 `docs/archive/phase_b/RESIDUAL_DIFFUSION.md`）后，fast test 证据显示：
 
 - **Data-only residual（test, K=10）** 已基本恢复宏观尺度：
   - 速度比：`pred_speed_mean/gt_speed_mean = 2.329/2.292 ≈ 1.016`
@@ -151,7 +151,7 @@ Phase B v1.1 引入 **prior + residual decomposition**（详见 `docs/RESIDUAL_D
 ### 7.1 已排除（工程层面）
 
 - **dt 语义/数据泄漏**：dt30 重采样 + train-only nav_field/data_stats + strict sanity check 均已 PASS。  
-  证据入口：`docs/TASK_DEFINITION.md`、`docs/PHASE_B_RESULTS.md#2`
+  证据入口：`docs/TASK_DEFINITION.md`、`docs/archive/phase_b/PHASE_B_RESULTS.md#2`
 - **Normalization mismatch / padding 污染 / 模型容量不足**：已逐项排雷（见第 2 节）。
 
 ### 7.2 已确认（机制层面）

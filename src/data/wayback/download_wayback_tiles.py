@@ -133,6 +133,14 @@ def load_release_map(session: requests.Session, config_url: str) -> Dict[int, Re
         candidates.sort(key=score, reverse=True)
         return candidates[0] if candidates else ""
 
+    def _pick_first_date(obj) -> str:
+        # Look for any ISO-like date string in nested values.
+        for s in _iter_strings(obj):
+            d = _parse_iso_date(s)
+            if d is not None:
+                return d.isoformat()
+        return ""
+
     release_map: Dict[int, ReleaseInfo] = {}
     if not isinstance(data, dict):
         return release_map
@@ -162,6 +170,8 @@ def load_release_map(session: requests.Session, config_url: str) -> Dict[int, Re
             )
             if not item_url:
                 item_url = _pick_first_template(v)
+            if not rel_date:
+                rel_date = _pick_first_date(v)
         else:
             continue
 

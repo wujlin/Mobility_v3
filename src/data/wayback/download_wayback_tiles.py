@@ -15,8 +15,8 @@ from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
 
-CONFIG_URL = "https://s3-us-west-2.amazonaws.com/config.maptiles.arcgis.com/waybackconfig.json"
-METADATA_URL_TPL = "https://s3-us-west-2.amazonaws.com/wayback-tilemap-console/metadata/edge/tile/{z}/{y}/{x}.json"
+CONFIG_URL_DEFAULT = "https://s3-us-west-2.amazonaws.com/config.maptiles.arcgis.com/waybackconfig.json"
+METADATA_URL_TPL_DEFAULT = "https://s3-us-west-2.amazonaws.com/wayback-tilemap-console/metadata/edge/tile/{z}/{y}/{x}.json"
 
 
 @dataclass(frozen=True)
@@ -63,26 +63,85 @@ def bbox_to_tile_range(bbox: Tuple[float, float, float, float], zoom: int) -> Tu
     return (min(x1, x2), max(x1, x2)), (min(y1, y2), max(y1, y2))
 
 
-def load_release_map(session: requests.Session) -> Dict[int, ReleaseInfo]:
-    res = session.get(CONFIG_URL, timeout=20)
+def load_release_map(session: requests.Session, config_url: str) -> Dict[int, ReleaseInfo]:
+    res = session.get(config_url, timeout=20)
     res.raise_for_status()
     data = res.json()
-    archive = data.get("archive", [])
+    # Old schema: {"archive": [{"releaseNum":..,"releaseDate":..,"itemURL":..}, ...]}
+    if isinstance(data, dict) and isinstance(data.get("archive"), list):
+        archive = data.get("archive", [])
+        release_map: Dict[int, ReleaseInfo] = {}
+        for item in archive:
+            try:
+                rid = int(item["releaseNum"])
+            except Exception:
+                continue
+            release_map[rid] = ReleaseInfo(
+                release_id=rid,
+                release_date=str(item.get("releaseDate", "")),
+                item_url_template=str(item.get("itemURL", "")),
+            )
+        return release_map
+
+    # New schema (observed 2026-01): top-level dict keyed by release_id (string),
+    # value is either:
+    # - dict containing releaseDate/itemURL (or similar), or
+    # - direct URL template string.
     release_map: Dict[int, ReleaseInfo] = {}
-    for item in archive:
-        rid = int(item["releaseNum"])
-        release_map[rid] = ReleaseInfo(
-            release_id=rid,
-            release_date=str(item.get("releaseDate", "")),
-            item_url_template=str(item.get("itemURL", "")),
-        )
+    if not isinstance(data, dict):
+        return release_map
+
+    for k, v in data.items():
+        try:
+            rid = int(k)
+        except Exception:
+            continue
+
+        if isinstance(v, str):
+            item_url = v
+            rel_date = ""
+        elif isinstance(v, dict):
+            rel_date = str(
+                v.get("releaseDate")
+                or v.get("date")
+                or v.get("d")
+                or ""
+            )
+            item_url = str(
+                v.get("itemURL")
+                or v.get("itemUrl")
+                or v.get("url")
+                or v.get("template")
+                or ""
+            )
+        else:
+            continue
+
+        if not item_url:
+            continue
+        release_map[rid] = ReleaseInfo(release_id=rid, release_date=rel_date, item_url_template=item_url)
     return release_map
 
 
-def get_tile_changes(session: requests.Session, release_map: Dict[int, ReleaseInfo], *, x: int, y: int, z: int) -> List[int]:
-    url = METADATA_URL_TPL.format(z=z, y=y, x=x)
+def get_tile_changes(
+    session: requests.Session,
+    release_map: Dict[int, ReleaseInfo],
+    metadata_url_tpl: str,
+    *,
+    x: int,
+    y: int,
+    z: int,
+) -> List[int]:
+    url = metadata_url_tpl.format(z=z, y=y, x=x)
     res = session.get(url, timeout=10)
     if res.status_code == 404:
+        # Distinguish "no metadata for this tile" vs "endpoint/bucket no longer exists".
+        # If the bucket is gone, returning [] would silently produce 0 tasks and mislead debugging.
+        if b"NoSuchBucket" in res.content:
+            raise RuntimeError(
+                "Wayback metadata endpoint is invalid (S3 NoSuchBucket). "
+                "You likely need to update --metadata_url_tpl to the new endpoint."
+            )
         return []
     res.raise_for_status()
     arr = res.json()
@@ -138,6 +197,8 @@ def main() -> None:
     ap.add_argument("--max_threads", type=int, default=16)
     ap.add_argument("--max_tiles", type=int, default=0, help="Debug: limit number of spatial tiles scanned (0=no limit)")
     ap.add_argument("--dry_run", action="store_true", help="Only scan metadata and report task count (no downloads)")
+    ap.add_argument("--config_url", type=str, default=CONFIG_URL_DEFAULT, help="Wayback config URL")
+    ap.add_argument("--metadata_url_tpl", type=str, default=METADATA_URL_TPL_DEFAULT, help="Wayback metadata URL template with {z}/{y}/{x}")
     args = ap.parse_args()
 
     out_dir: Path = args.out_dir
@@ -145,7 +206,13 @@ def main() -> None:
     zoom = int(args.zoom)
 
     session = _init_session()
-    release_map = load_release_map(session)
+    release_map = load_release_map(session, str(args.config_url))
+    if not release_map:
+        raise SystemExit(
+            "Wayback config loaded but no releases parsed. "
+            "This usually means config schema changed. "
+            "Please inspect the downloaded JSON and update the parser."
+        )
 
     (x_min, x_max), (y_min, y_max) = bbox_to_tile_range(bbox, zoom)
     total_tiles_geo = (x_max - x_min + 1) * (y_max - y_min + 1)
@@ -158,7 +225,7 @@ def main() -> None:
             scanned_tiles += 1
             if args.max_tiles and scanned_tiles > int(args.max_tiles):
                 break
-            rids = get_tile_changes(session, release_map, x=x, y=y, z=zoom)
+            rids = get_tile_changes(session, release_map, str(args.metadata_url_tpl), x=x, y=y, z=zoom)
             if not rids:
                 continue
             for rid in rids:
@@ -209,4 +276,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

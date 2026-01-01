@@ -74,6 +74,16 @@ python -m src.data.wayback.download_wayback_tiles \
 
 ## 4) 常见问题
 
+### 4.0 `num_releases_total=0` 或 `download_tasks=0`（但 bbox/zoom 正常）
+
+这是“Wayback 接口变化”的典型症状（不是缓存/不是反爬）：
+- **config schema 变了**：`waybackconfig.json` 不再包含旧版的 `archive` 字段；
+- **metadata endpoint 变了**：旧的 `wayback-tilemap-console` bucket 可能已经下线。
+
+脚本现在支持通过参数覆盖：
+- `--config_url`
+- `--metadata_url_tpl`
+
 ### 4.1 `ModuleNotFoundError: No module named 'src.data.wayback'`
 
 这不是 Python 结构问题，而是目标机器的仓库版本里缺少 `src/data/wayback/` 目录。  
@@ -85,3 +95,15 @@ python -m src.data.wayback.download_wayback_tiles \
 - 先用 `--dry_run` 估算任务量；
 - 先降低 `--zoom` 或缩小 `--bbox`；
 - 用 `--max_tiles` 做分块下载（每块输出到独立 `out_dir`，方便断点续跑与审计）。
+
+### 4.3 metadata 端点下线（`NoSuchBucket`）
+
+如果运行报错包含 `NoSuchBucket`，说明默认的 metadata URL 已失效，需要你先通过浏览器/抓包确认最新端点，再用：
+
+```bash
+python -m src.data.wayback.download_wayback_tiles \
+  --out_dir ... \
+  --bbox ... \
+  --zoom 16 \
+  --metadata_url_tpl "https://<NEW_ENDPOINT>/metadata/edge/tile/{z}/{y}/{x}.json"
+```

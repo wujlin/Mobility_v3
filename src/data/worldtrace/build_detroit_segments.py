@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import csv
 import datetime as dt
+import io
 import json
 import math
 import sys
@@ -123,7 +124,8 @@ def _pick_coord(row: Dict[str, str], cfg: SegmentConfig) -> Tuple[Optional[float
 
 def _iter_csv_rows_from_zip(zf: zipfile.ZipFile, member: str) -> Iterator[Dict[str, str]]:
     with zf.open(member, "r") as f:
-        text = (line.decode("utf-8", errors="ignore") for line in f)
+        # TextIOWrapper is faster than per-line decode generator for large CSV streams.
+        text = io.TextIOWrapper(f, encoding="utf-8", errors="ignore", newline="")
         reader = csv.DictReader(text)
         for row in reader:
             yield row
@@ -143,6 +145,28 @@ def _split_bbox_segments(
     cur: Optional[Dict[str, List]] = None
     last_t: Optional[int] = None
 
+    min_lon, max_lon = float(bbox.min_lon), float(bbox.max_lon)
+    min_lat, max_lat = float(bbox.min_lat), float(bbox.max_lat)
+    lon_span = max(max_lon - min_lon, 1e-12)
+    lat_span = max(max_lat - min_lat, 1e-12)
+
+    H, W = int(grid.H), int(grid.W)
+    inv_lon = float(W) / lon_span  # multiply instead of divide per-row
+    inv_lat = float(H) / lat_span
+
+    def _new_seg() -> Dict[str, List]:
+        return {
+            "t": [],
+            "lat": [],
+            "lon": [],
+            "y": [],
+            "x": [],
+            "is_matched": [],
+            "matched_distance": [],
+            "n": 0,
+            "unmatched_n": 0,
+        }
+
     def _flush():
         nonlocal cur, last_t
         if cur is not None and cur["n"] >= cfg.min_segment_points:
@@ -159,42 +183,24 @@ def _split_bbox_segments(
         if lat is None or lon is None:
             continue
 
-        if not bbox.contains(np.array([lat]), np.array([lon]))[0]:
+        # Scalar bbox check (avoid per-row numpy allocations)
+        if not (min_lon <= lon <= max_lon and min_lat <= lat <= max_lat):
             _flush()
             continue
 
         if cur is None:
-            cur = {
-                "t": [],
-                "lat": [],
-                "lon": [],
-                "y": [],
-                "x": [],
-                "is_matched": [],
-                "matched_distance": [],
-                "n": 0,
-                "unmatched_n": 0,
-            }
+            cur = _new_seg()
             last_t = None
 
         if last_t is not None and (t - last_t) > cfg.dt_gap_s:
             _flush()
-            cur = {
-                "t": [],
-                "lat": [],
-                "lon": [],
-                "y": [],
-                "x": [],
-                "is_matched": [],
-                "matched_distance": [],
-                "n": 0,
-                "unmatched_n": 0,
-            }
+            cur = _new_seg()
 
         last_t = t
-        y, x = grid.latlon_to_yx(np.array([lat]), np.array([lon]))
-        y0, x0 = int(y[0]), int(x[0])
-        if not grid.in_bounds(np.array([y0]), np.array([x0]))[0]:
+        # Scalar lat/lon -> y/x (avoid per-row numpy allocations)
+        x0 = int((lon - min_lon) * inv_lon)
+        y0 = int((max_lat - lat) * inv_lat)
+        if not (0 <= x0 < W and 0 <= y0 < H):
             _flush()
             continue
 

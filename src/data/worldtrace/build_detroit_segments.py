@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import datetime as dt
 import json
 import math
 import sys
@@ -52,6 +53,49 @@ def _safe_int(v: str) -> Optional[int]:
     try:
         return int(float(v))
     except (TypeError, ValueError):
+        return None
+
+
+def _parse_time_s(v: str) -> Optional[int]:
+    """
+    WorldTrace 的 time 字段在不同导出版本里可能是：
+    - 数字（epoch seconds / ms）
+    - 字符串（"YYYY-MM-DD HH:MM:SS" / ISO8601）
+
+    这里统一转成 int 秒（UTC 假设仅用于绝对值；我们只关心相邻点的 Δt）。
+    """
+    if v is None:
+        return None
+    s = str(v).strip()
+    if not s:
+        return None
+
+    # 1) numeric epoch (s / ms)
+    try:
+        fv = float(s)
+        if fv > 1e12:  # likely ms
+            fv = fv / 1000.0
+        return int(fv)
+    except (TypeError, ValueError):
+        pass
+
+    # 2) common datetime formats
+    s19 = s[:19]
+    for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%dT%H:%M:%S", "%Y/%m/%d %H:%M:%S"):
+        try:
+            t = dt.datetime.strptime(s19, fmt).replace(tzinfo=dt.timezone.utc)
+            return int(t.timestamp())
+        except Exception:
+            continue
+
+    # 3) ISO fallback (handles fractional seconds / timezone offsets)
+    try:
+        s2 = s.replace("Z", "+00:00")
+        t = dt.datetime.fromisoformat(s2)
+        if t.tzinfo is None:
+            t = t.replace(tzinfo=dt.timezone.utc)
+        return int(t.timestamp())
+    except Exception:
         return None
 
 
@@ -107,7 +151,7 @@ def _split_bbox_segments(
         last_t = None
 
     for row in rows:
-        t = _safe_int(row.get("time", ""))
+        t = _parse_time_s(row.get("time", ""))
         if t is None:
             continue
 

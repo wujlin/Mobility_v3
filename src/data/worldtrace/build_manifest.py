@@ -86,7 +86,7 @@ def _open_out_csv(path: Path):
     return path.open("w", encoding="utf-8", newline="")
 
 
-def _open_parquet_writer(path: Path) -> pq.ParquetWriter:
+def _open_parquet_writer(path: Path) -> tuple[pq.ParquetWriter, pa.Schema]:
     if pa is None or pq is None:
         raise SystemExit("pyarrow is required for parquet output. Install: conda/pip install pyarrow")
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -103,7 +103,7 @@ def _open_parquet_writer(path: Path) -> pq.ParquetWriter:
             ("end_lon", pa.float64()),
         ]
     )
-    return pq.ParquetWriter(str(path), schema=schema, compression="zstd")
+    return pq.ParquetWriter(str(path), schema=schema, compression="zstd"), schema
 
 
 def main() -> None:
@@ -131,7 +131,7 @@ def main() -> None:
     n = 0
 
     if out_path.suffix == ".parquet":
-        writer = _open_parquet_writer(out_path)
+        writer, schema = _open_parquet_writer(out_path)
         try:
             batch_rows: Dict[str, list] = {
                 "traj_filename": [],
@@ -149,8 +149,10 @@ def main() -> None:
                 nonlocal batch_rows
                 if not batch_rows["traj_filename"]:
                     return
-                table = pa.table(batch_rows)  # type: ignore[arg-type]
-                writer.write_table(table)
+                # 必须显式使用 schema；否则当某一批次里某列全为 None 时，Arrow 会推断为 null 类型，
+                # 导致与 ParquetWriter 的 float64 schema 不一致（例如 end_lat/end_lon）。
+                table = pa.Table.from_pydict(batch_rows, schema=schema)
+                writer.write_table(table)  # type: ignore[arg-type]
                 batch_rows = {k: [] for k in batch_rows}
 
             for _, obj in it:

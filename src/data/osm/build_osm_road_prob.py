@@ -88,9 +88,19 @@ def rasterize_roads_to_mask(geoms: Iterable, grid: GridSpec) -> np.ndarray:
 
 
 def main() -> None:
-    ap = argparse.ArgumentParser(description="Build OSM-based road_mask/dist_to_road/road_prob for Detroit core grid.")
+    ap = argparse.ArgumentParser(description="Build OSM-based road_mask/dist_to_road/road_prob for a city grid (default: Detroit core).")
     ap.add_argument("--osm_pbf", type=Path, required=True, help="OSM .pbf file path (Detroit region)")
     ap.add_argument("--out_dir", type=Path, required=True, help="Output directory (e.g. data/processed_worldtrace_detroit)")
+    ap.add_argument(
+        "--bbox",
+        type=float,
+        nargs=4,
+        default=None,
+        metavar=("MIN_LON", "MIN_LAT", "MAX_LON", "MAX_LAT"),
+        help="Override bbox in EPSG:4326. Default: Detroit core bbox.",
+    )
+    ap.add_argument("--grid_h", type=int, default=None, help="Override grid H (default: 1024)")
+    ap.add_argument("--grid_w", type=int, default=None, help="Override grid W (default: 1024)")
     ap.add_argument("--road_types", choices=["A", "B"], default="B", help="Road types set (A=conservative, B=more complete)")
     ap.add_argument("--buffer_m", type=float, default=15.0, help="Road width buffer (meters) via dilation")
     ap.add_argument("--road_prob_sigma_m", type=float, default=50.0, help="Sigma for exp(-dist/sigma)")
@@ -101,7 +111,14 @@ def main() -> None:
     except ModuleNotFoundError as e:
         raise SystemExit("Missing dependency: pyrosm. Install via conda/pip (plus shapely/geopandas).") from e
 
-    grid = _default_detroit_core_grid()
+    if args.bbox is None and args.grid_h is None and args.grid_w is None:
+        grid = _default_detroit_core_grid()
+    else:
+        bbox_vals = args.bbox or [-83.25, 42.25, -82.95, 42.50]
+        bbox = BBox(min_lon=float(bbox_vals[0]), min_lat=float(bbox_vals[1]), max_lon=float(bbox_vals[2]), max_lat=float(bbox_vals[3]))
+        H = int(args.grid_h or 1024)
+        W = int(args.grid_w or 1024)
+        grid = GridSpec(H=H, W=W, bbox=bbox)
     road_types = ROAD_TYPES_A if args.road_types == "A" else ROAD_TYPES_B
 
     bbox = grid.bbox

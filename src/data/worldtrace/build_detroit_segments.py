@@ -296,9 +296,19 @@ def _process_member_chunk(
 
 
 def main() -> None:
-    ap = argparse.ArgumentParser(description="Extract Detroit core bbox segments from WorldTrace Trajectory.zip.")
+    ap = argparse.ArgumentParser(description="Extract bbox segments from WorldTrace Trajectory.zip (one row per segment).")
     ap.add_argument("--trajectory_zip", type=Path, required=True, help="Path to Trajectory.zip")
     ap.add_argument("--out_parquet", type=Path, required=True, help="Output parquet (one row per segment)")
+    ap.add_argument(
+        "--bbox",
+        type=float,
+        nargs=4,
+        default=None,
+        metavar=("MIN_LON", "MIN_LAT", "MAX_LON", "MAX_LAT"),
+        help="Override bbox in EPSG:4326. Default: Detroit core bbox.",
+    )
+    ap.add_argument("--grid_h", type=int, default=1024, help="Grid height H (default: 1024)")
+    ap.add_argument("--grid_w", type=int, default=1024, help="Grid width  W (default: 1024)")
     ap.add_argument("--limit_files", type=int, default=0, help="Debug limit on number of csv files (0=no limit)")
     ap.add_argument(
         "--num_workers",
@@ -321,7 +331,14 @@ def main() -> None:
     if pa is None or pq is None:
         raise SystemExit("pyarrow is required for --out_parquet. Install: pip/conda install pyarrow")
 
-    grid = _default_detroit_core_grid()
+    if args.bbox is None:
+        grid = _default_detroit_core_grid()
+        if int(args.grid_h) != int(grid.H) or int(args.grid_w) != int(grid.W):
+            grid = GridSpec(H=int(args.grid_h), W=int(args.grid_w), bbox=grid.bbox)
+    else:
+        min_lon, min_lat, max_lon, max_lat = map(float, args.bbox)
+        bbox = BBox(min_lon=min_lon, max_lon=max_lon, min_lat=min_lat, max_lat=max_lat)
+        grid = GridSpec(H=int(args.grid_h), W=int(args.grid_w), bbox=bbox)
     cfg = SegmentConfig(
         dt_gap_s=int(args.dt_gap_s),
         min_segment_points=int(args.min_segment_points),

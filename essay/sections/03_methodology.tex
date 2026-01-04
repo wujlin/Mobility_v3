@@ -1,12 +1,12 @@
 \subsection{Methodology: Behavioral Reference Frames via Cross-City Transfer}
-Our methodology is organized around a research design goal: instantiate a \emph{behavioral reference frame} that predicts how people \emph{normally} choose routes under comparable intent and time context, then use the mismatch to detect functional rupture signatures. The generator is not a goal in itself; it exists to make the behavioral baseline well-defined and auditable.
+Our methodology is organized around a single research design goal: instantiate a \emph{behavioral reference frame} that produces a \emph{spatially specific} expectation of normal route choice, then use the mismatch to detect functional rupture signatures. The generator is not the scientific endpoint; it exists to define an auditable behavioral baseline that can be compared to realized mobility at the level of corridors and maps, not only as city-wide or tract-level scalars.
 
 \subsubsection{Study design: construct, apply, compare}
 We instantiate the behavioral reference frame in four steps.
 \textbf{(1) Learn normal route choice.} We train a route-choice generator in one or more functional reference cities, learning the distribution of corridor decisions and detours conditioned on origin--destination intent and time context.
 \textbf{(2) Apply to Detroit.} We transfer the trained generator to Detroit without re-fitting to Detroit-specific behavior. This yields a ``normal-behavior'' prediction for each Detroit trip context.
-\textbf{(3) Compute residuals.} We compare the predicted routes to realized Detroit routes and summarize the mismatch as residual statistics (e.g., corridor shifts, systematic detour under/over-estimation, and spatial over/under-representation).
-\textbf{(4) Spatialize and validate.} We map residuals over the city and validate them by comparison with external indicators of functional rupture.
+\textbf{(3) Compute residuals.} For each trip context, we compare the predicted \emph{spatial footprint} of normal routing to the realized footprint and summarize the mismatch as residual structure (corridor substitution, under/over-traversal of locations, and systematic detour under/over-estimation).
+\textbf{(4) Spatialize and validate.} We aggregate residuals across trips to obtain a city-wide \emph{behavioral avoidance field} and validate its structure by comparison with external indicators of functional rupture.
 
 This design addresses a key ambiguity: detours can be normal efficiency trade-offs, not necessarily symptoms. By learning the baseline from functional cities, we avoid treating shortest paths as ``ground truth'' behavior.
 
@@ -45,7 +45,7 @@ Once the behavioral reference model is trained, we compute residuals between pre
 (iii) \emph{spatial residual maps} (cells that are over- or under-represented relative to the reference).
 These residuals are the primary scientific outputs; they are then compared to external rupture indicators.
 
-In plain terms, the residual asks: \emph{given the same origin, destination, and time context, what parts of the city does the reference model expect travelers to traverse, and which parts do they actually traverse?} Cells that are consistently predicted but rarely visited form an ``avoidance field'', while cells that are unexpectedly over-visited suggest compensatory routing or functional substitution.
+In plain terms, the residual asks: \emph{given the same origin, destination, and time context, what parts of the city does the reference model expect travelers to traverse, and which parts do they actually traverse?} Cells that are consistently expected but under-realized form a \textbf{behavioral avoidance field}. Cells that are unexpectedly over-realized suggest \emph{substitution}: alternative corridors and neighborhoods that absorb the displaced flow. This spatial specificity turns rupture detection from a statement of ``degree'' (how much detour) into a statement of ``structure'': where deviations concentrate, whether they form contiguous fracture zones, and which corridors replace which.
 
 \paragraph{Behavioral vs.\ physical reference.}
 We report all residual analyses relative to the behavioral reference and contrast them with a physical reference frame (shortest-path baseline). This comparison is essential because a city can contain normal detours even without rupture; the behavioral reference is designed to absorb these normal trade-offs so that only excess deviation remains.

@@ -2,21 +2,38 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import time
 import zipfile
 from pathlib import Path
 from typing import Optional
 
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
 
 def _now_iso() -> str:
     return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
 
 
-def _download(url: str, out_path: Path) -> None:
+def _init_session(user_agent: str, *, max_retries: int) -> requests.Session:
+    session = requests.Session()
+    retries = Retry(
+        total=max(0, int(max_retries)),
+        backoff_factor=1,
+        status_forcelist=[429, 500, 502, 503, 504],
+        allowed_methods=["GET"],
+    )
+    adapter = HTTPAdapter(max_retries=retries, pool_connections=10, pool_maxsize=10)
+    session.mount("https://", adapter)
+    session.headers.update({"User-Agent": user_agent})
+    return session
+
+
+def _download(session: requests.Session, url: str, out_path: Path, *, proxies: Optional[dict]) -> None:
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    with requests.get(url, stream=True, timeout=300) as r:
+    with session.get(url, stream=True, timeout=300, proxies=proxies) as r:
         r.raise_for_status()
         tmp = out_path.with_suffix(out_path.suffix + ".tmp")
         with tmp.open("wb") as f:
@@ -44,6 +61,15 @@ def main() -> None:
     ap.add_argument("--state_fips", type=str, default="26", help="State FIPS (default: 26=MI)")
     ap.add_argument("--out_dir", type=Path, required=True, help="Output directory")
     ap.add_argument("--convert_geoparquet", action="store_true", help="If geopandas installed, convert shapefile to geoparquet")
+    ap.add_argument("--http_proxy", type=str, default=None, help="HTTP proxy (overrides env HTTP_PROXY)")
+    ap.add_argument("--https_proxy", type=str, default=None, help="HTTPS proxy (overrides env HTTPS_PROXY)")
+    ap.add_argument(
+        "--user_agent",
+        type=str,
+        default="GeoExplicitSFM/TIGERDownloader (requests)",
+        help="HTTP User-Agent",
+    )
+    ap.add_argument("--max_retries", type=int, default=3, help="HTTP retries for transient errors (default: 3)")
     args = ap.parse_args()
 
     year = int(args.year)
@@ -52,7 +78,39 @@ def main() -> None:
 
     args.out_dir.mkdir(parents=True, exist_ok=True)
     zip_path = args.out_dir / f"tl_{year}_{state}_tract.zip"
-    _download(url, zip_path)
+
+    http_proxy = args.http_proxy or os.environ.get("HTTP_PROXY") or os.environ.get("http_proxy")
+    https_proxy = args.https_proxy or os.environ.get("HTTPS_PROXY") or os.environ.get("https_proxy")
+    proxies = None
+    if http_proxy or https_proxy:
+        proxies = {}
+        if http_proxy:
+            proxies["http"] = http_proxy
+        if https_proxy:
+            proxies["https"] = https_proxy
+
+    session = _init_session(str(args.user_agent), max_retries=int(args.max_retries))
+    try:
+        _download(session, url, zip_path, proxies=proxies)
+    except Exception as e:
+        print(
+            json.dumps(
+                {
+                    "created_at": _now_iso(),
+                    "url": url,
+                    "zip_path": str(zip_path),
+                    "error": f"{type(e).__name__}: {e}",
+                    "proxy_env": {
+                        "HTTP_PROXY": os.environ.get("HTTP_PROXY"),
+                        "HTTPS_PROXY": os.environ.get("HTTPS_PROXY"),
+                    },
+                    "proxy_args": {"http_proxy": args.http_proxy, "https_proxy": args.https_proxy},
+                    "user_agent": str(args.user_agent),
+                },
+                indent=2,
+            )
+        )
+        raise SystemExit(2) from e
 
     extract_dir = args.out_dir / f"tl_{year}_{state}_tract"
     extract_dir.mkdir(parents=True, exist_ok=True)
@@ -81,4 +139,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

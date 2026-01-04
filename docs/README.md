@@ -5,21 +5,18 @@
 
 ---
 
-## 1) 先看哪份？（按需求）
+## 1) 看哪份？（按需求）
 
 - **我要确认任务定义/无泄漏/评估协议**：`docs/TASK_DEFINITION.md`
 - **我要确认多源数据版本/坐标系/时间一致性（数据契约）**：`docs/DATA_CONTRACT.md`
+- **我要跟踪关键决策与口径变化（实时记录）**：`docs/RESEARCH_LOG.md`
 - **我要快速理解代码框架与模块关系**：`docs/CODE_STRUCTURE.md`
 - **我要理解数据产物与字段**：`docs/DATA_STRUCTURE.md`
-- **我要写论文/essay 的 Phase A 素材**：`docs/PHASE_A_RESULTS.md`
-- **我要做地理可视化（bbox 映射，不做 map-matching）**：`docs/GEO_VISUALIZATION.md`
 - **我要了解学术 SOTA（Map-based vs Hierarchical）与路线选择**：`docs/SOTA_TRAJECTORY_GENERATION_2025_UPDATE.md`
-- **我要跑 trip-level 分层验证（Macro→Skeleton→DetRes，含 G1/G2 审计命令）**：`docs/HIERARCHICAL_VALIDATION_PROTOCOL.md`
-- **我要读 Phase C 结果复盘（Hard Support + AR + DetRes）**：`docs/PHASE_C_RESULTS.md`
 - **我要看新的路线图（OSM 道路先验（软） + 拓扑 + 城市语义 + AR + Diffusion 多模态）**：`docs/PHASE_D_ROADMAP_OSM_TOPO_SEMANTICS.md`
-- **我要准备汇报讲稿**：`docs/PPT_SPEAKER_NOTES.md`
-- **我要少踩坑地跑实验/同步多机器**：`docs/EXPERIMENT_PLAYBOOK.md`
 - **我要把主数据切换到 WorldTrace（UniTraj 底座）并做 Detroit 试点**：`docs/WORDTRACE_UNITRAJ.md`
+- **我要准备外部验证指标（ACS/TIGER tract-level vacancy/income/pop）**：`docs/DATA_CONTRACT.md`
+- **（Legacy）深圳 dt30 复现材料入口**：`docs/archive/legacy_shenzhen/`
 
 ### （归档）Phase B / 窗口级材料（保留但不作为当前主线入口）
 
@@ -52,8 +49,8 @@
 
 ### 2.2 事实层（只写“仓库里已有产物”）
 
-- `docs/PHASE_A_RESULTS.md`
-- `docs/PHASE_C_RESULTS.md`
+- `docs/archive/legacy_shenzhen/PHASE_A_RESULTS.md`（legacy）
+- `docs/archive/legacy_shenzhen/PHASE_C_RESULTS.md`（legacy）
 
 写作规则：
 - 只引用仓库内可点击路径（例如 `data/experiments/.../metrics.json`）
@@ -61,13 +58,13 @@
 
 ### 2.3 诊断与方案层（允许假设，但要可证伪）
 
-- `docs/HIERARCHICAL_VALIDATION_PROTOCOL.md`：分层验证协议（G1/G2 审计命令）
+- `docs/archive/legacy_shenzhen/HIERARCHICAL_VALIDATION_PROTOCOL.md`：分层验证协议（legacy，G1/G2 审计命令）
 - `docs/PHASE_D_ROADMAP_OSM_TOPO_SEMANTICS.md`：新路线图（OSM/拓扑/语义/Diffusion）
 - `docs/SOTA_TRAJECTORY_GENERATION_2025_UPDATE.md`：学术 SOTA（含 2025 更新）
 
 ### 2.4 写作/汇报层（不作为真相源）
 
-- `docs/PPT_SPEAKER_NOTES.md`：逐页讲稿（服务于汇报，不替代结果文档）
+- `docs/archive/legacy_shenzhen/PPT_SPEAKER_NOTES.md`：逐页讲稿（legacy，服务于汇报，不替代结果文档）
 - `docs/ESSAY_QUICK_GUIDE.md`：写作流程与素材入口
 
 ---

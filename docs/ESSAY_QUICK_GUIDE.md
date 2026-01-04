@@ -55,7 +55,7 @@ Implementation Plan, Task List and Thought in Chinese：本文件是“最后 1�
 你想强调“城市空间意义/复杂动力学”，最省时间的加分图是：
 - 将 evaluate 保存的 `samples.npz` 从 grid `[y,x]` 线性映射回经纬度 bbox，做轨迹叠图 + 密度图。
 
-一键命令与注意事项见：`docs/GEO_VISUALIZATION.md`
+一键命令与注意事项见：`docs/archive/legacy_shenzhen/GEO_VISUALIZATION.md`
 
 ---
 

@@ -23,7 +23,7 @@
 ### Legacy（仅用于复现）：深圳 dt30（Phase C）
 
 - 旧设定（dt_fixed=30s）仍保留在仓库中用于复现与对照，但不再作为 Phase D 的任务合同来源。
-- 旧口径的命令与审计：见 `docs/HIERARCHICAL_VALIDATION_PROTOCOL.md` 与 `docs/PHASE_C_RESULTS.md`。
+- 旧口径的命令与审计：见 `docs/archive/legacy_shenzhen/HIERARCHICAL_VALIDATION_PROTOCOL.md` 与 `docs/archive/legacy_shenzhen/PHASE_C_RESULTS.md`。
 
 ---
 
@@ -146,7 +146,7 @@ Phase D（WorldTrace×Detroit）不再把“深圳 HDF5 + nav_field”当作默�
 - `data/processed_worldtrace_detroit/osm_road_mask.npy` / `osm_dist_to_road_m.npy` / `osm_road_prob.npy`
 - `data/processed_worldtrace_detroit/poi_density_*.npy` / `landuse_dom.npy` / `landuse_entropy.npy`
 
-> Legacy（深圳 dt30）相关的 `nav_field.npz`/HDF5 产物合同与命令，统一放在 `docs/HIERARCHICAL_VALIDATION_PROTOCOL.md` 与 `docs/archive/`，避免与 Phase D 口径混淆。
+> Legacy（深圳 dt30）相关的 `nav_field.npz`/HDF5 产物合同与命令，统一放在 `docs/archive/legacy_shenzhen/HIERARCHICAL_VALIDATION_PROTOCOL.md` 与 `docs/archive/`，避免与 Phase D 口径混淆。
 
 ---
 

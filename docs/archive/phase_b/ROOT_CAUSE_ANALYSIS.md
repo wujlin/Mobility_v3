@@ -2,7 +2,7 @@
 
 > **范围声明**：本文件只讨论 Phase B（dt30，窗口级 diffusion/physics）里的“收缩/宏观偏小”问题。  
 > 若你当前在跑 trip-level 的分层路线（Macro Hard Support + AR + DetRes）与后续 OSM/拓扑/语义路线，请转看：  
-> - `docs/PHASE_C_RESULTS.md`  
+> - `docs/archive/legacy_shenzhen/PHASE_C_RESULTS.md`  
 > - `docs/PHASE_D_ROADMAP_OSM_TOPO_SEMANTICS.md`
 
 ## 1. 为了解决什么问题？

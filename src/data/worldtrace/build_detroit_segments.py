@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import argparse
+from concurrent.futures import ProcessPoolExecutor, as_completed
 import csv
 import datetime as dt
 import io
 import json
 import math
+import os
 import sys
 import zipfile
 from dataclasses import dataclass
@@ -243,11 +245,73 @@ def _open_parquet_writer(path: Path, schema: pa.Schema) -> pq.ParquetWriter:
     return pq.ParquetWriter(str(path), schema=schema, compression="zstd")
 
 
+_WORKER_ZIP_PATH: Optional[str] = None
+_WORKER_ZF: Optional[zipfile.ZipFile] = None
+
+
+def _get_worker_zip(zip_path: str) -> zipfile.ZipFile:
+    global _WORKER_ZIP_PATH, _WORKER_ZF
+    if _WORKER_ZF is None or _WORKER_ZIP_PATH != zip_path:
+        _WORKER_ZIP_PATH = zip_path
+        _WORKER_ZF = zipfile.ZipFile(zip_path, "r")
+    return _WORKER_ZF
+
+
+def _process_member_chunk(
+    zip_path: str,
+    members: List[str],
+    *,
+    bbox_dict: Dict[str, float],
+    grid_hw: Tuple[int, int],
+    cfg_dict: Dict[str, object],
+) -> Dict[str, object]:
+    """
+    Worker: process a chunk of trajectory CSV members and return kept segments only.
+    This keeps IPC small because only rare positive segments are returned.
+    """
+    bbox = BBox(**bbox_dict)
+    H, W = grid_hw
+    grid = GridSpec(H=int(H), W=int(W), bbox=bbox)
+    cfg = SegmentConfig(
+        dt_gap_s=int(cfg_dict["dt_gap_s"]),
+        min_segment_points=int(cfg_dict["min_segment_points"]),
+        matched_distance_max_m=float(cfg_dict["matched_distance_max_m"]),
+        max_unmatched_ratio=float(cfg_dict["max_unmatched_ratio"]),
+    )
+
+    zf = _get_worker_zip(zip_path)
+    kept: List[Tuple[str, Dict[str, List]]] = []
+    for member in members:
+        try:
+            rows = _iter_csv_rows_from_zip(zf, member)
+            segs = _split_bbox_segments(rows, bbox=bbox, grid=grid, cfg=cfg)
+            seg = _select_longest_segment(segs)
+            if seg is None or not _segment_ok(seg, cfg):
+                continue
+            kept.append((member, seg))
+        except Exception:
+            continue
+
+    return {"scanned": len(members), "kept": kept}
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description="Extract Detroit core bbox segments from WorldTrace Trajectory.zip.")
     ap.add_argument("--trajectory_zip", type=Path, required=True, help="Path to Trajectory.zip")
     ap.add_argument("--out_parquet", type=Path, required=True, help="Output parquet (one row per segment)")
     ap.add_argument("--limit_files", type=int, default=0, help="Debug limit on number of csv files (0=no limit)")
+    ap.add_argument(
+        "--num_workers",
+        type=int,
+        default=0,
+        help="Parallel workers for scanning CSV members (0=auto, 1=disable).",
+    )
+    ap.add_argument(
+        "--chunk_size",
+        type=int,
+        default=5000,
+        help="Chunk size for parallel scanning (only used when num_workers>1).",
+    )
     ap.add_argument("--dt_gap_s", type=int, default=5)
     ap.add_argument("--min_segment_points", type=int, default=120)
     ap.add_argument("--matched_distance_max_m", type=float, default=30.0)
@@ -281,45 +345,77 @@ def main() -> None:
     )
 
     out_writer = _open_parquet_writer(args.out_parquet, schema)
+    scanned = 0
+    wrote = 0
     try:
         with zipfile.ZipFile(args.trajectory_zip, "r") as zf:
             members = [m for m in zf.namelist() if m.endswith(".csv")]
-            if args.limit_files:
-                members = members[: int(args.limit_files)]
+        if args.limit_files:
+            members = members[: int(args.limit_files)]
 
-            wrote = 0
-            scanned = 0
-            for member in members:
-                scanned += 1
-                rows = _iter_csv_rows_from_zip(zf, member)
-                segs = _split_bbox_segments(rows, bbox=grid.bbox, grid=grid, cfg=cfg)
-                seg = _select_longest_segment(segs)
-                if seg is None or not _segment_ok(seg, cfg):
+        num_workers = int(args.num_workers)
+        if num_workers <= 0:
+            num_workers = os.cpu_count() or 1
+        chunk_size = max(1, int(args.chunk_size))
+
+        def _write_one(member: str, seg: Dict[str, List]) -> None:
+            nonlocal wrote
+            n = int(seg["n"])
+            unr = float(seg["unmatched_n"]) / float(max(n, 1))
+            batch = pa.Table.from_pydict(
+                {
+                    "traj_csv": [member],
+                    "n_points": [n],
+                    "unmatched_ratio": [np.float32(unr)],
+                    "t": [seg["t"]],
+                    "lat": [np.asarray(seg["lat"], np.float32).tolist()],
+                    "lon": [np.asarray(seg["lon"], np.float32).tolist()],
+                    "y": [np.asarray(seg["y"], np.int32).tolist()],
+                    "x": [np.asarray(seg["x"], np.int32).tolist()],
+                    "is_matched": [np.asarray(seg["is_matched"], np.int8).tolist()],
+                    "matched_distance": [np.asarray(seg["matched_distance"], np.float32).tolist()],
+                },
+                schema=schema,
+            )
+            out_writer.write_table(batch)
+            wrote += 1
+
+        if num_workers <= 1:
+            with zipfile.ZipFile(args.trajectory_zip, "r") as zf:
+                for member in members:
+                    scanned += 1
+                    rows = _iter_csv_rows_from_zip(zf, member)
+                    segs = _split_bbox_segments(rows, bbox=grid.bbox, grid=grid, cfg=cfg)
+                    seg = _select_longest_segment(segs)
+                    if seg is None or not _segment_ok(seg, cfg):
+                        if scanned % 50000 == 0:
+                            print(f"[INFO] scanned={scanned} wrote={wrote}", file=sys.stderr)
+                        continue
+                    _write_one(member, seg)
+                    if wrote % 10000 == 0:
+                        print(f"[INFO] scanned={scanned} wrote={wrote}", file=sys.stderr)
+        else:
+            zip_path = str(args.trajectory_zip)
+            chunks = [members[i : i + chunk_size] for i in range(0, len(members), chunk_size)]
+            with ProcessPoolExecutor(max_workers=num_workers) as ex:
+                futs = [
+                    ex.submit(
+                        _process_member_chunk,
+                        zip_path,
+                        chunk,
+                        bbox_dict=grid.bbox.__dict__,
+                        grid_hw=(grid.H, grid.W),
+                        cfg_dict=cfg.__dict__,
+                    )
+                    for chunk in chunks
+                ]
+                for fut in as_completed(futs):
+                    r = fut.result()
+                    scanned += int(r.get("scanned", 0))
+                    for member, seg in (r.get("kept") or []):  # type: ignore[assignment]
+                        _write_one(member, seg)
                     if scanned % 50000 == 0:
                         print(f"[INFO] scanned={scanned} wrote={wrote}", file=sys.stderr)
-                    continue
-
-                n = int(seg["n"])
-                unr = float(seg["unmatched_n"]) / float(max(n, 1))
-                batch = pa.Table.from_pydict(
-                    {
-                        "traj_csv": [member],
-                        "n_points": [n],
-                        "unmatched_ratio": [np.float32(unr)],
-                        "t": [seg["t"]],
-                        "lat": [np.asarray(seg["lat"], np.float32).tolist()],
-                        "lon": [np.asarray(seg["lon"], np.float32).tolist()],
-                        "y": [np.asarray(seg["y"], np.int32).tolist()],
-                        "x": [np.asarray(seg["x"], np.int32).tolist()],
-                        "is_matched": [np.asarray(seg["is_matched"], np.int8).tolist()],
-                        "matched_distance": [np.asarray(seg["matched_distance"], np.float32).tolist()],
-                    },
-                    schema=schema,
-                )
-                out_writer.write_table(batch)
-                wrote += 1
-                if wrote % 10000 == 0:
-                    print(f"[INFO] scanned={scanned} wrote={wrote}", file=sys.stderr)
 
     finally:
         out_writer.close()

@@ -4,7 +4,7 @@ Implementation Plan, Task List and Thought in Chinese：本文件是一封“可
 
 教授您好，
 
-> 注：该 memo 对应的是 Phase B（dt30，窗口级）里“macro loss 作为主线修复 shrinkage”的阶段。Phase B v1.1 之后我们把窗口级主线转向 `prior + residual`，并将剩余瓶颈定位为 nav\_field 的注入/保守 tether（详见 `docs/archive/memos/PROFESSOR_QUERY_RESIDUAL_V11.md`）。而当前 trip-level 主线已转向 `docs/PHASE_C_RESULTS.md` 与 `docs/PHASE_D_ROADMAP_OSM_TOPO_SEMANTICS.md`。此文档保留为阶段性证据与复盘材料。
+> 注：该 memo 对应的是 Phase B（dt30，窗口级）里“macro loss 作为主线修复 shrinkage”的阶段。Phase B v1.1 之后我们把窗口级主线转向 `prior + residual`，并将剩余瓶颈定位为 nav\_field 的注入/保守 tether（详见 `docs/archive/memos/PROFESSOR_QUERY_RESIDUAL_V11.md`）。而当前 trip-level 主线已转向 `docs/archive/legacy_shenzhen/PHASE_C_RESULTS.md` 与 `docs/PHASE_D_ROADMAP_OSM_TOPO_SEMANTICS.md`。此文档保留为阶段性证据与复盘材料。
 
 我们按您上次的建议把训练期 Macro Loss 从 Rog 切换到 **EPE（端到端位移差）**，并做了：
 

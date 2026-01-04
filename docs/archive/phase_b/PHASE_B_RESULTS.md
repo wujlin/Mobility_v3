@@ -13,7 +13,7 @@
 Phase B 的这份文档讨论的是 **dt30 窗口级（window-level）** 的 shrinkage / macro–micro trade-off。该阶段我们曾重点探索：**Residual（Prior + Residual）+ CFG（Destination Guidance）** 等路线，用于直接对抗 shrinkage 与宏观收缩。
 
 > 重要：后续在 **trip-level 分层诊断（Phase C）** 中，我们把主要瓶颈重新定位为“宏观决策/执行解耦 + 可行域/拓扑/语义信息缺失”，当前主线已转向：
-> - `docs/PHASE_C_RESULTS.md`（Hard Support + AR + DetRes 的已验证基线）
+> - `docs/archive/legacy_shenzhen/PHASE_C_RESULTS.md`（Hard Support + AR + DetRes 的已验证基线）
 > - `docs/PHASE_D_ROADMAP_OSM_TOPO_SEMANTICS.md`（OSM 道路先验（软） + 拓扑 + 城市语义 + AR + Diffusion 多模态）
 
 - **子刊级可视化与一键出图口径**：`docs/archive/phase_b/PHASE_B_CFG_VISUALIZATION.md`

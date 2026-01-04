@@ -79,7 +79,7 @@
 
 为了避免再走 “看起来合理但实际上是同义反复” 的弯路，分层路线必须先通过两个 **Go/No-Go Gate**（CPU-only，不烧卡），再做 Oracle 执行能力诊断。
 
-> **硬约束协议（必读）**：`docs/HIERARCHICAL_VALIDATION_PROTOCOL.md`
+> **硬约束协议（必读）**：`docs/archive/legacy_shenzhen/HIERARCHICAL_VALIDATION_PROTOCOL.md`
 
 ### 4.0 Waypoint Gate（Go/No-Go；先跑这个）
 

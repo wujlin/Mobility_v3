@@ -4,7 +4,7 @@
 
 > **范围声明**：本文件讨论的是 Phase B（dt30，窗口级）里的 shrinkage 结构性修复（prior+residual）。  
 > 若你当前在跑 trip-level 的分层路线（Macro Hard Support + AR + DetRes）与后续 OSM/拓扑/语义路线，请转看：  
-> - `docs/PHASE_C_RESULTS.md`  
+> - `docs/archive/legacy_shenzhen/PHASE_C_RESULTS.md`  
 > - `docs/PHASE_D_ROADMAP_OSM_TOPO_SEMANTICS.md`
 
 核心思路（KISS）：

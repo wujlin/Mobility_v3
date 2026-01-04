@@ -163,6 +163,26 @@ WorldTrace 不提供城市标签，因此 Detroit 必须用空间规则筛选。
 - 时间戳：`TBD`
 - 类别体系：`TBD`（需要映射到统一口径）
 
+### 3.4 Census / ACS（外部验证指标：tract-level）
+
+目的：为 H2/H3 提供独立的“断裂 proxy”（vacancy / income / population 等），用于与 residual/avoidance field 做空间对齐与相关性检验。
+
+拍板口径（最小可用集合；后续扩展必须进入消融与版本化）：
+- 统计层级：Census tract（以 `geoid` 为键）
+- 推荐年份：`ACS5 2023`（与 WorldTrace 2021–2023 尾部最接近；若后续改年需显式记录）
+- 最小变量集合（可直接用于 vacancy / population / income）：
+  - `B25002_001E` total housing units
+  - `B25002_003E` vacant housing units
+  - `B01003_001E` total population
+  - `B19013_001E` median household income
+- 产出：
+  - `acs_tract_<year>_state<state_fips>.csv`（含 `geoid` 与派生 `vacancy_rate`）
+  - `tiger_tract_<year>_state<state_fips>/`（tract 边界；可选 geoparquet）
+
+可执行下载脚本（仓库内）：
+- ACS 指标：`python -m src.data.census.download_acs_tract --year <YEAR> --out_csv <OUT.csv>`
+- TIGER 边界：`python -m src.data.census.download_tiger_tract --year <YEAR> --out_dir <OUT_DIR>`
+
 ---
 
 ## 4) OSM（辅助特征，不做 hard cut）

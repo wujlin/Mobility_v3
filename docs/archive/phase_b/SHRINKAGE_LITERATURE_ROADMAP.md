@@ -260,7 +260,7 @@ python -m src.training.evaluate \
 2) **CFG（目的地引导）是有效的推理期旋钮**  
    - 事实：cfg=2/3 在同一评估口径下呈现稳定的 micro–macro trade-off（并非偶然）。  
    - 重要边界：CFG 只能放大“朝目的地的平均梯度场”，**并不会凭空产生低频 detour/拓扑选择**；在 trip-level 诊断里容易表现为 Destination Gravity（直冲终点）+ 抖动。  
-     - 结论口径：CFG 可作为 Phase B/窗口级的对照旋钮与可视化素材，但**不应再作为 trip-level 主线去赌“调参能绕路”**（证据链见 `docs/archive/phase_b/PHASE_B_CFG_VISUALIZATION.md`、`docs/PHASE_C_RESULTS.md`）。  
+     - 结论口径：CFG 可作为 Phase B/窗口级的对照旋钮与可视化素材，但**不应再作为 trip-level 主线去赌“调参能绕路”**（证据链见 `docs/archive/phase_b/PHASE_B_CFG_VISUALIZATION.md`、`docs/archive/legacy_shenzhen/PHASE_C_RESULTS.md`）。  
    - 口径建议：不再扫 cfg 网格；固定两点：  
      - 主表：cfg=2（micro-optimal within macro validity gate）  
      - 附图：cfg=3（macro-validity-optimal，展示可调性）

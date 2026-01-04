@@ -1,6 +1,15 @@
-We study \textbf{OD-conditioned trajectory generation with a known destination} (KnownDestination) under an explicit temporal semantics setting (dt-fixed $\Delta t = 30$s). We investigate the following questions under a strict, leakage-free evaluation protocol:
+Our starting point is a city-science question: if an urban region suffers a functional rupture, how does that rupture imprint itself on everyday mobility? We approach this through cross-city transfer and a behavioral baseline.
+
+\paragraph{Main research question.}
+\textbf{Can we detect and localize urban functional ruptures by comparing observed mobility in a target city to a learned behavioral reference frame trained on functional cities?}
+
+\paragraph{Hypotheses.}
+We pre-register three hypotheses that connect the modeling design to the scientific claims:
 \begin{itemize}
-  \item \textbf{Coverage vs.\ realism:} under OD conditioning, how do deterministic regression and diffusion-based generators compare in micro-level errors (mean; best-of-$K$ oracle, i.e., minimum error over $K$ samples) and macro-level motion statistics (net displacement, MSD, Rog)?
-  \item \textbf{Main hypothesis:} can a \textbf{residual decomposition} (deterministic prior + stochastic residual diffusion) mitigate macroscopic shrinkage, defined as systematic under-estimation of net displacement and speed, while retaining multi-modality?
-  \item \textbf{Role of navigation field conditioning:} does injecting a \textbf{train-only navigation field conditioning signal} improve best-of-$K$ coverage without introducing conservative bias in macroscopic motion scale?
+  \item \textbf{H1 (Behavioral regularity is transferable):} route-choice patterns learned from one functional city generalize to other functional cities with small residuals, indicating that ``normal'' detour behavior is not purely city-idiosyncratic.
+  \item \textbf{H2 (Rupture signature):} in Detroit, the spatial distribution of residuals between the behavioral reference and realized mobility correlates with independent rupture indicators (e.g., vacancy, safety, or service accessibility proxies).
+  \item \textbf{H3 (Behavioral $>$ physical reference):} a behavioral reference frame produces rupture signatures that are more spatially localized and more correlated with independent rupture indicators than a physical reference frame (shortest-path baseline). This validates that behavioral references separate normal trade-offs from dysfunction-driven avoidance.
 \end{itemize}
+
+\paragraph{Role of model structure and diffusion.}
+The model is not a goal in itself; it is a measurement instrument. We therefore treat known generator failure modes (e.g., overly direct routes in end-to-end generators) as threats to measurement validity, and adopt decision-consistent planning to mitigate them. Diffusion is considered only after a valid single-mode behavioral baseline is established, and is used to represent multi-modal normal route choice rather than to ``fix'' infeasibility.

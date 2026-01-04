@@ -3,7 +3,7 @@
 > 目的：把 “trip-level 决策 + segment-level 执行” 的分层路线，变成**可执行、可止损、可归因**的工程流程。  
 > 原则：不为赶时间做 trivial 设计；不做无意义烧卡；所有止损线必须可复现（固定统计口径 + CI + 噪声地板）。
 
-> **阶段性结果解读**：见 `docs/PHASE_C_RESULTS.md`（Phase C：Macro Hard Support + AR + DetRes）。
+> **阶段性结果解读**：见 `docs/archive/legacy_shenzhen/PHASE_C_RESULTS.md`（Phase C：Macro Hard Support + AR + DetRes）。
 > **下一阶段路线图**：见 `docs/PHASE_D_ROADMAP_OSM_TOPO_SEMANTICS.md`（OSM 道路先验（软） + 拓扑 + 城市语义 + AR + Diffusion 多模态）。
 
 **重要说明（避免口径混淆）**

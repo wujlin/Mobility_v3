@@ -261,6 +261,12 @@ def main() -> None:
     ap.add_argument("--max_threads", type=int, default=16)
     ap.add_argument("--max_tiles", type=int, default=0, help="Debug: limit number of spatial tiles scanned (0=no limit)")
     ap.add_argument("--dry_run", action="store_true", help="Only scan metadata and report task count (no downloads)")
+    ap.add_argument(
+        "--log_every",
+        type=int,
+        default=0,
+        help="If >0, print a JSON progress line every N completed downloads (to stderr).",
+    )
     ap.add_argument("--config_url", type=str, default=CONFIG_URL_DEFAULT, help="Wayback config URL")
     ap.add_argument("--metadata_url_tpl", type=str, default=METADATA_URL_TPL_DEFAULT, help="Wayback metadata URL template with {z}/{y}/{x}")
     ap.add_argument("--mode", choices=["metadata", "fixed_releases"], default="metadata", help="Download mode")
@@ -318,8 +324,7 @@ def main() -> None:
                 for rid in rids:
                     info = release_map[rid]
                     url = _build_tile_url(info, x=x, y=y, z=zoom)
-                    rel_date = info.release_date or f"rid_{rid}"
-                    out_path = out_dir / f"z{zoom}" / f"{zoom}_{x}_{y}" / f"{rel_date}.jpg"
+                    out_path = out_dir / f"z{zoom}" / f"{zoom}_{x}_{y}" / f"rid_{rid}.jpg"
                     tasks.append((url, out_path))
             if args.max_tiles and scanned_tiles > int(args.max_tiles):
                 break
@@ -339,8 +344,7 @@ def main() -> None:
                 for rid in release_ids:
                     info = release_map[rid]
                     url = _build_tile_url(info, x=x, y=y, z=zoom)
-                    rel_date = info.release_date or f"rid_{rid}"
-                    out_path = out_dir / f"z{zoom}" / f"{zoom}_{x}_{y}" / f"{rel_date}.jpg"
+                    out_path = out_dir / f"z{zoom}" / f"{zoom}_{x}_{y}" / f"rid_{rid}.jpg"
                     tasks.append((url, out_path))
             if args.max_tiles and scanned_tiles > int(args.max_tiles):
                 break
@@ -356,6 +360,8 @@ def main() -> None:
         "dry_run": bool(args.dry_run),
         "mode": str(args.mode),
     }
+    if args.mode == "fixed_releases":
+        meta["release_ids"] = list(args.release_ids or [])
     out_dir.mkdir(parents=True, exist_ok=True)
     (out_dir / "wayback_scan_meta.json").write_text(json.dumps(meta, indent=2), encoding="utf-8")
 
@@ -366,18 +372,38 @@ def main() -> None:
     # stage 2: download
     t0 = time.time()
     counts: Dict[str, int] = {"OK": 0, "SKIP": 0, "FAIL": 0}
+    status_counts: Dict[str, int] = {}
+    done = 0
+    log_every = max(0, int(args.log_every))
     with ThreadPoolExecutor(max_workers=int(args.max_threads)) as ex:
         futs = {ex.submit(_download_one, session, url, path): (url, path) for (url, path) in tasks}
         for fut in as_completed(futs):
             status = fut.result()
+            done += 1
+            status_counts[status] = status_counts.get(status, 0) + 1
             if status == "OK":
                 counts["OK"] += 1
             elif status == "SKIP":
                 counts["SKIP"] += 1
             else:
                 counts["FAIL"] += 1
+            if log_every and (done % log_every == 0):
+                print(
+                    json.dumps(
+                        {
+                            "done": done,
+                            "total": len(tasks),
+                            "ok": counts["OK"],
+                            "skip": counts["SKIP"],
+                            "fail": counts["FAIL"],
+                            "elapsed_s": time.time() - t0,
+                        }
+                    ),
+                    file=os.sys.stderr,
+                    flush=True,
+                )
 
-    report = {**meta, "download": counts, "elapsed_s": time.time() - t0}
+    report = {**meta, "download": counts, "status_counts": status_counts, "elapsed_s": time.time() - t0}
     (out_dir / "wayback_download_report.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
     print(json.dumps(report, indent=2))
 

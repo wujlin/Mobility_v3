@@ -1,164 +1,99 @@
-# 开发进度追踪
+Implementation Plan, Task List and Thought in Chinese
+
+# 开发进度追踪（当前主线：WorldTrace × Detroit）
 
 > [!IMPORTANT]
-> 任务定义与实验协议以 `docs/TASK_DEFINITION.md` 为唯一准则；本文件用于进度记录，若与其冲突以其为准。
-
-> **项目**：物理约束扩散模型 - 轨迹生成  
-> **数据**：深圳出租车 GPS（2011/04/18-26）  
-> **更新**：2025-12-31
+> **任务口径/评估口径**以 `docs/TASK_DEFINITION.md` 为唯一准则；本文件只记录“主线推进到哪一步、下一步需要产出什么”。  
+> legacy（深圳 dt30）已归档：`docs/archive/legacy_shenzhen/`。
 
 ---
 
-## 总览
+## 0) 主线叙事（1 句话）
 
-| Phase | 任务 | 状态 |
-|-------|------|------|
-| 1 | 数据预处理 | ✅ 完成 |
-| 2 | 全量处理 | ⏳ 进行中 |
-| 3 | 模型训练 | ✅ 代码就绪，待真实数据训练 |
-| 4 | 评估验证 | ✅ 代码就绪，待真实数据验证 |
-| C | Macro Hard Support + AR + DetRes（trip-level 分层 baseline） | ✅ 完成（见 docs/PHASE_C_RESULTS.md） |
-| D | OSM 可行域 + 拓扑 + 城市语义 + Diffusion 多模态 | ⏳ 进行中（见 docs/PHASE_D_ROADMAP_OSM_TOPO_SEMANTICS.md） |
+用 **Behavioral Reference Frame**（从 functional 城市学到的“正常 route choice”）去预测 Detroit 的“正常该怎么走”，把预测与真实的差做空间化，得到 **Behavioral Avoidance Field** 并与外部断裂指标对齐（H1/H2/H3）。
 
 ---
 
-## Phase 1: 数据预处理 ✅
+## 1) 代码能力就绪情况（不是“结果”）
 
-### 1.1 GPS 读取 ✅
-
-| 项 | 值 |
-|---|---|
-| 路径 | `data/raw/gps/*.txt` |
-| 格式 | 车牌, 时间, 经度, 纬度, 状态, 速度, 方向 |
-| 文件数 | 1185 |
-| 实现 | `src/data/raw_io.py` |
-
-### 1.2 网格配置 ✅
-
-```python
-H = 400, W = 800
-lat: [22.45, 22.85]
-lon: [113.75, 114.65]
-```
-
-### 1.3 行程切分 ✅
-
-基于状态字段：0=空车, 1=载客
-- 0→1: trip 开始
-- 1→0: trip 结束
-
-### 1.4 归一化 ✅
-
-| 特征 | 方法 |
-|-----|-----|
-| pos | Min-Max → [-1, 1] |
-| vel | Z-Score |
-
-### 1.5 测试结果（20 文件）
-
-```
-轨迹数: 2493
-总点数: 70645
-车辆数: 20
-时间: 2011-04-18 ~ 2011-04-26
-轨迹长度: min=10, max=294, mean=28.3
-```
+| 模块 | 目标产物 | 入口 |
+|---|---|---|
+| WorldTrace manifest | `meta_manifest.parquet` | `python -m src.data.worldtrace.build_manifest` |
+| WorldTrace Detroit segments | `segments.parquet` | `python -m src.data.worldtrace.build_detroit_segments` |
+| OSM soft prior | `osm_road_mask.npy / osm_dist_to_road_m.npy / osm_road_prob.npy` | `python -m src.data.osm.build_osm_road_prob` |
+| SafeGraph POI rasters | `poi_density_*.npy / landuse_dom.npy / landuse_entropy.npy` | `python -m src.data.safegraph.build_poi_rasters` |
+| Wayback imagery | `wayback tiles (jpg)` | `python -m src.data.wayback.download_wayback_tiles` |
+| Census/ACS external indicators | `acs_tract.csv + tiger tracts` | `python -m src.data.census.download_acs_tract` / `python -m src.data.census.download_tiger_tract` |
 
 ---
 
-## Phase 2: 全量处理 ⏳
+## 2) Phase D（Detroit）最小可跑流程（只写“下一步需要产出什么”）
 
-**命令**：
-```bash
-python -m src.data.run_preprocess
-```
+> 路径与版本约束见 `docs/DATA_CONTRACT.md`；Wayback 的代理/SSL 口径见 `docs/WAYBACK.md`。
 
-**进度**：运行中...
-
----
-
-## Phase 3: 模型训练 ✅ 代码就绪
-
-**单元测试全部通过**：
-```
-test_model_seq.py      ✅ SeqBaseline / SeqCVAE Test Passed
-test_model_diffusion.py ✅ DiffusionModel Test Passed  
-test_model_physics.py   ✅ PhysicsModel Test Passed
-```
-
-| 模型 | 文件 | 状态 |
-|-----|-----|-----|
-| Deterministic L2（SeqBaseline） | `train_baseline.py` | ✅ 代码就绪 |
-| CVAE（baseline） | `train_cvae.py` | ✅ 代码就绪 |
-| Diffusion | `train_diffusion.py` | ✅ 代码就绪 |
-| Physics | `physics_condition_diffusion.py` | ✅ 代码就绪 |
-
-**下一步**：全量数据处理完成后，运行训练：
-```bash
-# 0) 生成 strict(train-only) 数据产物（无泄漏）
-python -m src.data.build_strict_products --processed_dir data/processed
-python -m src.utils.sanity_check --data_path data/processed --strict
-
-# Deterministic L2（SeqBaseline）
-python -m src.training.train_baseline --data_path data/processed/trajectories/shenzhen_trajectories.h5 --split train
-
-# CVAE baseline
-python -m src.training.train_cvae --data_path data/processed/trajectories/shenzhen_trajectories.h5 --split train
-
-# Diffusion
-python -m src.training.train_diffusion --model_type diffusion --data_path data/processed/trajectories/shenzhen_trajectories.h5 --split train
-
-# Physics
-python -m src.training.train_diffusion --model_type physics --data_path data/processed/trajectories/shenzhen_trajectories.h5 --nav_file data/processed/nav_field.npz --split train
-```
-
----
-
-## Phase 4: 评估 ✅ 代码就绪
-
-| 层次 | 指标 | 实现 |
-|-----|-----|-----|
-| 微观 | ADE, FDE, Fréchet, DTW | `micro_metrics.py` ✅ |
-| 宏观 | MSD, Rog | `macro_metrics.py` ✅ |
-
----
-
-## Phase B（论文版）：dt=30s 重采样 ✅ 代码就绪
-
-> 论文版必须 dt-fixed（见 `docs/TASK_DEFINITION.md`），并重新生成 train-only 数据产物以避免任何泄漏。
+### Step D1：构建 WorldTrace manifest（全量索引，解耦海量小文件 IO）
 
 ```bash
-# 1) 生成 dt-fixed 数据集（输出到独立目录，避免覆盖 Phase A）
-python -m src.data.build_dt_fixed_dataset \
-  --input_processed_dir data/processed \
-  --output_processed_dir data/processed_dt30 \
-  --dt_fixed 30 \
-  --max_gap 300 \
-  --min_length 10
-
-# 2) 生成 strict(train-only) 数据产物（无泄漏）
-python -m src.data.build_strict_products --processed_dir data/processed_dt30 --backup
-python -m src.utils.sanity_check --data_path data/processed_dt30 --strict --expected_dt 30 --dt_require_constant
+python -m src.data.worldtrace.build_manifest \
+  --meta_zip "$RAW_ROOT/worldtrace/OpenTrace_WorldTrace/Meta.zip" \
+  --out_manifest "$RAW_ROOT/worldtrace/meta_manifest.parquet"
 ```
 
-## 输出文件
+### Step D2：筛 Detroit core segments（bbox 内最长连续段）
 
+```bash
+python -m src.data.worldtrace.build_detroit_segments \
+  --trajectory_zip "$RAW_ROOT/worldtrace/OpenTrace_WorldTrace/Trajectory.zip" \
+  --out_parquet "$RAW_ROOT/worldtrace/detroit_core_v1/segments.parquet" \
+  --dt_gap_s 5 --min_segment_points 120 \
+  --matched_distance_max_m 30 --max_unmatched_ratio 0.2 \
+  --num_workers 48 --chunk_size 5000
 ```
-data/processed/
-├── trajectories/shenzhen_trajectories.h5
-├── splits/{train,val,test}_ids.npy
-├── data_stats.json
-└── nav_field.npz
+
+### Step D3：生成 OSM road_prob（soft prior）
+
+```bash
+python -m src.data.osm.build_osm_road_prob \
+  --osm_pbf "$RAW_ROOT/osm/michigan-latest.osm.pbf" \
+  --out_dir "$RAW_ROOT/worldtrace/detroit_core_v1" \
+  --road_types B --buffer_m 15 --road_prob_sigma_m 50
 ```
 
----
+### Step D4：生成 POI/功能区栅格（SafeGraph）
 
-## 日志
+```bash
+python -m src.data.safegraph.build_poi_rasters \
+  --base_dir "$RAW_ROOT/safegraph/safegraph_unzip" \
+  --base_glob "*.csv" \
+  --vintage 2024-01 \
+  --out_dir "$RAW_ROOT/worldtrace/detroit_core_v1"
+```
 
-| 日期 | 事件 |
-|-----|-----|
-| 2025-12-11 | Phase 1 完成，20 文件测试通过 |
-| 2025-12-11 | GitHub 仓库创建，代码推送 |
-| 2025-12-11 | Phase 2 全量处理启动 |
-| 2025-12-11 | Phase 3/4 单元测试验证通过（代码就绪）|
-| 2025-12-13 | strict(train-only) 数据产物生成器与 sanity_check 完成；支持 dt-fixed(30s) 论文版数据集生成闭环 |
+### Step D5：下载 Wayback 影像（多 release；注意 proxy）
+
+```bash
+PYTHONUNBUFFERED=1 \
+HTTP_PROXY="http://127.0.0.1:7890" HTTPS_PROXY="http://127.0.0.1:7890" \
+python -m src.data.wayback.download_wayback_tiles \
+  --out_dir "$RAW_ROOT/wayback/detroit_core_z16_fixed_multi_r6" \
+  --bbox -83.25 42.25 -82.95 42.50 \
+  --zoom 16 --max_threads 16 \
+  --mode fixed_releases \
+  --release_ids 10 4756 9175 16245 27946 64776 \
+  > >(tee "$RAW_ROOT/wayback/detroit_core_z16_fixed_multi_r6/cli_stdout.json") \
+  2> >(tee "$RAW_ROOT/wayback/detroit_core_z16_fixed_multi_r6/cli_stderr.log" >&2)
+```
+
+### Step D6：下载 tract-level 外部指标（ACS + TIGER）
+
+```bash
+python -m src.data.census.download_acs_tract \
+  --year 2023 --state_fips 26 \
+  --out_csv "$RAW_ROOT/census/acs_tract_2023_state26.csv"
+
+python -m src.data.census.download_tiger_tract \
+  --year 2023 --state_fips 26 \
+  --out_dir "$RAW_ROOT/census/tiger_tract_2023_state26" \
+  --convert_geoparquet
+```
+

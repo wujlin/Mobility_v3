@@ -1,7 +1,7 @@
 # Phase B Results Review & Recommendations
 
 ## 1. Summary of Observation
-I have reviewed `docs/archive/phase_b/PHASE_B_RESULTS.md` and compared it with `docs/PHASE_A_RESULTS.md`. The key observations are:
+I have reviewed `docs/archive/phase_b/PHASE_B_RESULTS.md` and compared it with `docs/archive/legacy_shenzhen/PHASE_A_RESULTS.md`. The key observations are:
 1.  **Baseline Rebound**: The Baseline model performance significantly **improved** in Phase B (ADE 6.42 -> 5.47). This is expected as `dt_fixed=30s` removes time-interval noise, making the "conditional mean" easier to learn for a deterministic LSTM.
 2.  **Diffusion Regression**: The Diffusion/Physics models **degraded** in Phase B (ADE 6.02 -> 6.74), leading to a large performance gap where Baseline >> Diffusion.
 3.  **Capacity Mismatch**: There is a critical discrepancy in model capacity:

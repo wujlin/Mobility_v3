@@ -14,8 +14,8 @@
 执行一次下载会在 `--out_dir` 下生成：
 - `wayback_scan_meta.json`：扫描 bbox/zoom 后的元数据统计（tile_range、扫描 tile 数、下载任务数等）
 - `wayback_download_report.json`：下载完成后的统计（OK/SKIP/FAIL 与耗时）
-- 瓦片目录（按空间瓦片分组、按 release_date 命名）：
-  - `z{zoom}/{zoom}_{x}_{y}/{release_date}.jpg`
+- 瓦片目录（按空间瓦片分组、按 release_id 命名；避免 release_date 缺失/异常导致口径不一致）：
+  - `z{zoom}/{zoom}_{x}_{y}/rid_{release_id}.jpg`
 
 ---
 
@@ -137,3 +137,36 @@ python -m src.data.wayback.download_wayback_tiles \
 ```
 
 在你还没拿到新 metadata 端点之前，建议直接使用 `fixed_releases` 跑通数据落盘（见 2/3 节）。
+
+### 4.4 `SSLError: CERTIFICATE_VERIFY_FAILED (Hostname mismatch)`
+
+在部分网络环境下（尤其存在透明代理/证书注入时），`requests` 可能会报主机名不匹配的 SSL 错误，导致下载任务“看起来在跑但没有任何文件落盘”。
+
+**排查与解决（KISS）**：
+- 先用浏览器或 `curl` 验证同一 URL 是否能正常返回 `image/jpeg`。
+- 若你有本地代理（例如 Clash），直接在运行前显式导出：
+
+```bash
+export HTTP_PROXY="http://127.0.0.1:7890"
+export HTTPS_PROXY="http://127.0.0.1:7890"
+```
+
+然后重新运行下载命令。
+
+> 说明：我们不在脚本里默认关闭 SSL 校验（避免把“下载成功”建立在不安全假设上）；网络侧问题应优先用代理/CA 修复。
+
+### 4.5 `wayback_download_report.json` 为空/无法解析
+
+`download_wayback_tiles.py` 会在 `--out_dir` 内 **自动写入**：
+- `wayback_scan_meta.json`
+- `wayback_download_report.json`
+
+因此不要把 stdout 重定向到 `wayback_download_report.json`（会生成一个空文件覆盖真实报告）。
+
+如果你想同时保留 CLI 输出与 stderr，建议：
+
+```bash
+PYTHONUNBUFFERED=1 python -m src.data.wayback.download_wayback_tiles ... \
+  > >(tee "$OUT_DIR/cli_stdout.json") \
+  2> >(tee "$OUT_DIR/cli_stderr.log" >&2)
+```

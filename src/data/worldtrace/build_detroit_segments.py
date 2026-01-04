@@ -8,6 +8,7 @@ import io
 import json
 import math
 import os
+import multiprocessing as mp
 import sys
 import zipfile
 from dataclasses import dataclass
@@ -317,6 +318,12 @@ def main() -> None:
         help="Parallel workers for scanning CSV members (0=auto, 1=disable).",
     )
     ap.add_argument(
+        "--mp_start",
+        choices=["fork", "spawn"],
+        default="fork",
+        help="Multiprocessing start method for workers (default: fork). Use 'spawn' to avoid fork+large-memory issues.",
+    )
+    ap.add_argument(
         "--chunk_size",
         type=int,
         default=5000,
@@ -414,7 +421,11 @@ def main() -> None:
         else:
             zip_path = str(args.trajectory_zip)
             chunks = [members[i : i + chunk_size] for i in range(0, len(members), chunk_size)]
-            with ProcessPoolExecutor(max_workers=num_workers) as ex:
+            if args.mp_start == "spawn":
+                mp_ctx = mp.get_context("spawn")
+            else:
+                mp_ctx = mp.get_context("fork")
+            with ProcessPoolExecutor(max_workers=num_workers, mp_context=mp_ctx) as ex:
                 futs = [
                     ex.submit(
                         _process_member_chunk,

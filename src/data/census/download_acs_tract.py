@@ -78,6 +78,9 @@ def main() -> None:
     for v in variables:
         if v in df.columns:
             df[v] = pd.to_numeric(df[v], errors="coerce")
+            # ACS uses negative sentinel values (e.g., -666666666) for missing estimates.
+            # For our use (counts/income), negative values are invalid => treat as missing.
+            df.loc[df[v] < 0, v] = None
 
     # Derived indicators (only if required vars are present)
     if "B25002_001E" in df.columns and "B25002_003E" in df.columns:
@@ -107,4 +110,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

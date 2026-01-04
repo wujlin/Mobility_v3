@@ -15,6 +15,9 @@ def _now_iso() -> str:
 
 def _pstats(s: pd.Series) -> Dict[str, Any]:
     x = pd.to_numeric(s, errors="coerce")
+    # Negative values are invalid for our covariates (counts/income/ratios) and
+    # often represent missing sentinels in ACS.
+    x = x.where(x >= 0)
     out: Dict[str, Any] = {"count": int(x.notna().sum()), "na_rate": float(x.isna().mean())}
     if out["count"] <= 0:
         out.update({"min": None, "p50": None, "p90": None, "mean": None})
@@ -148,6 +151,15 @@ def main() -> None:
     out = tracts.merge(acs, left_on="GEOID", right_on="geoid", how="left", suffixes=("", "_acs"))
     missing = int(out["geoid"].isna().sum())
 
+    # Clean negative ACS sentinels inside the merged table (defensive; should also be handled upstream).
+    for col in ("B25002_001E", "B25002_003E", "B01003_001E", "B19013_001E"):
+        if col in out.columns:
+            out[col] = pd.to_numeric(out[col], errors="coerce")
+            out.loc[out[col] < 0, col] = None
+    if "vacancy_rate" in out.columns:
+        out["vacancy_rate"] = pd.to_numeric(out["vacancy_rate"], errors="coerce")
+        out.loc[out["vacancy_rate"] < 0, "vacancy_rate"] = None
+
     # Write parquet
     args.out_parquet.parent.mkdir(parents=True, exist_ok=True)
     write_meta: Dict[str, Any] = {}
@@ -196,4 +208,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

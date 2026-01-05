@@ -47,6 +47,9 @@ These residuals are the primary scientific outputs; they are then compared to ex
 
 In plain terms, the residual asks: \emph{given the same origin, destination, and time context, what parts of the city does the reference model expect travelers to traverse, and which parts do they actually traverse?} Cells that are consistently expected but under-realized form a \textbf{behavioral avoidance field}. Cells that are unexpectedly over-realized suggest \emph{substitution}: alternative corridors and neighborhoods that absorb the displaced flow. This spatial specificity turns rupture detection from a statement of ``degree'' (how much detour) into a statement of ``structure'': where deviations concentrate, whether they form contiguous fracture zones, and which corridors replace which.
 
+\paragraph{Spatialization and conditioning.}
+Residual maps are computed by aggregating \emph{expected} and \emph{observed} route footprints over matched trip contexts. Conditioning is explicit: each Detroit trip is evaluated under the same origin--destination intent and time context, so differences cannot be attributed to global OD distribution shifts alone. Aggregation uses normalized rates rather than raw counts to avoid domination by high-volume OD pairs or tracts. When reference coverage is incomplete (contexts that are rare or absent in the reference cities), we report coverage explicitly and restrict residual interpretation to supported contexts.
+
 \paragraph{Behavioral vs.\ physical reference.}
 We report all residual analyses relative to the behavioral reference and contrast them with a physical reference frame (shortest-path baseline). This comparison is essential because a city can contain normal detours even without rupture; the behavioral reference is designed to absorb these normal trade-offs so that only excess deviation remains.
 

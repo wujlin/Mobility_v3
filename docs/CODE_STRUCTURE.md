@@ -10,6 +10,31 @@
 
 ---
 
+## 0. 当前主线（Phase D：WorldTrace × 多城迁移 × 城市语义）
+
+Phase D 的目标不是“刷一个更低 ADE”，而是构造 **Behavioral Reference Frame** 并在 Detroit 上产出 **Behavioral Avoidance Field**。因此代码的主线闭环是：
+
+1) **WorldTrace 子集与连续段**（多进程 / IO 为主瓶颈）  
+   - `src/data/worldtrace/build_manifest.py`：从 `Meta.zip` 建 manifest（全局索引）
+   - `src/data/worldtrace/build_detroit_segments.py`：按 bbox 抽取 city core 连续段（尽管文件名包含 detroit，但脚本支持 `--bbox/--grid_*`）
+
+2) **Geo-context 特征（全部可开关、可审计）**  
+   - OSM soft prior（road\_prob）：`src/data/osm/build_osm_road_prob.py`
+   - POI 栅格（SafeGraph）：`src/data/safegraph/build_poi_rasters.py`
+   - Wayback 遥感瓦片：`src/data/wayback/download_wayback_tiles.py`
+   - Census/ACS 外部指标（tract）：`src/data/census/*.py`
+
+3) **决策-执行生成器（作为“参照系”而非终点）**  
+   - Macro planner（AR waypoint；Phase D 主线将使用 soft prior，不做 hard cut）：`src/training/train_macro_*` + `src/models/macro/`
+   - Micro executor（确定性执行）：复用 `src/training/train_baseline.py` 或后续单独脚本（按需要）
+
+4) **残差空间化与验证**  
+   - 标量审计（city story / detour 分布）：`src/evaluation/city_story_analysis.py`
+   - G1/G2 审计与诊断脚本：`src/evaluation/*.py`
+   - Avoidance field（回避场）构造：`src/evaluation/build_avoidance_field.py`（输入：`expected_segments.parquet` vs `observed_segments.parquet`；输出：`avoidance_log_ratio.npy` 等）
+
+> 说明：Phase D 的外置数据根目录建议用 `$RAW_ROOT`（不进 git），仓库内只放代码与小体量 JSON/PNG；见 `docs/DATA_STRUCTURE.md`。
+
 ## 1. 目录结构
 
 项目根目录（建议）：
@@ -60,8 +85,8 @@ $$P(\tau \mid o, d, t_0, \text{env})$$
 
 **职责：**
 
-1. 从 `data/raw/` 读取原始 GPS 轨迹 / 路网
-2. 生成 `data/processed/`：map-matching、trip 切分、条件变量
+1. Phase D：从外置 `$RAW_ROOT/` 读取 WorldTrace/OSM/SafeGraph/Wayback/Census 等多源数据（不进 git）
+2. Legacy（深圳 dt30，仅复现）：从 `legacy/shenzhen/data/raw/` 构建 `legacy/shenzhen/data/processed*`
 3. 提供统一的 PyTorch Dataset 接口
 
 **推荐子结构：**
@@ -73,6 +98,17 @@ src/data/
 ├── trajectories.py        # Trajectory 对象 & 操作
 ├── datasets_seq.py        # 序列预测 Dataset
 └── datasets_diffusion.py  # 扩散生成 Dataset
+```
+
+Phase D 新增的数据模块（外置数据根目录 + 可复现产物）：
+
+```text
+src/data/
+├── worldtrace/             # WorldTrace manifest/segments（多进程抽取）
+├── osm/                    # OSM road_mask/dist/road_prob
+├── safegraph/              # SafeGraph POI 栅格化（vintage + active 规则）
+├── wayback/                # ArcGIS Wayback 遥感瓦片下载
+└── census/                 # ACS 指标 + TIGER 边界（tract-level）
 ```
 
 **统一 sample 结构：**
@@ -256,6 +292,17 @@ src/training/
 └── train_diffusion.py    # 训练 diffusion / physics（通过 --model_type）
 ```
 
+Phase D 的主线训练脚本（Macro/AR 方向）：
+
+```text
+src/training/
+├── train_macro_hardsupport.py        # legacy: hard support（输出空间裁剪）
+├── train_macro_hardsupport_ar.py     # legacy: hard support + AR
+└── train_macro_diffusion.py          # macro diffusion（Phase D 将作为“多模态意图层”候选；需 gated）
+```
+
+> 注：Phase D 已明确“不把 hard support 当能力”。`src/models/macro/*hardsupport*` 作为历史上界/诊断基线保留；主线将实现 soft-prior 版本的 AR planner（同目录下新增文件），并通过消融审计避免把外部地图当真值。
+
 **每个脚本的职责：**
 
 1. 解析配置（数据路径、模型超参、训练参数）
@@ -266,30 +313,30 @@ src/training/
 **示例用法：**
 
 ```bash
-# Deterministic L2（按 split）
+# Legacy（深圳）：Deterministic L2（按 split）
 python -m src.training.train_baseline \
-  --data_path data/processed/trajectories/shenzhen_trajectories.h5 \
+  --data_path legacy/shenzhen/data/processed/trajectories/shenzhen_trajectories.h5 \
   --split train \
   --exp_name baseline_v1_strict
 
-# CVAE baseline（按 split）
+# Legacy（深圳）：CVAE baseline（按 split）
 python -m src.training.train_cvae \
-  --data_path data/processed/trajectories/shenzhen_trajectories.h5 \
+  --data_path legacy/shenzhen/data/processed/trajectories/shenzhen_trajectories.h5 \
   --split train \
   --exp_name cvae_v1_strict
 
-# Data-only Diffusion（按 split）
+# Legacy（深圳）：Data-only Diffusion（按 split）
 python -m src.training.train_diffusion \
   --model_type diffusion \
-  --data_path data/processed/trajectories/shenzhen_trajectories.h5 \
+  --data_path legacy/shenzhen/data/processed/trajectories/shenzhen_trajectories.h5 \
   --split train \
   --exp_name diff_v1_strict
 
-# Physics Diffusion（按 split + nav_field）
+# Legacy（深圳）：Physics Diffusion（按 split + nav_field）
 python -m src.training.train_diffusion \
   --model_type physics \
-  --data_path data/processed/trajectories/shenzhen_trajectories.h5 \
-  --nav_file data/processed/nav_field.npz \
+  --data_path legacy/shenzhen/data/processed/trajectories/shenzhen_trajectories.h5 \
+  --nav_file legacy/shenzhen/data/processed/nav_field.npz \
   --split train \
   --exp_name physics_v1_strict
 ```
@@ -310,11 +357,11 @@ src/evaluation/
 
 ```bash
 python -m src.training.evaluate \
-  --exp_name physics_v1_strict_eval \
+  --exp_name legacy_phys_dt30_eval \
   --model_type physics \
-  --data_path data/processed/trajectories/shenzhen_trajectories.h5 \
-  --checkpoint data/experiments/physics_v1_strict/last.pt \
-  --nav_file data/processed/nav_field.npz \
+  --data_path legacy/shenzhen/data/processed/trajectories/shenzhen_trajectories.h5 \
+  --checkpoint legacy/shenzhen/data/experiments/phys_dt30_rog_h128_b1024_lr1e-3_e20_s0/last.pt \
+  --nav_file legacy/shenzhen/data/processed/nav_field.npz \
   --split test \
   --num_samples_per_condition 20
 ```
@@ -361,8 +408,8 @@ experiment:
   seed: 42
 
 data:
-  trajectory_file: "data/processed/trajectories/city_trajectories.h5"
-  nav_field_file: "data/processed/nav_field.npz"
+  trajectory_file: "legacy/shenzhen/data/processed/trajectories/shenzhen_trajectories.h5"  # legacy 示例
+  nav_field_file: "legacy/shenzhen/data/processed/nav_field.npz"                           # legacy 示例
   history_len: 4
   future_len: 16
   batch_size: 256
@@ -386,7 +433,7 @@ evaluation:
 **约定：**
 - 每次实验写一个配置文件
 - 训练脚本读取 config，不在代码里硬编码路径/超参
-- 实验结果保存到 `data/experiments/{exp_name}/`
+- 默认实验结果保存到 `data/experiments/{exp_name}/`（建议软链到外置 `$RAW_ROOT/experiments/`）；legacy 深圳产物封存在 `legacy/shenzhen/data/experiments/{exp_name}/`
 
 ---
 

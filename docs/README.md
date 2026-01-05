@@ -16,21 +16,21 @@
 - **我要看新的路线图（OSM 道路先验（软） + 拓扑 + 城市语义 + AR + Diffusion 多模态）**：`docs/PHASE_D_ROADMAP_OSM_TOPO_SEMANTICS.md`
 - **我要把主数据切换到 WorldTrace（UniTraj 底座）并做 Detroit 试点**：`docs/WORDTRACE_UNITRAJ.md`
 - **我要准备外部验证指标（ACS/TIGER tract-level vacancy/income/pop）**：`docs/DATA_CONTRACT.md`
-- **（Legacy）深圳 dt30 复现材料入口**：`docs/archive/legacy_shenzhen/`
+- **（Legacy）深圳 dt30 复现材料入口**：`legacy/shenzhen/README.md`
 
 ### （归档）Phase B / 窗口级材料（保留但不作为当前主线入口）
 
-- `docs/archive/phase_b/PHASE_B_RESULTS.md`
-- `docs/archive/phase_b/PHASE_B_CFG_VISUALIZATION.md`
-- `docs/archive/phase_b/ROOT_CAUSE_ANALYSIS.md`
-- `docs/archive/phase_b/RESIDUAL_DIFFUSION.md`
-- `docs/archive/phase_b/SHRINKAGE_LITERATURE_ROADMAP.md`
-- `docs/archive/phase_b/PHASE_B_REVIEW.md`
-- `docs/archive/phase_b/RF_PILOT.md`
-- `docs/archive/memos/EXPERT_CONSULTATION_PACKET.md`
-- `docs/archive/memos/PROFESSOR_QUERY_RESIDUAL_V11.md`
-- `docs/archive/memos/PROFESSOR_QUERY_MACRO_LOSS.md`
-- `docs/archive/memos/PROFESSOR_UPDATE_BATCH_EPE.md`
+- `legacy/shenzhen/docs/phase_b/PHASE_B_RESULTS.md`
+- `legacy/shenzhen/docs/phase_b/PHASE_B_CFG_VISUALIZATION.md`
+- `legacy/shenzhen/docs/phase_b/ROOT_CAUSE_ANALYSIS.md`
+- `legacy/shenzhen/docs/phase_b/RESIDUAL_DIFFUSION.md`
+- `legacy/shenzhen/docs/phase_b/SHRINKAGE_LITERATURE_ROADMAP.md`
+- `legacy/shenzhen/docs/phase_b/PHASE_B_REVIEW.md`
+- `legacy/shenzhen/docs/phase_b/RF_PILOT.md`
+- `legacy/shenzhen/docs/memos/EXPERT_CONSULTATION_PACKET.md`
+- `legacy/shenzhen/docs/memos/PROFESSOR_QUERY_RESIDUAL_V11.md`
+- `legacy/shenzhen/docs/memos/PROFESSOR_QUERY_MACRO_LOSS.md`
+- `legacy/shenzhen/docs/memos/PROFESSOR_UPDATE_BATCH_EPE.md`
 - `docs/archive/sota/SOTA_TRAJECTORY_GENERATION.md`
 
 ---
@@ -49,22 +49,22 @@
 
 ### 2.2 事实层（只写“仓库里已有产物”）
 
-- `docs/archive/legacy_shenzhen/PHASE_A_RESULTS.md`（legacy）
-- `docs/archive/legacy_shenzhen/PHASE_C_RESULTS.md`（legacy）
+- `legacy/shenzhen/docs/legacy_shenzhen/PHASE_A_RESULTS.md`（legacy）
+- `legacy/shenzhen/docs/legacy_shenzhen/PHASE_C_RESULTS.md`（legacy）
 
 写作规则：
-- 只引用仓库内可点击路径（例如 `data/experiments/.../metrics.json`）
+- 只引用仓库内可点击路径（例如 `legacy/shenzhen/data/experiments/.../metrics.json`）
 - 每条结论都标注是否 *preliminary*（quick / subset / 单 seed）
 
 ### 2.3 诊断与方案层（允许假设，但要可证伪）
 
-- `docs/archive/legacy_shenzhen/HIERARCHICAL_VALIDATION_PROTOCOL.md`：分层验证协议（legacy，G1/G2 审计命令）
+- `legacy/shenzhen/docs/legacy_shenzhen/HIERARCHICAL_VALIDATION_PROTOCOL.md`：分层验证协议（legacy，G1/G2 审计命令）
 - `docs/PHASE_D_ROADMAP_OSM_TOPO_SEMANTICS.md`：新路线图（OSM/拓扑/语义/Diffusion）
 - `docs/SOTA_TRAJECTORY_GENERATION_2025_UPDATE.md`：学术 SOTA（含 2025 更新）
 
 ### 2.4 写作/汇报层（不作为真相源）
 
-- `docs/archive/legacy_shenzhen/PPT_SPEAKER_NOTES.md`：逐页讲稿（legacy，服务于汇报，不替代结果文档）
+- `legacy/shenzhen/docs/legacy_shenzhen/PPT_SPEAKER_NOTES.md`：逐页讲稿（legacy，服务于汇报，不替代结果文档）
 - `docs/ESSAY_QUICK_GUIDE.md`：写作流程与素材入口
 
 ---

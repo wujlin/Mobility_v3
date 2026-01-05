@@ -1,115 +1,86 @@
-Implementation Plan, Task List and Thought in Chinese：本文件是“最后 1–2 小时冲刺写作”的最小骨架，目标是在**不夸大、不造假**的前提下，把你们已经做对的“方法论严谨性 + 可复现性 + 证据链”写成一篇得分高的期末报告（docx）。
+Implementation Plan, Task List and Thought in Chinese：本文档服务于 Phase D（WorldTrace×Detroit）的 essay 写作，强调“科学叙事”而不是“技术报告”。
 
-# Essay 冲刺写作指南（基于真实结果）
+# Essay 写作指南（Phase D：Behavioral Reference Frame → Behavioral Avoidance Field）
 
-> 交付要求来源：`essay/requirements.md`（docx、15 页左右、Times New Roman 12、1.5 倍行距、图表≤5页、必须有个人贡献与 AI 声明）
-
----
-
-## 0) 先说底线：不要“包装/生成预期结果”
-
-你现在时间紧、想拿高分非常合理，但**伪造或选择性误导**属于学术不端，风险远大于收益。  
-更稳妥的高分策略是：把“严格 pipeline + 负结果诊断 + 专家反馈 + 迭代路线”写得清楚，让 instructor 看到你们掌握了科学研究的方法，而不是只堆分数。
+> 目标：把项目从“做了什么”写成“发现了什么、为什么重要、证据是什么”。  
+> 单一真相源：数据口径以 `docs/DATA_CONTRACT.md` 为准；任务/评估口径以 `docs/TASK_DEFINITION.md` 为准；关键概念命名以 `docs/RESEARCH_LOG.md` 为准。  
+> LaTeX 主稿：`essay/main.tex`（已按该叙事框架组织）。
 
 ---
 
-## 1) 你这篇报告最强的主线（建议照抄到 Introduction 最后）
+## 0) 一句话主线（写在 Abstract 末尾、Introduction 末尾都成立）
 
-**主线一句话**：我们研究在已知 OD（KnownDestination）条件下的出租车未来轨迹生成；提出并评估 data-only diffusion 与 physics-conditioned diffusion（nav_field 条件），在严格的 dt-fixed=30s、train-only 产物合同与无泄漏评估协议下，系统对比了确定性回归与生成式模型在**覆盖能力（best-of-K）**与**物理一致性（MSD/Rog）**上的权衡，并对“宏观收缩/走不动”现象做了可复现的根因诊断与改进尝试。
-
-你们的贡献不只是“结果”，更是：
-- strict 数据合同（train-only nav_field & stats + hash）
-- 评估协议补齐（K=20、best-of-K、Fréchet、DTW、GT MSD/Rog）
-- 对 shrinkage 的排雷式诊断（vel_scale / macro loss / gating / batch norm）
+我们用跨城市迁移构造一个 **Behavioral Reference Frame（行为参照系）**，并把“参照系预测的正常路线 footprint”与 Detroit 的真实路线 footprint 做差，得到一个具有**空间具体性**的 **Behavioral Avoidance Field（行为回避场）**，用来描述“断裂长什么样”（走廊替代、边界效应、断裂带形态），而不仅是“断裂强不强”（一个相关系数）。
 
 ---
 
-## 2) Results：最省时间的“1 表 + 2 图”组合
+## 1) 两个概念怎么用（避免叙事混乱）
 
-### 2.1 主表（Phase B quick, test, 320 conditions）
+- **Behavioral Reference Frame**：方法论概念（你构造 baseline 的方式）。标题/摘要/引言重点讲它。
+- **Behavioral Avoidance Field**：实证发现/结果概念（你在 Detroit 上得到的空间残差场）。结果/讨论重点讲它。
 
-直接引用：`docs/archive/phase_b/PHASE_B_RESULTS.md` 第 4 节的 quick 表格（已整理好）。
-
-你在正文里只需要抓 3 句话：
-- **确定性 baseline（K=1）**：`ADE_mean=5.467, FDE_mean=8.855`，宏观指标接近 GT（`Rog=5.494` vs `GT_Rog=5.247`，`MSD_10=304.099` vs `GT_MSD_10=349.740`）。
-- **生成模型（K=20）**：Diffusion/Physics 的 **best-of-K 明显更好**（Diffusion `ADE_best=2.836`，Physics `ADE_best=2.510`），说明具备更强的多模态覆盖潜力。
-- **但宏观收缩明显**：Diffusion `Rog=3.056 (0.582×GT)`, `MSD_10=100.948 (0.289×GT)`；Physics `Rog=3.435 (0.655×GT)`, `MSD_10=116.869 (0.334×GT)` —— physics 能缓解但不足以根治。
-
-对应文件（可复现）：
-- `data/experiments/baseline_b_dt30_eval_quick/metrics.json`
-- `data/experiments/diff_b_dt30_eval_quick/metrics.json`
-- `data/experiments/physics_b_dt30_eval_quick/metrics.json`
-
-### 2.2 图 1：微观指标对比（mean + best-of-K）
-
-建议画法：同一张图里放 `ADE_mean/ADE_best/FDE_mean/FDE_best`（或分两张）。  
-如果来不及画，直接用现成脚本重出（见 `docs/archive/phase_b/PHASE_B_RESULTS.md` 第 5 节的命令），并在 caption 标注 quick=320。
-
-### 2.3 图 2：MSD(τ) 曲线叠图（Pred vs GT）
-
-这是“期刊风格”的硬证据图：横轴 `τ=k*30s`，纵轴 MSD(τ)，至少展示 baseline / diffusion / physics / GT 四条曲线。  
-目的：把“收缩”从一句话变成一张图。
-
-### 2.4（可选加分）图 3：地理空间可视化（地图式展示）
-
-你想强调“城市空间意义/复杂动力学”，最省时间的加分图是：
-- 将 evaluate 保存的 `samples.npz` 从 grid `[y,x]` 线性映射回经纬度 bbox，做轨迹叠图 + 密度图。
-
-一键命令与注意事项见：`docs/archive/legacy_shenzhen/GEO_VISUALIZATION.md`
+叙事约束：不要把“destination gravity”等技术细节当主线；它只解释“为什么要用决策-执行分解/AR，否则参照系会退化成最短路近似”。
 
 ---
 
-## 3) Discussion：用“诊断链”拿分（比硬拉 SOTA 更稳）
+## 2) 写作结构（每节只回答一个问题）
 
-建议分 3 小段，每段都要有“观察→解释→证据路径”：
+### Abstract（回答：我们发现了什么？为什么可信？）
+- 现象：功能断裂是空间异质的，标量指标难以描述其结构。
+- 方法：行为参照系（从 functional 城市学到“正常 route choice”）。
+- 产物：回避场（空间残差），可以揭示走廊替代与行为边界。
+- 可信度：多源对齐（WorldTrace + OSM soft prior + POI + 遥感 + census）与可审计的数据契约。
 
-### 3.1 为什么 ADE_mean 不该成为生成模型的唯一目标
-- 生成式模型追求覆盖未来分布；确定性回归追求条件均值。
-- 因此 best-of-K、Fréchet/DTW、MSD/Rog 更能反映“风险感知与物理真实”。
+### Introduction（回答：为什么 route choice 是“独特信号”？）
+建议写成 5 段：
+1) 城市功能断裂的重要性（Detroit 的空间异质性是动机，不是背景噪音）。
+2) 传统指标是 outcome，不是 process（它们很重要，但缺少“人如何适应”的过程信号）。
+3) 移动行为是“行为投票”，但 detour 很常见；最短路不是好的行为基线。
+4) 行为参照系：用 functional 城市学习正常权衡；避免把“正常绕行”误判为“问题回避”。
+5) 空间具体性：标量比较（detour ratio/相关系数）解释力有限；我们要回答“断裂结构是什么样”。
 
-### 3.2 Shrinkage（走不动）的根因与证据
-直接引用并压缩 `docs/archive/phase_b/ROOT_CAUSE_ANALYSIS.md`：
-- 排除：统计量 mismatch / padding 污染 / 单纯欠拟合
-- 剩下：高不确定性下的均值回归倾向 + nav_field 的保守先验
+### Materials \& Data（回答：我们依赖哪些信息？各自提供什么“语义”？）
+按“功能”写，不要按“下载步骤”写：
+- WorldTrace：提供 OD+时间语境下的 route choice 事实样本（并明确 1Hz、matched 坐标与质量闸门）。
+- OSM（soft prior）：提供“更像路”的连续概率场（road\_prob），作为特征与软正则，而非硬裁剪。
+- SafeGraph POI：提供功能语义（区域“是什么/有什么”），解释非几何原因的绕行。
+- Wayback 遥感：提供建成环境外观（POI 覆盖不到的结构：水体/绿地/大型设施）。
+- Census/ACS：提供独立外部指标（vacancy/income/pop），用于验证回避场是否与断裂 proxy 对齐。
 
-### 3.3 我们做了哪些“严谨但仍未完全解决”的改进尝试
-这里写成 ablation（真实且高分）：
-- 推理期 `vel_scale`：能拉近宏观幅度，但会放大方向误差导致 ADE/FDE 变差（说明尺度≠根治）。
-- 训练期 macro loss：从 Rog 到 EPE（端到端位移），并做 timestep gate；仍存在平台区/权衡（可作为“失败的但严谨的尝试”）。
-- 结构性修复（v1.1 residual）：prior+residual decomposition 把“尺度”交给 deterministic prior，把“随机性”交给 diffusion；在 fast eval 中能显著缓解 shrinkage（可作为“阶段性成功的 pivot”）。
+### Methodology（回答：如何把“参照→残差→空间场”做成可证伪的科学测量？）
+按研究设计写成四步（与 `essay/sections/03_methodology.tex` 对齐）：
+1) 在 functional 城市学习“正常 route choice”（构造参照系）。
+2) 不在 Detroit 上重训（否则参照系不再是 counterfactual）。
+3) 用一致的 OD+时间语境生成“正常 footprint”。
+4) 与 Detroit 真实 footprint 做差并空间化：得到回避场 + 替代场（substitution）。
 
-给出一个小表（可放附录）：展示 `pred_speed/gt_speed`、`MSD10/GT`、`Rog/GT` 的 ratio。
-
-例：Physics batch-normalized EPE（val, K=1, 51200）：
-- `λ=0.01/0.03/0.06` 几乎相同：`speed_ratio≈0.597`，`MSD10_ratio≈0.261`，`Rog_ratio≈0.536`
-（对应：`data/experiments/phys_ft_batchEPE_l0.{01,03,06}_t50_lr3e-4_e22_s0_eval_val_k1/metrics.json`）
-
-结论写法（建议原句）：  
-“Macro loss 在当前实现下尚未根治 shrinkage，但它为后续提供了可解释的控制旋钮；下一步的关键不是继续扫 λ，而是按 GT 位移对 macro 信号做加权/筛选以避免被低位移窗口稀释。”
-
-补充一句（如果篇幅允许）：  
-“进一步地，我们采用 residual decomposition（prior+residual）作为结构性修复，使宏观尺度从‘走不动’转为‘保守 tether’，将后续工作聚焦到 conditioning 注入方式上。”
-
----
-
-## 4) Conclusion：不要写“我们解决了”，写“我们建立了可复现闭环并定位瓶颈”
-
-结论 3 句足够：
-1) 我们构建了 dt-fixed=30s、无泄漏合同的数据/训练/评估闭环；  
-2) 生成式模型在 best-of-K 与分布指标上显示出更强覆盖潜力，physics 条件进一步提升最优覆盖；  
-3) 发现并量化了宏观收缩瓶颈，给出可复现诊断与下一步可验证的修复路线（位移加权 macro loss / 更稳的 low-frequency supervision）。
-（可选替换为更贴近最新状态）：位移加权的 deterministic prior + residual decomposition + 更合理的 nav\_field 注入（避免 mean-field tether）。
+同时明确三条假设（H1/H2/H3），并说明每条假设对应的可证伪证据。
 
 ---
 
-## 5) 你必须补齐的两段声明（按 requirements）
+## 3) 图表怎么选（以“空间结构”说服读者）
 
-### 5.1 个人贡献（每个人都要写）
-你可以按“数据/代码/实验/写作”四类写：
-- 我负责：dt-fixed 数据制作与 strict 合同、训练/评估脚本实现、实验运行与结果分析、报告撰写（哪些章节）。
-- 合作者负责：例如 nav_field 构建、文档规范、baseline 训练、可视化脚本等。
+建议把图表资源集中在“空间具体性”上：
+- Fig 1（概念图）：Behavioral Reference Frame → Behavioral Avoidance Field（流程示意）。
+- Fig 2（标量不足的证据）：Detroit vs Columbus 的 detour 标量相近（或弱相关），引出“需要空间场”。
+- Fig 3（核心结果）：Detroit 的 avoidance field 地图（under-traversal）+ substitution field（over-traversal）。
+- Fig 4（外部验证）：回避场聚合到 tract 后与 vacancy/income 的关系；同时给出一张对齐地图（不只给相关系数）。
 
-### 5.2 AI 声明（如实写）
-可参考 `essay/sections/06_ai_declaration.tex` 的模板，写清楚 AI 用在：
-- brainstorming/润色/代码 review/排错建议（如果有）
-- 最后由作者复核并对内容负责
+> 注意：如果最终回避场只是 vacancy map 的低分辨率版本，必须展示“额外信息量”（走廊替代、边界更尖锐、时变结构等）来回答“为什么值得”。
+
+---
+
+## 4) 结果还没跑完时怎么写（不造假也不失分）
+
+- Results 部分可以先写成“分析计划 + 预注册式口径”（用 will/report/define），并把“将报告的指标与可视化”写清楚。
+- 任何数值型结论（相关系数、显著性、热点位置）必须来自仓库内的真实产物；否则只写“我们将用 X 验证 Y”。
+
+---
+
+## 5) 写作自检（避免写成工程日志）
+
+每写完一节，问自己三个问题：
+1) 这节回答的科学问题是什么？（一句话能说出来）
+2) 读者读完会记住一个“发现/洞见”吗？还是只记住“我们做了很多步骤”？  
+3) 如果删掉所有“我们接下来/首先/然后”，逻辑还能自洽吗？
+

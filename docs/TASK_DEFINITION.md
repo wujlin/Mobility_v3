@@ -23,7 +23,7 @@
 ### Legacy（仅用于复现）：深圳 dt30（Phase C）
 
 - 旧设定（dt_fixed=30s）仍保留在仓库中用于复现与对照，但不再作为 Phase D 的任务合同来源。
-- 旧口径的命令与审计：见 `docs/archive/legacy_shenzhen/HIERARCHICAL_VALIDATION_PROTOCOL.md` 与 `docs/archive/legacy_shenzhen/PHASE_C_RESULTS.md`。
+- 旧口径的命令与审计：见 `legacy/shenzhen/docs/legacy_shenzhen/HIERARCHICAL_VALIDATION_PROTOCOL.md` 与 `legacy/shenzhen/docs/legacy_shenzhen/PHASE_C_RESULTS.md`。
 
 ---
 
@@ -116,7 +116,7 @@ physical_velocity[t] = vel[t] / dt # 单位: grid_cell/second
 ### 3.1 split 文件（唯一真相源）
 
 ```
-data/processed/splits/
+legacy/shenzhen/data/processed/splits/   # legacy 示例（深圳 HDF5 流水线）
   train_ids.npy
   val_ids.npy
   test_ids.npy
@@ -124,9 +124,9 @@ data/processed/splits/
 
 ### 3.2 严格规则
 
-必须仅用 **train split** 估计：
-- `data_stats.json`（normalizer 统计量）
-- `nav_field.npz`（direction/speed/count）
+Legacy（深圳 HDF5）必须仅用 **train split** 估计：
+- `legacy/shenzhen/data/processed/data_stats.json`（normalizer 统计量）
+- `legacy/shenzhen/data/processed/nav_field.npz`（direction/speed/count）
 
 训练与评估必须按 split 过滤轨迹：
 - 训练默认 `--split train`
@@ -141,12 +141,15 @@ Phase D（WorldTrace×Detroit）不再把“深圳 HDF5 + nav_field”当作默�
 - **train-only 统计**：任何用于训练的归一化/密度/先验统计（若存在）必须标注 `split=train` 与输入指纹（sha/版本）
 
 推荐产物形态（示例，名称仅作约定，不限定实现）：
-- `data/processed_worldtrace_detroit/manifest.parquet`（全局索引，用于筛选/抽样/统计）
-- `data/processed_worldtrace_detroit/segments.parquet`（Detroit core 连续段，含 `traj_id/time/lat/lon/is_matched/...`）
-- `data/processed_worldtrace_detroit/osm_road_mask.npy` / `osm_dist_to_road_m.npy` / `osm_road_prob.npy`
-- `data/processed_worldtrace_detroit/poi_density_*.npy` / `landuse_dom.npy` / `landuse_entropy.npy`
+- **推荐外置数据根目录**：`$RAW_ROOT`（不要放进 git；仓库内可用软链指向）
+- `"$RAW_ROOT/worldtrace/<city>_core_v1/manifest.parquet"`（全局索引，用于筛选/抽样/统计）
+- `"$RAW_ROOT/worldtrace/<city>_core_v1/segments.parquet"`（city core 连续段，含 `traj_csv/time/lat/lon/is_matched/...`）
+- `"$RAW_ROOT/worldtrace/<city>_core_v1/osm_road_mask.npy"` / `osm_dist_to_road_m.npy` / `osm_road_prob.npy`
+- `"$RAW_ROOT/worldtrace/<city>_core_v1/poi_density_*.npy"` / `landuse_dom.npy` / `landuse_entropy.npy`
 
-> Legacy（深圳 dt30）相关的 `nav_field.npz`/HDF5 产物合同与命令，统一放在 `docs/archive/legacy_shenzhen/HIERARCHICAL_VALIDATION_PROTOCOL.md` 与 `docs/archive/`，避免与 Phase D 口径混淆。
+> 说明：`<city>_core_v1` 必须把 `bbox/grid` 写死在 `*_meta.json` 里；同一城市若改 bbox/grid 必须新建目录（例如 `detroit_core_v2`），避免“口径漂移导致无法归因”。
+
+> Legacy（深圳 dt30）相关的 `nav_field.npz`/HDF5 产物合同与命令，统一放在 `legacy/shenzhen/docs/legacy_shenzhen/HIERARCHICAL_VALIDATION_PROTOCOL.md` 与 `legacy/shenzhen/README.md`，避免与 Phase D 口径混淆。
 
 ---
 
@@ -199,22 +202,22 @@ Phase D（WorldTrace×Detroit）不再把“深圳 HDF5 + nav_field”当作默�
 生成严格数据产物（train-only）：
 
 ```bash
-python -m src.data.build_strict_products --processed_dir data/processed
+python -m src.data.build_strict_products --processed_dir legacy/shenzhen/data/processed
 ```
 
 严格 sanity check：
 
 ```bash
-python -m src.utils.sanity_check --data_path data/processed --strict
+python -m src.utils.sanity_check --data_path legacy/shenzhen/data/processed --strict
 ```
 
 训练（按 split）：
 
 ```bash
 python -m src.training.train_diffusion \
-  --data_path data/processed/trajectories/shenzhen_trajectories.h5 \
+  --data_path legacy/shenzhen/data/processed/trajectories/shenzhen_trajectories.h5 \
   --model_type physics \
-  --nav_file data/processed/nav_field.npz \
+  --nav_file legacy/shenzhen/data/processed/nav_field.npz \
   --split train \
   --exp_name physics_v1_strict \
   --seed 0
@@ -226,9 +229,9 @@ python -m src.training.train_diffusion \
 python -m src.training.evaluate \
   --exp_name physics_v1_strict_eval \
   --model_type physics \
-  --data_path data/processed/trajectories/shenzhen_trajectories.h5 \
-  --checkpoint data/experiments/physics_v1_strict/last.pt \
-  --nav_file data/processed/nav_field.npz \
+  --data_path legacy/shenzhen/data/processed/trajectories/shenzhen_trajectories.h5 \
+  --checkpoint legacy/shenzhen/data/experiments/physics_v1_strict/last.pt \
+  --nav_file legacy/shenzhen/data/processed/nav_field.npz \
   --split test \
   --num_samples_per_condition 20 \
   --seed 0
@@ -258,10 +261,10 @@ python -m src.training.evaluate \
 - **vel 语义保持不变（决策 B）**：仍用 `step displacement`
   - 只是每一步对应 `dt_fixed`，因此需要物理速度时：`physical_velocity = vel / dt_fixed`
 - **数据产物建议独立目录**（避免覆盖 Phase A）：
-  - `data/processed_dt30/trajectories/shenzhen_trajectories.h5`
-  - `data/processed_dt30/splits/*.npy`
-  - `data/processed_dt30/data_stats.json`（train-only）
-  - `data/processed_dt30/nav_field.npz`（train-only）
+  - `legacy/shenzhen/data/processed_dt30/trajectories/shenzhen_trajectories.h5`
+  - `legacy/shenzhen/data/processed_dt30/splits/*.npy`
+  - `legacy/shenzhen/data/processed_dt30/data_stats.json`（train-only）
+  - `legacy/shenzhen/data/processed_dt30/nav_field.npz`（train-only）
 
 #### 7.2.1 “异常数据 / inactive 数据”处理口径（避免评估口径混乱）
 
@@ -272,11 +275,11 @@ python -m src.training.evaluate \
   - 去重后仍出现 `dt<=0` → 丢弃该轨迹
   - 存在超大 gap（`max_gap`，默认 300s）→ **丢弃整条轨迹**（保持 trip-level OD 语义一致性）
   - 总时长不足以支撑 `min_length`（默认 10）→ 丢弃该轨迹
-  - 事实证据：`data/processed_dt30/resample_meta.json` 会记录 drop 统计；实现代码在 `src/data/build_dt_fixed_dataset.py`（函数 `_resample_one`）。
+  - 事实证据：`legacy/shenzhen/data/processed_dt30/resample_meta.json` 会记录 drop 统计；实现代码在 `src/data/build_dt_fixed_dataset.py`（函数 `_resample_one`）。
 
 - **不会被剔除的 inactive（窗口/局部静止）**：
   - “近静止/低位移”的片段不会在数据集层面被删除；`SeqDataset/DiffusionDataset` 只是滑窗切片，不按速度/位移阈值过滤（见 `src/data/datasets_seq.py`、`src/data/datasets_diffusion.py`）。
-  - **因此：训练用的 GT 与评估用的 GT 都包含这些窗口**；这也是 macro loss 可能被“低位移窗口稀释”的原因之一（见 `docs/archive/memos/PROFESSOR_UPDATE_BATCH_EPE.md`）。
+  - **因此：训练用的 GT 与评估用的 GT 都包含这些窗口**；这也是 macro loss 可能被“低位移窗口稀释”的原因之一（见 `legacy/shenzhen/docs/memos/PROFESSOR_UPDATE_BATCH_EPE.md`）。
   - 但在某些统计指标里会做 *metric-level mask*：例如 Turn Angle 统计通常会对 `speed < turn_min_speed` 的 step 做忽略，以避免 “速度≈0 时航向角不稳定” 造成的数值污染（这是指标计算口径，不等价于删数据）。
 
 - **关于 raw 数据的 `status`（是否载客/有效）字段**：
@@ -285,7 +288,7 @@ python -m src.training.evaluate \
 
 #### 7.2.2 raw→processed（Passenger Trip）推荐实现（status==1）
 
-若你要从 `data/raw/gps/*.txt` 重新构建更“干净的导航意图”数据集，推荐按 Passenger Trip（`status==1`）抽取：
+若你要从 `legacy/shenzhen/data/raw/gps/*.txt` 重新构建更“干净的导航意图”数据集，推荐按 Passenger Trip（`status==1`）抽取：
 
 - 只保留 `status==1`（Passenger Trip），避免把 `status==0` 的 Search Policy 混入导航分布
 - `max_gap_s=300`：gap 视为因果断裂，不跨 gap 插值（切段）
@@ -295,8 +298,8 @@ python -m src.training.evaluate \
 
 ```bash
 python -m src.data.build_passenger_dataset_from_raw_txt \
-  --raw_gps_dir data/raw/gps \
-  --output_dir data/processed_passenger \
+  --raw_gps_dir legacy/shenzhen/data/raw/gps \
+  --output_dir legacy/shenzhen/data/processed_passenger \
   --keep_status 1 \
   --max_gap_s 300 \
   --max_speed_kmh 120 \
@@ -305,27 +308,27 @@ python -m src.data.build_passenger_dataset_from_raw_txt \
   --time_zone shanghai
 ```
 
-> `--time_zone` 说明：本项目的深圳出租车 `data/raw/gps/*.txt` 的 `time` 已确认是北京时间（UTC+8），因此默认使用 `shanghai`。
+> `--time_zone` 说明：本项目的深圳出租车 `legacy/shenzhen/data/raw/gps/*.txt` 的 `time` 已确认是北京时间（UTC+8），因此默认使用 `shanghai`。
 
 生成完成后，务必跑 strict(train-only) 产物以避免泄漏并补齐 `data_stats.json/nav_field.npz`：
 
 ```bash
-python -m src.data.build_strict_products --processed_dir data/processed_passenger --backup
-python -m src.utils.sanity_check --data_path data/processed_passenger --strict
+python -m src.data.build_strict_products --processed_dir legacy/shenzhen/data/processed_passenger --backup
+python -m src.utils.sanity_check --data_path legacy/shenzhen/data/processed_passenger --strict
 ```
 
 如果你要进入 Phase B（论文版 dt=30s），再从 passenger 版本生成 dt-fixed 版本：
 
 ```bash
 python -m src.data.build_dt_fixed_dataset \
-  --input_processed_dir data/processed_passenger \
-  --output_processed_dir data/processed_passenger_dt30 \
+  --input_processed_dir legacy/shenzhen/data/processed_passenger \
+  --output_processed_dir legacy/shenzhen/data/processed_passenger_dt30 \
   --dt_fixed 30 \
   --max_gap 300 \
   --min_length 10
 
-python -m src.data.build_strict_products --processed_dir data/processed_passenger_dt30 --backup
-python -m src.utils.sanity_check --data_path data/processed_passenger_dt30 --strict --expected_dt 30 --dt_require_constant
+python -m src.data.build_strict_products --processed_dir legacy/shenzhen/data/processed_passenger_dt30 --backup
+python -m src.utils.sanity_check --data_path legacy/shenzhen/data/processed_passenger_dt30 --strict --expected_dt 30 --dt_require_constant
 ```
 
 ### 7.3 工程落地（当前缺口与可复现闭环）
@@ -334,8 +337,8 @@ python -m src.utils.sanity_check --data_path data/processed_passenger_dt30 --str
 
 ```bash
 python -m src.data.build_dt_fixed_dataset \
-  --input_processed_dir data/processed \
-  --output_processed_dir data/processed_dt30 \
+  --input_processed_dir legacy/shenzhen/data/processed \
+  --output_processed_dir legacy/shenzhen/data/processed_dt30 \
   --dt_fixed 30 \
   --max_gap 300 \
   --min_length 10
@@ -346,11 +349,11 @@ python -m src.data.build_dt_fixed_dataset \
 2) **复用现有严格产物生成器（train-only，无泄漏）**：
 
 ```bash
-python -m src.data.build_strict_products --processed_dir data/processed_dt30 --backup
-python -m src.utils.sanity_check --data_path data/processed_dt30 --strict --expected_dt 30 --dt_require_constant
+python -m src.data.build_strict_products --processed_dir legacy/shenzhen/data/processed_dt30 --backup
+python -m src.utils.sanity_check --data_path legacy/shenzhen/data/processed_dt30 --strict --expected_dt 30 --dt_require_constant
 ```
 
-- 论文版训练/评估统一指向 `data/processed_dt30/...`，并固定随机种子与配置日志
+- 论文版训练/评估统一指向 `legacy/shenzhen/data/processed_dt30/...`，并固定随机种子与配置日志
 
 ### 7.4 论文实验设计
 

@@ -54,7 +54,7 @@ Implementation Plan, Task List and Thought in Chinese
 因此 Phase D 主线的约束是：
 - OSM road 信息进入模型的方式是 **soft prior/feature + 可审计消融**，而非输出空间裁剪。
 
-注：legacy 深圳 dt30 的 hard support + AR + DetRes 结果与审计被归档为历史证据链，见 `docs/archive/legacy_shenzhen/PHASE_C_RESULTS.md`。
+注：legacy 深圳 dt30 的 hard support + AR + DetRes 结果与审计被归档为历史证据链，见 `legacy/shenzhen/docs/legacy_shenzhen/PHASE_C_RESULTS.md`。
 
 ---
 
@@ -81,3 +81,46 @@ Diffusion 触发门槛（当前口径，写入 `docs/DATA_CONTRACT.md` / `docs/P
 - **proxy 依赖**：任何“road/feasible”的判断都必须说明是 OSM proxy 还是 data-driven proxy（轨迹密度），并版本化 buffer/dilation/sigma。
 - **迁移叙事的自洽性**：functional→functional 残差若不小，则 Behavioral Reference Frame 的“可迁移性”假设不成立，需要先修 H1 再谈 Detroit。
 
+---
+
+## 6) 下一步（可跑命令｜产出第一批 narrative-ready 证据）
+
+目标：先把“标量对比为何不够（空间具体性缺失）”做成一张图 + 一个 JSON，作为 essay 的 baseline 证据。
+
+**Step 1：Detroit 的 detour 分布 + Top-OD route-choice 热图**
+
+```bash
+export RAW_ROOT="$HOME/data/geoexplicit_data"
+export DET_OUT="$RAW_ROOT/worldtrace/detroit_core_v1"
+
+python -m src.evaluation.city_story_analysis \
+  --segments_parquet "$DET_OUT/segments.parquet" \
+  --out_dir "$DET_OUT/story" \
+  --city_name "Detroit" \
+  --timezone "America/Detroit" \
+  --od_bins 8 --top_od 6 --min_od_n 30 \
+  > "$DET_OUT/story/story_analysis.json"
+```
+
+（可选）**Step 2：Columbus 的同口径输出（用于对照“标量相近但结构可能不同”）**
+
+```bash
+export COL_OUT="$RAW_ROOT/worldtrace/columbus_core_v1"
+
+python -m src.evaluation.city_story_analysis \
+  --segments_parquet "$COL_OUT/segments.parquet" \
+  --out_dir "$COL_OUT/story" \
+  --city_name "Columbus" \
+  --timezone "America/New_York" \
+  --bbox -83.14572187394832 39.84858738738738 -82.85187812605169 40.07381261261261 \
+  --grid_h 1024 --grid_w 1024 \
+  --od_bins 8 --top_od 6 --min_od_n 30 \
+  > "$COL_OUT/story/story_analysis.json"
+```
+
+产物（两个城市各自会生成）：
+- `detour_ratio_hist.png`
+- `detour_ratio_by_hour.png`
+- `route_choice_top_od.png`
+- `route_choice_top_od.json`
+- `story_analysis.json`

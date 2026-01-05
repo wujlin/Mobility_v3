@@ -2,6 +2,11 @@ This section reports results once the cross-city behavioral reference is instant
 
 We refer to the spatialized residual map as a \emph{behavioral avoidance field}: locations and corridors that the behavioral reference predicts should be traversed under normal trade-offs but are systematically under-realized in Detroit. Complementarily, we report \emph{substitution structure}: where the displaced mobility mass concentrates, revealing which corridors compensate for avoided regions.
 
+\subsection{Global detour scalars do not distinguish rupture}
+A natural intuition is that rupture-induced avoidance should increase average detours: if travelers bypass dysfunctional areas, routes should become longer and deviate more from straight lines. Our data do not support this naive expectation. Using two scalar summaries---the length ratio (route length divided by OD straight-line distance) and maximum deviation ratio (maximum lateral deviation from the OD chord, normalized by OD distance)---Detroit and Columbus are nearly indistinguishable in median length ratio ($1.297$ vs.\ $1.296$), and Detroit is \emph{more direct} in median maximum deviation ratio ($0.166$ vs.\ $0.197$). This null result is informative: functional rupture does not simply make people ``drive longer.''
+
+The implication is that rupture signatures, if they exist, must lie in \emph{spatial organization} rather than global detour magnitude: which corridors are under-used relative to normal expectations, which alternative corridors absorb the displaced flow, and where sharp behavioral boundaries emerge. This motivates the behavioral avoidance field as the primary object of analysis.
+
 \subsection{H1: Functional$\to$Functional Transfer Audit}
 We will evaluate transfer between two functional cities to establish that the learned baseline represents normal route choice rather than city-specific idiosyncrasies. The key output is a low residual baseline for functional$\to$functional transfer.
 

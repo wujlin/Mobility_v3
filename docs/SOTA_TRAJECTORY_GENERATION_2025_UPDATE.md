@@ -79,7 +79,7 @@
 
 为了避免再走 “看起来合理但实际上是同义反复” 的弯路，分层路线必须先通过两个 **Go/No-Go Gate**（CPU-only，不烧卡），再做 Oracle 执行能力诊断。
 
-> **硬约束协议（必读）**：`docs/archive/legacy_shenzhen/HIERARCHICAL_VALIDATION_PROTOCOL.md`
+> **硬约束协议（必读）**：`legacy/shenzhen/docs/legacy_shenzhen/HIERARCHICAL_VALIDATION_PROTOCOL.md`
 
 ### 4.0 Waypoint Gate（Go/No-Go；先跑这个）
 
@@ -100,12 +100,12 @@
 
 ```bash
 python -m src.evaluation.waypoint_gate \
-  --samples_npz data/experiments/prior_geo_density_test/samples.npz \
-  --nav_file data/processed_dt30/nav_field.npz \
+  --samples_npz legacy/shenzhen/data/experiments/prior_geo_density_test/samples.npz \
+  --nav_file legacy/shenzhen/data/processed_dt30/nav_field.npz \
   --waypoint_mode max_turn --num_waypoints 1 \
   --skeleton linear+pchip \
   --count_thr 1 --close 0 --dilate 0 \
-  --out_json data/experiments/waypoint_gate/prior_density10k_maxturn_k1_thr1.json
+  --out_json legacy/shenzhen/data/experiments/waypoint_gate/prior_density10k_maxturn_k1_thr1.json
 ```
 
 > 现状快照（基于 `prior_geo_density_test/samples.npz`, N=10k）：  
@@ -121,7 +121,7 @@ python -m src.evaluation.waypoint_gate \
 2. **Segmented Inference**：使用现有 Phase B Diffusion/Physics 模型，分别推理 $O \to W^*$ 与 $W^* \to D$（无需重训）。
 3. **Metrics Check**：看 `JSD_TurnAngle` 是否下降（更接近 GT），并结合 DCV/可视化。
 
-> 当前结论：OracleWP 已被证伪（详见 `docs/archive/phase_b/PHASE_B_CFG_VISUALIZATION.md#8.1.1`），说明现有生成器的 support 基本没有“低频、平滑 detour”模态。  
+> 当前结论：OracleWP 已被证伪（详见 `legacy/shenzhen/docs/phase_b/PHASE_B_CFG_VISUALIZATION.md#8.1.1`），说明现有生成器的 support 基本没有“低频、平滑 detour”模态。  
 > 因此：hierarchical 若要成立，**不能只补宏观层**，还需要重训/重构 segment-level executor（更短 horizon / 更强条件 / 更结构化 latent）。
 
 ### 4.2 进入训练前的决策树（避免再浪费一周）

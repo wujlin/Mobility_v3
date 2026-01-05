@@ -9,7 +9,7 @@
 
 > 这里不讲符号，只讲“指标在说什么”。
 
-> 注：本节引用的若干数值型证据来自 **legacy 深圳 dt30 的 Phase C pilot**（见 `docs/archive/legacy_shenzhen/PHASE_C_RESULTS.md` 及其审计产物），用于证明 failure mode（under-detour / 指标被 proxy 孔洞污染 / corridor error）在我们系统中确实发生过。  
+> 注：本节引用的若干数值型证据来自 **legacy 深圳 dt30 的 Phase C pilot**（见 `legacy/shenzhen/docs/legacy_shenzhen/PHASE_C_RESULTS.md` 及其审计产物），用于证明 failure mode（under-detour / 指标被 proxy 孔洞污染 / corridor error）在我们系统中确实发生过。  
 > Detroit（WorldTrace×Detroit，1Hz）将复用同一套审计脚本与口径，但数值不会直接沿用，需在 Detroit 数据上重新生成。
 
 ### 发现 1：Macro 决策偏直（under-detour），这是 G2 主矛盾

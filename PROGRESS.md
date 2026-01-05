@@ -4,7 +4,7 @@ Implementation Plan, Task List and Thought in Chinese
 
 > [!IMPORTANT]
 > **任务口径/评估口径**以 `docs/TASK_DEFINITION.md` 为唯一准则；本文件只记录“主线推进到哪一步、下一步需要产出什么”。  
-> legacy（深圳 dt30）已归档：`docs/archive/legacy_shenzhen/`。
+> legacy（深圳 dt30）已归档：`legacy/shenzhen/README.md`。
 
 ---
 
@@ -97,3 +97,31 @@ python -m src.data.census.download_tiger_tract \
   --convert_geoparquet
 ```
 
+### Step D7：生成“空间具体性”的最小证据图（detour 分布 + top OD 走廊热力）
+
+> 目的：为论文的“null scalar → 必须看空间结构”提供第一张可视化证据（不依赖训练）。
+
+```bash
+python -m src.evaluation.city_story_analysis \
+  --segments_parquet "$RAW_ROOT/worldtrace/detroit_core_v1/segments.parquet" \
+  --out_dir "$RAW_ROOT/worldtrace/detroit_core_v1/story" \
+  --city_name "Detroit" \
+  --bbox -83.25 42.25 -82.95 42.50 \
+  --grid_h 1024 --grid_w 1024 \
+  --timezone "America/Detroit" \
+  --od_bins 8 --top_od 6 --min_od_n 30
+```
+
+### Step D8：构造 Behavioral Avoidance Field（expected vs observed）
+
+> 目的：主线产物。输入必须是同一批 trip context 的“期望路线足迹 vs 实际路线足迹”（按 `traj_csv` 对齐）。
+
+```bash
+python -m src.evaluation.build_avoidance_field \
+  --expected_segments_parquet "$RAW_ROOT/worldtrace/detroit_core_v1/expected_segments.parquet" \
+  --observed_segments_parquet "$RAW_ROOT/worldtrace/detroit_core_v1/segments.parquet" \
+  --out_dir "$RAW_ROOT/worldtrace/detroit_core_v1/avoidance_field" \
+  --grid_h 1024 --grid_w 1024 \
+  --weighting segment \
+  --normalize
+```

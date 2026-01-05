@@ -24,6 +24,7 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
+from src.plot_style import FIGSIZE_HALF, OKABE_ITO, paper_style, save_figure
 from src.utils.geo_grid import BBox, GridSpec
 
 
@@ -108,19 +109,22 @@ def _plot_detour_hist(len_ratio: np.ndarray, out_png: Path, *, city_name: str) -
     x = x[np.isfinite(x)]
     if x.size == 0:
         return
+    # Keep the bulk readable; tail is not the story here.
     hi = float(np.percentile(x, 99.5))
-    hi = max(1.5, min(hi, 10.0))
+    hi = max(1.5, min(hi, 4.0))
     x = np.clip(x, 1.0, hi)
 
-    fig, ax = plt.subplots(figsize=(6, 3.6), dpi=200)
-    ax.hist(x, bins=60, color="#3b82f6", alpha=0.85, edgecolor="none")
-    ax.set_xlabel("Detour ratio (path length / straight distance)")
-    ax.set_ylabel("Count")
-    ax.set_title(f"{city_name} (WorldTrace) detour ratio distribution")
-    ax.grid(True, alpha=0.25)
-    fig.tight_layout()
-    fig.savefig(out_png)
-    plt.close(fig)
+    with paper_style():
+        fig, ax = plt.subplots(figsize=FIGSIZE_HALF)
+        ax.hist(x, bins=50, color=OKABE_ITO["blue"], alpha=0.85, edgecolor="none")
+        ax.set_xlim(1.0, hi)
+        ax.set_xlabel("Detour ratio (path length / straight distance)")
+        ax.set_ylabel("Count")
+        ax.set_title(f"{city_name} (WorldTrace) detour ratio distribution")
+        fig.tight_layout()
+        save_figure(fig, out_png)
+        save_figure(fig, out_png.with_suffix(".pdf"))
+        plt.close(fig)
 
 
 def _plot_detour_by_hour(len_ratio: np.ndarray, hour: np.ndarray, out_png: Path, *, tz_name: str) -> None:
@@ -135,16 +139,17 @@ def _plot_detour_by_hour(len_ratio: np.ndarray, hour: np.ndarray, out_png: Path,
         if v.size >= 10:
             med[hh] = float(np.median(v))
 
-    fig, ax = plt.subplots(figsize=(6, 3.2), dpi=200)
-    ax.plot(np.arange(24), med, marker="o", markersize=3, linewidth=1.5, color="#ef4444")
-    ax.set_xticks(np.arange(0, 24, 3))
-    ax.set_xlabel(f"Local hour ({tz_name})")
-    ax.set_ylabel("Median detour ratio")
-    ax.set_title("Detour ratio by hour (median, n>=10)")
-    ax.grid(True, alpha=0.25)
-    fig.tight_layout()
-    fig.savefig(out_png)
-    plt.close(fig)
+    with paper_style():
+        fig, ax = plt.subplots(figsize=FIGSIZE_HALF)
+        ax.plot(np.arange(24), med, marker="o", color=OKABE_ITO["vermillion"])
+        ax.set_xticks(np.arange(0, 24, 3))
+        ax.set_xlabel(f"Local hour ({tz_name})")
+        ax.set_ylabel("Median detour ratio")
+        ax.set_title("Detour ratio by hour (median, n>=10)")
+        fig.tight_layout()
+        save_figure(fig, out_png)
+        save_figure(fig, out_png.with_suffix(".pdf"))
+        plt.close(fig)
 
 
 def _od_bins_xy(x0: int, y0: int, x1: int, y1: int, *, H: int, W: int, od_bins: int) -> Tuple[int, int, int, int, int, int]:
@@ -190,44 +195,47 @@ def _plot_route_choice_heatmaps(
     n = len(pairs)
     ncols = min(3, n)
     nrows = int(math.ceil(n / ncols))
-    fig, axes = plt.subplots(nrows=nrows, ncols=ncols, figsize=(4.2 * ncols, 4.0 * nrows), dpi=200)
-    if not isinstance(axes, np.ndarray):
-        axes = np.asarray([axes])
-    axes = axes.reshape(-1)
+    fig_h = 2.4 * float(nrows)
+    with paper_style():
+        fig, axes = plt.subplots(nrows=nrows, ncols=ncols, figsize=(6.5, fig_h))
+        if not isinstance(axes, np.ndarray):
+            axes = np.asarray([axes])
+        axes = axes.reshape(-1)
 
-    vmax = 0.0
-    heatmaps: List[np.ndarray] = []
-    for p in pairs:
-        pid = int(p["pair_id"])  # type: ignore[arg-type]
-        seg_idx = by_pair_segments[pid]
-        heat = _accum_density(((np.asarray(ys[i]), np.asarray(xs[i])) for i in seg_idx), H=H, W=W)
-        heat = np.log1p(heat.astype(np.float32))
-        heatmaps.append(heat)
-        vmax = max(vmax, float(np.max(heat)))
+        vmax = 0.0
+        heatmaps: List[np.ndarray] = []
+        for p in pairs:
+            pid = int(p["pair_id"])  # type: ignore[arg-type]
+            seg_idx = by_pair_segments[pid]
+            heat = _accum_density(((np.asarray(ys[i]), np.asarray(xs[i])) for i in seg_idx), H=H, W=W)
+            heat = np.log1p(heat.astype(np.float32))
+            heatmaps.append(heat)
+            vmax = max(vmax, float(np.max(heat)))
 
-    for ax, p, heat in zip(axes, pairs, heatmaps):
-        im = ax.imshow(heat, cmap="viridis", origin="upper", vmin=0.0, vmax=vmax if vmax > 0 else None)
-        ax.set_xticks([])
-        ax.set_yticks([])
-        ax.set_title(p.get("title", ""), fontsize=9)
-        sx = float(p.get("start_x_mean", float("nan")))
-        sy = float(p.get("start_y_mean", float("nan")))
-        ex = float(p.get("end_x_mean", float("nan")))
-        ey = float(p.get("end_y_mean", float("nan")))
-        if np.isfinite(sx) and np.isfinite(sy):
-            ax.scatter([sx], [sy], s=20, c="#22c55e", marker="o", edgecolors="white", linewidths=0.6)
-        if np.isfinite(ex) and np.isfinite(ey):
-            ax.scatter([ex], [ey], s=24, c="#ef4444", marker="*", edgecolors="white", linewidths=0.6)
+        for ax, p, heat in zip(axes, pairs, heatmaps):
+            im = ax.imshow(heat, cmap="viridis", origin="upper", vmin=0.0, vmax=vmax if vmax > 0 else None)
+            ax.set_xticks([])
+            ax.set_yticks([])
+            ax.set_title(p.get("title", ""))
+            sx = float(p.get("start_x_mean", float("nan")))
+            sy = float(p.get("start_y_mean", float("nan")))
+            ex = float(p.get("end_x_mean", float("nan")))
+            ey = float(p.get("end_y_mean", float("nan")))
+            if np.isfinite(sx) and np.isfinite(sy):
+                ax.scatter([sx], [sy], s=28, c=OKABE_ITO["bluish_green"], marker="o", edgecolors="white", linewidths=0.6)
+            if np.isfinite(ex) and np.isfinite(ey):
+                ax.scatter([ex], [ey], s=34, c=OKABE_ITO["vermillion"], marker="*", edgecolors="white", linewidths=0.6)
 
-    for ax in axes[len(pairs) :]:
-        ax.axis("off")
+        for ax in axes[len(pairs) :]:
+            ax.axis("off")
 
-    cbar = fig.colorbar(im, ax=axes[: len(pairs)].tolist(), fraction=0.02, pad=0.02)
-    cbar.set_label("log(1 + visit count)", rotation=90)
-    fig.suptitle(f"{city_name}: top OD route-choice patterns", fontsize=11)
-    fig.tight_layout()
-    fig.savefig(out_png)
-    plt.close(fig)
+        cbar = fig.colorbar(im, ax=axes[: len(pairs)].tolist(), fraction=0.03, pad=0.02)
+        cbar.set_label("log(1 + visit count)", rotation=90)
+        fig.suptitle(f"{city_name}: top OD route-choice patterns")
+        fig.tight_layout()
+        save_figure(fig, out_png)
+        save_figure(fig, out_png.with_suffix(".pdf"))
+        plt.close(fig)
 
 
 def build_argparser() -> argparse.ArgumentParser:
@@ -415,4 +423,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

@@ -81,36 +81,45 @@ time_features = {
 
 ## 2. 目录层级
 
+> [!IMPORTANT]
+> Phase D（WorldTrace×多城）**默认外置数据根目录**：`$RAW_ROOT`（不进 git）。仓库内只放代码与小体量产物，必要时用软链指向外置目录，避免“仓库传输 vs 数据存在性”冲突。
+
+### 2.1 外置数据根目录（推荐，不进 git）
+
+```text
+$RAW_ROOT/
+├── worldtrace/
+│   ├── OpenTrace_WorldTrace/
+│   │   ├── Trajectory.zip
+│   │   └── Meta.zip
+│   ├── detroit_core_v1/
+│   │   ├── manifest.parquet
+│   │   ├── segments.parquet
+│   │   ├── osm_road_mask.npy
+│   │   ├── osm_dist_to_road_m.npy
+│   │   ├── osm_road_prob.npy
+│   │   └── poi_density_*.npy / landuse_*.npy
+│   └── columbus_core_v1/            # 参考城市示例（同构目录）
+├── osm/
+│   ├── michigan-latest.osm.pbf      # Detroit
+│   └── ohio-latest.osm.pbf          # Columbus
+├── safegraph/
+│   └── safegraph_unzip/             # Places shards (*.csv)
+├── wayback/
+│   └── detroit_core_z16_fixed_multi_r6/
+└── census/
+    └── detroit_core_v1/
+```
+
+### 2.2 仓库内 data/（只放小文件/legacy/软链）
+
 ```text
 data/
-├── raw/
-│   ├── worldtrace/        # WorldTrace 原始数据（Trajectory/Meta 解压；海量小文件，建议只在工作站落盘）
-│   ├── gps/              # 原始车辆 GPS 轨迹
-│   └── network/          # 路网 (OSM 等)
-├── processed/            # legacy: 旧流水线产物（深圳等）
-│   ├── map_matched/      # 地图匹配后的轨迹
-│   ├── trajectories/     # 统一格式的 trip 序列
-│   ├── splits/           # train/val/test 切分
-│   ├── data_stats.json   # strict: train-only 统计量（含 source）
-│   ├── nav_field.npz     # strict: train-only 导航场（含 metadata）
-│   ├── fields/           # legacy: 导航场 / 速度场等物理场（可选）
-│   └── macro_stats/      # 宏观统计指标（标度律等）
-├── processed_worldtrace_detroit/   # Phase D: WorldTrace × Detroit（建议命名按 city/bbox/grid 写死）
-│   ├── manifest.parquet            # 全局索引（从 Meta.zip 解析；用于筛选/抽样/统计）
-│   ├── segments.parquet            # Detroit core 连续段（bbox 内切片后产物）
-│   ├── splits/                     # train/val/test（按 traj_id 或 segment_id）
-│   ├── osm_road_mask.npy           # OSM 栅格（1024×1024，bool；proxy/特征）
-│   ├── osm_dist_to_road_m.npy      # 到最近道路距离（米；float）
-│   ├── osm_road_prob.npy           # road_prob（float；soft prior 特征）
-│   ├── poi_density_*.npy           # POI 多通道密度（按一级粗分类）
-│   ├── landuse_dom.npy             # 功能主导类型（int / one-hot）
-│   └── landuse_entropy.npy         # 功能混合度（float）
-└── experiments/
-    └── {exp_name}/       # 各实验的中间结果与评估输出
+└── (仓库内仅保留小文件；legacy 深圳统一在 `legacy/shenzhen/data/`；Phase D 默认使用外置 `$RAW_ROOT/`)
 ```
 
 > [!NOTE]
-> Phase B（论文版）推荐使用独立目录 `data/processed_dt30/`（dt_fixed=30s），由 `python -m src.data.build_dt_fixed_dataset` 生成，并在该目录下再生成 strict(train-only) 的 `data_stats.json/nav_field.npz`。
+> Phase B（论文版）推荐使用独立目录 `legacy/shenzhen/data/processed_dt30/`（dt_fixed=30s），由 `python -m src.data.build_dt_fixed_dataset` 生成，并在该目录下再生成 strict(train-only) 的 `data_stats.json/nav_field.npz`。
 
 **层级说明：**
 
@@ -124,7 +133,7 @@ data/
 
 ## 3. Raw 层：原始数据格式
 
-### 3.1 原始 GPS (`data/raw/gps/*.parquet` 或 `.csv`)
+### 3.1 原始 GPS（legacy 示例：`legacy/shenzhen/data/raw/gps/*.parquet` 或 `.csv`）
 
 **推荐列结构：**
 
@@ -147,16 +156,10 @@ V001,1672531260,31.2310,121.4745,10.2,50.0
 ```
 
 > [!NOTE]
-> 当前深圳出租车原始数据为 **GBK 编码的 txt/CSV**（例如 `data/raw/gps/粤BA0P65.txt`），字段为：
-> `name,time,jd,wd,status,v,angle,`
-> - `jd`/`wd`：经度/纬度（**坐标系待审计**，以 `docs/DATA_CONTRACT.md` 为准；可能为 WGS84 或 GCJ-02）
-> - `status`：0=空载/巡游（Search Policy），1=载客/导航（Passenger Trip, Navigation Policy）
-> - `time`：形如 `2011/04/18 00:04:09` 的字符串（已确认是北京时间，UTC+8）
->
-> 若要把该 txt 转成项目统一的 `processed/trajectories/*.h5`，并按论文主线只保留 `status==1`，使用：
-> `python -m src.data.build_passenger_dataset_from_raw_txt ...`（见 `docs/TASK_DEFINITION.md` 的 raw→processed 合同）。
+> legacy 深圳出租车原始数据（GBK txt/CSV）的字段与清洗口径已移至：
+> `legacy/shenzhen/docs/legacy_shenzhen/RAW_GPS_SCHEMA.md`
 
-### 3.2 路网 (`data/raw/network/{city}.pbf` 或等价格式)
+### 3.2 路网（Phase D：`$RAW_ROOT/osm/*.osm.pbf`；legacy：`legacy/shenzhen/data/raw/network/{city}.pbf`）
 
 - 原始 OSM/路网文件
 - 由 `src/data/preprocess.py` 解析为内部表示（路段、路口）
@@ -168,7 +171,7 @@ V001,1672531260,31.2310,121.4745,10.2,50.0
 
 ### 4.1 地图匹配后的轨迹
 
-**路径：** `data/processed/map_matched/{city}_mapmatched.parquet`
+**路径（legacy 示例）：** `legacy/shenzhen/data/processed/map_matched/{city}_mapmatched.parquet`
 
 **列结构：**
 
@@ -186,7 +189,7 @@ V001,1672531260,31.2310,121.4745,10.2,50.0
 
 ### 4.2 统一轨迹文件（HDF5）
 
-**路径：** `data/processed/trajectories/{city}_trajectories.h5`
+**路径（legacy 示例）：** `legacy/shenzhen/data/processed/trajectories/{city}_trajectories.h5`
 
 **采用"扁平 + 指针"结构，支持变长轨迹：**
 
@@ -232,7 +235,7 @@ with h5py.File("trajectories.h5", "r") as f:
 
 #### 4.3.1 v1 strict 导航场（推荐）
 
-**路径：** `data/processed/nav_field.npz`
+**路径（legacy 示例）：** `legacy/shenzhen/data/processed/nav_field.npz`
 
 **结构：**
 
@@ -269,7 +272,7 @@ nav_direction = direction[:, y, x]  # [dir_y, dir_x]
 
 > 说明：历史版本可能使用 `nav_y/nav_x/speed_mean` 命名；当前代码加载器兼容两种格式，但以 v1 strict 为准。
 
-**路径：** `data/processed/fields/nav_field_baseline.npz`
+**路径（legacy 示例）：** `legacy/shenzhen/data/processed/fields/nav_field_baseline.npz`
 
 **结构：**
 
@@ -283,7 +286,7 @@ nav_field_baseline.npz
 
 #### 4.3.3 目的地相关的导航场（可选，v2）
 
-**路径：** `data/processed/fields/nav_field_dest_{dest_id}.npz`
+**路径（legacy 示例）：** `legacy/shenzhen/data/processed/fields/nav_field_dest_{dest_id}.npz`
 
 **结构：**
 
@@ -299,7 +302,7 @@ nav_field_dest_{dest_id}.npz
 
 ### 4.4 数据集切分
 
-**路径：** `data/processed/splits/`
+**路径（legacy 示例）：** `legacy/shenzhen/data/processed/splits/`
 
 **文件结构：**
 
@@ -323,7 +326,7 @@ splits/
 
 ### 4.5 宏观统计指标
 
-**路径：** `data/processed/macro_stats/{city}_macro.json`
+**路径（legacy 示例）：** `legacy/shenzhen/data/processed/macro_stats/{city}_macro.json`
 
 **结构示例：**
 
@@ -365,12 +368,12 @@ splits/
 
 ## 5. Experiments 层：实验特定输出
 
-**路径：** `data/experiments/{exp_name}/`
+**路径（legacy 示例）：** `legacy/shenzhen/data/experiments/{exp_name}/`
 
 **当前实现（v1）结构：**
 
 ```text
-data/experiments/{exp_name}/
+legacy/shenzhen/data/experiments/{exp_name}/
 ├── last.pt        # 训练保存的权重（dict：含 model_state_dict/optimizer_state_dict/config 等）
 ├── epoch_*.pt     # （可选）baseline 额外保存的纯 state_dict（每 5 epoch）
 ├── metrics.json   # evaluate.py 输出（可选）
@@ -387,14 +390,14 @@ data/experiments/{exp_name}/
 
 | 数据类型 | 格式 | 路径模式 |
 |---------|------|----------|
-| 原始 GPS | parquet/csv | `data/raw/gps/*.parquet` |
-| 地图匹配结果 | parquet | `data/processed/map_matched/*.parquet` |
-| 统一轨迹 | HDF5 | `data/processed/trajectories/*.h5` |
-| 导航场 | npz | `data/processed/nav_field.npz`（推荐）或 `data/processed/fields/*.npz`（legacy） |
-| 数据切分 | npy | `data/processed/splits/*.npy` |
-| 宏观统计 | json | `data/processed/macro_stats/*.json` |
-| 模型权重 | pt | `data/experiments/*/*.pt` |
-| 评估结果 | json/npz | `data/experiments/*/metrics.json`、`data/experiments/*/samples.npz` |
+| 原始 GPS | parquet/csv | `legacy/shenzhen/data/raw/gps/*.parquet` |
+| 地图匹配结果 | parquet | `legacy/shenzhen/data/processed/map_matched/*.parquet` |
+| 统一轨迹 | HDF5 | `legacy/shenzhen/data/processed/trajectories/*.h5` |
+| 导航场 | npz | `legacy/shenzhen/data/processed/nav_field.npz`（推荐）或 `legacy/shenzhen/data/processed/fields/*.npz`（legacy） |
+| 数据切分 | npy | `legacy/shenzhen/data/processed/splits/*.npy` |
+| 宏观统计 | json | `legacy/shenzhen/data/processed/macro_stats/*.json` |
+| 模型权重 | pt | `legacy/shenzhen/data/experiments/*/*.pt` |
+| 评估结果 | json/npz | `legacy/shenzhen/data/experiments/*/metrics.json`、`legacy/shenzhen/data/experiments/*/samples.npz` |
 
 ### 6.2 坐标约定速查
 

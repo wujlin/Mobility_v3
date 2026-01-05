@@ -23,6 +23,10 @@ logs/
 experiments/
 backups/
 
+# Legacy Shenzhen (keep raw blobs local)
+legacy/shenzhen/track_data/**/TaxiData
+legacy/shenzhen/track_data/**/*.rar
+
 # System
 .DS_Store
 Thumbs.db

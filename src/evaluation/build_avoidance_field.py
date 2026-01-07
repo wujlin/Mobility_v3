@@ -207,8 +207,15 @@ def main() -> None:
     rel_diff = (obs - exp) / (exp + eps)
 
     support = exp > float(cfg.support_min_prob)
+    obs_cells = obs > 0.0
     supported_vals = log_ratio[support]
     supported_rel = rel_diff[support]
+
+    support_cells = int(np.sum(support))
+    obs_support_cells = int(np.sum(obs_cells))
+    overlap_cells = int(np.sum(support & obs_cells))
+    denom = float(max(1, support_cells))
+    denom_j = float(max(1, support_cells + obs_support_cells - overlap_cells))
 
     out = {
         "expected_segments_parquet": str(Path(args.expected_segments_parquet)),
@@ -227,10 +234,18 @@ def main() -> None:
             "dropped": dropped,
         },
         "summary": {
-            "support_cells": int(np.sum(support)),
+            "obs_cells": int(obs_support_cells),
+            "obs_cells_ratio": float(np.mean(obs_cells.astype(np.float64))),
+            "support_cells": int(support_cells),
             "support_cells_ratio": float(np.mean(support.astype(np.float64))),
-            "log_ratio_stats": _quantiles(supported_vals),
-            "rel_diff_stats": _quantiles(supported_rel),
+            "overlap_cells": int(overlap_cells),
+            "overlap_ratio_in_support": float(float(overlap_cells) / denom),
+            "jaccard_support_vs_obs": float(float(overlap_cells) / denom_j),
+            "mass_obs_in_support": float(np.sum(obs[support])),
+            "mass_exp_in_obs_cells": float(np.sum(exp[obs_cells])),
+            "pos_rate_in_support": float(np.mean((log_ratio[support] > 0).astype(np.float64))) if support_cells else float("nan"),
+            "log_ratio_stats_in_support": _quantiles(supported_vals),
+            "rel_diff_stats_in_support": _quantiles(supported_rel),
         },
         "artifacts": {
             "expected_npy": str(out_dir / "expected.npy"),

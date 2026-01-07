@@ -32,6 +32,44 @@ def _ensure_dir(p: Path) -> None:
     p.mkdir(parents=True, exist_ok=True)
 
 
+def _mode_cluster_mask(v: np.ndarray, *, iters: int = 10) -> np.ndarray:
+    """
+    Return a boolean mask selecting the dominant cluster (mode) using a tiny 2-means.
+
+    v: (N, D) float array.
+    """
+    x = np.asarray(v, dtype=np.float64)
+    if x.ndim != 2 or x.shape[0] < 2:
+        return np.ones((x.shape[0],), dtype=bool)
+
+    # Deterministic init: pick two farthest points via a 2-step heuristic.
+    c0 = x[0]
+    d0 = np.sum((x - c0) ** 2, axis=1)
+    i1 = int(np.argmax(d0))
+    c1 = x[i1]
+    d1 = np.sum((x - c1) ** 2, axis=1)
+    i0 = int(np.argmax(d1))
+    c0 = x[i0]
+
+    for _ in range(int(iters)):
+        d0 = np.sum((x - c0) ** 2, axis=1)
+        d1 = np.sum((x - c1) ** 2, axis=1)
+        a0 = d0 <= d1
+        a1 = ~a0
+        if not np.any(a0) or not np.any(a1):
+            break
+        c0 = np.mean(x[a0], axis=0)
+        c1 = np.mean(x[a1], axis=0)
+
+    # Pick the larger cluster as the mode.
+    d0 = np.sum((x - c0) ** 2, axis=1)
+    d1 = np.sum((x - c1) ** 2, axis=1)
+    a0 = d0 <= d1
+    if int(np.sum(a0)) >= int(np.sum(~a0)):
+        return a0.astype(bool)
+    return (~a0).astype(bool)
+
+
 def _iter_segments_xy(parquet_path: Path, *, max_segments: int) -> Iterable[Tuple[str, np.ndarray, np.ndarray]]:
     if pq is None:
         raise SystemExit("pyarrow is required. Install: pip/conda install pyarrow")
@@ -128,7 +166,7 @@ def _build_templates(
     res_x_m: float,
     cfg: TemplateCfg,
     max_segments: int,
-) -> Tuple[Dict[Tuple[int, int], np.ndarray], Dict[Tuple[int, int], int]]:
+) -> Tuple[Dict[Tuple[int, int], np.ndarray], Dict[Tuple[int, int], int], Dict[Tuple[int, int], float]]:
     # templates[(dist_bin, dir_bin)] -> (M, 2) normalized waypoints in (x,y) where end is at (1,0).
     accum: Dict[Tuple[int, int], List[np.ndarray]] = {}
     counts: Dict[Tuple[int, int], int] = {}
@@ -161,10 +199,23 @@ def _build_templates(
         counts[k] = int(counts.get(k, 0) + 1)
 
     templates: Dict[Tuple[int, int], np.ndarray] = {}
+    mode_frac: Dict[Tuple[int, int], float] = {}
     for k, items in accum.items():
         stack = np.stack(items, axis=0)  # (N, M, 2)
+        n = int(stack.shape[0])
+        # If a bin is multi-modal, the median can sit "between corridors" and inflate expected support.
+        # We approximate a "mode" template by selecting the dominant cluster in waypoint space.
+        if n >= max(2 * int(cfg.min_bin_samples), 10):
+            v = stack.reshape(n, -1)  # (N, 2M)
+            m = _mode_cluster_mask(v, iters=10)
+            m_cnt = int(np.sum(m))
+            if m_cnt >= 2:
+                templates[k] = np.median(stack[m], axis=0).astype(np.float32)
+                mode_frac[k] = float(m_cnt / max(1, n))
+                continue
         templates[k] = np.median(stack, axis=0).astype(np.float32)
-    return templates, counts
+        mode_frac[k] = 1.0
+    return templates, counts, mode_frac
 
 
 def _pick_template(
@@ -309,7 +360,7 @@ def main() -> None:
         min_bin_samples=int(args.min_bin_samples),
     )
 
-    templates, counts = _build_templates(
+    templates, counts, mode_frac = _build_templates(
         Path(args.source_segments_parquet),
         res_y_m=float(res_y_m),
         res_x_m=float(res_x_m),
@@ -437,6 +488,10 @@ def main() -> None:
             "template_fallback_rate": float(fallback_n / max(1, scanned)),
             "template_bins_total": int((len(dist_bins) - 1) * int(tcfg.dir_bins)),
             "template_bins_nonempty": int(len(templates)),
+            "template_mode_frac": {
+                "p50": float(np.percentile(list(mode_frac.values()), 50)) if mode_frac else float("nan"),
+                "mean": float(np.mean(list(mode_frac.values()))) if mode_frac else float("nan"),
+            },
             "max_segments": int(args.max_segments),
         },
     }
@@ -451,4 +506,3 @@ if __name__ == "__main__":
     os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
     os.environ.setdefault("MKL_NUM_THREADS", "1")
     main()
-

@@ -70,6 +70,43 @@ def _mode_cluster_mask(v: np.ndarray, *, iters: int = 10) -> np.ndarray:
     return (~a0).astype(bool)
 
 
+def _pick_medoid(stack: np.ndarray, mask: Optional[np.ndarray] = None) -> np.ndarray:
+    """
+    Pick a representative *observed* template from stack (a medoid-like selection).
+
+    Why medoid instead of median?
+    - The median in waypoint space can lie between corridors (an interpolation),
+      which turns an intended "mode" template into a diffuse support when mapped
+      back to the city.
+    - Picking an actual member of the dominant cluster keeps expected as "most
+      likely corridor" rather than "average of corridors".
+
+    stack: (N, M, 2)
+    mask: optional boolean mask selecting a subset (e.g., dominant mode cluster).
+    Returns: (M, 2) template from stack.
+    """
+    s = np.asarray(stack, dtype=np.float64)
+    if s.ndim != 3 or s.shape[0] < 1:
+        return np.zeros((0, 2), dtype=np.float32)
+    if mask is None:
+        idx = np.arange(int(s.shape[0]), dtype=np.int64)
+    else:
+        m = np.asarray(mask, dtype=bool).reshape(-1)
+        if m.size != int(s.shape[0]):
+            idx = np.arange(int(s.shape[0]), dtype=np.int64)
+        else:
+            idx = np.where(m)[0].astype(np.int64)
+            if idx.size == 0:
+                idx = np.arange(int(s.shape[0]), dtype=np.int64)
+
+    v = s[idx].reshape(int(idx.size), -1)  # (K, D)
+    # Robust center in waypoint space; then pick the closest observed sample.
+    center = np.median(v, axis=0, keepdims=True)  # (1, D)
+    d2 = np.sum((v - center) ** 2, axis=1)
+    j = int(idx[int(np.argmin(d2))])
+    return np.asarray(stack[j], dtype=np.float32)
+
+
 def _iter_segments_xy(parquet_path: Path, *, max_segments: int) -> Iterable[Tuple[str, np.ndarray, np.ndarray]]:
     if pq is None:
         raise SystemExit("pyarrow is required. Install: pip/conda install pyarrow")
@@ -223,17 +260,18 @@ def _build_templates(
     for k, items in accum.items():
         stack = np.stack(items, axis=0)  # (N, M, 2)
         n = int(stack.shape[0])
-        # If a bin is multi-modal, the median can sit "between corridors" and inflate expected support.
-        # We approximate a "mode" template by selecting the dominant cluster in waypoint space.
+        # If a bin is multi-modal, a pointwise median can sit "between corridors" and inflate expected support.
+        # We approximate a "mode" template by selecting the dominant cluster in waypoint space, then picking a
+        # representative *observed* member (medoid-like) from that cluster.
         if n >= max(2 * int(cfg.min_bin_samples), 10):
             v = stack.reshape(n, -1)  # (N, 2M)
             m = _mode_cluster_mask(v, iters=10)
             m_cnt = int(np.sum(m))
             if m_cnt >= 2:
-                templates[k] = np.median(stack[m], axis=0).astype(np.float32)
+                templates[k] = _pick_medoid(stack, m)
                 mode_frac[k] = float(m_cnt / max(1, n))
                 continue
-        templates[k] = np.median(stack, axis=0).astype(np.float32)
+        templates[k] = _pick_medoid(stack, None)
         mode_frac[k] = 1.0
     return templates, counts, mode_frac
 
@@ -293,10 +331,10 @@ def _build_od_templates(
             m = _mode_cluster_mask(v, iters=10)
             m_cnt = int(np.sum(m))
             if m_cnt >= 2:
-                templates[k] = np.median(stack[m], axis=0).astype(np.float32)
+                templates[k] = _pick_medoid(stack, m)
                 mode_frac[k] = float(m_cnt / max(1, n))
                 continue
-        templates[k] = np.median(stack, axis=0).astype(np.float32)
+        templates[k] = _pick_medoid(stack, None)
         mode_frac[k] = 1.0
     return templates, counts, mode_frac
 
@@ -604,6 +642,7 @@ def main() -> None:
         "out_parquet": str(out_parquet),
         "grid": {"H": int(grid.H), "W": int(grid.W), "bbox": grid.bbox.__dict__},
         "template_cfg": {
+            "template_repr": "medoid",
             "od_bins": int(od_bins),
             "min_od_samples": int(args.min_od_samples),
             "dist_bins_m": list(dist_bins),

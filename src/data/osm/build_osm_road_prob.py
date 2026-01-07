@@ -27,6 +27,10 @@ ROAD_TYPES_A = {
 
 ROAD_TYPES_B = ROAD_TYPES_A | {"service", "unclassified"}
 
+TIER_MAJOR = {"motorway", "trunk", "primary", "secondary"}
+TIER_MINOR = {"tertiary", "residential"}
+TIER_SERVICE = {"service", "unclassified"}
+
 
 def _iter_geom_coords(geom) -> Iterator[np.ndarray]:
     """
@@ -87,6 +91,77 @@ def rasterize_roads_to_mask(geoms: Iterable, grid: GridSpec) -> np.ndarray:
     return mask
 
 
+def _normalize_highway_tag(tag: object) -> str:
+    s = str(tag or "").strip()
+    if not s:
+        return ""
+    # Some OSM extracts contain *_link variants; treat them as the base type.
+    if s.endswith("_link"):
+        s = s[: -len("_link")]
+    return s
+
+
+def _tier_prob_from_roads(
+    roads,
+    *,
+    grid: GridSpec,
+    buffer_m: float,
+    sigma_m: float,
+    tier_weights: Tuple[float, float, float],
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """
+    Build a tiered road probability field using three masks:
+    - major roads: high probability
+    - minor roads: medium probability
+    - service roads: low probability
+
+    Returns: (mask_union, dist_m, road_prob)
+    """
+    if "highway" not in roads.columns:
+        raise SystemExit("Expected 'highway' column in OSM roads GeoDataFrame.")
+
+    hw = roads["highway"].apply(_normalize_highway_tag)
+    major = roads[hw.isin(TIER_MAJOR)]
+    minor = roads[hw.isin(TIER_MINOR)]
+    service = roads[hw.isin(TIER_SERVICE)]
+
+    # Rasterize each tier.
+    mask_major = rasterize_roads_to_mask(major["geometry"].values, grid) if len(major) else np.zeros((grid.H, grid.W), dtype=bool)
+    mask_minor = rasterize_roads_to_mask(minor["geometry"].values, grid) if len(minor) else np.zeros((grid.H, grid.W), dtype=bool)
+    mask_service = rasterize_roads_to_mask(service["geometry"].values, grid) if len(service) else np.zeros((grid.H, grid.W), dtype=bool)
+    mask_union = mask_major | mask_minor | mask_service
+
+    res_y_m, res_x_m = grid.resolution_m()
+    iters = int(np.ceil(float(buffer_m) / max(1e-6, min(res_x_m, res_y_m))))
+    if iters > 0:
+        mask_major = binary_dilation(mask_major, iterations=iters)
+        mask_minor = binary_dilation(mask_minor, iterations=iters)
+        mask_service = binary_dilation(mask_service, iterations=iters)
+        mask_union = binary_dilation(mask_union, iterations=iters)
+
+    # Distances to each tier (meters).
+    dist_major = distance_transform_edt(~mask_major, sampling=(res_y_m, res_x_m)).astype(np.float32) if np.any(mask_major) else None
+    dist_minor = distance_transform_edt(~mask_minor, sampling=(res_y_m, res_x_m)).astype(np.float32) if np.any(mask_minor) else None
+    dist_service = distance_transform_edt(~mask_service, sampling=(res_y_m, res_x_m)).astype(np.float32) if np.any(mask_service) else None
+
+    # Always report distance to the union mask for diagnostics.
+    dist_union = distance_transform_edt(~mask_union, sampling=(res_y_m, res_x_m)).astype(np.float32)
+
+    w_major, w_minor, w_service = (float(tier_weights[0]), float(tier_weights[1]), float(tier_weights[2]))
+    if not (0.0 < w_service <= w_minor <= w_major <= 1.0):
+        raise SystemExit("--tier_weights must satisfy 0 < service <= minor <= major <= 1")
+
+    prob = np.zeros((grid.H, grid.W), dtype=np.float32)
+    if dist_major is not None:
+        prob = np.maximum(prob, (w_major * np.exp(-dist_major / float(sigma_m))).astype(np.float32))
+    if dist_minor is not None:
+        prob = np.maximum(prob, (w_minor * np.exp(-dist_minor / float(sigma_m))).astype(np.float32))
+    if dist_service is not None:
+        prob = np.maximum(prob, (w_service * np.exp(-dist_service / float(sigma_m))).astype(np.float32))
+
+    return np.asarray(mask_union, np.uint8), dist_union, prob
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description="Build OSM-based road_mask/dist_to_road/road_prob for a city grid (default: Detroit core).")
     ap.add_argument("--osm_pbf", type=Path, required=True, help="OSM .pbf file path (Detroit region)")
@@ -104,6 +179,20 @@ def main() -> None:
     ap.add_argument("--road_types", choices=["A", "B"], default="B", help="Road types set (A=conservative, B=more complete)")
     ap.add_argument("--buffer_m", type=float, default=15.0, help="Road width buffer (meters) via dilation")
     ap.add_argument("--road_prob_sigma_m", type=float, default=50.0, help="Sigma for exp(-dist/sigma)")
+    ap.add_argument(
+        "--road_prob_variant",
+        choices=["distance", "tiered"],
+        default="distance",
+        help="How to define road_prob: 'distance' treats all drivable roads equally; 'tiered' assigns lower probability to minor/service roads to better reflect corridor preference.",
+    )
+    ap.add_argument(
+        "--tier_weights",
+        type=float,
+        nargs=3,
+        default=[1.0, 0.7, 0.4],
+        metavar=("MAJOR", "MINOR", "SERVICE"),
+        help="Weights for tiered road_prob (must satisfy 0 < SERVICE <= MINOR <= MAJOR <= 1).",
+    )
     args = ap.parse_args()
 
     try:
@@ -129,20 +218,29 @@ def main() -> None:
         raise SystemExit("No roads extracted from OSM within bbox. Check osm_pbf/bbox/road_types.")
 
     if "highway" in roads.columns:
-        roads = roads[roads["highway"].isin(road_types)]
+        hw = roads["highway"].apply(_normalize_highway_tag)
+        roads = roads[hw.isin(road_types)]
 
     if "geometry" not in roads.columns:
         raise SystemExit("Unexpected pyrosm output: missing 'geometry' column.")
 
-    mask = rasterize_roads_to_mask(roads["geometry"].values, grid)
-
     res_y_m, res_x_m = grid.resolution_m()
-    iters = int(np.ceil(float(args.buffer_m) / max(1e-6, min(res_x_m, res_y_m))))
-    if iters > 0:
-        mask = binary_dilation(mask, iterations=iters)
-
-    dist_m = distance_transform_edt(~mask, sampling=(res_y_m, res_x_m)).astype(np.float32)
-    road_prob = np.exp(-dist_m / float(args.road_prob_sigma_m)).astype(np.float32)
+    if args.road_prob_variant == "tiered":
+        mask_u8, dist_m, road_prob = _tier_prob_from_roads(
+            roads,
+            grid=grid,
+            buffer_m=float(args.buffer_m),
+            sigma_m=float(args.road_prob_sigma_m),
+            tier_weights=(float(args.tier_weights[0]), float(args.tier_weights[1]), float(args.tier_weights[2])),
+        )
+        mask = mask_u8.astype(bool)
+    else:
+        mask = rasterize_roads_to_mask(roads["geometry"].values, grid)
+        iters = int(np.ceil(float(args.buffer_m) / max(1e-6, min(res_x_m, res_y_m))))
+        if iters > 0:
+            mask = binary_dilation(mask, iterations=iters)
+        dist_m = distance_transform_edt(~mask, sampling=(res_y_m, res_x_m)).astype(np.float32)
+        road_prob = np.exp(-dist_m / float(args.road_prob_sigma_m)).astype(np.float32)
 
     args.out_dir.mkdir(parents=True, exist_ok=True)
     np.save(args.out_dir / "osm_road_mask.npy", np.asarray(mask, np.uint8))
@@ -154,6 +252,8 @@ def main() -> None:
         "road_types": args.road_types,
         "buffer_m": float(args.buffer_m),
         "road_prob_sigma_m": float(args.road_prob_sigma_m),
+        "road_prob_variant": str(args.road_prob_variant),
+        "tier_weights": [float(x) for x in args.tier_weights],
         "res_x_m": res_x_m,
         "res_y_m": res_y_m,
     }

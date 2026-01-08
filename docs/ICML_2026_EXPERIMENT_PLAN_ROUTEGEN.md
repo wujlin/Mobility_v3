@@ -78,6 +78,7 @@ Implementation Plan, Task List and Thought in Chinese
 ### 3.2 我们的方法（CascadeTraj）
 **Stage-1 决策（Topological Commitment）**  
 - 输出：稀疏 waypoint skeleton（如 2 个 waypoint + end anchor）
+- 监督信号（KISS 优先）：从 GT 路线几何**启发式抽取**固定数量的 waypoints（例如 Fixed-K RDP：largest deviation first），作为 Stage-1 的训练目标；对应实现可复用 `src/features/waypoints.py` 的 `rdp_dev`（并在 Method 中明确写 “We derive ground-truth skeleton by ...” 以避免歧义）。
 - 模型：AR 或 diffusion 均可（以能稳定表达多模态为准）
 
 **Stage-2 执行（Physical Execution）**  
@@ -102,6 +103,7 @@ Implementation Plan, Task List and Thought in Chinese
 ### 4.2 Realism（几何与形状）
 - DTW / Fréchet 类形状距离（比单点 FDE 更能抓“形状像不像”）
 - 路径长度/绕行比的分布一致性（避免“看似到达但走直线”）
+- **多 GT 的匹配规则（必须写死）**：同一条件下若存在多条 GT 路线（本身多模态），则对每条生成样本 $\hat{\tau}$ 计算 `min-DTW`（或 `min-Fréchet`）到该条件的 GT 集合；再对 $K$ 个生成样本汇总（例如 `mean(min-DTW)` 与 `best-of-K` 两个口径同时报告，避免只看单一样本导致误判）。
 
 ### 4.3 Feasibility proxies（可行性：必须做敏感性审计）
 - on-road ratio / off-road rate：基于 OSM road mask 或 dist-to-road
@@ -119,8 +121,9 @@ Implementation Plan, Task List and Thought in Chinese
 
 **(b) 走廊覆盖（corridor coverage）**  
 核心是“是否覆盖到 GT 的主要走廊模态”。最小可行做法：
-- 在每个条件下，对 GT 路线做聚类得到走廊簇 $\{\mathcal{C}_m\}$（特征可用 occupancy grid 或 polyline embedding；聚类算法 DBSCAN/KMeans 均可，先用 KMeans 让流程跑通）。
+- 在每个条件下，对 GT 路线做聚类得到走廊簇 $\{\mathcal{C}_m\}$。KISS 版本建议先复用 `src/evaluation/od_multimodality_gate.py` 的几何特征（signed deviation / progress / length ratio）做 `k=2` 聚类来定义“两个走廊模态”，确保流程可跑通；更复杂的 occupancy/embedding 聚类作为后续增强。
 - 生成样本覆盖率：生成集合与 GT 簇的匹配比例（例如每个 GT 簇是否至少被一个生成样本命中，或按簇权重算 recall）。
+- **Corridor clustering audit（E0 必交付）**：对 3–5 个关键 OD case，画出 GT 路线叠图并按簇着色，人工确认簇确实对应“肉眼可辨的走廊”；并做一次参数敏感性扫描（KMeans 的 `k` 或 DBSCAN 的 `eps`）确认结论不依赖拍脑袋参数。若高度敏感，需在论文中诚实声明限制。
 
 > 通过这两层指标，我们能把“端到端模型看似 FDE 还行但其实 collapse 到单走廊/平均走廊”的问题量化出来，从而支撑 Claim A/B。
 
@@ -145,7 +148,7 @@ Implementation Plan, Task List and Thought in Chinese
   - 可加 waypoint 标记（点/十字）强调“离散承诺”确实在分离模态
 
 **Fig 2：Diversity–Realism Tradeoff（主文级）**  
-散点或 Pareto 曲线：x=realism（DTW/Fréchet），y=diversity（Jaccard/self-BLEU/coverage），把“多样性不是靠牺牲真实性换来的”讲清楚。
+优先用**散点图**：x=realism（DTW/Fréchet），y=diversity（Jaccard/self-BLEU/coverage），不同模型用不同颜色/形状标记；Pareto 曲线仅用于“同一模型多超参变体”的补充展示。
 
 > 其余 ablation 图（soft prior / hard mask / semantics / census）放 Fig 3/4 或 SI。
 
@@ -155,15 +158,140 @@ Implementation Plan, Task List and Thought in Chinese
 
 ### E0（必做）数据与评估管线自检
 目标：确保每个指标/图都能在小样本上跑通，避免最后两天才发现口径问题。
-通过标准：能生成 Fig1 的“同条件多样本叠图”；能输出四类指标（intent/realism/feasibility/diversity）。
+通过标准（写死交付物）：
+- **GT baseline（优先级最高）**：对同一条件下的 GT 多轨迹集合，计算 4.4 的 diversity/coverage 指标，作为后续模型结果的“参照上限/基准”（PI 提醒：没有 GT baseline，后面很难判定是否真的 collapse）。
+- **诊断 OD case 选择**：用 GT 数据先筛出至少 3–5 个“肉眼可辨存在多走廊”的 OD case（可复用 `src/evaluation/od_multimodality_gate.py` 的 OD 分桶 + 2-means gate 作为自动筛选器），并将这些 case 固定为 Fig1/2 的诊断集（避免每次换 case 导致结论漂移）。
+- **Corridor clustering audit**：对诊断 OD case 输出“GT 走廊聚类可视化审计图”，并记录聚类参数（见 4.4b）。
+- **Waypoint audit（若启用 Stage-1 监督）**：把抽取到的 GT waypoints 叠加在 GT 路线上（同一风格规范），人工确认它们确实编码了走廊选择（否则 Stage-1 监督会变成噪声）。
+- 能生成 Fig1 的“同条件多样本叠图”；能输出四类指标（intent/realism/feasibility/diversity）。
+
+#### E0（工作站A可执行模板｜产物用于后续 Gate）
+
+> 说明：以下以“窗口级 GT samples.npz”作为输入（必须包含 `start_pos/targets/traj_idx/start_t`，可选 `dest_pos`）。  
+> Legacy 深圳可参考 `src/evaluation/dump_gt_windows_npz.py`；Phase D（WorldTrace×Detroit）请先用你现有的导出脚本生成同口径 npz（不要在这里工程化）。
+
+```bash
+export RAW_ROOT="$HOME/data/geoexplicit_data"
+export EXP_ROOT="$RAW_ROOT/experiments/icml2026_routegen"
+export E0_DIR="$EXP_ROOT/E0_gt_baseline"
+mkdir -p "$E0_DIR"
+
+# 选择多走廊 OD case + 生成 case_XX/gt_case.npz（用于后续固定窗口对齐）
+python -m src.evaluation.route_gt_baseline \
+  --samples_npz "<PATH_TO_GT_WINDOWS_SAMPLES_NPZ>" \
+  --out_dir "$E0_DIR" \
+  --od_bin 8 \
+  --min_bucket_n 30 \
+  --sep_thr 2.5 \
+  --num_cases 5 \
+  --save_case_npz \
+  > "$E0_DIR/route_gt_baseline.stdout.json"
+
+# JSON-only 摘要（方便贴给 PI review）
+python - <<'PY'
+import json, os, pathlib
+e0_dir = pathlib.Path(os.environ["E0_DIR"])
+p = e0_dir / "report.json"
+r = json.loads(p.read_text(encoding="utf-8"))
+out = {
+  "E0_dir": str(e0_dir),
+  "N": (r.get("stats") or {}).get("N"),
+  "F": (r.get("stats") or {}).get("F"),
+  "num_buckets_multimodal": (r.get("stats") or {}).get("num_buckets_multimodal"),
+  "selected_cases": [
+    {
+      "case_id": c.get("case_id"),
+      "n_used": c.get("n_used"),
+      "gt_jaccard_mean": ((c.get("gt_jaccard_distance") or {}) or {}).get("mean"),
+      "gt_corridor_pdf": ((c.get("paths") or {}) or {}).get("gt_corridor_clusters_pdf"),
+    } for c in (r.get("selected_cases") or [])
+  ],
+}
+print(json.dumps(out, ensure_ascii=False))
+PY
+```
 
 ### E1（必做）端到端 baseline 诊断（支撑 Claim A）
 目标：证明 collapse 真实发生，且是拓扑多模态造成的。
-输出：Fig1 左半边 + diversity/coverage 指标显著偏低。
+输出（写死判定标准）：
+- **视觉标准**：在 Fig1 左半边（K=20），样本无法分离出多于一条清晰走廊，或收敛为接近 O–D 直线的模糊带状区域，即判定出现 collapse。
+- **量化标准（相对 GT baseline）**：对诊断 OD case，若
+  - `mean pairwise Jaccard` 明显低于 GT baseline（例如 $D_{\text{model}} < 0.5 \cdot D_{\text{GT}}$），且
+  - corridor coverage 未覆盖到 GT 的多走廊簇（例如 GT 有 2 簇但生成样本仅命中 1 簇），
+  则判定为 mode/corridor collapse。
+- 备注：在 E0 先跑 GT baseline 的原因是把阈值锚定到“数据自身的多模态强度”，避免凭空设定绝对阈值。
+
+#### E1/E2（工作站A可执行模板｜同一批 windows 对齐）
+
+> 关键点：所有对比必须在**同一批窗口集合**上进行（`--windows_npz`），否则 diversity/coverage 不可比。  
+> 做法：直接用 E0 产物 `case_XX/gt_case.npz` 作为固定窗口集合。
+
+```bash
+export RAW_ROOT="$HOME/data/geoexplicit_data"
+export EXP_ROOT="$RAW_ROOT/experiments/icml2026_routegen"
+export E0_DIR="$EXP_ROOT/E0_gt_baseline"
+
+# 选择一个 case（先肉眼看 case_XX/gt_corridor_clusters.pdf 决定）
+export CASE_DIR="$E0_DIR/case_00"
+
+# 避免 HDF5 多进程锁（常见卡死/无输出），必要时强制单进程加载
+export HDF5_USE_FILE_LOCKING=FALSE
+
+# --- E1: 端到端 baseline（samples_only + 保存 preds_k 用于 Fig1）---
+python -m src.training.evaluate \
+  --exp_name "icml2026_routegen/E1_end2end_baseline_case00_seed0" \
+  --model_type diffusion \
+  --data_path "<DATA_PATH>" \
+  --checkpoint "<BASELINE_CKPT_PATH>" \
+  --split test \
+  --num_workers 0 \
+  --samples_only --save_all_k --save_samples 200 \
+  --windows_npz "$CASE_DIR/gt_case.npz" \
+  --seed 0
+
+# --- E2: CascadeTraj（samples_only + 保存 preds_k 用于 Fig1）---
+python -m src.training.evaluate \
+  --exp_name "icml2026_routegen/E2_cascadetraj_case00_seed0" \
+  --model_type diffusion \
+  --data_path "<DATA_PATH>" \
+  --checkpoint "<CASCADE_CKPT_PATH>" \
+  --split test \
+  --num_workers 0 \
+  --samples_only --save_all_k --save_samples 200 \
+  --windows_npz "$CASE_DIR/gt_case.npz" \
+  --seed 0
+
+# --- collapse 指标（JSON-only）---
+python -m src.evaluation.route_mode_collapse_metrics \
+  --gt_report_json "$E0_DIR/report.json" \
+  --gt_windows_npz "<PATH_TO_GT_WINDOWS_SAMPLES_NPZ>" \
+  --model_samples_npz "data/experiments/icml2026_routegen/E1_end2end_baseline_case00_seed0/samples.npz" \
+  --out_json "$CASE_DIR/baseline_collapse.json" \
+  > "$CASE_DIR/baseline_collapse.stdout.json"
+
+python -m src.evaluation.route_mode_collapse_metrics \
+  --gt_report_json "$E0_DIR/report.json" \
+  --gt_windows_npz "<PATH_TO_GT_WINDOWS_SAMPLES_NPZ>" \
+  --model_samples_npz "data/experiments/icml2026_routegen/E2_cascadetraj_case00_seed0/samples.npz" \
+  --out_json "$CASE_DIR/cascade_collapse.json" \
+  > "$CASE_DIR/cascade_collapse.stdout.json"
+
+# --- Fig1 风格可视化（PDF + JSON-only）---
+python -m src.evaluation.plot_route_mode_collapse_figure \
+  --gt_case_npz "$CASE_DIR/gt_case.npz" \
+  --model "End2End=data/experiments/icml2026_routegen/E1_end2end_baseline_case00_seed0/samples.npz" \
+  --model "CascadeTraj=data/experiments/icml2026_routegen/E2_cascadetraj_case00_seed0/samples.npz" \
+  --out_pdf "$CASE_DIR/fig_mode_collapse.pdf" \
+  --out_json "$CASE_DIR/fig_mode_collapse.json" \
+  > "$CASE_DIR/fig_mode_collapse.stdout.json"
+```
 
 ### E2（必做）CascadeTraj（仅 Stage-1 改动）验证（支撑 Claim B）
 目标：只靠“离散承诺”就能让走廊模态分离（避免把功劳归因给执行层）。
-输出：Fig1 右半边 + diversity/coverage 显著提升；intent 不显著变差。
+输出：
+- Fig1 右半边：在相同诊断 OD case 下，多走廊样本可视化“清晰分离”。
+- 指标：diversity/coverage 显著提升，并接近 GT baseline（至少不再处于 collapse 区间）；intent/realism 不显著变差。
+- 训练信号说明：Stage-1 的 GT skeleton 采用 E0 中审计过的启发式抽取策略（例如 `rdp_dev`），避免 reviewer 质疑“waypoints 从哪来”。
 
 ### E3（中）执行层细化（支撑“physical execution”叙事）
 目标：在已分离走廊模态的前提下，提升 realism/feasibility（形状/速度纹理/局部几何）。
@@ -171,11 +299,16 @@ Implementation Plan, Task List and Thought in Chinese
 
 ### E4（中）soft prior vs hard mask（支撑 Claim C）
 目标：展示 hard mask 的“可行性提升”伴随分布截断/多样性损失；soft prior 更平衡。
-输出：feasibility↑ 且 diversity 不被截断；并提供 dilation/buffer 敏感性审计（防止 proxy 污染）。
+输出（包含两种叙事分支，提前预案）：
+- 必交付：dilation/buffer 扫描曲线（Feasibility & Diversity vs dilation/buffer），证明 hard mask 的结果对 proxy 质量更敏感，从而支撑 soft prior 的鲁棒性价值。
+- 情况 A（预期）：Hard mask 的 feasibility 更高但 diversity/coverage 更低 → 叙事为 “truncation trades diversity for feasibility; soft prior offers a better balance.”
+- 情况 B（挑战）：Hard mask 在所有指标上都更好 → 叙事改为 “framework is compatible with hard constraints when reliable; soft priors are preferred under uncertain map quality / for generalization”，并用敏感性审计展示其潜在脆弱性。
 
 ### E5（可选）语义通道与 census guidance（不抢主线）
 目标：展示可控性/扩展性，而不是把论文变成 population synthesis。
-输出：只在补充实验/ablation 中呈现；主文只保留边界声明与一句话结果摘要。
+成功标准（写死，不引入新任务）：
+- 只报告核心指标（Diversity/Realism/Feasibility/Intent）是否保持或小幅改善，证明“加入 census guidance 不破坏核心能力，并展示可扩展性”。
+- **不引入** census-specific 的语义准确性指标（例如“生成职业分布是否匹配 census”），避免论文叙事滑向 population synthesis。
 
 ---
 
@@ -204,7 +337,7 @@ Implementation Plan, Task List and Thought in Chinese
 
 ## 9) 10 天时间盒（建议节奏；可按实际压缩）
 
-- Day 1–2：E0（数据/评估/作图管线跑通）+ Fig1 样例框架定稿（遵循 `docs/visual_style_guide.md`）
+- Day 1–2：E0（数据/评估/作图管线跑通）+ baseline 代码链路确认（至少能启动训练/采样）+ Fig1 样例框架定稿（遵循 `docs/visual_style_guide.md`）
 - Day 3–4：E1（端到端 baseline collapse 证据 + diversity 指标）
 - Day 5–6：E2（CascadeTraj 的 Stage-1 版本，优先把 Fig1 右半边做“扎实”）
 - Day 7–8：E3/E4（执行层提升 realism + soft prior/hard mask 对照 + proxy 敏感性审计）

@@ -1,5 +1,5 @@
 import torch
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, Subset
 from pathlib import Path
 import argparse
 import json
@@ -30,6 +30,73 @@ def _set_seed(seed: int) -> None:
     torch.manual_seed(int(seed))
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(int(seed))
+
+
+def _subset_indices_from_windows_npz(
+    *,
+    dataset,
+    windows_npz: str,
+    save_samples: Optional[int],
+    seed: int,
+) -> np.ndarray:
+    """
+    Map (traj_idx,start_t) in windows_npz to dataset sample indices, then select up to save_samples.
+
+    Works for SeqDataset/DiffusionDataset as long as:
+    - dataset.traj_ids is not None (use split ids, not split=all)
+    - dataset.step == 1
+    - dataset.storage._ptr exists
+    - dataset.window_size exists
+    """
+    win = np.load(str(windows_npz), allow_pickle=True)
+    if "traj_idx" not in win.files or "start_t" not in win.files:
+        raise ValueError(f"--windows_npz must contain traj_idx/start_t, got {win.files}")
+    traj_idx = np.asarray(win["traj_idx"], dtype=np.int64).reshape(-1)
+    start_t = np.asarray(win["start_t"], dtype=np.int64).reshape(-1)
+    if traj_idx.shape != start_t.shape:
+        raise ValueError("windows_npz: traj_idx/start_t shape mismatch")
+
+    if getattr(dataset, "traj_ids", None) is None:
+        raise ValueError("--windows_npz requires dataset.traj_ids (use split ids, not split=all).")
+    if int(getattr(dataset, "step", 1)) != 1:
+        raise ValueError(f"--windows_npz mapping currently assumes step=1, got step={getattr(dataset, 'step', None)}")
+
+    traj_ids = np.asarray(dataset.traj_ids, dtype=np.int64).reshape(-1)
+    ptr = np.asarray(dataset.storage._ptr, dtype=np.int64)
+    window_size = int(dataset.window_size)
+    length = (ptr[traj_ids + 1] - ptr[traj_ids]).astype(np.int64)
+    win_count = np.maximum(length - window_size + 1, 0).astype(np.int64)
+    offsets = np.concatenate([np.zeros((1,), dtype=np.int64), np.cumsum(win_count[:-1], dtype=np.int64)], axis=0)
+
+    pos_map = {int(tid): int(i) for i, tid in enumerate(traj_ids.tolist())}
+
+    idx_list: list[int] = []
+    for tid, t0 in zip(traj_idx.tolist(), start_t.tolist()):
+        p = pos_map.get(int(tid))
+        if p is None:
+            continue
+        t0_i = int(t0)
+        if t0_i < 0 or t0_i >= int(win_count[p]):
+            continue
+        idx_list.append(int(offsets[p] + t0_i))
+
+    if not idx_list:
+        raise RuntimeError("No windows from --windows_npz found in the specified split/dataset ordering.")
+
+    idx_arr = np.unique(np.asarray(idx_list, dtype=np.int64))
+
+    if save_samples is None:
+        return idx_arr
+    n_need = int(save_samples)
+    if n_need <= 0:
+        return idx_arr
+    if idx_arr.size <= n_need:
+        return idx_arr
+
+    rng = np.random.default_rng(int(seed))
+    pick = rng.choice(idx_arr, size=int(n_need), replace=False)
+    pick = np.sort(pick)
+    return pick.astype(np.int64, copy=False)
 
 
 def _load_checkpoint(checkpoint_path: str, device: torch.device) -> Tuple[dict, dict]:
@@ -966,7 +1033,24 @@ def evaluate(args):
         )
         
     # IMPORTANT: denormalization must use the same stats as the dataset.
-    norm = dataset.normalizer
+    base_dataset = dataset
+    norm = base_dataset.normalizer
+
+    # Optional: restrict evaluation to a fixed window set (traj_idx/start_t) for strict comparability.
+    if getattr(args, "windows_npz", None):
+        if str(args.split) == "all":
+            raise ValueError("--windows_npz requires --split train/val/test (cannot be used with split=all).")
+        # In samples_only mode we sample up to --save_samples windows from the fixed set;
+        # otherwise we evaluate on the full fixed set.
+        sample_cap = int(args.save_samples) if bool(getattr(args, "samples_only", False)) else None
+        subset_idx = _subset_indices_from_windows_npz(
+            dataset=base_dataset,
+            windows_npz=str(args.windows_npz),
+            save_samples=sample_cap,
+            seed=int(args.seed),
+        )
+        dataset = Subset(base_dataset, subset_idx.tolist())
+
     try:
         dataloader = DataLoader(dataset, batch_size=args.batch_size, shuffle=False, num_workers=int(args.num_workers))
     except PermissionError:
@@ -1609,6 +1693,7 @@ if __name__ == "__main__":
     parser.add_argument('--samples_only', action='store_true', help="只生成 samples.npz（用于可视化/大样本密度图），不计算完整指标；会在达到 --save_samples 后提前停止")
     parser.add_argument('--resume_samples', action='store_true', help="samples_only 模式：若 exp_dir/samples.npz 已存在，则从已有 N 继续补齐到 --save_samples（断点续算）")
     parser.add_argument('--sample_offset', type=int, default=0, help="samples_only 模式：跳过前 N 个 conditions 后再开始采样（用于分片并行）")
+    parser.add_argument('--windows_npz', type=str, default=None, help="可选：固定窗口集合（npz 必含 traj_idx/start_t）；用于跨方法对齐同一批条件。")
     parser.add_argument('--max_batches', type=int, default=None, help="limit evaluation batches for quick runs")
     parser.add_argument('--vel_scale', type=float, default=1.0, help="对预测 future vel 做整体缩放（用于修正运动幅度偏小；与温度/噪声解耦）")
     parser.add_argument('--cfg_scale', type=float, default=0.0, help="CFG guidance scale（0 关闭；>0 放大 destination 条件影响）")

@@ -10,9 +10,9 @@ In practice, we sample $z$ and then generate $\tau$ conditioned on $z$.
 We represent the route skeleton as an ordered waypoint sequence $z = (w_1,\dots,w_K)$.
 An autoregressive planner models $p_\theta(z \mid c)$ to maintain multi-step consistency.
 
-\subsection{Macro guidance: census-derived spatial priors (optional)}
-To support semantic controllability without requiring explicit per-agent attribute labels, we allow census-derived spatial covariates (e.g., tract-level population or income) to enter the model as additional context channels or weak guidance terms.
-In the main experiments, census guidance is treated as an optional ablation rather than the paper's primary task.
+\paragraph{Optional macro covariates (ablation).}
+The framework can ingest additional spatial covariates (e.g., census-derived tract-level attributes) as conditioning channels for semantic controllability.
+We treat this strictly as an ablation and keep the paper's focus on route generation.
 
 \subsection{Execution: continuous route generation}
 Conditioned on $z$, the execution module generates a full-resolution route, modeling local geometry and motion.

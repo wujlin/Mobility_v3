@@ -425,6 +425,97 @@ def _route_via_waypoints(
     return ys, xs, bool(ok_all)
 
 
+def _bresenham_line(y0: int, x0: int, y1: int, x1: int) -> List[Tuple[int, int]]:
+    """Integer grid line drawing (Bresenham), inclusive of both endpoints."""
+    y0, x0 = int(y0), int(x0)
+    y1, x1 = int(y1), int(x1)
+    dy = abs(y1 - y0)
+    dx = abs(x1 - x0)
+    sy = 1 if y0 < y1 else -1
+    sx = 1 if x0 < x1 else -1
+    err = dx - dy
+    out: List[Tuple[int, int]] = []
+    y, x = y0, x0
+    while True:
+        out.append((int(y), int(x)))
+        if y == y1 and x == x1:
+            break
+        e2 = 2 * err
+        if e2 > -dy:
+            err -= dy
+            x += sx
+        if e2 < dx:
+            err += dx
+            y += sy
+    return out
+
+
+def _snap_point_to_road(
+    road_prob: np.ndarray, *, y: int, x: int, radius: int, H: int, W: int
+) -> Tuple[int, int]:
+    r = int(max(0, radius))
+    yy = int(min(max(0, int(y)), int(H - 1)))
+    xx = int(min(max(0, int(x)), int(W - 1)))
+    if r == 0:
+        return yy, xx
+    y0 = int(max(0, yy - r))
+    y1 = int(min(H, yy + r + 1))
+    x0 = int(max(0, xx - r))
+    x1 = int(min(W, xx + r + 1))
+    win = road_prob[y0:y1, x0:x1]
+    if win.size == 0:
+        return yy, xx
+    j = int(np.argmax(win))
+    wy, wx = np.unravel_index(j, win.shape)
+    return int(y0 + wy), int(x0 + wx)
+
+
+def _route_polyline(
+    road_prob: np.ndarray,
+    *,
+    grid,
+    start: Tuple[int, int],
+    waypoints: List[Tuple[int, int]],
+    end: Tuple[int, int],
+    snap_radius: int,
+) -> Tuple[List[int], List[int], bool]:
+    """
+    Deterministic polyline "landing" without A* search:
+    start -> waypoints -> end, connected by Bresenham lines.
+
+    This aims to keep expected concentrated (mode-like). Optionally snaps intermediate
+    points to local maxima in road_prob within snap_radius to stay near the road manifold.
+    """
+    H, W = int(grid.H), int(grid.W)
+    pts: List[Tuple[int, int]] = [tuple(map(int, start))] + [tuple(map(int, p)) for p in waypoints] + [
+        tuple(map(int, end))
+    ]
+    if int(snap_radius) > 0 and len(pts) > 2:
+        snapped: List[Tuple[int, int]] = [pts[0]]
+        for y, x in pts[1:-1]:
+            sy, sx = _snap_point_to_road(road_prob, y=int(y), x=int(x), radius=int(snap_radius), H=H, W=W)
+            snapped.append((int(sy), int(sx)))
+        snapped.append(pts[-1])
+        pts = snapped
+
+    ys: List[int] = []
+    xs: List[int] = []
+    for i in range(len(pts) - 1):
+        y0, x0 = pts[i]
+        y1, x1 = pts[i + 1]
+        seg = _bresenham_line(y0, x0, y1, x1)
+        if ys:
+            seg = seg[1:]
+        for y, x in seg:
+            if 0 <= int(y) < H and 0 <= int(x) < W:
+                ys.append(int(y))
+                xs.append(int(x))
+    if not ys:
+        ys = [int(start[0]), int(end[0])]
+        xs = [int(start[1]), int(end[1])]
+    return ys, xs, True
+
+
 def build_argparser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         description="Build a behavioral reference as expected segments, using source-city route-shape templates + target-city soft OSM routing."
@@ -445,6 +536,19 @@ def build_argparser() -> argparse.ArgumentParser:
     p.add_argument("--dir_bins", type=int, default=8)
     p.add_argument("--waypoint_fracs", type=float, nargs="+", default=[0.33, 0.66])
     p.add_argument("--min_bin_samples", type=int, default=50, help="Require at least this many source samples in a bin; otherwise fallback.")
+    p.add_argument(
+        "--landing",
+        type=str,
+        default="astar",
+        choices=["astar", "polyline"],
+        help="How to map templates onto the target city. 'astar' uses soft-OSM A*; 'polyline' connects (start, waypoints, end) without search (mode-like).",
+    )
+    p.add_argument(
+        "--polyline_snap_radius",
+        type=int,
+        default=0,
+        help="(polyline only) Snap intermediate points to local maxima in road_prob within this radius (in grid cells). 0 disables.",
+    )
     p.add_argument("--lambda_offroad", type=float, default=20.0)
     p.add_argument("--max_expansions", type=int, default=350000)
     p.add_argument("--min_margin", type=int, default=64)
@@ -588,14 +692,24 @@ def main() -> None:
             wy = int(min(int(grid.H - 1), max(0, wy)))
             wps_yx.append((wy, wx))
 
-        py, px, ok = _route_via_waypoints(
-            road_prob,
-            grid=grid,
-            astar_cfg=astar_cfg,
-            start=(y0, x0),
-            waypoints=wps_yx,
-            end=(y1, x1),
-        )
+        if str(args.landing) == "polyline":
+            py, px, ok = _route_polyline(
+                road_prob,
+                grid=grid,
+                start=(y0, x0),
+                waypoints=wps_yx,
+                end=(y1, x1),
+                snap_radius=int(args.polyline_snap_radius),
+            )
+        else:
+            py, px, ok = _route_via_waypoints(
+                road_prob,
+                grid=grid,
+                astar_cfg=astar_cfg,
+                start=(y0, x0),
+                waypoints=wps_yx,
+                end=(y1, x1),
+            )
         if ok:
             ok_n += 1
 
@@ -649,6 +763,10 @@ def main() -> None:
             "dir_bins": int(tcfg.dir_bins),
             "waypoint_fracs": list(waypoint_fracs),
             "min_bin_samples": int(tcfg.min_bin_samples),
+        },
+        "landing": {
+            "mode": str(args.landing),
+            "polyline_snap_radius": int(args.polyline_snap_radius),
         },
         "astar_cfg": {
             "lambda_offroad": float(astar_cfg.lambda_offroad),

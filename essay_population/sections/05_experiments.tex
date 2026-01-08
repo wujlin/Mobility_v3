@@ -1,14 +1,39 @@
-\paragraph{Data.}
-Placeholder: specify datasets (e.g., WorldTrace city subsets), preprocessing, and train/val/test splits.
+\paragraph{Data and preprocessing.}
+We evaluate on large-scale mobility traces with consistent map-matched coordinates (e.g., WorldTrace) and construct trip segments with origin--destination intent and time context.
+We standardize representation to a shared coordinate system, and build optional spatial context channels (soft map priors, POI/imagery features, and census covariates when enabled).
+We report split definitions and leakage controls (train/val/test) to ensure reproducibility.
 
-\paragraph{Baselines.}
-Placeholder: include end-to-end sequence models, end-to-end diffusion, and map-constrained variants (as diagnostics).
+\paragraph{Baselines (direct competitors).}
+We include end-to-end generators that output the full coordinate sequence directly:
+(i) an autoregressive coordinate model, and
+(ii) an end-to-end diffusion model \citep{ho2020ddpm} conditioned on $(o,d,t_0)$ and optional context.
+These baselines are expected to exhibit mode collapse under topological multi-modality, serving as diagnostic references.
+We also include a hard-constrained variant (e.g., output masking / masked-softmax) as a \emph{diagnostic} ablation to separate ``feasibility by truncation'' from true distribution learning.
 
-\paragraph{Metrics.}
-Placeholder: intent consistency (arrival / endpoint error), realism (path similarity / shape metrics), feasibility proxies (on-road ratio with sensitivity), and diversity (coverage / distinct corridors).
+\paragraph{Core evidence: mode collapse visualization.}
+To make the failure mode unambiguous, we include a primary qualitative figure comparing multiple samples for the same condition:
+end-to-end baselines vs CascadeTraj.
+The figure highlights whether samples occupy distinct corridors (good) or blur into overly direct/average routes (collapse).
+This visualization is treated as Figure~1/2-level evidence rather than an appendix-only artifact.
 
-\paragraph{Ablations.}
-Placeholder: waypoint hierarchy, soft map priors, semantic channels (POI/imagery), and optional census guidance.
+\paragraph{Metrics: feasibility, realism, intent, and diversity.}
+We report four complementary metric groups:
+\begin{itemize}
+  \item \textbf{Intent consistency:} endpoint error and arrival/termination consistency (reaching the destination without drift).
+  \item \textbf{Feasibility proxies:} on-road/off-road ratios computed against map proxies, with sensitivity audits over dilation/buffering to avoid proxy-hole artifacts.
+  \item \textbf{Realism:} path-shape similarity metrics (e.g., DTW/Fr\'echet-style distances) and length/detour statistics to capture geometric fidelity beyond endpoint error.
+  \item \textbf{Diversity/coverage:} corridor-level coverage metrics (e.g., distinct corridor clusters per condition), and distributional diversity scores (e.g., self-BLEU on discretized route tokens) to distinguish ``one good path'' from ``many plausible alternatives''.
+\end{itemize}
 
-\paragraph{Sanity checks and failure analysis.}
-Placeholder: report common degeneracies (overly direct routes, corridor collapse, off-road artifacts) and how each design choice addresses a specific failure mode.
+\paragraph{Ablations (tying design to failure modes).}
+We design ablations to map each architectural choice to a specific failure mode:
+\begin{itemize}
+  \item \textbf{No decision stage:} remove waypoint commitment to test whether collapse returns.
+  \item \textbf{No soft map prior:} test feasibility degradation without hard truncation.
+  \item \textbf{No semantic context:} remove POI/imagery channels to test corridor-choice realism.
+  \item \textbf{Optional census guidance:} enable census covariates only as an ablation to quantify controllability/extensibility without shifting the paper's focus to population synthesis.
+\end{itemize}
+
+\paragraph{Failure analysis.}
+We explicitly report characteristic degeneracies: overly direct routes, corridor collapse, and off-road artifacts.
+For each, we show which component (decision stage, execution stage, or soft priors) mitigates the issue and where limitations remain.

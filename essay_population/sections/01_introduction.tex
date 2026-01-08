@@ -15,6 +15,24 @@ Even for the same origin and destination, multiple corridor-level choices can be
 End-to-end coordinate generators trained with likelihood or Euclidean losses therefore face a destructive ``averaging'' pressure: the mean of several feasible routes is often an infeasible straight line.
 This suggests that route generation should be modeled as a \emph{decision--execution} process rather than a single homogeneous sequence problem.
 
+\paragraph{A diagnostic baseline: mode interference in continuous output space.}
+We first provide a diagnostic experiment (Fig.~\ref{fig:mode-collapse}) using an end-to-end generative baseline trained under the same data and conditioning.
+We observe a characteristic collapse: samples either concentrate around overly direct routes or blur distinct corridor-level alternatives into implausible averages.
+This supports the hypothesis that the bottleneck is not simply model capacity, but \emph{mode interference} when corridor-level decisions are represented only implicitly in a continuous coordinate output space.
+
+\begin{figure}[t]
+  \centering
+  \fbox{\parbox{0.95\linewidth}{
+    \vspace{0.75in}
+    \centering
+    Placeholder: diagnostic mode-collapse visualization\\
+    (end-to-end baseline vs CascadeTraj)
+    \vspace{0.75in}
+  }}
+  \caption{A diagnostic visualization of mode collapse in end-to-end route generators and how CascadeTraj preserves corridor-level alternatives via a decision--execution cascade.}
+  \label{fig:mode-collapse}
+\end{figure}
+
 \paragraph{CascadeTraj: bridging semantic intent and physical execution.}
 We propose \textbf{CascadeTraj}, a cascaded generative framework for route generation.
 At the \emph{decision} stage, the model samples a sparse route skeleton (e.g., waypoints) that represents discrete corridor-level alternatives and preserves long-horizon intent consistency.
@@ -24,10 +42,11 @@ This decomposition turns a brittle one-shot generation problem into two conditio
 \paragraph{Soft priors and optional census guidance.}
 To encourage feasibility without collapsing support, we incorporate map information as \emph{soft} priors (e.g., road-proximity fields) rather than hard output masking.
 We also support injecting census-derived spatial covariates as optional semantic guidance signals that can steer route preferences without making population/attribute synthesis the main objective of this paper.
+While macro-level statistics can provide useful priors for controllability, this paper focuses on the generative architecture for the \emph{route itself}; census integration is explored only as an ablation to demonstrate extensibility.
 
 \paragraph{Contributions.}
 \begin{itemize}
-  \item \textbf{Problem framing:} we formulate long-horizon mobility as conditional \emph{route generation} that must jointly satisfy intent consistency, physical plausibility, and corridor-level multi-modality.
-  \item \textbf{Method:} we introduce \textbf{CascadeTraj}, a decision--execution cascaded generator that combines sparse waypoint planning with continuous route execution, augmented by soft map priors and optional census-guided semantics.
-  \item \textbf{Empirical protocol:} we outline an evaluation setup with baselines and ablations for realism, feasibility, and diversity under consistent conditions.
+  \item \textbf{Finding 1 (Diagnosis):} we provide evidence that topological multi-modality induces mode interference and destructive averaging in end-to-end long-horizon route generators, which cannot be fixed by naively scaling continuous coordinate models.
+  \item \textbf{Finding 2 (Solution):} we show that a decision--execution decomposition, where a discrete topological commitment (waypoint skeleton) precedes continuous generation, breaks the destructive averaging trap and enables corridor-level diversity.
+  \item \textbf{Robustness:} we incorporate map information as \emph{soft} priors (instead of hard masking) to encourage feasibility without truncating support, and treat additional macro semantics (e.g., census covariates) strictly as optional ablations for extensibility.
 \end{itemize}

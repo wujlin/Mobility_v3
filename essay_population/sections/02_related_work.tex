@@ -1,9 +1,22 @@
-\paragraph{Trajectory prediction and generation.}
-Placeholder: position this work against short-horizon trajectory prediction, long-horizon route generation, and mobility diffusion/flow-matching models.
+\paragraph{Short-horizon trajectory prediction.}
+Most trajectory prediction work targets short horizons: given a brief observation window, predict near-future displacements.
+Modern architectures (e.g., Transformers \citep{vaswani2017attention}) and generative variants have pushed accuracy forward, but these settings typically do not require committing to a full-trip route under origin--destination intent.
+In contrast, our focus is full-trip route generation, where corridor-level alternatives and feasibility constraints dominate the difficulty.
 
-\paragraph{Hierarchical and multi-stage generative modeling.}
-Placeholder: discuss decision--execution decompositions (waypoints, anchors, coarse-to-fine planning) and why they address topological multi-modality.
+\paragraph{End-to-end generative models for long-horizon routes.}
+A natural extension is to train an end-to-end generator to output an entire coordinate sequence, using latent-variable models \citep{kingma2014auto} or diffusion models \citep{ho2020ddpm}.
+However, in route generation the output distribution is strongly multi-modal in a \emph{topological} sense: distinct corridor-level modes can be geometrically far apart yet semantically equivalent.
+This makes end-to-end coordinate generation prone to destructive averaging and mode interference, which we highlight via diagnostic experiments.
 
-\paragraph{Map-conditioned vs map-free generation.}
-Placeholder: contrast hard map constraints (graph search, masked softmax) with soft priors and energy guidance.
+\paragraph{Hierarchical and latent-structure approaches.}
+Hierarchical approaches address long-horizon uncertainty by separating coarse decisions from fine execution, e.g., sampling sparse waypoints/anchors and then refining a continuous path.
+Our formulation instantiates this idea as an explicit decision--execution cascade: a discrete topological commitment (waypoint skeleton) precedes continuous route generation, so corridor-level multi-modality is represented explicitly rather than being forced into a single continuous output space.
 
+\paragraph{Feasibility: hard constraints vs soft priors.}
+Feasibility is often enforced by hard conditioning on a road graph or by masking the output space to a ``feasible set''.
+Hard constraints can ensure on-road outputs but may also truncate the learned distribution and bind performance to map quality.
+We instead use map information as soft priors (e.g., road proximity fields) to encourage plausibility without hard support cutting.
+
+\paragraph{Macro priors and population synthesis (related but distinct).}
+Macro-level statistics (e.g., census attributes) are central in population synthesis and controllable urban simulation.
+Our work touches this direction only lightly: census-derived spatial covariates are explored as an optional guidance signal to demonstrate extensibility, while the core contribution remains the generative architecture for route generation.

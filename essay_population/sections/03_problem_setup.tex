@@ -1,0 +1,14 @@
+\paragraph{Setting.}
+We study conditional \emph{route generation}.
+Each route is a sequence of 2D positions $\tau = (p_1,\dots,p_T)$, where $p_t \in \mathbb{R}^2$ denotes the location at step $t$.
+We condition on trip intent and context $c$ (e.g., origin $o$, destination $d$, departure time $t_0$, and optional spatial semantic context such as POI/imagery/census covariates).
+
+\paragraph{Goal.}
+Given $c$, the model samples routes $\hat{\tau} \sim p_\theta(\tau \mid c)$ that satisfy:
+(i) \textbf{intent consistency} (reaching $d$ without drifting),
+(ii) \textbf{physical plausibility} (avoiding systematic off-road / obstacle crossings),
+and (iii) \textbf{multi-modality} (representing corridor-level alternatives).
+
+\paragraph{Why end-to-end generation is brittle.}
+When multiple corridor-level modes exist, direct coordinate modeling in $\tau$ tends to blur modes into infeasible averages.
+This motivates introducing an explicit decision variable that captures topological structure.

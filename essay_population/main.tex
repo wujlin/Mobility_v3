@@ -1,0 +1,99 @@
+\documentclass{article}
+
+% ============================================================
+% ICML 2026 paper scaffold
+% - If icml2026.sty exists, compile in ICML two-column mode.
+% - Otherwise, fall back to a single-column draft layout.
+% ============================================================
+
+\newif\ificml
+\IfFileExists{icml2026.sty}{\icmltrue}{\icmlfalse}
+
+\ificml
+  \usepackage{icml2026} % Provided by the official ICML 2026 template
+  \icmlfinalcopy
+  \icmltitlerunning{CascadeTraj for Route Generation}
+\else
+  \usepackage[margin=1in]{geometry}
+  \usepackage{setspace}
+  \onehalfspacing
+  \usepackage{newtxtext}
+  \usepackage{newtxmath}
+  \usepackage[round,authoryear]{natbib}
+\fi
+
+\usepackage{microtype}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{subcaption}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{hyperref}
+\hypersetup{hidelinks}
+
+\title{CascadeTraj: Bridging Semantic Intent and Physical Execution for Route Generation}
+\author{Anonymous Author(s)}
+\date{}
+
+\begin{document}
+
+\ificml
+\twocolumn[
+\icmltitle{CascadeTraj: Bridging Semantic Intent and Physical Execution for Route Generation}
+
+\begin{icmlauthorlist}
+\icmlauthor{Anonymous Author(s)}{anon}
+\end{icmlauthorlist}
+
+\icmlaffiliation{anon}{Anonymous Institution}
+\icmlkeywords{route generation, route choice, diffusion models, hierarchical generative modeling}
+\vskip 0.3in
+]
+\printAffiliationsAndNotice{} % Leave blank to omit the notice
+\else
+\maketitle
+\fi
+
+\begin{abstract}
+Abstract placeholder (150--250 words).
+We study long-horizon \emph{route generation}: sampling realistic, feasible, and diverse paths between an origin and a destination under time and semantic context.
+We propose \textbf{CascadeTraj}, a cascaded decision--execution generator that separates corridor-level commitments (sparse waypoints) from continuous physical execution.
+The framework supports soft map priors (e.g., road proximity) and optional census-derived spatial covariates as semantic guidance, without relying on hard output masking.
+\end{abstract}
+
+\section{Introduction}
+\input{sections/01_introduction.tex}
+
+\section{Related Work}
+\input{sections/02_related_work.tex}
+
+\section{Problem Setup}
+\input{sections/03_problem_setup.tex}
+
+\section{Method}
+\input{sections/04_method.tex}
+
+\section{Experiments}
+\input{sections/05_experiments.tex}
+
+\section{Results}
+\input{sections/06_results.tex}
+
+\section{Discussion}
+\input{sections/07_discussion.tex}
+
+\section{Conclusion}
+\input{sections/08_conclusion.tex}
+
+\appendix
+\section{Appendix}
+\input{sections/A_appendix.tex}
+
+\ificml
+  \IfFileExists{icml2026.bst}{\bibliographystyle{icml2026}}{\bibliographystyle{plainnat}}
+\else
+  \bibliographystyle{plainnat}
+\fi
+\bibliography{references}
+
+\end{document}

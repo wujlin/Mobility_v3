@@ -1,0 +1,33 @@
+\paragraph{From short-horizon forecasting to route generation.}
+Urban mobility traces record how people realize intent through space: not only \emph{where} they go, but \emph{how} they get there.
+Recent progress in sequence models and diffusion models \citep{vaswani2017attention,ho2020ddpm} has made short-horizon trajectory prediction increasingly accurate.
+Yet many practical and scientific tasks require a different capability: \emph{route generation} over a full trip.
+Given an origin--destination intent and context (e.g., departure time and neighborhood semantics), a route generator must sample an entire path that is realistic, feasible, and diverse.
+
+\paragraph{Why long-horizon route generation fails.}
+We observe two recurrent failure modes when extending generative modeling from seconds to full trips.
+First, intent can drift: purely autoregressive rollouts accumulate small errors and become globally inconsistent with the destination.
+Second, feasibility can break: when emphasizing diversity (e.g., via latent-variable models \citep{kingma2014auto} or standard diffusion), generators often hallucinate physically invalid paths that cut through obstacles or deviate systematically from the road network---especially when explicit map supervision is absent or unreliable.
+
+\paragraph{Root cause: topological multi-modality and destructive averaging.}
+The core difficulty is \emph{topological multi-modality}.
+Even for the same origin and destination, multiple corridor-level choices can be equally reasonable.
+End-to-end coordinate generators trained with likelihood or Euclidean losses therefore face a destructive ``averaging'' pressure: the mean of several feasible routes is often an infeasible straight line.
+This suggests that route generation should be modeled as a \emph{decision--execution} process rather than a single homogeneous sequence problem.
+
+\paragraph{CascadeTraj: bridging semantic intent and physical execution.}
+We propose \textbf{CascadeTraj}, a cascaded generative framework for route generation.
+At the \emph{decision} stage, the model samples a sparse route skeleton (e.g., waypoints) that represents discrete corridor-level alternatives and preserves long-horizon intent consistency.
+At the \emph{execution} stage, the model generates a full-resolution continuous route conditioned on the skeleton, capturing local geometry and motion patterns.
+This decomposition turns a brittle one-shot generation problem into two conditional problems with clearer responsibilities: (i) committing to a coherent topological plan, and (ii) executing a physically plausible realization.
+
+\paragraph{Soft priors and optional census guidance.}
+To encourage feasibility without collapsing support, we incorporate map information as \emph{soft} priors (e.g., road-proximity fields) rather than hard output masking.
+We also support injecting census-derived spatial covariates as optional semantic guidance signals that can steer route preferences without making population/attribute synthesis the main objective of this paper.
+
+\paragraph{Contributions.}
+\begin{itemize}
+  \item \textbf{Problem framing:} we formulate long-horizon mobility as conditional \emph{route generation} that must jointly satisfy intent consistency, physical plausibility, and corridor-level multi-modality.
+  \item \textbf{Method:} we introduce \textbf{CascadeTraj}, a decision--execution cascaded generator that combines sparse waypoint planning with continuous route execution, augmented by soft map priors and optional census-guided semantics.
+  \item \textbf{Empirical protocol:} we outline an evaluation setup with baselines and ablations for realism, feasibility, and diversity under consistent conditions.
+\end{itemize}

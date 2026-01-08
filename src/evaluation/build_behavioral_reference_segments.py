@@ -485,21 +485,19 @@ def _route_polyline(
 
     This aims to keep expected concentrated (mode-like). Optionally snaps intermediate
     points to local maxima in road_prob within snap_radius to stay near the road manifold.
+
+    Important: snapping only the control points is insufficient; the straight line segments
+    can still cut through large off-road regions and inflate the expected support. We
+    therefore snap *each* polyline point when snap_radius > 0.
     """
     H, W = int(grid.H), int(grid.W)
     pts: List[Tuple[int, int]] = [tuple(map(int, start))] + [tuple(map(int, p)) for p in waypoints] + [
         tuple(map(int, end))
     ]
-    if int(snap_radius) > 0 and len(pts) > 2:
-        snapped: List[Tuple[int, int]] = [pts[0]]
-        for y, x in pts[1:-1]:
-            sy, sx = _snap_point_to_road(road_prob, y=int(y), x=int(x), radius=int(snap_radius), H=H, W=W)
-            snapped.append((int(sy), int(sx)))
-        snapped.append(pts[-1])
-        pts = snapped
 
     ys: List[int] = []
     xs: List[int] = []
+    r = int(max(0, int(snap_radius)))
     for i in range(len(pts) - 1):
         y0, x0 = pts[i]
         y1, x1 = pts[i + 1]
@@ -507,9 +505,14 @@ def _route_polyline(
         if ys:
             seg = seg[1:]
         for y, x in seg:
-            if 0 <= int(y) < H and 0 <= int(x) < W:
-                ys.append(int(y))
-                xs.append(int(x))
+            yy = int(y)
+            xx = int(x)
+            if not (0 <= yy < H and 0 <= xx < W):
+                continue
+            if r > 0:
+                yy, xx = _snap_point_to_road(road_prob, y=yy, x=xx, radius=r, H=H, W=W)
+            ys.append(int(yy))
+            xs.append(int(xx))
     if not ys:
         ys = [int(start[0]), int(end[0])]
         xs = [int(start[1]), int(end[1])]

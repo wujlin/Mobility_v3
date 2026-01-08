@@ -1,0 +1,23 @@
+\subsection{Overview}
+We model route generation as a decision--execution hierarchy with a latent skeleton $z$ (e.g., waypoints).
+The conditional distribution factorizes as:
+\begin{equation}
+  p_\theta(\tau \mid c) = \sum_{z} p_\theta(z \mid c)\, p_\theta(\tau \mid z, c).
+\end{equation}
+In practice, we sample $z$ and then generate $\tau$ conditioned on $z$.
+
+\subsection{Decision: waypoint skeleton}
+We represent the route skeleton as an ordered waypoint sequence $z = (w_1,\dots,w_K)$.
+An autoregressive planner models $p_\theta(z \mid c)$ to maintain multi-step consistency.
+
+\subsection{Macro guidance: census-derived spatial priors (optional)}
+To support semantic controllability without requiring explicit per-agent attribute labels, we allow census-derived spatial covariates (e.g., tract-level population or income) to enter the model as additional context channels or weak guidance terms.
+In the main experiments, census guidance is treated as an optional ablation rather than the paper's primary task.
+
+\subsection{Execution: continuous route generation}
+Conditioned on $z$, the execution module generates a full-resolution route, modeling local geometry and motion.
+We leave the specific choice (diffusion / flow matching) as an implementation detail and focus on the hierarchy and conditioning interfaces.
+
+\subsection{Soft map priors for feasibility}
+We incorporate map-derived signals (e.g., road proximity) as soft priors in training and/or sampling, avoiding hard masking of the output space.
+This design prevents the generator from collapsing its support to an externally defined feasible set while still discouraging physically implausible routes.

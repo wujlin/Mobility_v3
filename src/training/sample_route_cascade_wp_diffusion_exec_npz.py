@@ -108,6 +108,7 @@ def build_argparser() -> argparse.ArgumentParser:
     p.add_argument("--case_npz", type=str, required=True, help="case_XX/gt_case.npz from route_gt_baseline.py")
     p.add_argument("--out_dir", type=str, required=True)
     p.add_argument("--num_samples_per_condition", type=int, default=20, help="K")
+    p.add_argument("--res_scale", type=float, default=1.0, help="Scale residual velocity from execution model (0 => skeleton-only).")
     p.add_argument("--seed", type=int, default=0)
     return p
 
@@ -280,7 +281,7 @@ def main() -> None:
             )
             torch.manual_seed(int(args.seed) + 2000 + int(kk))
             res_vel_norm = exec_model.sample_trajectory(obs_exec_t, cond_exec_t, horizon=int(f))
-            vel_norm = prior_vel_norm + res_vel_norm
+            vel_norm = prior_vel_norm + res_vel_norm * float(args.res_scale)
             vel = denormalize_vel(vel_norm.detach().cpu().numpy(), exec_norm)  # (N,F,2)
 
             disp = np.sum(vel, axis=1)
@@ -301,6 +302,7 @@ def main() -> None:
         "case_npz": str(Path(args.case_npz).resolve()),
         "seed": int(args.seed),
         "k_samples": int(k_samples),
+        "res_scale": float(args.res_scale),
         "od_bin": float(od_bin),
         "o_clip": float(o_clip),
         "decision_model": {"hidden_dim": int(dec_hidden), "diff_steps": int(dec_steps), "pred_type": str(dec_pred_type)},
@@ -325,4 +327,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

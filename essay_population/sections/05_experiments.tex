@@ -34,6 +34,7 @@ We evaluate corridor coverage and intra-condition diversity on the fixed audit c
 \paragraph{E4: composed cascade (decision + execution).}
 We compose the waypoint decision sampler with a waypoint-conditioned residual diffusion executor to generate full-resolution routes.
 This experiment tests whether corridor coverage gained at the decision stage is preserved after continuous execution, while improving realism and feasibility.
+We also vary the execution refinement strength by scaling the residual component, to characterize the tradeoff between corridor adherence and geometric detail.
 
 \paragraph{Core evidence: mode collapse visualization.}
 To make the failure mode unambiguous, we include a primary qualitative figure comparing multiple samples for the same condition:

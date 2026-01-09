@@ -56,6 +56,8 @@ def build_argparser() -> argparse.ArgumentParser:
     p.add_argument("--case_npz", type=str, required=True, help="case_XX/gt_case.npz from route_gt_baseline.py")
     p.add_argument("--out_dir", type=str, required=True)
     p.add_argument("--num_samples_per_condition", type=int, default=20, help="K")
+    p.add_argument("--cfg_scale", type=float, default=0.0, help="CFG inference scale (0 disables).")
+    p.add_argument("--cfg_uncond_dest_mode", type=str, choices=["origin", "zeros"], default="origin")
     p.add_argument("--max_n", type=int, default=None, help="Optional: limit number of windows in the case")
     p.add_argument("--seed", type=int, default=0)
     return p
@@ -117,11 +119,29 @@ def main() -> None:
 
     k = int(args.num_samples_per_condition)
     preds_k = np.zeros((n, k, f, 2), dtype=np.float32)
+    cfg_scale = float(args.cfg_scale)
+    cond_uncond_t = None
+    if cfg_scale != 0.0:
+        cond_uncond = cond.copy()
+        mode = str(args.cfg_uncond_dest_mode)
+        if mode == "origin":
+            cond_uncond[:, 4:6] = cond_uncond[:, 2:4]
+        elif mode == "zeros":
+            cond_uncond[:, 4:6] = 0.0
+        else:  # pragma: no cover
+            raise ValueError(f"Unknown cfg_uncond_dest_mode: {mode}")
+        cond_uncond_t = torch.from_numpy(cond_uncond).to(device=device, dtype=torch.float32)
     with torch.no_grad():
         for kk in range(k):
             # Make per-k randomness stable but distinct.
             torch.manual_seed(int(args.seed) + 1000 + int(kk))
-            vel_norm = model.sample_trajectory(obs_t, cond_t, horizon=int(f))  # (N,F,2) normalized
+            vel_norm = model.sample_trajectory(
+                obs_t,
+                cond_t,
+                horizon=int(f),
+                cond_uncond=cond_uncond_t,
+                cfg_scale=cfg_scale,
+            )  # (N,F,2) normalized
             vel = denormalize_vel(vel_norm.detach().cpu().numpy(), norm)  # (N,F,2) grid disp
             # Integrate: pos[t] = start + sum_{i<=t} vel[i]
             pos = start_pos[:, None, :] + np.cumsum(vel, axis=1)
@@ -143,7 +163,7 @@ def main() -> None:
 
     result = {
         "inputs": {"checkpoint": str(ckpt_path.resolve()), "case_npz": str(Path(args.case_npz).resolve())},
-        "config": {"K": int(k), "seed": int(args.seed)},
+        "config": {"K": int(k), "seed": int(args.seed), "cfg_scale": float(cfg_scale), "cfg_uncond_dest_mode": str(args.cfg_uncond_dest_mode)},
         "stats": {"N": int(n), "F": int(f)},
         "outputs": {"samples_npz": str(out_npz.resolve()), "summary_json": str(out_json.resolve())},
     }
@@ -153,4 +173,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

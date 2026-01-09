@@ -95,6 +95,10 @@ def build_argparser() -> argparse.ArgumentParser:
     p.add_argument("--diff_steps", type=int, default=100)
     p.add_argument("--pred_type", type=str, choices=["eps", "v"], default="eps")
 
+    # CFG training (destination dropout) for later CFG inference.
+    p.add_argument("--cfg_drop_dest_prob", type=float, default=0.0, help="Training-time destination dropout prob (0 disables).")
+    p.add_argument("--cfg_uncond_dest_mode", type=str, choices=["origin", "zeros"], default="origin", help="How to replace destination when dropped.")
+
     p.add_argument("--batch_size", type=int, default=64)
     p.add_argument("--epochs", type=int, default=30)
     p.add_argument("--lr", type=float, default=1e-3)
@@ -186,6 +190,21 @@ def main() -> None:
             cond = batch["cond"].to(device=device, non_blocking=True)
             target = batch["action"].to(device=device, non_blocking=True)
 
+            # CFG training: drop destination with probability p (per sample).
+            if float(args.cfg_drop_dest_prob) > 0.0:
+                p = float(args.cfg_drop_dest_prob)
+                if p < 0.0 or p > 1.0:
+                    raise ValueError("--cfg_drop_dest_prob must be in [0,1]")
+                mask = (torch.rand((cond.shape[0],), device=cond.device) < p)
+                if mask.any():
+                    mode = str(args.cfg_uncond_dest_mode)
+                    if mode == "origin":
+                        cond[mask, 4:6] = cond[mask, 2:4]
+                    elif mode == "zeros":
+                        cond[mask, 4:6].zero_()
+                    else:  # pragma: no cover
+                        raise ValueError(f"Unknown cfg_uncond_dest_mode: {mode}")
+
             optimizer.zero_grad(set_to_none=True)
             loss = model(obs, cond, target=target)
             loss.backward()
@@ -214,6 +233,10 @@ def main() -> None:
                         "obs_len": 1,
                         "cond_dim": 6,
                     },
+                    "cfg": {
+                        "cfg_drop_dest_prob": float(args.cfg_drop_dest_prob),
+                        "cfg_uncond_dest_mode": str(args.cfg_uncond_dest_mode),
+                    },
                     "norm": norm.as_jsonable(),
                 },
             },
@@ -229,6 +252,8 @@ def main() -> None:
             "hidden_dim": int(cfg.hidden_dim),
             "diff_steps": int(cfg.diff_steps),
             "pred_type": str(cfg.pred_type),
+            "cfg_drop_dest_prob": float(args.cfg_drop_dest_prob),
+            "cfg_uncond_dest_mode": str(args.cfg_uncond_dest_mode),
             "batch_size": int(cfg.batch_size),
             "epochs": int(cfg.epochs),
             "lr": float(cfg.lr),
@@ -254,4 +279,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

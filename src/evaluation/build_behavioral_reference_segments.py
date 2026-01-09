@@ -5,6 +5,7 @@ import json
 import math
 import os
 import datetime as dt
+import hashlib
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Tuple
@@ -441,28 +442,29 @@ def _build_od_templates(
 
 
 def _pick_template(
-    templates: Dict[Tuple[int, int, int], np.ndarray],
+    templates: Dict[Tuple[int, int, int], List[np.ndarray]],
     counts: Dict[Tuple[int, int, int], int],
+    weights: Dict[Tuple[int, int, int], List[float]],
     *,
     db: int,
     hb: int,
     tb: int,
     cfg: TemplateCfg,
-) -> Tuple[np.ndarray, Tuple[int, int, int], bool]:
+) -> Tuple[List[np.ndarray], List[float], Tuple[int, int, int], bool]:
     """
-    Return (template, chosen_key, used_fallback).
+    Return (templates, weights, chosen_key, used_fallback).
     Fallback searches nearest direction, then nearest distance.
     """
     k0 = (int(db), int(hb), int(tb))
     if k0 in templates and int(counts.get(k0, 0)) >= int(cfg.min_bin_samples):
-        return templates[k0], k0, False
+        return templates[k0], weights.get(k0, [1.0]), k0, False
 
     # 1) nearest direction within same dist bin
     for delta in range(1, int(cfg.dir_bins)):
         for sgn in (-1, 1):
             kk = (int(db), int((hb + sgn * delta) % int(cfg.dir_bins)), int(tb))
             if kk in templates and int(counts.get(kk, 0)) >= int(cfg.min_bin_samples):
-                return templates[kk], kk, True
+                return templates[kk], weights.get(kk, [1.0]), kk, True
 
     # 2) nearest distance, then nearest direction
     n_dist = int(len(cfg.dist_bins_m) - 1)
@@ -473,18 +475,41 @@ def _pick_template(
                 continue
             kk = (int(db2), int(hb), int(tb))
             if kk in templates and int(counts.get(kk, 0)) >= int(cfg.min_bin_samples):
-                return templates[kk], kk, True
+                return templates[kk], weights.get(kk, [1.0]), kk, True
             for delta in range(1, int(cfg.dir_bins)):
                 for sgn2 in (-1, 1):
                     kk2 = (int(db2), int((hb + sgn2 * delta) % int(cfg.dir_bins)), int(tb))
                     if kk2 in templates and int(counts.get(kk2, 0)) >= int(cfg.min_bin_samples):
-                        return templates[kk2], kk2, True
+                        return templates[kk2], weights.get(kk2, [1.0]), kk2, True
 
     # 3) last resort: any template (largest bin by sample count)
     if templates:
         kk_best = max(templates.keys(), key=lambda k: int(counts.get(k, 0)))
-        return templates[kk_best], kk_best, True
-    return np.zeros((len(cfg.waypoint_fracs), 2), dtype=np.float32), k0, True
+        return templates[kk_best], weights.get(kk_best, [1.0]), kk_best, True
+    empty = np.zeros((len(cfg.waypoint_fracs), 2), dtype=np.float32)
+    return [empty], [1.0], k0, True
+
+
+def _select_mode_id(key: str, *, weights: List[float]) -> int:
+    """
+    Deterministically select a mode index from a small mixture, to avoid "support" behavior.
+    We want the mixture to materialize across segments (dataset level), not within one segment.
+    """
+    w = [float(x) for x in weights]
+    if len(w) <= 1:
+        return 0
+    s = float(sum(w))
+    if not np.isfinite(s) or s <= 0.0:
+        return 0
+    w = [float(x / s) for x in w]
+    h = hashlib.blake2b(key.encode("utf-8"), digest_size=8).digest()
+    u = int.from_bytes(h, "little", signed=False) / float(2**64)
+    c = 0.0
+    for i, wi in enumerate(w):
+        c += float(wi)
+        if u < c:
+            return int(i)
+    return int(len(w) - 1)
 
 
 def _route_via_waypoints(
@@ -663,6 +688,18 @@ def build_argparser() -> argparse.ArgumentParser:
         help="(polyline only) Snap intermediate points to local maxima in road_prob within this radius (in grid cells). 0 disables.",
     )
     p.add_argument("--lambda_offroad", type=float, default=20.0)
+    p.add_argument(
+        "--lambda_corridor",
+        type=float,
+        default=0.0,
+        help="(astar only) Penalize deviation from the template corridor (per-segment start->waypoint->end chords). Larger => expected concentrates to corridor (mode-like).",
+    )
+    p.add_argument(
+        "--corridor_buffer_m",
+        type=float,
+        default=200.0,
+        help="(astar only) Corridor buffer in meters before corridor penalty kicks in.",
+    )
     p.add_argument("--max_expansions", type=int, default=350000)
     p.add_argument("--min_margin", type=int, default=64)
     p.add_argument("--max_margin", type=int, default=256)
@@ -705,7 +742,7 @@ def main() -> None:
         min_bin_samples=int(args.min_bin_samples),
     )
 
-    templates, counts, mode_frac = _build_templates(
+    templates, counts, weights, mode_frac = _build_templates(
         Path(args.source_segments_parquet),
         res_y_m=float(res_y_m),
         res_x_m=float(res_x_m),
@@ -716,11 +753,12 @@ def main() -> None:
     )
 
     od_bins = int(args.od_bins)
-    od_templates: Dict[Tuple[int, int, int], np.ndarray] = {}
+    od_templates: Dict[Tuple[int, int, int], List[np.ndarray]] = {}
     od_counts: Dict[Tuple[int, int, int], int] = {}
+    od_weights: Dict[Tuple[int, int, int], List[float]] = {}
     od_mode_frac: Dict[Tuple[int, int, int], float] = {}
     if od_bins > 1:
-        od_templates, od_counts, od_mode_frac = _build_od_templates(
+        od_templates, od_counts, od_weights, od_mode_frac = _build_od_templates(
             Path(args.source_segments_parquet),
             H=int(grid.H),
             W=int(grid.W),
@@ -739,6 +777,8 @@ def main() -> None:
         max_expansions=int(args.max_expansions),
         min_margin=int(args.min_margin),
         max_margin=int(args.max_margin),
+        lambda_corridor=float(args.lambda_corridor),
+        corridor_buffer_m=float(args.corridor_buffer_m),
     )
 
     out_parquet = Path(args.out_parquet)
@@ -761,6 +801,9 @@ def main() -> None:
     chosen_hb: List[int] = []
     chosen_tb: List[int] = []
     seg_tb: List[int] = []
+    tpl_mode_id: List[int] = []
+    tpl_mode_w: List[float] = []
+    tpl_mode_k: List[int] = []
 
     scanned = 0
     fallback_n = 0
@@ -782,17 +825,24 @@ def main() -> None:
         if od_bins > 1:
             kk_od = (int(o_id), int(d_id), int(tb))
             if kk_od in od_templates and int(od_counts.get(kk_od, 0)) >= int(args.min_od_samples):
-                tpl = od_templates[kk_od]
+                tpl_list = od_templates[kk_od]
+                w_list = od_weights.get(kk_od, [1.0] * int(len(tpl_list)))
                 used_od = True
                 od_used_n += 1
             else:
-                tpl, kk, fb = _pick_template(templates, counts, db=db, hb=hb, tb=tb, cfg=tcfg)
+                tpl_list, w_list, kk, fb = _pick_template(templates, counts, weights, db=db, hb=hb, tb=tb, cfg=tcfg)
                 od_fallback_n += 1
         else:
-            tpl, kk, fb = _pick_template(templates, counts, db=db, hb=hb, tb=tb, cfg=tcfg)
+            tpl_list, w_list, kk, fb = _pick_template(templates, counts, weights, db=db, hb=hb, tb=tb, cfg=tcfg)
 
         if fb:
             fallback_n += 1
+
+        key_for_mode = f"{k}|{kk[0]}|{kk[1]}|{kk[2]}"
+        mi = _select_mode_id(key_for_mode, weights=list(w_list))
+        mi = int(min(max(mi, 0), int(len(tpl_list) - 1)))
+        tpl = tpl_list[mi]
+        mw = float(w_list[mi]) if mi < len(w_list) else 1.0
 
         # Inverse transform: normalized (x,y) -> target grid waypoint coords.
         # Metric start
@@ -849,6 +899,9 @@ def main() -> None:
         chosen_hb.append(int(kk[1]))
         chosen_tb.append(int(kk[2]))
         seg_tb.append(int(tb))
+        tpl_mode_id.append(int(mi))
+        tpl_mode_w.append(float(mw))
+        tpl_mode_k.append(int(len(tpl_list)))
 
     table = pa.table(
         {
@@ -868,6 +921,9 @@ def main() -> None:
             "tpl_dir_bin": pa.array(chosen_hb, type=pa.int16()),
             "tpl_time_bucket": pa.array(chosen_tb, type=pa.int8()),
             "time_bucket": pa.array(seg_tb, type=pa.int8()),
+            "tpl_mode_id": pa.array(tpl_mode_id, type=pa.int8()),
+            "tpl_mode_w": pa.array(tpl_mode_w, type=pa.float32()),
+            "tpl_mode_k": pa.array(tpl_mode_k, type=pa.int8()),
         }
     )
     pq.write_table(table, str(out_parquet))
@@ -881,12 +937,15 @@ def main() -> None:
         "grid": {"H": int(grid.H), "W": int(grid.W), "bbox": grid.bbox.__dict__},
         "template_cfg": {
             "template_repr": "medoid",
+            "major_mode_threshold": 0.8,
             "od_bins": int(od_bins),
             "min_od_samples": int(args.min_od_samples),
             "dist_bins_m": list(dist_bins),
             "dir_bins": int(tcfg.dir_bins),
             "waypoint_fracs": list(waypoint_fracs),
             "min_bin_samples": int(tcfg.min_bin_samples),
+            "time_scheme": str(args.time_scheme),
+            "tz": str(args.tz),
         },
         "landing": {
             "mode": str(args.landing),
@@ -897,16 +956,22 @@ def main() -> None:
             "max_expansions": int(astar_cfg.max_expansions),
             "min_margin": int(astar_cfg.min_margin),
             "max_margin": int(astar_cfg.max_margin),
+            "lambda_corridor": float(astar_cfg.lambda_corridor),
+            "corridor_buffer_m": float(astar_cfg.corridor_buffer_m),
         },
         "stats": {
             "target_segments_scanned": int(scanned),
             "astar_success_rate": float(ok_n / max(1, scanned)),
             "template_fallback_rate": float(fallback_n / max(1, scanned)),
-            "template_bins_total": int((len(dist_bins) - 1) * int(tcfg.dir_bins)),
+            "template_bins_total": int((len(dist_bins) - 1) * int(tcfg.dir_bins) * (1 if str(args.time_scheme) == "none" else 3)),
             "template_bins_nonempty": int(len(templates)),
             "template_mode_frac": {
                 "p50": float(np.percentile(list(mode_frac.values()), 50)) if mode_frac else float("nan"),
                 "mean": float(np.mean(list(mode_frac.values()))) if mode_frac else float("nan"),
+            },
+            "template_major_k": {
+                "k1": int(sum(1 for v in templates.values() if int(len(v)) == 1)),
+                "k2": int(sum(1 for v in templates.values() if int(len(v)) == 2)),
             },
             "template_od_bins_nonempty": int(len(od_templates)) if od_bins > 1 else 0,
             "template_od_used_rate": float(od_used_n / max(1, scanned)) if od_bins > 1 else 0.0,
@@ -914,6 +979,10 @@ def main() -> None:
             "template_od_mode_frac": {
                 "p50": float(np.percentile(list(od_mode_frac.values()), 50)) if od_mode_frac else float("nan"),
                 "mean": float(np.mean(list(od_mode_frac.values()))) if od_mode_frac else float("nan"),
+            },
+            "template_od_major_k": {
+                "k1": int(sum(1 for v in od_templates.values() if int(len(v)) == 1)) if od_bins > 1 else 0,
+                "k2": int(sum(1 for v in od_templates.values() if int(len(v)) == 2)) if od_bins > 1 else 0,
             },
             "max_segments": int(args.max_segments),
         },

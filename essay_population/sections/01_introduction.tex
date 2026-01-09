@@ -15,11 +15,11 @@ Even for the same origin and destination, multiple corridor-level choices can be
 End-to-end coordinate generators trained with likelihood or Euclidean losses therefore face a destructive ``averaging'' pressure: the mean of several feasible routes is often an infeasible straight line.
 This suggests that route generation should be modeled as a \emph{decision--execution} process rather than a single homogeneous sequence problem.
 
-\paragraph{A diagnostic baseline: mode interference in continuous output space.}
-We first provide a diagnostic experiment (Fig.~\ref{fig:mode-collapse}) using an end-to-end generative baseline trained under the same data and conditioning.
+\paragraph{A diagnostic baseline: averaging vs.\ blur in continuous output space.}
+We first provide a diagnostic experiment (Fig.~\ref{fig:mode-collapse}) using end-to-end baselines trained under the same data and conditioning.
 To avoid cherry-picking, we fix diagnostic OD cases via a ground-truth corridor audit (Sec.~\ref{sec:experiments}).
-We observe a characteristic collapse: samples either concentrate around overly direct routes or blur distinct corridor-level alternatives into implausible averages.
-This supports the hypothesis that the bottleneck is not simply model capacity, but \emph{mode interference} when corridor-level decisions are represented only implicitly in a continuous coordinate output space.
+We observe two characteristic symptoms of topological multi-modality: (i) deterministic coordinate regression collapses to overly direct ``average'' routes, and (ii) stochastic generation can avoid hard collapse yet still blurs corridor-level alternatives into implausible mixtures.
+Together, these failures suggest that the bottleneck is not simply model capacity, but \emph{mode interference} when corridor-level decisions are represented only implicitly in a continuous coordinate output space.
 
 \begin{figure}[t]
   \centering

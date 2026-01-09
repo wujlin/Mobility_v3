@@ -258,17 +258,31 @@ python -m src.training.sample_route_e2e_diffusion_npz \
   --seed 0 \
   > "$E1_CASE_DIR/sample.stdout.json"
 
-# --- E2: CascadeTraj（samples_only + 保存 preds_k 用于 Fig1）---
-python -m src.training.evaluate \
-  --exp_name "icml2026_routegen/E2_cascadetraj_case00_seed0" \
-  --model_type diffusion \
-  --data_path "<DATA_PATH>" \
-  --checkpoint "<CASCADE_CKPT_PATH>" \
-  --split test \
-  --num_workers 0 \
-  --samples_only --save_all_k --save_samples 200 \
-  --windows_npz "$CASE_DIR/gt_case.npz" \
-  --seed 0
+# --- E2: Decision→Execution（oracle skeleton bank + residual diffusion execution）---
+# 说明：这是最快能闭环验证 Claim-B 的最小版本：
+# - 先从 GT case 构建 waypoint bank（两走廊混合），作为“离散承诺”的采样来源；
+# - 再用 waypoint-conditioned residual diffusion 做执行层生成，避免端到端平均化。
+export E2_TRAIN_DIR="$EXP_ROOT/E2_exec_diffusion_wp_residual_npz_seed0"
+export E2_CASE_DIR="$EXP_ROOT/E2_exec_diffusion_wp_residual_npz_case00_seed0"
+
+PYTHONUNBUFFERED=1 python -u -m src.training.train_route_exec_diffusion_wp_npz \
+  --train_npz "$GT_WINDOWS_NPZ" \
+  --out_dir "$E2_TRAIN_DIR" \
+  --waypoint_mode rdp_dev \
+  --num_waypoints 2 \
+  --hidden_dim 128 \
+  --diff_steps 100 \
+  --epochs 30 \
+  --batch_size 64 \
+  --seed 0 |& tee "$E2_TRAIN_DIR/run.log"
+
+python -m src.training.sample_route_exec_diffusion_wp_npz \
+  --checkpoint "$E2_TRAIN_DIR/last.pt" \
+  --case_npz "$CASE_DIR/gt_case.npz" \
+  --out_dir "$E2_CASE_DIR" \
+  --num_samples_per_condition 20 \
+  --seed 0 \
+  > "$E2_CASE_DIR/sample.stdout.json"
 
 # --- collapse 指标（JSON-only）---
 python -m src.evaluation.route_mode_collapse_metrics \
@@ -281,15 +295,15 @@ python -m src.evaluation.route_mode_collapse_metrics \
 python -m src.evaluation.route_mode_collapse_metrics \
   --gt_report_json "$E0_DIR/report.json" \
   --gt_windows_npz "$CASE_DIR/gt_case.npz" \
-  --model_samples_npz "data/experiments/icml2026_routegen/E2_cascadetraj_case00_seed0/samples.npz" \
-  --out_json "$CASE_DIR/cascade_collapse.json" \
-  > "$CASE_DIR/cascade_collapse.stdout.json"
+  --model_samples_npz "$E2_CASE_DIR/samples.npz" \
+  --out_json "$E2_CASE_DIR/cascade_collapse.json" \
+  > "$E2_CASE_DIR/cascade_collapse.stdout.json"
 
 # --- Fig1 风格可视化（PDF + JSON-only）---
 python -m src.evaluation.plot_route_mode_collapse_figure \
   --gt_case_npz "$CASE_DIR/gt_case.npz" \
   --model "End2End=$E1_CASE_DIR/samples.npz" \
-  --model "CascadeTraj=data/experiments/icml2026_routegen/E2_cascadetraj_case00_seed0/samples.npz" \
+  --model "CascadeTraj=$E2_CASE_DIR/samples.npz" \
   --out_pdf "$E1_CASE_DIR/fig_mode_collapse.pdf" \
   --out_json "$E1_CASE_DIR/fig_mode_collapse.json" \
   > "$E1_CASE_DIR/fig_mode_collapse.stdout.json"

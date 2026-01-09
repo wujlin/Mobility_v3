@@ -14,7 +14,7 @@ We report split definitions and leakage controls (train/val/test) to ensure repr
 We include end-to-end generators that output the full coordinate sequence directly:
 (i) an autoregressive coordinate model, and
 (ii) an end-to-end diffusion model \citep{ho2020ddpm} conditioned on $(o,d,t_0)$ and optional context.
-These baselines are expected to exhibit mode collapse under topological multi-modality, serving as diagnostic references.
+These baselines serve as diagnostic references for two common failure modes under topological multi-modality: destructive averaging (collapse) and corridor-level mode interference (blur).
 We also include a hard-constrained variant (e.g., output masking / masked-softmax) as a \emph{diagnostic} ablation to separate ``feasibility by truncation'' from true distribution learning.
 
 \paragraph{Core evidence: mode collapse visualization.}

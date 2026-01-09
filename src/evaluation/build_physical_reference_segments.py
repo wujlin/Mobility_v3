@@ -26,6 +26,10 @@ class AStarCfg:
     max_expansions: int
     min_margin: int
     max_margin: int
+    # Optional corridor constraint: penalize deviation from the straight start->end corridor.
+    # This is used by behavioral reference landing to keep expected concentrated (mode-like).
+    lambda_corridor: float = 0.0
+    corridor_buffer_m: float = 0.0
 
 
 def _ensure_dir(p: Path) -> None:
@@ -101,6 +105,42 @@ def _astar_soft(
 
     import heapq
 
+    # Precompute corridor segment in metric coords (subgrid local).
+    use_corridor = float(cfg.lambda_corridor) > 0.0 and float(cfg.corridor_buffer_m) >= 0.0
+    ax_m = float(sx) * float(res_x_m)
+    ay_m = float(sy) * float(res_y_m)
+    bx_m = float(gx) * float(res_x_m)
+    by_m = float(gy) * float(res_y_m)
+    abx = float(bx_m - ax_m)
+    aby = float(by_m - ay_m)
+    ab_len2 = float(abx * abx + aby * aby)
+    inv_ab_len2 = 0.0 if ab_len2 <= 1e-9 else float(1.0 / ab_len2)
+    corridor_buffer_m = float(max(0.0, float(cfg.corridor_buffer_m)))
+    lambda_corridor = float(max(0.0, float(cfg.lambda_corridor)))
+
+    def _corridor_excess_m(yy: int, xx: int) -> float:
+        if not use_corridor:
+            return 0.0
+        px = float(xx) * float(res_x_m)
+        py = float(yy) * float(res_y_m)
+        apx = float(px - ax_m)
+        apy = float(py - ay_m)
+        t = float((apx * abx + apy * aby) * inv_ab_len2) if inv_ab_len2 > 0.0 else 0.0
+        if t <= 0.0:
+            cx = ax_m
+            cy = ay_m
+        elif t >= 1.0:
+            cx = bx_m
+            cy = by_m
+        else:
+            cx = float(ax_m + t * abx)
+            cy = float(ay_m + t * aby)
+        dx = float(px - cx)
+        dy = float(py - cy)
+        d = float(math.hypot(dx, dy))
+        ex = float(d - corridor_buffer_m)
+        return float(ex) if ex > 0.0 else 0.0
+
     def heuristic(i: int) -> float:
         yy = i // subW
         xx = i - yy * subW
@@ -139,6 +179,8 @@ def _astar_soft(
                 continue
             ni = ny * subW + nx
             ng = gi + float(step_m) * float(w[ni])
+            if use_corridor:
+                ng += float(lambda_corridor) * float(_corridor_excess_m(int(ny), int(nx)))
             if ng < float(gscore[ni]):
                 gscore[ni] = ng
                 came[ni] = int(i)
@@ -340,4 +382,3 @@ if __name__ == "__main__":
     os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
     os.environ.setdefault("MKL_NUM_THREADS", "1")
     main()
-

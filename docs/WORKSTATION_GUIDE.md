@@ -15,6 +15,13 @@
 
 ### 1.1 工作站 A（训练/大规模处理）
 
+- **设备信息（最小可复现口径）**：
+  - hostname/别名：`wsA`（ssh config）
+  - OS/Kernel：以 `uname -a` 为准
+  - CPU：24C/48T（已知；以 `lscpu` 为准）
+  - GPU：以 `nvidia-smi` 为准
+  - 内存：以 `free -h` 为准
+
 - **仓库路径**：`~/projects/Mobility_v3`
 - **外置数据根目录（唯一口径）**：`$RAW_ROOT=/home/jinlin/data/geoexplicit_data`
 - **常用数据目录**（示例）：
@@ -29,6 +36,16 @@
 ```bash
 export REPO="$HOME/projects/Mobility_v3"
 export RAW_ROOT="$HOME/data/geoexplicit_data"
+```
+
+设备信息快速自检（仅打印，不写盘）：
+
+```bash
+uname -a
+lscpu | head
+free -h
+nvidia-smi || true
+df -h | head
 ```
 
 #### 1.1.1 工作站 A 数据内容（当前主线：WorldTrace Detroit/Columbus）
@@ -47,6 +64,17 @@ export RAW_ROOT="$HOME/data/geoexplicit_data"
 | POI 栅格化产物（每城） | `$RAW_ROOT/worldtrace/<city>_core_v1/` | `poi_density_*.npy`, `poi_raster_meta.json` | 必须写清 `grid_shape`/bbox 与过滤口径 |
 | Wayback 遥感（Detroit） | `$RAW_ROOT/wayback/detroit_core_z16_fixed_multi_r6/` | `wayback_scan_meta.json`, `z16/.../rid_<release_id>.jpg` | 以 `release_id` 作为快照标识；不以 release_date 做时间证据 |
 | Census/ACS（Detroit） | `$RAW_ROOT/census/detroit_core_v1/` | `acs_tract_*.csv`, `tract_covariates_*.parquet` | TIGER 若遇 403 可手动下载；注意 GeoParquet vs 普通 parquet 读取方式 |
+
+#### 1.1.2 数据快照（仅用于排错；不作为论文证据）
+
+> 目的：当“跑不动/找不到文件/数据不一致”时，用一组可复现检查项快速判断是否为**路径/缺文件/版本不同**导致。  
+> 说明：数值会随数据版本变化；论文正文不直接引用。
+
+- Detroit（WorldTrace core）：`$RAW_ROOT/worldtrace/detroit_core_v1/segments.parquet`（约 2.3k segments）
+- Columbus（WorldTrace core）：`$RAW_ROOT/worldtrace/columbus_core_v1/segments.parquet`（约 5.2k segments）
+- SafeGraph Places（Base shards）：`$RAW_ROOT/safegraph/safegraph_unzip/Global_Places_POI_Data-*.csv`（当前 64 分片）
+- Wayback Detroit（z=16，多 release）：`$RAW_ROOT/wayback/detroit_core_z16_fixed_multi_r6/`（目标 6×3472=20832 tiles）
+- Census Detroit（tract covariates）：`$RAW_ROOT/census/detroit_core_v1/tract_covariates_detroit_core.clean.parquet`（约 419 tracts）
 
 ### 1.2 本地 WSL（写作/轻量分析/拉图）
 

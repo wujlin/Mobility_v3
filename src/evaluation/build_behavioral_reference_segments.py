@@ -281,8 +281,14 @@ def _build_templates(
     tz: str,
     time_scheme: str,
     max_segments: int,
-) -> Tuple[Dict[Tuple[int, int, int], np.ndarray], Dict[Tuple[int, int, int], int], Dict[Tuple[int, int, int], float]]:
-    # templates[(dist_bin, dir_bin, time_bucket)] -> (M, 2) normalized waypoints in (x,y) where end is at (1,0).
+) -> Tuple[
+    Dict[Tuple[int, int, int], List[np.ndarray]],
+    Dict[Tuple[int, int, int], int],
+    Dict[Tuple[int, int, int], List[float]],
+    Dict[Tuple[int, int, int], float],
+]:
+    # templates[(dist_bin, dir_bin, time_bucket)] -> list of (M,2) templates (major modes mixture)
+    # weights[(dist_bin, dir_bin, time_bucket)]   -> list of weights aligned with templates
     accum: Dict[Tuple[int, int, int], List[np.ndarray]] = {}
     counts: Dict[Tuple[int, int, int], int] = {}
 
@@ -314,25 +320,39 @@ def _build_templates(
         accum.setdefault(k, []).append(w)
         counts[k] = int(counts.get(k, 0) + 1)
 
-    templates: Dict[Tuple[int, int, int], np.ndarray] = {}
-    mode_frac: Dict[Tuple[int, int, int], float] = {}
+    templates: Dict[Tuple[int, int, int], List[np.ndarray]] = {}
+    weights: Dict[Tuple[int, int, int], List[float]] = {}
+    dominant_frac: Dict[Tuple[int, int, int], float] = {}
     for k, items in accum.items():
         stack = np.stack(items, axis=0)  # (N, M, 2)
         n = int(stack.shape[0])
-        # If a bin is multi-modal, a pointwise median can sit "between corridors" and inflate expected support.
-        # We approximate a "mode" template by selecting the dominant cluster in waypoint space, then picking a
-        # representative *observed* member (medoid-like) from that cluster.
+        # Major modes mixture (top-k cumulative mass >= 0.8):
+        # - Never output broad support ("all plausible corridors").
+        # - Allow 2-3 equally plausible commute corridors; here we approximate with a 2-means split.
         if n >= max(2 * int(cfg.min_bin_samples), 10):
             v = stack.reshape(n, -1)  # (N, 2M)
-            m = _mode_cluster_mask(v, iters=10)
-            m_cnt = int(np.sum(m))
-            if m_cnt >= 2:
-                templates[k] = _pick_medoid(stack, m)
-                mode_frac[k] = float(m_cnt / max(1, n))
+            m0 = _mode_cluster_mask(v, iters=10)  # dominant cluster (by count)
+            c0 = int(np.sum(m0))
+            c1 = int(n - c0)
+            f0 = float(c0 / max(1, n))
+            # If the dominant corridor already covers >=80%, keep single mode; otherwise keep both modes.
+            if c0 >= 2 and c1 >= 2 and f0 < 0.8:
+                tpl0 = _pick_medoid(stack, m0)
+                tpl1 = _pick_medoid(stack, ~m0)
+                templates[k] = [tpl0, tpl1]
+                weights[k] = [float(f0), float(1.0 - f0)]
+                dominant_frac[k] = float(f0)
                 continue
-        templates[k] = _pick_medoid(stack, None)
-        mode_frac[k] = 1.0
-    return templates, counts, mode_frac
+            if c0 >= 2:
+                templates[k] = [_pick_medoid(stack, m0)]
+                weights[k] = [1.0]
+                dominant_frac[k] = float(f0)
+                continue
+
+        templates[k] = [_pick_medoid(stack, None)]
+        weights[k] = [1.0]
+        dominant_frac[k] = 1.0
+    return templates, counts, weights, dominant_frac
 
 
 def _build_od_templates(
@@ -345,15 +365,24 @@ def _build_od_templates(
     cfg: TemplateCfg,
     od_bins: int,
     min_od_samples: int,
+    tz: str,
+    time_scheme: str,
     max_segments: int,
-) -> Tuple[Dict[Tuple[int, int], np.ndarray], Dict[Tuple[int, int], int], Dict[Tuple[int, int], float]]:
-    # templates[(o_id, d_id)] -> (M, 2) normalized waypoints in (x,y) where end is at (1,0).
-    accum: Dict[Tuple[int, int], List[np.ndarray]] = {}
-    counts: Dict[Tuple[int, int], int] = {}
+) -> Tuple[
+    Dict[Tuple[int, int, int], List[np.ndarray]],
+    Dict[Tuple[int, int, int], int],
+    Dict[Tuple[int, int, int], List[float]],
+    Dict[Tuple[int, int, int], float],
+]:
+    # templates[(o_id, d_id, time_bucket)] -> list of (M,2) templates (major modes mixture)
+    # weights[(o_id, d_id, time_bucket)]   -> list of weights aligned with templates
+    accum: Dict[Tuple[int, int, int], List[np.ndarray]] = {}
+    counts: Dict[Tuple[int, int, int], int] = {}
 
-    for _, y, x in _iter_segments_xy(source_segments_parquet, max_segments=max_segments):
+    for _, y, x, t0 in _iter_segments_xy_t0(source_segments_parquet, max_segments=max_segments):
         y0, x0, y1, x1 = int(y[0]), int(x[0]), int(y[-1]), int(x[-1])
         o_id, d_id = _od_key(y0, x0, y1, x1, H=int(H), W=int(W), od_bins=int(od_bins))
+        tb = 0 if str(time_scheme) == "none" else _time_bucket_peak3(t0, tz=str(tz))
 
         chord_m, theta = _chord_len_dir(y, x, res_y_m=res_y_m, res_x_m=res_x_m)
         if not np.isfinite(chord_m) or chord_m <= 1e-3:
@@ -374,12 +403,13 @@ def _build_od_templates(
             wps.append([float(xr), float(yr)])
         w = np.asarray(wps, dtype=np.float32)
 
-        k = (int(o_id), int(d_id))
+        k = (int(o_id), int(d_id), int(tb))
         accum.setdefault(k, []).append(w)
         counts[k] = int(counts.get(k, 0) + 1)
 
-    templates: Dict[Tuple[int, int], np.ndarray] = {}
-    mode_frac: Dict[Tuple[int, int], float] = {}
+    templates: Dict[Tuple[int, int, int], List[np.ndarray]] = {}
+    weights: Dict[Tuple[int, int, int], List[float]] = {}
+    dominant_frac: Dict[Tuple[int, int, int], float] = {}
     for k, items in accum.items():
         if int(counts.get(k, 0)) < int(min_od_samples):
             continue
@@ -387,37 +417,50 @@ def _build_od_templates(
         n = int(stack.shape[0])
         if n >= max(2 * int(min_od_samples), 10):
             v = stack.reshape(n, -1)  # (N, 2M)
-            m = _mode_cluster_mask(v, iters=10)
-            m_cnt = int(np.sum(m))
-            if m_cnt >= 2:
-                templates[k] = _pick_medoid(stack, m)
-                mode_frac[k] = float(m_cnt / max(1, n))
+            m0 = _mode_cluster_mask(v, iters=10)
+            c0 = int(np.sum(m0))
+            c1 = int(n - c0)
+            f0 = float(c0 / max(1, n))
+            if c0 >= 2 and c1 >= 2 and f0 < 0.8:
+                tpl0 = _pick_medoid(stack, m0)
+                tpl1 = _pick_medoid(stack, ~m0)
+                templates[k] = [tpl0, tpl1]
+                weights[k] = [float(f0), float(1.0 - f0)]
+                dominant_frac[k] = float(f0)
                 continue
-        templates[k] = _pick_medoid(stack, None)
-        mode_frac[k] = 1.0
-    return templates, counts, mode_frac
+            if c0 >= 2:
+                templates[k] = [_pick_medoid(stack, m0)]
+                weights[k] = [1.0]
+                dominant_frac[k] = float(f0)
+                continue
+
+        templates[k] = [_pick_medoid(stack, None)]
+        weights[k] = [1.0]
+        dominant_frac[k] = 1.0
+    return templates, counts, weights, dominant_frac
 
 
 def _pick_template(
-    templates: Dict[Tuple[int, int], np.ndarray],
-    counts: Dict[Tuple[int, int], int],
+    templates: Dict[Tuple[int, int, int], np.ndarray],
+    counts: Dict[Tuple[int, int, int], int],
     *,
     db: int,
     hb: int,
+    tb: int,
     cfg: TemplateCfg,
-) -> Tuple[np.ndarray, Tuple[int, int], bool]:
+) -> Tuple[np.ndarray, Tuple[int, int, int], bool]:
     """
     Return (template, chosen_key, used_fallback).
     Fallback searches nearest direction, then nearest distance.
     """
-    k0 = (int(db), int(hb))
+    k0 = (int(db), int(hb), int(tb))
     if k0 in templates and int(counts.get(k0, 0)) >= int(cfg.min_bin_samples):
         return templates[k0], k0, False
 
     # 1) nearest direction within same dist bin
     for delta in range(1, int(cfg.dir_bins)):
         for sgn in (-1, 1):
-            kk = (int(db), int((hb + sgn * delta) % int(cfg.dir_bins)))
+            kk = (int(db), int((hb + sgn * delta) % int(cfg.dir_bins)), int(tb))
             if kk in templates and int(counts.get(kk, 0)) >= int(cfg.min_bin_samples):
                 return templates[kk], kk, True
 
@@ -428,12 +471,12 @@ def _pick_template(
             db2 = int(db + sgn * dd)
             if db2 < 0 or db2 >= n_dist:
                 continue
-            kk = (int(db2), int(hb))
+            kk = (int(db2), int(hb), int(tb))
             if kk in templates and int(counts.get(kk, 0)) >= int(cfg.min_bin_samples):
                 return templates[kk], kk, True
             for delta in range(1, int(cfg.dir_bins)):
                 for sgn2 in (-1, 1):
-                    kk2 = (int(db2), int((hb + sgn2 * delta) % int(cfg.dir_bins)))
+                    kk2 = (int(db2), int((hb + sgn2 * delta) % int(cfg.dir_bins)), int(tb))
                     if kk2 in templates and int(counts.get(kk2, 0)) >= int(cfg.min_bin_samples):
                         return templates[kk2], kk2, True
 
@@ -599,6 +642,14 @@ def build_argparser() -> argparse.ArgumentParser:
     p.add_argument("--waypoint_fracs", type=float, nargs="+", default=[0.33, 0.66])
     p.add_argument("--min_bin_samples", type=int, default=50, help="Require at least this many source samples in a bin; otherwise fallback.")
     p.add_argument(
+        "--time_scheme",
+        type=str,
+        default="peak3",
+        choices=["peak3", "none"],
+        help="Time bucket scheme for templates. 'peak3' uses AM/PM/Other buckets; 'none' disables time conditioning.",
+    )
+    p.add_argument("--tz", type=str, default="America/New_York", help="IANA timezone for local hour bucketing (e.g., America/Detroit).")
+    p.add_argument(
         "--landing",
         type=str,
         default="astar",
@@ -659,13 +710,15 @@ def main() -> None:
         res_y_m=float(res_y_m),
         res_x_m=float(res_x_m),
         cfg=tcfg,
+        tz=str(args.tz),
+        time_scheme=str(args.time_scheme),
         max_segments=int(args.max_segments),
     )
 
     od_bins = int(args.od_bins)
-    od_templates: Dict[Tuple[int, int], np.ndarray] = {}
-    od_counts: Dict[Tuple[int, int], int] = {}
-    od_mode_frac: Dict[Tuple[int, int], float] = {}
+    od_templates: Dict[Tuple[int, int, int], np.ndarray] = {}
+    od_counts: Dict[Tuple[int, int, int], int] = {}
+    od_mode_frac: Dict[Tuple[int, int, int], float] = {}
     if od_bins > 1:
         od_templates, od_counts, od_mode_frac = _build_od_templates(
             Path(args.source_segments_parquet),
@@ -676,6 +729,8 @@ def main() -> None:
             cfg=tcfg,
             od_bins=int(od_bins),
             min_od_samples=int(args.min_od_samples),
+            tz=str(args.tz),
+            time_scheme=str(args.time_scheme),
             max_segments=int(args.max_segments),
         )
 
@@ -704,6 +759,8 @@ def main() -> None:
     tpl_d_id: List[int] = []
     chosen_db: List[int] = []
     chosen_hb: List[int] = []
+    chosen_tb: List[int] = []
+    seg_tb: List[int] = []
 
     scanned = 0
     fallback_n = 0
@@ -711,27 +768,28 @@ def main() -> None:
     od_fallback_n = 0
     ok_n = 0
 
-    for k, y, x in _iter_segments_xy(Path(args.target_segments_parquet), max_segments=int(args.max_segments)):
+    for k, y, x, t0 in _iter_segments_xy_t0(Path(args.target_segments_parquet), max_segments=int(args.max_segments)):
         scanned += 1
         y0, x0, y1, x1 = int(y[0]), int(x[0]), int(y[-1]), int(x[-1])
         chord_m, theta = _chord_len_dir(y, x, res_y_m=float(res_y_m), res_x_m=float(res_x_m))
         db = _dist_bin_id(float(chord_m), tcfg.dist_bins_m)
         hb = _dir_bin_id(float(theta), int(tcfg.dir_bins))
+        tb = 0 if str(args.time_scheme) == "none" else _time_bucket_peak3(t0, tz=str(args.tz))
         o_id, d_id = _od_key(y0, x0, y1, x1, H=int(grid.H), W=int(grid.W), od_bins=max(1, od_bins))
         used_od = False
         fb = False
-        kk = (int(db), int(hb))
+        kk = (int(db), int(hb), int(tb))
         if od_bins > 1:
-            kk_od = (int(o_id), int(d_id))
+            kk_od = (int(o_id), int(d_id), int(tb))
             if kk_od in od_templates and int(od_counts.get(kk_od, 0)) >= int(args.min_od_samples):
                 tpl = od_templates[kk_od]
                 used_od = True
                 od_used_n += 1
             else:
-                tpl, kk, fb = _pick_template(templates, counts, db=db, hb=hb, cfg=tcfg)
+                tpl, kk, fb = _pick_template(templates, counts, db=db, hb=hb, tb=tb, cfg=tcfg)
                 od_fallback_n += 1
         else:
-            tpl, kk, fb = _pick_template(templates, counts, db=db, hb=hb, cfg=tcfg)
+            tpl, kk, fb = _pick_template(templates, counts, db=db, hb=hb, tb=tb, cfg=tcfg)
 
         if fb:
             fallback_n += 1
@@ -789,6 +847,8 @@ def main() -> None:
         tpl_d_id.append(int(d_id))
         chosen_db.append(int(kk[0]))
         chosen_hb.append(int(kk[1]))
+        chosen_tb.append(int(kk[2]))
+        seg_tb.append(int(tb))
 
     table = pa.table(
         {
@@ -806,6 +866,8 @@ def main() -> None:
             "tpl_d_id": pa.array(tpl_d_id, type=pa.int16()),
             "tpl_dist_bin": pa.array(chosen_db, type=pa.int16()),
             "tpl_dir_bin": pa.array(chosen_hb, type=pa.int16()),
+            "tpl_time_bucket": pa.array(chosen_tb, type=pa.int8()),
+            "time_bucket": pa.array(seg_tb, type=pa.int8()),
         }
     )
     pq.write_table(table, str(out_parquet))

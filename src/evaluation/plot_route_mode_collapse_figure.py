@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
@@ -20,6 +21,10 @@ class Config:
     max_paths: int
     seed: int
     jacc_cell: float
+    ncols: int
+    panel_dx: float
+    panel_dy: float
+    png_dpi: int
 
 
 def _key64(traj_idx: np.ndarray, start_t: np.ndarray) -> np.ndarray:
@@ -217,6 +222,7 @@ def run_figure(
     gt_case_npz: Path,
     models: List[Tuple[str, Path]],
     out_pdf: Path,
+    out_png: Optional[Path],
     cfg: Config,
     out_json: Optional[Path],
 ) -> Dict[str, object]:
@@ -403,19 +409,30 @@ def run_figure(
     x0, x1, y0, y1 = _compute_bbox(bbox_polys)
 
     # Plot.
+    n_models = int(len(model_plot_data))
+    ncols = int(cfg.ncols)
+    if ncols <= 0:
+        ncols = 2 if n_models >= 4 else n_models
+    ncols = max(1, min(ncols, n_models))
+    nrows = int(math.ceil(float(n_models) / float(ncols)))
+
+    fig_w = float(FIGSIZE_FULL[0])
+    fig_h = 2.45 * float(nrows)  # compact, match FIGSIZE_HALF height per row
     with paper_style():
         fig, axes = plt.subplots(
-            nrows=1,
-            ncols=len(model_plot_data),
-            figsize=(FIGSIZE_FULL[0], FIGSIZE_FULL[1]),
+            nrows=int(nrows),
+            ncols=int(ncols),
+            figsize=(fig_w, fig_h),
             squeeze=False,
         )
+        fig.subplots_adjust(left=0.06, right=0.99, bottom=0.04, top=0.90, wspace=0.05, hspace=0.10)
         colors = [OKABE_ITO["blue"], OKABE_ITO["vermillion"]]
         panels = "abcdefghijklmnopqrstuvwxyz"
 
+        flat = axes.reshape(-1)
         for j, md in enumerate(model_plot_data):
-            ax = axes[0, j]
-            ax.set_title(str(md["label"]))
+            ax = flat[j]
+            ax.set_title(str(md["label"]), pad=2.0)
 
             # Background GT (optional).
             for i in range(len(gt_polys)):
@@ -436,11 +453,22 @@ def run_figure(
             ax.invert_yaxis()
             ax.set_xticks([])
             ax.set_yticks([])
-            add_panel_label(ax, panels[j])
+            add_panel_label(ax, panels[j], dx=float(cfg.panel_dx), dy=float(cfg.panel_dy))
+
+        for k in range(int(n_models), int(flat.size)):
+            flat[k].axis("off")
 
         out_pdf.parent.mkdir(parents=True, exist_ok=True)
         save_figure(fig, out_pdf)
+        if out_png is None and str(out_pdf).lower().endswith(".pdf"):
+            out_png = out_pdf.with_suffix(".png")
+        if out_png is not None:
+            save_figure(fig, out_png, dpi=int(cfg.png_dpi))
         plt.close(fig)
+
+    out_outputs: Dict[str, str] = {"figure_pdf": str(out_pdf)}
+    if out_png is not None:
+        out_outputs["figure_png"] = str(out_png)
 
     result: Dict[str, object] = {
         "inputs": {
@@ -462,7 +490,7 @@ def run_figure(
             "gt_cluster_counts_plotted": {"c0": int(np.sum(gt_labels == 0)), "c1": int(np.sum(gt_labels == 1))},
         },
         "models": model_payloads,
-        "outputs": {"figure_pdf": str(out_pdf)},
+        "outputs": out_outputs,
     }
     if out_json is not None:
         out_json.parent.mkdir(parents=True, exist_ok=True)
@@ -476,12 +504,17 @@ def build_argparser() -> argparse.ArgumentParser:
     p.add_argument("--model", action="append", default=None, help="Repeatable: 'Label=/path/to/samples.npz' (expects preds_k or preds).")
     p.add_argument("--out_pdf", type=str, required=True)
     p.add_argument("--out_json", type=str, default=None)
+    p.add_argument("--out_png", type=str, default=None, help="Optional preview output (PNG). If omitted, writes alongside --out_pdf.")
 
     p.add_argument("--max_k", type=int, default=20, help="Max K per window to plot/use (<=K in file).")
     p.add_argument("--max_gt", type=int, default=80, help="Max GT trajectories to plot as gray background (0 to disable).")
     p.add_argument("--max_paths", type=int, default=400, help="Max predicted polylines to plot per model (stratified by corridor cluster).")
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--jacc_cell", type=float, default=8.0)
+    p.add_argument("--ncols", type=int, default=0, help="Layout columns (0 => auto; >=4 models defaults to 2).")
+    p.add_argument("--panel_dx", type=float, default=-28.0, help="Panel label x-offset in points (negative => left of axis).")
+    p.add_argument("--panel_dy", type=float, default=4.0, help="Panel label y-offset in points.")
+    p.add_argument("--png_dpi", type=int, default=150, help="DPI for preview PNG.")
     return p
 
 
@@ -493,11 +526,16 @@ def main() -> None:
         max_paths=int(args.max_paths),
         seed=int(args.seed),
         jacc_cell=float(args.jacc_cell),
+        ncols=int(args.ncols),
+        panel_dx=float(args.panel_dx),
+        panel_dy=float(args.panel_dy),
+        png_dpi=int(args.png_dpi),
     )
     report = run_figure(
         gt_case_npz=Path(args.gt_case_npz),
         models=_parse_models(args.model),
         out_pdf=Path(args.out_pdf),
+        out_png=(Path(args.out_png) if args.out_png else None),
         out_json=(Path(args.out_json) if args.out_json else None),
         cfg=cfg,
     )

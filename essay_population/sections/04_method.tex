@@ -17,6 +17,7 @@ We treat this strictly as an ablation and keep the paper's focus on route genera
 \subsection{Execution: continuous route generation}
 Conditioned on $z$, the execution module generates a full-resolution route, modeling local geometry and motion.
 We leave the specific choice (diffusion / flow matching) as an implementation detail and focus on the hierarchy and conditioning interfaces.
+In practice, we treat execution as a refinement around the skeleton and scale the residual component to preserve corridor commitments when composing decision and execution.
 
 \subsection{Soft map priors for feasibility}
 We incorporate map-derived signals (e.g., road proximity) as soft priors in training and/or sampling, avoiding hard masking of the output space.

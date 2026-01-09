@@ -31,6 +31,10 @@ These ablations test whether diversity is created at the decision stage or merel
 To turn the decision stage into an explicit multi-modal sampler, we train a lightweight diffusion model to generate waypoint skeletons conditioned on a coarse OD intent (OD bin centers).
 We evaluate corridor coverage and intra-condition diversity on the fixed audit cases, and use this decision model as the planner component of CascadeTraj.
 
+\paragraph{E4: composed cascade (decision + execution).}
+We compose the waypoint decision sampler with a waypoint-conditioned residual diffusion executor to generate full-resolution routes.
+This experiment tests whether corridor coverage gained at the decision stage is preserved after continuous execution, while improving realism and feasibility.
+
 \paragraph{Core evidence: mode collapse visualization.}
 To make the failure mode unambiguous, we include a primary qualitative figure comparing multiple samples for the same condition:
 end-to-end baselines vs CascadeTraj.

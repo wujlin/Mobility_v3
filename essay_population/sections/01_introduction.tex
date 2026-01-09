@@ -17,6 +17,7 @@ This suggests that route generation should be modeled as a \emph{decision--execu
 
 \paragraph{A diagnostic baseline: mode interference in continuous output space.}
 We first provide a diagnostic experiment (Fig.~\ref{fig:mode-collapse}) using an end-to-end generative baseline trained under the same data and conditioning.
+To avoid cherry-picking, we fix diagnostic OD cases via a ground-truth corridor audit (Sec.~\ref{sec:experiments}).
 We observe a characteristic collapse: samples either concentrate around overly direct routes or blur distinct corridor-level alternatives into implausible averages.
 This supports the hypothesis that the bottleneck is not simply model capacity, but \emph{mode interference} when corridor-level decisions are represented only implicitly in a continuous coordinate output space.
 

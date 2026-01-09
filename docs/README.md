@@ -16,7 +16,8 @@
 - **我要看新的路线图（OSM 道路先验（软） + 拓扑 + 城市语义 + AR + Diffusion 多模态）**：`docs/PHASE_D_ROADMAP_OSM_TOPO_SEMANTICS.md`
 - **我要把主数据切换到 WorldTrace（UniTraj 底座）并做 Detroit 试点**：`docs/WORDTRACE_UNITRAJ.md`
 - **我要准备外部验证指标（ACS/TIGER tract-level vacancy/income/pop）**：`docs/DATA_CONTRACT.md`
-- **（Legacy）深圳 dt30 复现材料入口**：`legacy/shenzhen/README.md`
+- **我要确认工作站/本地运行口径（RAW_ROOT / 代理 / tmux / 多进程）**：`docs/WORKSTATION_GUIDE.md`
+- **（Legacy｜封存）深圳 dt30 复现材料入口（不参与当前 Detroit story）**：`legacy/shenzhen/README.md`
 
 ### （归档）Phase B / 窗口级材料（保留但不作为当前主线入口）
 

@@ -234,20 +234,29 @@ export E0_DIR="$EXP_ROOT/E0_gt_baseline"
 # 选择一个 case（先肉眼看 case_XX/gt_corridor_clusters.pdf 决定）
 export CASE_DIR="$E0_DIR/case_00"
 
-# 避免 HDF5 多进程锁（常见卡死/无输出），必要时强制单进程加载
-export HDF5_USE_FILE_LOCKING=FALSE
+# 训练输入：E0 同口径的 GT windows npz（Detroit）
+export GT_WINDOWS_NPZ="<PATH_TO_GT_WINDOWS_SAMPLES_NPZ>"
 
-# --- E1: 端到端 baseline（samples_only + 保存 preds_k 用于 Fig1）---
-python -m src.training.evaluate \
-  --exp_name "icml2026_routegen/E1_end2end_baseline_case00_seed0" \
-  --model_type diffusion \
-  --data_path "<DATA_PATH>" \
-  --checkpoint "<BASELINE_CKPT_PATH>" \
-  --split test \
-  --num_workers 0 \
-  --samples_only --save_all_k --save_samples 200 \
-  --windows_npz "$CASE_DIR/gt_case.npz" \
-  --seed 0
+# --- E1: 端到端 baseline（从 windows npz 直接训练 + 在固定 case 上采样，产物为 samples.npz）---
+export E1_TRAIN_DIR="$EXP_ROOT/E1_end2end_diffusion_npz_seed0"
+export E1_CASE_DIR="$EXP_ROOT/E1_end2end_diffusion_npz_case00_seed0"
+
+PYTHONUNBUFFERED=1 python -u -m src.training.train_route_e2e_diffusion_npz \
+  --train_npz "$GT_WINDOWS_NPZ" \
+  --out_dir "$E1_TRAIN_DIR" \
+  --hidden_dim 128 \
+  --diff_steps 100 \
+  --epochs 30 \
+  --batch_size 64 \
+  --seed 0 |& tee "$E1_TRAIN_DIR/run.log"
+
+python -m src.training.sample_route_e2e_diffusion_npz \
+  --checkpoint "$E1_TRAIN_DIR/last.pt" \
+  --case_npz "$CASE_DIR/gt_case.npz" \
+  --out_dir "$E1_CASE_DIR" \
+  --num_samples_per_condition 20 \
+  --seed 0 \
+  > "$E1_CASE_DIR/sample.stdout.json"
 
 # --- E2: CascadeTraj（samples_only + 保存 preds_k 用于 Fig1）---
 python -m src.training.evaluate \
@@ -264,14 +273,14 @@ python -m src.training.evaluate \
 # --- collapse 指标（JSON-only）---
 python -m src.evaluation.route_mode_collapse_metrics \
   --gt_report_json "$E0_DIR/report.json" \
-  --gt_windows_npz "<PATH_TO_GT_WINDOWS_SAMPLES_NPZ>" \
-  --model_samples_npz "data/experiments/icml2026_routegen/E1_end2end_baseline_case00_seed0/samples.npz" \
-  --out_json "$CASE_DIR/baseline_collapse.json" \
-  > "$CASE_DIR/baseline_collapse.stdout.json"
+  --gt_windows_npz "$CASE_DIR/gt_case.npz" \
+  --model_samples_npz "$E1_CASE_DIR/samples.npz" \
+  --out_json "$E1_CASE_DIR/baseline_collapse.json" \
+  > "$E1_CASE_DIR/baseline_collapse.stdout.json"
 
 python -m src.evaluation.route_mode_collapse_metrics \
   --gt_report_json "$E0_DIR/report.json" \
-  --gt_windows_npz "<PATH_TO_GT_WINDOWS_SAMPLES_NPZ>" \
+  --gt_windows_npz "$CASE_DIR/gt_case.npz" \
   --model_samples_npz "data/experiments/icml2026_routegen/E2_cascadetraj_case00_seed0/samples.npz" \
   --out_json "$CASE_DIR/cascade_collapse.json" \
   > "$CASE_DIR/cascade_collapse.stdout.json"
@@ -279,11 +288,11 @@ python -m src.evaluation.route_mode_collapse_metrics \
 # --- Fig1 风格可视化（PDF + JSON-only）---
 python -m src.evaluation.plot_route_mode_collapse_figure \
   --gt_case_npz "$CASE_DIR/gt_case.npz" \
-  --model "End2End=data/experiments/icml2026_routegen/E1_end2end_baseline_case00_seed0/samples.npz" \
+  --model "End2End=$E1_CASE_DIR/samples.npz" \
   --model "CascadeTraj=data/experiments/icml2026_routegen/E2_cascadetraj_case00_seed0/samples.npz" \
-  --out_pdf "$CASE_DIR/fig_mode_collapse.pdf" \
-  --out_json "$CASE_DIR/fig_mode_collapse.json" \
-  > "$CASE_DIR/fig_mode_collapse.stdout.json"
+  --out_pdf "$E1_CASE_DIR/fig_mode_collapse.pdf" \
+  --out_json "$E1_CASE_DIR/fig_mode_collapse.json" \
+  > "$E1_CASE_DIR/fig_mode_collapse.stdout.json"
 ```
 
 ### E2（必做）CascadeTraj（仅 Stage-1 改动）验证（支撑 Claim B）

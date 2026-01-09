@@ -1,0 +1,257 @@
+from __future__ import annotations
+
+import argparse
+import json
+import random
+import time
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Optional
+
+import numpy as np
+import torch
+import torch.optim as optim
+from torch.utils.data import DataLoader, Dataset
+
+from src.models.diffusion.diffusion_model import DiffusionTrajectoryModel
+from src.training.route_npz_utils import (
+    RouteNorm,
+    compute_vel_from_positions,
+    estimate_vel_stats,
+    load_route_windows_npz,
+    make_default_pos_bounds,
+    normalize_pos,
+    normalize_vel,
+)
+
+
+def _set_seed(seed: int) -> None:
+    random.seed(int(seed))
+    np.random.seed(int(seed))
+    torch.manual_seed(int(seed))
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(int(seed))
+
+
+@dataclass(frozen=True)
+class TrainConfig:
+    train_npz: str
+    out_dir: str
+    pos_max: int
+    max_train_n: Optional[int]
+    hidden_dim: int
+    diff_steps: int
+    pred_type: str
+    batch_size: int
+    epochs: int
+    lr: float
+    num_workers: int
+    max_batches: Optional[int]
+    seed: int
+
+
+class RouteWindowsVelDataset(Dataset):
+    def __init__(self, *, data: dict, norm: RouteNorm):
+        self.start_pos = np.asarray(data["start_pos"], dtype=np.float32)
+        self.targets = np.asarray(data["targets"], dtype=np.float32)
+        self.dest_pos = np.asarray(data["dest_pos"], dtype=np.float32)
+        self.traj_idx = np.asarray(data["traj_idx"], dtype=np.int64)
+        self.start_t = np.asarray(data["start_t"], dtype=np.int64)
+        self.norm = norm
+
+        vel = compute_vel_from_positions(self.start_pos, self.targets)  # (N,F,2)
+        self.vel_norm = normalize_vel(vel, norm)  # (N,F,2)
+
+        self.start_pos_norm = normalize_pos(self.start_pos, norm)  # (N,2)
+        self.dest_pos_norm = normalize_pos(self.dest_pos, norm)  # (N,2)
+
+    def __len__(self) -> int:
+        return int(self.start_pos.shape[0])
+
+    def __getitem__(self, idx: int) -> dict:
+        idx = int(idx)
+        # obs_len=1: only the start position, with zero velocity (avoid leaking future heading).
+        obs = np.concatenate([self.start_pos_norm[idx], np.zeros((2,), dtype=np.float32)], axis=0)[None, :]  # (1,4)
+        cond = np.asarray(
+            [0.0, 0.0, float(self.start_pos_norm[idx, 0]), float(self.start_pos_norm[idx, 1]), float(self.dest_pos_norm[idx, 0]), float(self.dest_pos_norm[idx, 1])],
+            dtype=np.float32,
+        )
+        return {
+            "obs": torch.from_numpy(obs).float(),
+            "cond": torch.from_numpy(cond).float(),
+            "action": torch.from_numpy(self.vel_norm[idx]).float(),
+            "meta": {"traj_idx": int(self.traj_idx[idx]), "start_t": int(self.start_t[idx])},
+        }
+
+
+def build_argparser() -> argparse.ArgumentParser:
+    p = argparse.ArgumentParser(description="Train an end-to-end diffusion baseline directly from route windows npz (Detroit).")
+    p.add_argument("--train_npz", type=str, required=True, help="npz with start_pos/targets/dest_pos/traj_idx/start_t")
+    p.add_argument("--out_dir", type=str, required=True)
+    p.add_argument("--pos_max", type=int, default=1023, help="Grid max coordinate (assumes y/x in [0,pos_max])")
+    p.add_argument("--max_train_n", type=int, default=None, help="Optional: subsample training windows for speed")
+
+    p.add_argument("--hidden_dim", type=int, default=128)
+    p.add_argument("--diff_steps", type=int, default=100)
+    p.add_argument("--pred_type", type=str, choices=["eps", "v"], default="eps")
+
+    p.add_argument("--batch_size", type=int, default=64)
+    p.add_argument("--epochs", type=int, default=30)
+    p.add_argument("--lr", type=float, default=1e-3)
+    p.add_argument("--num_workers", type=int, default=4)
+    p.add_argument("--max_batches", type=int, default=None, help="Limit batches per epoch (smoke runs)")
+    p.add_argument("--seed", type=int, default=0)
+    return p
+
+
+def main() -> None:
+    args = build_argparser().parse_args()
+    cfg = TrainConfig(
+        train_npz=str(args.train_npz),
+        out_dir=str(args.out_dir),
+        pos_max=int(args.pos_max),
+        max_train_n=(int(args.max_train_n) if args.max_train_n is not None else None),
+        hidden_dim=int(args.hidden_dim),
+        diff_steps=int(args.diff_steps),
+        pred_type=str(args.pred_type),
+        batch_size=int(args.batch_size),
+        epochs=int(args.epochs),
+        lr=float(args.lr),
+        num_workers=int(args.num_workers),
+        max_batches=(int(args.max_batches) if args.max_batches is not None else None),
+        seed=int(args.seed),
+    )
+    _set_seed(int(cfg.seed))
+
+    out_dir = Path(cfg.out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    ckpt_path = out_dir / "last.pt"
+    summary_path = out_dir / "train_summary.json"
+
+    data = load_route_windows_npz(cfg.train_npz, max_n=cfg.max_train_n, seed=int(cfg.seed))
+    start_pos = np.asarray(data["start_pos"], dtype=np.float32)
+    targets = np.asarray(data["targets"], dtype=np.float32)
+    dest_pos = np.asarray(data["dest_pos"], dtype=np.float32)
+    n = int(start_pos.shape[0])
+    f = int(targets.shape[1])
+
+    pos_min, pos_max_arr = make_default_pos_bounds(pos_max=int(cfg.pos_max))
+    pos_range = (pos_max_arr - pos_min + 1e-6).astype(np.float32)
+    vel = compute_vel_from_positions(start_pos, targets)
+    vel_mean, vel_std = estimate_vel_stats(vel)
+    norm = RouteNorm(
+        pos_min=pos_min.astype(np.float32, copy=False),
+        pos_max=pos_max_arr.astype(np.float32, copy=False),
+        pos_range=pos_range.astype(np.float32, copy=False),
+        vel_mean=vel_mean.astype(np.float32, copy=False),
+        vel_std=vel_std.astype(np.float32, copy=False),
+    )
+
+    dataset = RouteWindowsVelDataset(data=data, norm=norm)
+    g = torch.Generator()
+    g.manual_seed(int(cfg.seed))
+    loader = DataLoader(
+        dataset,
+        batch_size=int(cfg.batch_size),
+        shuffle=True,
+        num_workers=int(cfg.num_workers),
+        generator=g,
+        pin_memory=bool(torch.cuda.is_available()),
+        persistent_workers=(int(cfg.num_workers) > 0),
+    )
+
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    model = DiffusionTrajectoryModel(
+        obs_dim=4,
+        act_dim=2,
+        cond_dim=6,
+        obs_len=1,
+        pred_len=int(f),
+        hidden_dim=int(cfg.hidden_dim),
+        diffusion_steps=int(cfg.diff_steps),
+        prediction_type=str(cfg.pred_type),
+    ).to(device=device)
+    optimizer = optim.Adam(model.parameters(), lr=float(cfg.lr))
+
+    model.train()
+    start_wall = time.time()
+    steps = 0
+    for epoch in range(int(cfg.epochs)):
+        epoch_loss = 0.0
+        epoch_steps = 0
+        for batch_idx, batch in enumerate(loader):
+            if cfg.max_batches is not None and int(batch_idx) >= int(cfg.max_batches):
+                break
+            obs = batch["obs"].to(device=device, non_blocking=True)
+            cond = batch["cond"].to(device=device, non_blocking=True)
+            target = batch["action"].to(device=device, non_blocking=True)
+
+            optimizer.zero_grad(set_to_none=True)
+            loss = model(obs, cond, target=target)
+            loss.backward()
+            torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+            optimizer.step()
+
+            l = float(loss.detach().cpu().item())
+            epoch_loss += l
+            epoch_steps += 1
+            steps += 1
+
+        avg_loss = epoch_loss / max(epoch_steps, 1)
+        torch.save(
+            {
+                "epoch": int(epoch),
+                "loss": float(avg_loss),
+                "model_state_dict": model.state_dict(),
+                "optimizer_state_dict": optimizer.state_dict(),
+                "config": {
+                    "task": "route_e2e_diffusion_npz",
+                    "F": int(f),
+                    "model": {
+                        "hidden_dim": int(cfg.hidden_dim),
+                        "diff_steps": int(cfg.diff_steps),
+                        "pred_type": str(cfg.pred_type),
+                        "obs_len": 1,
+                        "cond_dim": 6,
+                    },
+                    "norm": norm.as_jsonable(),
+                },
+            },
+            ckpt_path,
+        )
+
+    elapsed_s = float(time.time() - start_wall)
+    result = {
+        "inputs": {"train_npz": str(Path(cfg.train_npz).resolve())},
+        "config": {
+            "pos_max": int(cfg.pos_max),
+            "max_train_n": (int(cfg.max_train_n) if cfg.max_train_n is not None else None),
+            "hidden_dim": int(cfg.hidden_dim),
+            "diff_steps": int(cfg.diff_steps),
+            "pred_type": str(cfg.pred_type),
+            "batch_size": int(cfg.batch_size),
+            "epochs": int(cfg.epochs),
+            "lr": float(cfg.lr),
+            "num_workers": int(cfg.num_workers),
+            "max_batches": (int(cfg.max_batches) if cfg.max_batches is not None else None),
+            "seed": int(cfg.seed),
+        },
+        "stats": {
+            "N": int(n),
+            "F": int(f),
+            "pos_min": [float(x) for x in norm.pos_min.tolist()],
+            "pos_max": [float(x) for x in norm.pos_max.tolist()],
+            "vel_mean": [float(x) for x in norm.vel_mean.tolist()],
+            "vel_std": [float(x) for x in norm.vel_std.tolist()],
+            "dest_pos_present": bool(dest_pos is not None),
+        },
+        "timing": {"wall_s": float(elapsed_s), "steps": int(steps)},
+        "outputs": {"out_dir": str(out_dir.resolve()), "checkpoint": str(ckpt_path.resolve()), "summary_json": str(summary_path.resolve())},
+    }
+    summary_path.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
+    print(json.dumps(result, ensure_ascii=False))
+
+
+if __name__ == "__main__":
+    main()
+

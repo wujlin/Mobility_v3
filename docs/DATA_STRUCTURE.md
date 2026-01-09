@@ -4,7 +4,7 @@
 > 任务定义与实验协议以 `docs/TASK_DEFINITION.md` 为唯一准则；本文档仅描述数据格式，若与其冲突以其为准。
 
 > [!NOTE]
-> 当前主线数据为 **WorldTrace × Detroit（Phase D）**；深圳出租车 dt30 相关目录仍保留为 legacy 复现材料。
+> 当前主线数据为 **WorldTrace ×（Detroit + 参考城市，Phase D）**。深圳出租车 dt30 相关目录已作为 **legacy 封存材料** 保留，仅用于历史复现，不参与当前 Detroit story 的任何分析与图表。
 
 目标：
 - 统一所有数据文件的格式、路径和坐标约定；

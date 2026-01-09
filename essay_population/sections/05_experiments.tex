@@ -1,3 +1,10 @@
+\label{sec:experiments}
+
+\paragraph{E0: ground-truth corridor audit (fixed diagnostic cases).}
+Before comparing models, we audit the ground-truth routes to identify OD conditions with clear corridor-level multi-modality.
+We cluster GT routes within each OD bucket using simple polyline features (e.g., signed deviation, progress, and length ratios) and select a small set of high-separation cases.
+All qualitative figures (Fig.~\ref{fig:mode-collapse}) and collapse metrics are computed on these \emph{fixed} cases to avoid cherry-picking; GT diversity also provides a reference scale for interpreting collapse severity.
+
 \paragraph{Data and preprocessing.}
 We evaluate on large-scale mobility traces with consistent map-matched coordinates (e.g., WorldTrace) and construct trip segments with origin--destination intent and time context.
 We standardize representation to a shared coordinate system, and build optional spatial context channels (soft map priors, POI/imagery features, and census covariates when enabled).

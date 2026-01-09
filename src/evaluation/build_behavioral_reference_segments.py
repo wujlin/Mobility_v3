@@ -4,11 +4,13 @@ import argparse
 import json
 import math
 import os
+import datetime as dt
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Tuple
 
 import numpy as np
+from zoneinfo import ZoneInfo
 
 try:
     import pyarrow as pa
@@ -128,6 +130,60 @@ def _iter_segments_xy(parquet_path: Path, *, max_segments: int) -> Iterable[Tupl
             yield k, y, x
 
 
+def _iter_segments_xy_t0(
+    parquet_path: Path, *, max_segments: int
+) -> Iterable[Tuple[str, np.ndarray, np.ndarray, Optional[int]]]:
+    """
+    Like _iter_segments_xy, but also yields t0 (segment start timestamp in epoch seconds, if available).
+    """
+    if pq is None:
+        raise SystemExit("pyarrow is required. Install: pip/conda install pyarrow")
+    pf = pq.ParquetFile(str(parquet_path))
+    cols = ["traj_csv", "y", "x", "t"]
+    scanned = 0
+    for batch in pf.iter_batches(batch_size=128, columns=cols):
+        d = batch.to_pydict()
+        n = len(d["traj_csv"])
+        for i in range(n):
+            scanned += 1
+            if max_segments and scanned > int(max_segments):
+                return
+            k = str(d["traj_csv"][i])
+            y = np.asarray(d["y"][i], dtype=np.int64).reshape(-1)
+            x = np.asarray(d["x"][i], dtype=np.int64).reshape(-1)
+            t0: Optional[int] = None
+            try:
+                tt = np.asarray(d["t"][i], dtype=np.int64).reshape(-1)
+                if tt.size > 0:
+                    t0 = int(tt[0])
+            except Exception:
+                t0 = None
+            if y.size < 2 or x.size < 2:
+                continue
+            yield k, y, x, t0
+
+
+def _time_bucket_peak3(t0_s: Optional[int], *, tz: str) -> int:
+    """
+    Peak time buckets (3):
+      0: AM peak   [07:00,10:00)
+      1: PM peak   [16:00,19:00)
+      2: Other
+    """
+    if t0_s is None:
+        return 2
+    try:
+        d = dt.datetime.fromtimestamp(int(t0_s), tz=ZoneInfo(str(tz)))
+        h = int(d.hour)
+    except Exception:
+        return 2
+    if 7 <= h < 10:
+        return 0
+    if 16 <= h < 19:
+        return 1
+    return 2
+
+
 def _chord_len_dir(
     y: np.ndarray,
     x: np.ndarray,
@@ -222,18 +278,21 @@ def _build_templates(
     res_y_m: float,
     res_x_m: float,
     cfg: TemplateCfg,
+    tz: str,
+    time_scheme: str,
     max_segments: int,
-) -> Tuple[Dict[Tuple[int, int], np.ndarray], Dict[Tuple[int, int], int], Dict[Tuple[int, int], float]]:
-    # templates[(dist_bin, dir_bin)] -> (M, 2) normalized waypoints in (x,y) where end is at (1,0).
-    accum: Dict[Tuple[int, int], List[np.ndarray]] = {}
-    counts: Dict[Tuple[int, int], int] = {}
+) -> Tuple[Dict[Tuple[int, int, int], np.ndarray], Dict[Tuple[int, int, int], int], Dict[Tuple[int, int, int], float]]:
+    # templates[(dist_bin, dir_bin, time_bucket)] -> (M, 2) normalized waypoints in (x,y) where end is at (1,0).
+    accum: Dict[Tuple[int, int, int], List[np.ndarray]] = {}
+    counts: Dict[Tuple[int, int, int], int] = {}
 
-    for _, y, x in _iter_segments_xy(source_segments_parquet, max_segments=max_segments):
+    for _, y, x, t0 in _iter_segments_xy_t0(source_segments_parquet, max_segments=max_segments):
         chord_m, theta = _chord_len_dir(y, x, res_y_m=res_y_m, res_x_m=res_x_m)
         if not np.isfinite(chord_m) or chord_m <= 1e-3:
             continue
         db = _dist_bin_id(float(chord_m), cfg.dist_bins_m)
         hb = _dir_bin_id(float(theta), int(cfg.dir_bins))
+        tb = 0 if str(time_scheme) == "none" else _time_bucket_peak3(t0, tz=str(tz))
 
         # Metric coords (x east, y south)
         x_m = x.astype(np.float64) * float(res_x_m)
@@ -251,12 +310,12 @@ def _build_templates(
             wps.append([float(xr), float(yr)])
         w = np.asarray(wps, dtype=np.float32)
 
-        k = (int(db), int(hb))
+        k = (int(db), int(hb), int(tb))
         accum.setdefault(k, []).append(w)
         counts[k] = int(counts.get(k, 0) + 1)
 
-    templates: Dict[Tuple[int, int], np.ndarray] = {}
-    mode_frac: Dict[Tuple[int, int], float] = {}
+    templates: Dict[Tuple[int, int, int], np.ndarray] = {}
+    mode_frac: Dict[Tuple[int, int, int], float] = {}
     for k, items in accum.items():
         stack = np.stack(items, axis=0)  # (N, M, 2)
         n = int(stack.shape[0])

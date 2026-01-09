@@ -22,6 +22,10 @@ logs/
 *.log
 experiments/
 backups/
+_sync/
+*.pt
+*.pth
+*.ckpt
 
 # Legacy Shenzhen (keep raw blobs local)
 legacy/shenzhen/track_data/**/TaxiData

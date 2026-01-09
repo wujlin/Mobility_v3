@@ -27,6 +27,10 @@ To isolate where corridor coverage is gained or lost, we run two waypoint-based 
 (ii) a waypoint-conditioned execution model that generates residual trajectories around the skeleton.
 These ablations test whether diversity is created at the decision stage or merely ``washed out'' during continuous execution.
 
+\paragraph{E3: generative decision model (waypoint diffusion).}
+To turn the decision stage into an explicit multi-modal sampler, we train a lightweight diffusion model to generate waypoint skeletons conditioned on a coarse OD intent (OD bin centers).
+We evaluate corridor coverage and intra-condition diversity on the fixed audit cases, and use this decision model as the planner component of CascadeTraj.
+
 \paragraph{Core evidence: mode collapse visualization.}
 To make the failure mode unambiguous, we include a primary qualitative figure comparing multiple samples for the same condition:
 end-to-end baselines vs CascadeTraj.

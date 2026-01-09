@@ -25,7 +25,7 @@ Ablations with waypoint bottlenecks further indicate that corridor coverage is d
 \begin{figure}[t]
   \centering
   \includegraphics[width=0.95\linewidth]{figures/fig_mode_collapse.pdf}
-  \caption{Diagnostic visualization on a fixed multi-modal OD case. Deterministic L2 regression collapses to an averaged route; end-to-end diffusion avoids hard collapse yet exhibits corridor-level interference; a waypoint-conditioned cascade prototype can still concentrate on a single corridor, motivating an explicit generative decision stage.}
+  \caption{Diagnostic visualization on a fixed multi-modal OD case. Deterministic L2 regression collapses to an averaged route; end-to-end diffusion avoids hard collapse yet exhibits corridor-level interference; a diffusion-based decision model over waypoint skeletons recovers both corridor alternatives by explicit multi-modal sampling.}
   \label{fig:mode-collapse}
 \end{figure}
 

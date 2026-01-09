@@ -98,7 +98,6 @@ def pick_waypoint_indices_rdp_fixed_k(points: np.ndarray, *, k: int) -> np.ndarr
 
 
 def extract_oracle_waypoints_from_future(
-    *,
     start_pos: np.ndarray,  # (2,)
     future_pos: np.ndarray,  # (F,2)
     cfg: WaypointConfig,
@@ -131,4 +130,3 @@ def extract_oracle_waypoints_from_future(
     idx_future = np.clip(idx_poly - 1, 0, max(F - 2, 0)).astype(np.int64)
     waypoints = future_pos[idx_future].astype(np.float32, copy=False)
     return idx_future.astype(np.int64, copy=False), waypoints
-

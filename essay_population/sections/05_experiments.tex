@@ -17,6 +17,16 @@ We include end-to-end generators that output the full coordinate sequence direct
 These baselines serve as diagnostic references for two common failure modes under topological multi-modality: destructive averaging (collapse) and corridor-level mode interference (blur).
 We also include a hard-constrained variant (e.g., output masking / masked-softmax) as a \emph{diagnostic} ablation to separate ``feasibility by truncation'' from true distribution learning.
 
+\paragraph{E1: diagnostic end-to-end baselines (collapse vs.\ interference).}
+On the fixed audit cases, we compare deterministic coordinate regression (L2) and stochastic end-to-end diffusion under the same conditioning.
+We report both qualitative overlays (Fig.~\ref{fig:mode-collapse}) and corridor-level metrics that quantify intra-condition diversity and corridor coverage relative to the GT corridor clustering.
+
+\paragraph{E2: waypoint bottleneck ablation (decision vs.\ execution).}
+To isolate where corridor coverage is gained or lost, we run two waypoint-based controls:
+(i) a skeleton-only generator that connects the waypoint sequence into a polyline, and
+(ii) a waypoint-conditioned execution model that generates residual trajectories around the skeleton.
+These ablations test whether diversity is created at the decision stage or merely ``washed out'' during continuous execution.
+
 \paragraph{Core evidence: mode collapse visualization.}
 To make the failure mode unambiguous, we include a primary qualitative figure comparing multiple samples for the same condition:
 end-to-end baselines vs CascadeTraj.

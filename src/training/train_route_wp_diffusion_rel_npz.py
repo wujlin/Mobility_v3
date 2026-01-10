@@ -14,17 +14,23 @@ import torch.optim as optim
 from torch.utils.data import DataLoader, Dataset
 
 from src.features.semantic_od import (
+    SemanticGridNorm,
     fit_semantic_norm,
+    fit_grid_norm,
+    load_osm_road_prob,
     load_poi_stack_and_landuse_entropy,
     load_poi_total_and_landuse_entropy,
+    normalize_grid_patch,
     normalize_semantic,
     semantic_corridor_profile_features,
+    semantic_grid_patch_tensor,
     semantic_grid_pool_features,
     semantic_od_features,
     semantic_rand4_features,
 )
 from src.features.waypoints import WaypointConfig, extract_oracle_waypoints_from_future
 from src.models.diffusion.diffusion_model import DiffusionTrajectoryModel
+from src.models.semantic.grid_cnn_encoder import GridCNNEncoder
 from src.training.route_npz_utils import RouteNorm, load_route_windows_npz, make_default_pos_bounds, normalize_pos
 
 
@@ -129,6 +135,8 @@ class TrainConfig:
     grid_patch_size: int
     grid_extent: float
     grid_pool: str
+    grid_channels: str
+    grid_emb_dim: int
     hidden_dim: int
     diff_steps: int
     pred_type: str
@@ -170,6 +178,57 @@ class WaypointRelDataset(Dataset):
         }
 
 
+class WaypointRelDatasetWithGrid(Dataset):
+    def __init__(
+        self,
+        *,
+        obs: np.ndarray,
+        cond_base: np.ndarray,
+        cond_sem: Optional[np.ndarray],
+        grid_patch: np.ndarray,
+        target_rel_norm: np.ndarray,
+        traj_idx: np.ndarray,
+        start_t: np.ndarray,
+    ) -> None:
+        self.obs = np.asarray(obs, dtype=np.float32)
+        self.cond_base = np.asarray(cond_base, dtype=np.float32)
+        self.cond_sem = (np.asarray(cond_sem, dtype=np.float32) if cond_sem is not None else None)
+        self.grid_patch = np.asarray(grid_patch, dtype=np.float32)
+        self.target = np.asarray(target_rel_norm, dtype=np.float32)
+        self.traj_idx = np.asarray(traj_idx, dtype=np.int64)
+        self.start_t = np.asarray(start_t, dtype=np.int64)
+
+        if self.obs.ndim != 3 or self.obs.shape[1:] != (1, 4):
+            raise ValueError(f"Expected obs (N,1,4), got {self.obs.shape}")
+        if self.cond_base.ndim != 2 or self.cond_base.shape[1] != 6:
+            raise ValueError(f"Expected cond_base (N,6), got {self.cond_base.shape}")
+        if self.cond_sem is not None and (self.cond_sem.ndim != 2 or self.cond_sem.shape[0] != self.cond_base.shape[0]):
+            raise ValueError(f"Bad cond_sem shape: {None if self.cond_sem is None else self.cond_sem.shape}")
+        if self.grid_patch.ndim != 4:
+            raise ValueError(f"Expected grid_patch (N,C,S,S), got {self.grid_patch.shape}")
+        if self.target.ndim != 3 or self.target.shape[-1] != 2:
+            raise ValueError(f"Expected target (N,K,2), got {self.target.shape}")
+        n = int(self.obs.shape[0])
+        if int(self.cond_base.shape[0]) != n or int(self.grid_patch.shape[0]) != n or int(self.target.shape[0]) != n:
+            raise ValueError("N mismatch among obs/cond_base/grid_patch/target")
+
+    def __len__(self) -> int:
+        return int(self.obs.shape[0])
+
+    def __getitem__(self, idx: int) -> dict:
+        idx = int(idx)
+        out = {
+            "obs": torch.from_numpy(self.obs[idx]).float(),
+            "cond_base": torch.from_numpy(self.cond_base[idx]).float(),
+            "grid_patch": torch.from_numpy(self.grid_patch[idx]).float(),
+            "action": torch.from_numpy(self.target[idx]).float(),
+            "meta": {"traj_idx": int(self.traj_idx[idx]), "start_t": int(self.start_t[idx])},
+        }
+        if self.cond_sem is not None:
+            out["cond_sem"] = torch.from_numpy(self.cond_sem[idx]).float()
+        return out
+
+
 def build_argparser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description="Train a diffusion decision model: p(waypoints | OD-bin) on route windows npz.")
     p.add_argument("--train_npz", type=str, required=True, help="npz with start_pos/targets/dest_pos/traj_idx/start_t")
@@ -189,9 +248,9 @@ def build_argparser() -> argparse.ArgumentParser:
     p.add_argument(
         "--semantic_mode",
         type=str,
-        choices=["od", "profile", "od_profile", "grid", "od_grid", "rand4"],
+        choices=["od", "profile", "od_profile", "grid", "od_grid", "gridcnn", "od_gridcnn", "rand4"],
         default="od",
-        help="Semantic feature mode: od (O/D point features), profile (OD-chord strip profile; legacy), grid (OD-aligned grid pooling), rand4 (OD-keyed random control), or concatenations.",
+        help="Semantic feature mode: od (O/D point features), profile (OD-chord strip profile; legacy), grid (OD-aligned grid pooling), gridcnn (OD-aligned patch + CNN encoder), rand4 (OD-keyed random control), or concatenations.",
     )
     p.add_argument(
         "--semantic_use_bins",
@@ -203,6 +262,8 @@ def build_argparser() -> argparse.ArgumentParser:
     p.add_argument("--grid_patch_size", type=int, default=16, help="When semantic_mode includes 'grid': patch size S (even), pooled spatially (no flatten).")
     p.add_argument("--grid_extent", type=float, default=128.0, help="When semantic_mode includes 'grid': patch half-extent (grid units) around OD midpoint.")
     p.add_argument("--grid_pool", type=str, choices=["quad", "lr"], default="quad", help="When semantic_mode includes 'grid': pooling mode (quad=4 quadrants, lr=left/right halves).")
+    p.add_argument("--grid_channels", type=str, default="poi,entropy", help="When semantic_mode includes 'gridcnn': comma-separated channels from {poi,entropy,road_prob}.")
+    p.add_argument("--grid_emb_dim", type=int, default=64, help="When semantic_mode includes 'gridcnn': CNN output embedding dim.")
 
     p.add_argument("--hidden_dim", type=int, default=128)
     p.add_argument("--diff_steps", type=int, default=50)
@@ -235,6 +296,8 @@ def main() -> None:
         grid_patch_size=int(args.grid_patch_size),
         grid_extent=float(args.grid_extent),
         grid_pool=str(args.grid_pool),
+        grid_channels=str(args.grid_channels),
+        grid_emb_dim=int(args.grid_emb_dim),
         hidden_dim=int(args.hidden_dim),
         diff_steps=int(args.diff_steps),
         pred_type=str(args.pred_type),
@@ -289,21 +352,26 @@ def main() -> None:
     sem_norm = None
     sem_keys = None
     sem_cfg = None
-    uses_semantics = bool(cfg.semantic_dir) or (str(cfg.semantic_mode) == "rand4")
-    sem_use_bins = (True if str(cfg.semantic_mode) == "rand4" else bool(cfg.semantic_use_bins))
+    grid_patch = None
+    grid_keys = None
+    grid_norm_cfg: Optional[SemanticGridNorm] = None
+
+    sem_mode = str(cfg.semantic_mode)
+    uses_semantics = bool(cfg.semantic_dir) or (sem_mode in ("rand4", "gridcnn", "od_gridcnn"))
+    sem_use_bins = (True if sem_mode == "rand4" else bool(cfg.semantic_use_bins))
     if uses_semantics:
         sem_o = start_ctr if bool(sem_use_bins) else start_pos
         sem_d = dest_ctr if bool(sem_use_bins) else dest_pos
 
         parts = []
         keys_all = []
-        if str(cfg.semantic_mode) == "rand4":
+        if sem_mode == "rand4":
             sem_r, sem_keys_r = semantic_rand4_features(start_ctr=start_ctr, dest_ctr=dest_ctr)
             parts.append(sem_r)
             keys_all.extend(list(sem_keys_r))
-        if cfg.semantic_mode in ("od", "od_profile", "od_grid"):
+        if sem_mode in ("od", "od_profile", "od_grid", "od_gridcnn"):
             if not cfg.semantic_dir:
-                raise ValueError("--semantic_dir is required for semantic_mode=od/od_profile/od_grid")
+                raise ValueError("--semantic_dir is required for semantic_mode including 'od'")
             poi_total, landuse_entropy = load_poi_total_and_landuse_entropy(cfg.semantic_dir)
             sem_od, sem_keys_od = semantic_od_features(
                 start_ctr=sem_o,
@@ -314,9 +382,9 @@ def main() -> None:
             )
             parts.append(sem_od)
             keys_all.extend(list(sem_keys_od))
-        if cfg.semantic_mode in ("profile", "od_profile"):
+        if sem_mode in ("profile", "od_profile"):
             if not cfg.semantic_dir:
-                raise ValueError("--semantic_dir is required for semantic_mode=profile/od_profile")
+                raise ValueError("--semantic_dir is required for semantic_mode including 'profile'")
             poi_stack, categories, landuse_entropy = load_poi_stack_and_landuse_entropy(cfg.semantic_dir)
             offsets = _parse_float_list(cfg.profile_offsets)
             sem_prof, sem_keys_prof = semantic_corridor_profile_features(
@@ -331,9 +399,9 @@ def main() -> None:
             )
             parts.append(sem_prof)
             keys_all.extend(list(sem_keys_prof))
-        if cfg.semantic_mode in ("grid", "od_grid"):
+        if sem_mode in ("grid", "od_grid"):
             if not cfg.semantic_dir:
-                raise ValueError("--semantic_dir is required for semantic_mode=grid/od_grid")
+                raise ValueError("--semantic_dir is required for semantic_mode including 'grid'")
             poi_stack, categories, landuse_entropy = load_poi_stack_and_landuse_entropy(cfg.semantic_dir)
             sem_grid, sem_keys_grid = semantic_grid_pool_features(
                 start_ctr=sem_o,
@@ -348,15 +416,47 @@ def main() -> None:
             )
             parts.append(sem_grid)
             keys_all.extend(list(sem_keys_grid))
-        if not parts:
-            raise ValueError(f"Bad semantic_mode: {cfg.semantic_mode}")
-        sem_raw = parts[0] if len(parts) == 1 else np.concatenate(parts, axis=1).astype(np.float32, copy=False)
-        sem_keys = tuple(str(k) for k in keys_all)
-        sem_cfg = fit_semantic_norm(sem_raw, keys=sem_keys)
-        sem_norm = normalize_semantic(sem_raw, sem_cfg)
-        cond = np.concatenate([base_cond, sem_norm], axis=1).astype(np.float32, copy=False)
+
+        if parts:
+            sem_raw = parts[0] if len(parts) == 1 else np.concatenate(parts, axis=1).astype(np.float32, copy=False)
+            sem_keys = tuple(str(k) for k in keys_all)
+            sem_cfg = fit_semantic_norm(sem_raw, keys=sem_keys)
+            sem_norm = normalize_semantic(sem_raw, sem_cfg)
+
+        if sem_mode in ("gridcnn", "od_gridcnn"):
+            if not cfg.semantic_dir:
+                raise ValueError("--semantic_dir is required for semantic_mode=gridcnn/od_gridcnn")
+            chans = {x.strip() for x in str(cfg.grid_channels).split(",") if x.strip()}
+            need_poi = ("poi" in chans) or ("entropy" in chans)
+            poi_stack = None
+            categories = None
+            landuse_entropy = None
+            osm_road_prob = None
+            if need_poi:
+                poi_stack, categories, landuse_entropy = load_poi_stack_and_landuse_entropy(cfg.semantic_dir)
+            if "road_prob" in chans:
+                osm_road_prob = load_osm_road_prob(cfg.semantic_dir)
+            grid_patch_raw, grid_keys = semantic_grid_patch_tensor(
+                start_ctr=sem_o,
+                dest_ctr=sem_d,
+                poi_stack=poi_stack,
+                categories=categories,
+                landuse_entropy=landuse_entropy,
+                osm_road_prob=osm_road_prob,
+                patch_size=int(cfg.grid_patch_size),
+                extent=float(cfg.grid_extent),
+                grid_channels=str(cfg.grid_channels),
+                log_poi=True,
+            )
+            grid_norm_cfg = fit_grid_norm(grid_patch_raw, keys=grid_keys)
+            grid_patch = normalize_grid_patch(grid_patch_raw, grid_norm_cfg)
+
+    if grid_patch is not None:
+        cond_base = base_cond
+        cond_sem = sem_norm
+        cond = None
     else:
-        cond = base_cond
+        cond = np.concatenate([base_cond, sem_norm], axis=1).astype(np.float32, copy=False) if sem_norm is not None else base_cond
 
     # Oracle targets: waypoints -> chord-relative (s,o).
     wp_abs = _extract_oracle_waypoints(start_pos=start_pos, targets=targets, num_waypoints=int(cfg.num_waypoints))  # (N,K,2)
@@ -368,7 +468,18 @@ def main() -> None:
     rel_mean, rel_std = _compute_rel_norm(rel)
     target_rel_norm = _normalize_rel(rel, mean=rel_mean, std=rel_std)
 
-    dataset = WaypointRelDataset(obs=obs, cond=cond, target_rel_norm=target_rel_norm, traj_idx=traj_idx, start_t=start_t)
+    if grid_patch is not None:
+        dataset = WaypointRelDatasetWithGrid(
+            obs=obs,
+            cond_base=cond_base,
+            cond_sem=cond_sem,
+            grid_patch=grid_patch,
+            target_rel_norm=target_rel_norm,
+            traj_idx=traj_idx,
+            start_t=start_t,
+        )
+    else:
+        dataset = WaypointRelDataset(obs=obs, cond=cond, target_rel_norm=target_rel_norm, traj_idx=traj_idx, start_t=start_t)
     g = torch.Generator()
     g.manual_seed(int(cfg.seed))
     loader = DataLoader(
@@ -382,7 +493,14 @@ def main() -> None:
     )
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    cond_dim = int(cond.shape[1])
+    grid_encoder = None
+    if grid_patch is not None:
+        assert grid_keys is not None and grid_norm_cfg is not None
+        grid_encoder = GridCNNEncoder(in_channels=int(grid_patch.shape[1]), out_dim=int(cfg.grid_emb_dim)).to(device=device)
+        cond_dim = 6 + (0 if cond_sem is None else int(cond_sem.shape[1])) + int(cfg.grid_emb_dim)
+    else:
+        cond_dim = int(cond.shape[1])
+
     model = DiffusionTrajectoryModel(
         obs_dim=4,
         act_dim=2,
@@ -393,7 +511,10 @@ def main() -> None:
         diffusion_steps=int(cfg.diff_steps),
         prediction_type=str(cfg.pred_type),
     ).to(device=device)
-    optimizer = optim.Adam(model.parameters(), lr=float(cfg.lr))
+    params = list(model.parameters())
+    if grid_encoder is not None:
+        params.extend(list(grid_encoder.parameters()))
+    optimizer = optim.Adam(params, lr=float(cfg.lr))
 
     start_wall = time.time()
     model.train()
@@ -404,13 +525,24 @@ def main() -> None:
             if cfg.max_batches is not None and int(batch_idx) >= int(cfg.max_batches):
                 break
             obs_b = batch["obs"].to(device=device, non_blocking=True)
-            cond_b = batch["cond"].to(device=device, non_blocking=True)
+            if grid_encoder is not None:
+                cond_parts = [batch["cond_base"].to(device=device, non_blocking=True)]
+                if "cond_sem" in batch:
+                    cond_parts.append(batch["cond_sem"].to(device=device, non_blocking=True))
+                patch_b = batch["grid_patch"].to(device=device, non_blocking=True)
+                emb_b = grid_encoder(patch_b)
+                cond_parts.append(emb_b)
+                cond_b = torch.cat(cond_parts, dim=1)
+            else:
+                cond_b = batch["cond"].to(device=device, non_blocking=True)
             target_b = batch["action"].to(device=device, non_blocking=True)
 
             optimizer.zero_grad(set_to_none=True)
             loss = model(obs_b, cond_b, target=target_b)
             loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+            if grid_encoder is not None:
+                torch.nn.utils.clip_grad_norm_(grid_encoder.parameters(), 1.0)
             optimizer.step()
 
             epoch_loss += float(loss.detach().cpu().item())
@@ -422,6 +554,7 @@ def main() -> None:
                 "epoch": int(epoch),
                 "loss": float(avg_loss),
                 "model_state_dict": model.state_dict(),
+                "grid_encoder_state_dict": (grid_encoder.state_dict() if grid_encoder is not None else None),
                 "optimizer_state_dict": optimizer.state_dict(),
                 "config": {
                     "task": "route_wp_diffusion_rel_npz",
@@ -448,8 +581,11 @@ def main() -> None:
                         "grid_patch_size": int(cfg.grid_patch_size),
                         "grid_extent": float(cfg.grid_extent),
                         "grid_pool": str(cfg.grid_pool),
+                        "grid_channels": str(cfg.grid_channels),
+                        "grid_emb_dim": int(cfg.grid_emb_dim),
                     },
                     "semantic_od_norm": (sem_cfg.to_json() if sem_cfg is not None else None),
+                    "semantic_grid_norm": (grid_norm_cfg.to_json() if grid_norm_cfg is not None else None),
                 },
             },
             ckpt_path,
@@ -472,6 +608,8 @@ def main() -> None:
             "grid_patch_size": int(cfg.grid_patch_size),
             "grid_extent": float(cfg.grid_extent),
             "grid_pool": str(cfg.grid_pool),
+            "grid_channels": str(cfg.grid_channels),
+            "grid_emb_dim": int(cfg.grid_emb_dim),
             "hidden_dim": int(cfg.hidden_dim),
             "diff_steps": int(cfg.diff_steps),
             "pred_type": str(cfg.pred_type),

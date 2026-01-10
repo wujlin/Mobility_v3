@@ -32,6 +32,202 @@ class SemanticODNorm:
         return SemanticODNorm(keys=keys, mean=mean.astype(np.float32, copy=False), std=std)
 
 
+@dataclass(frozen=True)
+class SemanticGridNorm:
+    keys: Tuple[str, ...]  # channel names
+    mean: np.ndarray  # (C,)
+    std: np.ndarray  # (C,)
+
+    def to_json(self) -> Dict[str, object]:
+        return {
+            "keys": list(self.keys),
+            "mean": [float(x) for x in np.asarray(self.mean, dtype=np.float32).reshape(-1).tolist()],
+            "std": [float(x) for x in np.asarray(self.std, dtype=np.float32).reshape(-1).tolist()],
+        }
+
+    @staticmethod
+    def from_json(d: Dict[str, object]) -> "SemanticGridNorm":
+        keys = tuple(str(x) for x in (d.get("keys") or []))
+        mean = np.asarray(d.get("mean") or [], dtype=np.float32).reshape(-1)
+        std = np.asarray(d.get("std") or [], dtype=np.float32).reshape(-1)
+        if len(keys) != int(mean.size) or int(mean.size) != int(std.size):
+            raise ValueError(f"Bad SemanticGridNorm json: keys={len(keys)} mean={mean.size} std={std.size}")
+        std = np.maximum(std, 1e-3).astype(np.float32, copy=False)
+        return SemanticGridNorm(keys=keys, mean=mean.astype(np.float32, copy=False), std=std)
+
+
+def load_osm_road_prob(semantic_dir: str | Path) -> np.ndarray:
+    d = Path(semantic_dir)
+    p = d / "osm_road_prob.npy"
+    if not p.exists():
+        raise FileNotFoundError(f"Missing osm_road_prob.npy under: {d}")
+    a = np.load(p).astype(np.float32, copy=False)
+    if a.ndim != 2:
+        raise ValueError(f"Bad osm_road_prob shape in {p}: {a.shape} (expected H,W)")
+    return a
+
+
+def _parse_grid_channels(s: str) -> Tuple[str, ...]:
+    items = [x.strip() for x in str(s).split(",") if str(x).strip()]
+    if not items:
+        raise ValueError("--grid_channels must be a non-empty comma-separated list.")
+    ok = {"poi", "entropy", "road_prob"}
+    out = []
+    for x in items:
+        if x not in ok:
+            raise ValueError(f"Bad grid channel: {x} (expected one of {sorted(ok)})")
+        if x not in out:
+            out.append(x)
+    return tuple(out)
+
+
+def semantic_grid_patch_tensor(
+    *,
+    start_ctr: np.ndarray,  # (N,2) [y,x]
+    dest_ctr: np.ndarray,  # (N,2)
+    poi_stack: np.ndarray | None,  # (C,H,W)
+    categories: Sequence[str] | None,
+    landuse_entropy: np.ndarray | None,  # (H,W)
+    osm_road_prob: np.ndarray | None,  # (H,W)
+    patch_size: int = 16,
+    extent: float = 128.0,
+    grid_channels: str = "poi,entropy",
+    log_poi: bool = True,
+) -> Tuple[np.ndarray, Tuple[str, ...]]:
+    """
+    Build an OD-aligned semantic patch tensor for a trainable encoder (e.g., CNN).
+
+    Channels are inference-observable raster fields, selected by `grid_channels`:
+      - poi:        POI density stack (per category)
+      - entropy:    landuse entropy
+      - road_prob:  OSM road probability (soft prior; dense)
+
+    Returns:
+      patch: (N,C_in,S,S) float32
+      keys:  channel names aligned with C_in
+    """
+    start_ctr = np.asarray(start_ctr, dtype=np.float32)
+    dest_ctr = np.asarray(dest_ctr, dtype=np.float32)
+    if start_ctr.ndim != 2 or start_ctr.shape[1] != 2:
+        raise ValueError(f"Expected start_ctr (N,2), got {start_ctr.shape}")
+    if dest_ctr.shape != start_ctr.shape:
+        raise ValueError(f"Shape mismatch: start_ctr={start_ctr.shape} dest_ctr={dest_ctr.shape}")
+
+    S = int(patch_size)
+    if S <= 0 or (S % 2) != 0:
+        raise ValueError("--grid_patch_size must be a positive even integer.")
+    ext = float(extent)
+    if not np.isfinite(ext) or ext <= 0.0:
+        raise ValueError("--grid_extent must be > 0")
+
+    chans = _parse_grid_channels(grid_channels)
+    keys: List[str] = []
+
+    # Determine raster shape from the first available input.
+    H = W = None
+    if "poi" in chans:
+        if poi_stack is None or categories is None:
+            raise ValueError("poi_stack/categories required when grid_channels includes 'poi'")
+        poi_stack = np.asarray(poi_stack, dtype=np.float32)
+        if poi_stack.ndim != 3:
+            raise ValueError(f"Expected poi_stack (C,H,W), got {poi_stack.shape}")
+        C_poi, H, W = poi_stack.shape
+        if int(len(categories)) != int(C_poi):
+            raise ValueError(f"categories length mismatch: categories={len(categories)} poi_stack.C={C_poi}")
+        keys.extend([f"poi_{str(c)}" for c in categories])
+    if "entropy" in chans:
+        if landuse_entropy is None:
+            raise ValueError("landuse_entropy required when grid_channels includes 'entropy'")
+        landuse_entropy = np.asarray(landuse_entropy, dtype=np.float32)
+        if landuse_entropy.ndim != 2:
+            raise ValueError(f"Expected landuse_entropy (H,W), got {landuse_entropy.shape}")
+        if H is None:
+            H, W = landuse_entropy.shape
+        if landuse_entropy.shape != (H, W):
+            raise ValueError(f"Raster shape mismatch: landuse_entropy={landuse_entropy.shape} expected {(H, W)}")
+        keys.append("landuse_entropy")
+    if "road_prob" in chans:
+        if osm_road_prob is None:
+            raise ValueError("osm_road_prob required when grid_channels includes 'road_prob'")
+        osm_road_prob = np.asarray(osm_road_prob, dtype=np.float32)
+        if osm_road_prob.ndim != 2:
+            raise ValueError(f"Expected osm_road_prob (H,W), got {osm_road_prob.shape}")
+        if H is None:
+            H, W = osm_road_prob.shape
+        if osm_road_prob.shape != (H, W):
+            raise ValueError(f"Raster shape mismatch: osm_road_prob={osm_road_prob.shape} expected {(H, W)}")
+        keys.append("osm_road_prob")
+
+    if H is None or W is None:
+        raise ValueError("No valid grid channels selected.")
+
+    # Patch sampling coordinates in the aligned (par, perp) frame.
+    u = ((np.arange(S, dtype=np.float32) + 0.5) - (float(S) / 2.0)) / (float(S) / 2.0) * ext  # (S,)
+    v = u.copy()
+    uu, vv = np.meshgrid(u, v, indexing="ij")  # (S,S)
+
+    N = int(start_ctr.shape[0])
+    C_in = int(len(keys))
+    out = np.zeros((N, C_in, S, S), dtype=np.float32)
+
+    for i in range(N):
+        a = start_ctr[i].astype(np.float32, copy=False)
+        b = dest_ctr[i].astype(np.float32, copy=False)
+        mid = 0.5 * (a + b)
+        d = b - a
+        L = float(np.linalg.norm(d))
+        if not np.isfinite(L) or L <= 1e-6:
+            e_par = np.asarray([1.0, 0.0], dtype=np.float32)
+            e_perp = np.asarray([0.0, 1.0], dtype=np.float32)
+        else:
+            e_par = (d / float(L)).astype(np.float32, copy=False)
+            e_perp = np.asarray([-e_par[1], e_par[0]], dtype=np.float32)
+
+        pts = mid[None, None, :] + uu[:, :, None] * e_par[None, None, :] + vv[:, :, None] * e_perp[None, None, :]  # (S,S,2)
+        yy = np.clip(np.rint(pts[:, :, 0]).astype(np.int64), 0, int(H) - 1)
+        xx = np.clip(np.rint(pts[:, :, 1]).astype(np.int64), 0, int(W) - 1)
+
+        col = 0
+        if "poi" in chans:
+            assert poi_stack is not None
+            patch_poi = poi_stack[:, yy, xx].astype(np.float32, copy=False)
+            if bool(log_poi):
+                patch_poi = np.log1p(np.maximum(patch_poi, 0.0)).astype(np.float32, copy=False)
+            out[i, col : col + patch_poi.shape[0]] = patch_poi
+            col += int(patch_poi.shape[0])
+        if "entropy" in chans:
+            assert landuse_entropy is not None
+            out[i, col] = landuse_entropy[yy, xx].astype(np.float32, copy=False)
+            col += 1
+        if "road_prob" in chans:
+            assert osm_road_prob is not None
+            out[i, col] = osm_road_prob[yy, xx].astype(np.float32, copy=False)
+            col += 1
+        if col != C_in:
+            raise RuntimeError("Internal channel packing mismatch.")
+
+    return out.astype(np.float32, copy=False), tuple(keys)
+
+
+def fit_grid_norm(patch: np.ndarray, *, keys: Tuple[str, ...]) -> SemanticGridNorm:
+    patch = np.asarray(patch, dtype=np.float32)
+    if patch.ndim != 4:
+        raise ValueError(f"Expected patch (N,C,S,S), got {patch.shape}")
+    mean = np.mean(patch, axis=(0, 2, 3), dtype=np.float64).astype(np.float32)  # (C,)
+    std = np.std(patch, axis=(0, 2, 3), dtype=np.float64).astype(np.float32)
+    std = np.maximum(std, 1e-3).astype(np.float32, copy=False)
+    if len(keys) != int(mean.size):
+        raise ValueError(f"keys/mean mismatch: keys={len(keys)} mean={mean.size}")
+    return SemanticGridNorm(keys=keys, mean=mean, std=std)
+
+
+def normalize_grid_patch(patch: np.ndarray, norm: SemanticGridNorm) -> np.ndarray:
+    patch = np.asarray(patch, dtype=np.float32)
+    if patch.ndim != 4 or patch.shape[1] != int(norm.mean.size):
+        raise ValueError(f"Bad patch shape: {patch.shape}, expected (N,{int(norm.mean.size)},S,S)")
+    return ((patch - norm.mean[None, :, None, None]) / norm.std[None, :, None, None]).astype(np.float32, copy=False)
+
+
 def load_poi_total_and_landuse_entropy(semantic_dir: str | Path) -> Tuple[np.ndarray, np.ndarray]:
     """
     Load minimal spatial semantics rasters from a directory (Detroit core grid).

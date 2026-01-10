@@ -10,17 +10,22 @@ import numpy as np
 import torch
 
 from src.features.semantic_od import (
+    SemanticGridNorm,
     SemanticODNorm,
+    load_osm_road_prob,
     load_poi_stack_and_landuse_entropy,
     load_poi_total_and_landuse_entropy,
+    normalize_grid_patch,
     normalize_semantic,
     semantic_corridor_profile_features,
+    semantic_grid_patch_tensor,
     semantic_grid_pool_features,
     semantic_od_features,
     semantic_rand4_features,
 )
 from src.features.skeleton_prior import build_skeleton_prior_vel_norm_k2
 from src.models.diffusion.diffusion_model import DiffusionTrajectoryModel
+from src.models.semantic.grid_cnn_encoder import GridCNNEncoder
 from src.training.route_npz_utils import RouteNorm, denormalize_vel, load_route_windows_npz, make_default_pos_bounds, normalize_pos
 
 
@@ -212,89 +217,147 @@ def main() -> None:
     if sem_cfg_raw is not None and not isinstance(sem_cfg_raw, dict):
         raise TypeError(f"Bad semantic_od_norm in decision checkpoint config: {type(sem_cfg_raw)}")
     sem_cfg = SemanticODNorm.from_json(sem_cfg_raw) if isinstance(sem_cfg_raw, dict) else None
-    if sem_cfg is not None:
-        sem_meta = dec_cfg.get("semantic") if isinstance(dec_cfg, dict) else None
-        if isinstance(sem_meta, dict) and sem_meta.get("mode") is not None:
-            sem_mode = str(sem_meta.get("mode"))
-            sem_use_bins = bool(sem_meta.get("use_bins", False))
-            profile_num_steps = int(sem_meta.get("profile_num_steps", 16))
-            profile_offsets_str = str(sem_meta.get("profile_offsets", "-32,0,32"))
-            profile_offsets = _parse_float_list(profile_offsets_str)
-            grid_patch_size = int(sem_meta.get("grid_patch_size", 16))
-            grid_extent = float(sem_meta.get("grid_extent", 128.0))
-            grid_pool = str(sem_meta.get("grid_pool", "quad"))
-        else:
-            # Backward-compatible fallback for older decision checkpoints (OD-only semantics).
-            sem_mode = "od"
-            sem_use_bins = False
-            profile_num_steps = 16
-            profile_offsets = (-32.0, 0.0, 32.0)
-            grid_patch_size = 16
-            grid_extent = 128.0
-            grid_pool = "quad"
+    sem_meta = dec_cfg.get("semantic") if isinstance(dec_cfg, dict) else None
+    if isinstance(sem_meta, dict) and sem_meta.get("mode") is not None:
+        sem_mode = str(sem_meta.get("mode"))
+        sem_use_bins = bool(sem_meta.get("use_bins", False))
+        profile_num_steps = int(sem_meta.get("profile_num_steps", 16))
+        profile_offsets_str = str(sem_meta.get("profile_offsets", "-32,0,32"))
+        profile_offsets = _parse_float_list(profile_offsets_str)
+        grid_patch_size = int(sem_meta.get("grid_patch_size", 16))
+        grid_extent = float(sem_meta.get("grid_extent", 128.0))
+        grid_pool = str(sem_meta.get("grid_pool", "quad"))
+        grid_channels = str(sem_meta.get("grid_channels", "poi,entropy"))
+        grid_emb_dim = int(sem_meta.get("grid_emb_dim", 64))
+    else:
+        sem_mode = None
+        sem_use_bins = False
+        profile_num_steps = 16
+        profile_offsets = (-32.0, 0.0, 32.0)
+        grid_patch_size = 16
+        grid_extent = 128.0
+        grid_pool = "quad"
+        grid_channels = "poi,entropy"
+        grid_emb_dim = 64
 
-        if sem_mode != "rand4" and not args.semantic_dir:
+    if sem_mode is None and sem_cfg is not None:
+        sem_mode = "od"
+
+    cond_parts = [base_cond_dec]
+    if sem_mode is not None:
+        if sem_mode not in ("rand4",) and (sem_mode not in ("gridcnn", "od_gridcnn")) and not args.semantic_dir:
             raise ValueError("--semantic_dir is required because decision checkpoint includes semantic features")
+        if sem_mode in ("gridcnn", "od_gridcnn") and not args.semantic_dir:
+            raise ValueError("--semantic_dir is required because decision checkpoint includes gridcnn semantics")
 
         sem_o = start_ctr if sem_use_bins else start_pos
         sem_d = dest_ctr if sem_use_bins else dest_pos
 
-        parts = []
-        keys_all = []
-        if sem_mode == "rand4":
-            sem_r, sem_keys_r = semantic_rand4_features(start_ctr=start_ctr, dest_ctr=dest_ctr)
-            parts.append(sem_r)
-            keys_all.extend(list(sem_keys_r))
-        if sem_mode in ("od", "od_profile", "od_grid"):
-            poi_total, landuse_entropy = load_poi_total_and_landuse_entropy(args.semantic_dir)
-            sem_od, sem_keys_od = semantic_od_features(
-                start_ctr=sem_o,
-                dest_ctr=sem_d,
-                poi_total=poi_total,
-                landuse_entropy=landuse_entropy,
-                log_poi=True,
-            )
-            parts.append(sem_od)
-            keys_all.extend(list(sem_keys_od))
-        if sem_mode in ("profile", "od_profile"):
-            poi_stack, categories, landuse_entropy = load_poi_stack_and_landuse_entropy(args.semantic_dir)
-            sem_prof, sem_keys_prof = semantic_corridor_profile_features(
+        if sem_mode in ("rand4", "od", "od_profile", "od_grid", "profile", "grid", "od_gridcnn"):
+            if sem_cfg is None:
+                raise ValueError("Decision checkpoint semantic mode requires semantic_od_norm, but it is missing.")
+            parts = []
+            keys_all = []
+            if sem_mode == "rand4":
+                sem_r, sem_keys_r = semantic_rand4_features(start_ctr=start_ctr, dest_ctr=dest_ctr)
+                parts.append(sem_r)
+                keys_all.extend(list(sem_keys_r))
+            if sem_mode in ("od", "od_profile", "od_grid", "od_gridcnn"):
+                poi_total, landuse_entropy = load_poi_total_and_landuse_entropy(args.semantic_dir)
+                sem_od, sem_keys_od = semantic_od_features(
+                    start_ctr=sem_o,
+                    dest_ctr=sem_d,
+                    poi_total=poi_total,
+                    landuse_entropy=landuse_entropy,
+                    log_poi=True,
+                )
+                parts.append(sem_od)
+                keys_all.extend(list(sem_keys_od))
+            if sem_mode in ("profile", "od_profile"):
+                poi_stack, categories, landuse_entropy = load_poi_stack_and_landuse_entropy(args.semantic_dir)
+                sem_prof, sem_keys_prof = semantic_corridor_profile_features(
+                    start_ctr=sem_o,
+                    dest_ctr=sem_d,
+                    poi_stack=poi_stack,
+                    categories=categories,
+                    landuse_entropy=landuse_entropy,
+                    num_steps=int(profile_num_steps),
+                    offsets=profile_offsets,
+                    log_total=True,
+                )
+                parts.append(sem_prof)
+                keys_all.extend(list(sem_keys_prof))
+            if sem_mode in ("grid", "od_grid"):
+                poi_stack, categories, landuse_entropy = load_poi_stack_and_landuse_entropy(args.semantic_dir)
+                sem_grid, sem_keys_grid = semantic_grid_pool_features(
+                    start_ctr=sem_o,
+                    dest_ctr=sem_d,
+                    poi_stack=poi_stack,
+                    categories=categories,
+                    landuse_entropy=landuse_entropy,
+                    patch_size=int(grid_patch_size),
+                    extent=float(grid_extent),
+                    pool=str(grid_pool),
+                    log_poi=True,
+                )
+                parts.append(sem_grid)
+                keys_all.extend(list(sem_keys_grid))
+            if not parts:
+                raise ValueError(f"Bad semantic mode in decision checkpoint: {sem_mode}")
+            sem_raw = parts[0] if len(parts) == 1 else np.concatenate(parts, axis=1).astype(np.float32, copy=False)
+            keys = tuple(str(k) for k in keys_all)
+            if keys != sem_cfg.keys:
+                raise ValueError(f"Semantic keys mismatch: ckpt={sem_cfg.keys} vs computed={keys}")
+            sem_norm = normalize_semantic(sem_raw, sem_cfg)
+            cond_parts.append(sem_norm.astype(np.float32, copy=False))
+
+        if sem_mode in ("gridcnn", "od_gridcnn"):
+            grid_norm_raw = dec_cfg.get("semantic_grid_norm") if isinstance(dec_cfg, dict) else None
+            if grid_norm_raw is None or not isinstance(grid_norm_raw, dict):
+                raise ValueError("Decision checkpoint includes gridcnn but missing semantic_grid_norm.")
+            grid_norm = SemanticGridNorm.from_json(grid_norm_raw)
+
+            enc_state = dec_ckpt.get("grid_encoder_state_dict")
+            if enc_state is None or not isinstance(enc_state, dict):
+                raise ValueError("Decision checkpoint includes gridcnn but missing grid_encoder_state_dict.")
+
+            chans = {x.strip() for x in str(grid_channels).split(",") if x.strip()}
+            need_poi = ("poi" in chans) or ("entropy" in chans)
+            poi_stack = None
+            categories = None
+            landuse_entropy = None
+            osm_road_prob = None
+            if need_poi:
+                poi_stack, categories, landuse_entropy = load_poi_stack_and_landuse_entropy(args.semantic_dir)
+            if "road_prob" in chans:
+                osm_road_prob = load_osm_road_prob(args.semantic_dir)
+
+            grid_patch_raw, grid_keys = semantic_grid_patch_tensor(
                 start_ctr=sem_o,
                 dest_ctr=sem_d,
                 poi_stack=poi_stack,
                 categories=categories,
                 landuse_entropy=landuse_entropy,
-                num_steps=int(profile_num_steps),
-                offsets=profile_offsets,
-                log_total=True,
-            )
-            parts.append(sem_prof)
-            keys_all.extend(list(sem_keys_prof))
-        if sem_mode in ("grid", "od_grid"):
-            poi_stack, categories, landuse_entropy = load_poi_stack_and_landuse_entropy(args.semantic_dir)
-            sem_grid, sem_keys_grid = semantic_grid_pool_features(
-                start_ctr=sem_o,
-                dest_ctr=sem_d,
-                poi_stack=poi_stack,
-                categories=categories,
-                landuse_entropy=landuse_entropy,
+                osm_road_prob=osm_road_prob,
                 patch_size=int(grid_patch_size),
                 extent=float(grid_extent),
-                pool=str(grid_pool),
+                grid_channels=str(grid_channels),
                 log_poi=True,
             )
-            parts.append(sem_grid)
-            keys_all.extend(list(sem_keys_grid))
-        if not parts:
-            raise ValueError(f"Bad semantic mode in decision checkpoint: {sem_mode}")
-        sem_raw = parts[0] if len(parts) == 1 else np.concatenate(parts, axis=1).astype(np.float32, copy=False)
-        keys = tuple(str(k) for k in keys_all)
-        if keys != sem_cfg.keys:
-            raise ValueError(f"Semantic keys mismatch: ckpt={sem_cfg.keys} vs computed={keys}")
-        sem_norm = normalize_semantic(sem_raw, sem_cfg)
-        cond_dec = np.concatenate([base_cond_dec, sem_norm], axis=1).astype(np.float32, copy=False)
-    else:
-        cond_dec = base_cond_dec
+            if tuple(grid_keys) != grid_norm.keys:
+                raise ValueError(f"Grid keys mismatch: ckpt={grid_norm.keys} vs computed={grid_keys}")
+            grid_patch = normalize_grid_patch(grid_patch_raw, grid_norm)
+
+            device_enc = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+            grid_encoder = GridCNNEncoder(in_channels=int(grid_patch.shape[1]), out_dim=int(grid_emb_dim)).to(device=device_enc)
+            grid_encoder.load_state_dict(enc_state)
+            grid_encoder.eval()
+            with torch.no_grad():
+                patch_t = torch.from_numpy(grid_patch).to(device=device_enc, dtype=torch.float32)
+                emb = grid_encoder(patch_t).detach().cpu().numpy().astype(np.float32, copy=False)
+            cond_parts.append(emb)
+
+    cond_dec = np.concatenate(cond_parts, axis=1).astype(np.float32, copy=False)
 
     if int(cond_dec.shape[1]) != int(dec_cond_dim):
         raise ValueError(f"Decision cond_dim mismatch: ckpt cond_dim={dec_cond_dim} vs built={cond_dec.shape[1]}")

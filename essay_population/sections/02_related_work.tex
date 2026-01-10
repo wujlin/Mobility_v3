@@ -11,6 +11,7 @@ This makes end-to-end coordinate generation prone to destructive averaging and m
 \paragraph{Hierarchical and latent-structure approaches.}
 Hierarchical approaches address long-horizon uncertainty by separating coarse decisions from fine execution, e.g., sampling sparse waypoints/anchors and then refining a continuous path.
 Our formulation instantiates this idea as an explicit decision--execution cascade: a discrete topological commitment (waypoint skeleton) precedes continuous route generation, so corridor-level multi-modality is represented explicitly rather than being forced into a single continuous output space.
+Beyond introducing the hierarchy, we emphasize a composition issue that is often glossed over in practice: a powerful continuous refiner can overwrite the coarse commitment, collapsing corridor diversity even when the decision stage is multi-modal.
 
 \paragraph{Feasibility: hard constraints vs soft priors.}
 Feasibility is often enforced by hard conditioning on a road graph or by masking the output space to a ``feasible set''.
@@ -20,3 +21,6 @@ We instead use map information as soft priors (e.g., road proximity fields) to e
 \paragraph{Macro priors and population synthesis (related but distinct).}
 Macro-level statistics (e.g., census attributes) are central in population synthesis and controllable urban simulation.
 Our work touches this direction only lightly: census-derived spatial covariates are explored as an optional guidance signal to demonstrate extensibility, while the core contribution remains the generative architecture for route generation.
+
+\paragraph{Note on citations (draft).}
+This draft focuses on clarifying the core claims and diagnostic evidence; we will expand citations to domain-specific route choice, trajectory generation, and hierarchical planning work in the final version.

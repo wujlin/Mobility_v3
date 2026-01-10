@@ -55,10 +55,13 @@
 \fi
 
 \begin{abstract}
-Abstract placeholder (150--250 words).
-We study long-horizon \emph{route generation}: sampling realistic, feasible, and diverse paths between an origin and a destination under time and semantic context.
-We propose \textbf{CascadeTraj}, a cascaded decision--execution generator that separates corridor-level commitments (sparse waypoints) from continuous physical execution.
-The framework supports soft map priors (e.g., road proximity) and optional census-derived spatial covariates as semantic guidance, without relying on hard output masking.
+Long-horizon mobility modeling is increasingly important for simulation and generative urban agents, yet most learning methods target short-horizon trajectory forecasting.
+We study \emph{route generation}: sampling an entire path for a trip conditioned on an origin, a destination, and time/context.
+Route generation is fundamentally multi-modal at the corridor level: distinct topological alternatives can be geometrically far apart while remaining intent-equivalent.
+Through diagnostic experiments on large-scale mobility traces, we identify two characteristic failures of end-to-end coordinate generators under this multi-modality: deterministic regression collapses to destructive averages, while stochastic generation can avoid hard collapse yet blurs corridor alternatives through mode interference.
+We propose \textbf{CascadeTraj}, a decision--execution generator that first samples a sparse waypoint skeleton as an explicit topological commitment, then refines it with a continuous execution model.
+We further find that naive composition can overwrite corridor commitments; treating execution as a weak residual refinement preserves corridor coverage while still capturing local geometry.
+The framework supports soft map priors (e.g., road-proximity fields) for feasibility, and treats macro covariates (e.g., census attributes) only as optional ablations for extensibility.
 \end{abstract}
 
 \section{Introduction}

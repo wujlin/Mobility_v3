@@ -13,6 +13,7 @@ import torch
 import torch.optim as optim
 from torch.utils.data import DataLoader, Dataset
 
+from src.features.semantic_od import fit_semantic_norm, load_poi_total_and_landuse_entropy, normalize_semantic, semantic_od_features
 from src.features.waypoints import WaypointConfig, extract_oracle_waypoints_from_future
 from src.models.diffusion.diffusion_model import DiffusionTrajectoryModel
 from src.training.route_npz_utils import RouteNorm, load_route_windows_npz, make_default_pos_bounds, normalize_pos
@@ -101,6 +102,7 @@ class TrainConfig:
     num_waypoints: int
     od_bin: float
     o_clip: float
+    semantic_dir: Optional[str]
     hidden_dim: int
     diff_steps: int
     pred_type: str
@@ -122,8 +124,8 @@ class WaypointRelDataset(Dataset):
 
         if self.obs.ndim != 3 or self.obs.shape[1:] != (1, 4):
             raise ValueError(f"Expected obs (N,1,4), got {self.obs.shape}")
-        if self.cond.ndim != 2 or self.cond.shape[1] != 6:
-            raise ValueError(f"Expected cond (N,6), got {self.cond.shape}")
+        if self.cond.ndim != 2 or self.cond.shape[1] <= 0:
+            raise ValueError(f"Expected cond (N,D), got {self.cond.shape}")
         if self.target.ndim != 3 or self.target.shape[-1] != 2:
             raise ValueError(f"Expected target (N,K,2), got {self.target.shape}")
         if self.obs.shape[0] != self.cond.shape[0] or self.obs.shape[0] != self.target.shape[0]:
@@ -152,6 +154,12 @@ def build_argparser() -> argparse.ArgumentParser:
     p.add_argument("--num_waypoints", type=int, default=2)
     p.add_argument("--od_bin", type=float, default=128.0, help="Bin size (grid units) for OD intent conditioning.")
     p.add_argument("--o_clip", type=float, default=2.0, help="Clip signed offset o (in chord-normalized units) for stability.")
+    p.add_argument(
+        "--semantic_dir",
+        type=str,
+        default=None,
+        help="Optional directory containing poi_density_*.npy and landuse_entropy.npy (adds OD semantics to cond).",
+    )
 
     p.add_argument("--hidden_dim", type=int, default=128)
     p.add_argument("--diff_steps", type=int, default=50)
@@ -176,6 +184,7 @@ def main() -> None:
         num_waypoints=int(args.num_waypoints),
         od_bin=float(args.od_bin),
         o_clip=float(args.o_clip),
+        semantic_dir=(str(args.semantic_dir) if args.semantic_dir else None),
         hidden_dim=int(args.hidden_dim),
         diff_steps=int(args.diff_steps),
         pred_type=str(args.pred_type),
@@ -225,7 +234,25 @@ def main() -> None:
     # obs: start-bin only (avoid leaking per-window micro differences).
     obs = np.concatenate([start_ctr_norm, np.zeros((n, 2), dtype=np.float32)], axis=1)[:, None, :]  # (N,1,4)
     # cond: (hour,day placeholders) + (start_bin, dest_bin)
-    cond = np.concatenate([np.zeros((n, 2), dtype=np.float32), start_ctr_norm, dest_ctr_norm], axis=1).astype(np.float32, copy=False)  # (N,6)
+    base_cond = np.concatenate([np.zeros((n, 2), dtype=np.float32), start_ctr_norm, dest_ctr_norm], axis=1).astype(np.float32, copy=False)  # (N,6)
+
+    sem_norm = None
+    sem_keys = None
+    sem_cfg = None
+    if cfg.semantic_dir:
+        poi_total, landuse_entropy = load_poi_total_and_landuse_entropy(cfg.semantic_dir)
+        sem_raw, sem_keys = semantic_od_features(
+            start_ctr=start_pos,
+            dest_ctr=dest_pos,
+            poi_total=poi_total,
+            landuse_entropy=landuse_entropy,
+            log_poi=True,
+        )
+        sem_cfg = fit_semantic_norm(sem_raw, keys=sem_keys)
+        sem_norm = normalize_semantic(sem_raw, sem_cfg)
+        cond = np.concatenate([base_cond, sem_norm], axis=1).astype(np.float32, copy=False)
+    else:
+        cond = base_cond
 
     # Oracle targets: waypoints -> chord-relative (s,o).
     wp_abs = _extract_oracle_waypoints(start_pos=start_pos, targets=targets, num_waypoints=int(cfg.num_waypoints))  # (N,K,2)
@@ -251,10 +278,11 @@ def main() -> None:
     )
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    cond_dim = int(cond.shape[1])
     model = DiffusionTrajectoryModel(
         obs_dim=4,
         act_dim=2,
-        cond_dim=6,
+        cond_dim=int(cond_dim),
         obs_len=1,
         pred_len=int(k),
         hidden_dim=int(cfg.hidden_dim),
@@ -299,7 +327,7 @@ def main() -> None:
                         "diff_steps": int(cfg.diff_steps),
                         "pred_type": str(cfg.pred_type),
                         "obs_len": 1,
-                        "cond_dim": 6,
+                        "cond_dim": int(cond_dim),
                     },
                     "od_bin": float(cfg.od_bin),
                     "o_clip": float(cfg.o_clip),
@@ -308,6 +336,7 @@ def main() -> None:
                         "pos_max": [float(x) for x in norm.pos_max.tolist()],
                     },
                     "rel_norm": {"mean": [float(x) for x in rel_mean.tolist()], "std": [float(x) for x in rel_std.tolist()]},
+                    "semantic_od_norm": (sem_cfg.to_json() if sem_cfg is not None else None),
                 },
             },
             ckpt_path,
@@ -342,4 +371,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

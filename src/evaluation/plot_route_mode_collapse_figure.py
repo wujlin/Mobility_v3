@@ -150,7 +150,8 @@ def _parse_models(items: Optional[List[str]]) -> List[Tuple[str, Path]]:
     for raw in items:
         if "=" not in raw:
             raise ValueError(f"Bad --model '{raw}', expected 'Label=/path/to/samples.npz'")
-        label, path = raw.split("=", 1)
+        # Split by the last '=' so labels like 'res=0.1' are supported.
+        label, path = raw.rsplit("=", 1)
         label = label.strip()
         path = path.strip()
         if not label:

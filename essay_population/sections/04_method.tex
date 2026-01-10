@@ -19,6 +19,15 @@ Conditioned on $z$, the execution module generates a full-resolution route, mode
 We leave the specific choice (diffusion / flow matching) as an implementation detail and focus on the hierarchy and conditioning interfaces.
 In practice, we treat execution as a refinement around the skeleton and scale the residual component to preserve corridor commitments when composing decision and execution.
 
+\paragraph{Commitment-preserving refinement.}
+Let $\tau_{\text{skel}}$ denote the polyline induced by the sampled skeleton $z$ (e.g., piecewise-linear interpolation),
+and let the execution module predict a residual velocity sequence $\Delta v_{1:T}$ conditioned on $(z,c)$.
+We form the final route by applying a scaled residual update, with a single scalar $\alpha \in [0,1]$:
+\begin{equation}
+  v_t = v^{\text{skel}}_t + \alpha \,\Delta v_t,\quad t=1,\dots,T.
+\end{equation}
+When $\alpha$ is too large, the executor can overwrite corridor commitments; choosing a small $\alpha$ yields a weak refinement that preserves corridor coverage while improving local geometric fidelity.
+
 \subsection{Soft map priors for feasibility}
 We incorporate map-derived signals (e.g., road proximity) as soft priors in training and/or sampling, avoiding hard masking of the output space.
 This design prevents the generator from collapsing its support to an externally defined feasible set while still discouraging physically implausible routes.

@@ -1,7 +1,9 @@
 \paragraph{Setting.}
 We study conditional \emph{route generation}.
 Each route is a sequence of 2D positions $\tau = (p_1,\dots,p_T)$, where $p_t \in \mathbb{R}^2$ denotes the location at step $t$.
-We condition on trip intent and context $c$ (e.g., origin $o$, destination $d$, departure time $t_0$, and optional spatial semantic context such as POI/imagery/census covariates).
+We condition on a minimal trip intent and context
+$c = (o, d, t_0, x)$,
+including origin $o$, destination $d$, departure time $t_0$, and optional context channels $x$ (e.g., soft map priors, POI/imagery features, or census covariates in ablations).
 
 \paragraph{Goal.}
 Given $c$, the model samples routes $\hat{\tau} \sim p_\theta(\tau \mid c)$ that satisfy:
@@ -12,3 +14,14 @@ and (iii) \textbf{multi-modality} (representing corridor-level alternatives).
 \paragraph{Why end-to-end generation is brittle.}
 When multiple corridor-level modes exist, direct coordinate modeling in $\tau$ tends to blur modes into infeasible averages.
 This motivates introducing an explicit decision variable that captures topological structure.
+
+\paragraph{Corridor-level diversity and coverage metrics.}
+To make corridor-level failure modes measurable, we evaluate diversity and coverage under a fixed condition $c$ using a finite sample set $\{\hat{\tau}^{(k)}\}_{k=1}^K$.
+We discretize a polyline into an occupancy set $S(\tau)$ by binning points into cells of size $\delta$ and hashing cell indices.
+The Jaccard distance between two routes is
+$D_{\mathrm{jac}}(\tau_i,\tau_j)=1-\frac{|S(\tau_i)\cap S(\tau_j)|}{|S(\tau_i)\cup S(\tau_j)|}$,
+and we report the mean pairwise Jaccard distance within $\{\hat{\tau}^{(k)}\}$ as a geometry-based diversity proxy.
+
+To quantify corridor \emph{coverage}, we fit a simple two-corridor clustering on ground-truth routes for a diagnostic OD case (Sec.~\ref{sec:experiments}), using coarse polyline features (e.g., signed deviation and length ratios), and assign each generated sample to the nearest corridor cluster.
+Coverage is then defined as the fraction of ground-truth corridor clusters hit by at least one generated sample for the same condition (averaged over conditions).
+We additionally report a collapse indicator when the model diversity falls below a fixed fraction of the ground-truth diversity for the same case, to separate ``one good route'' from ``coverage of alternatives.''

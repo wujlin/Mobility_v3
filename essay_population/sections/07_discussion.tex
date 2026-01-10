@@ -1,2 +1,17 @@
-Placeholder: limitations, failure analysis, and implications for urban generative agents.
+\paragraph{What the diagnostics reveal.}
+The central lesson from our experiments is that long-horizon route generation fails for a structural reason: corridor-level multi-modality is \emph{topological} and cannot be reliably encoded as a single mode in a continuous coordinate space.
+This manifests as destructive averaging in deterministic regression, and as corridor-level interference in stochastic continuous generators.
 
+\paragraph{Why hierarchy is necessary but not sufficient.}
+Separating decision from execution resolves the representation mismatch by letting the model commit to discrete corridor alternatives.
+However, our results also reveal a subtle failure mode: if execution is too expressive, it can overwrite the commitment and reintroduce corridor collapse.
+This suggests that hierarchical route generators should be designed with an explicit ``commitment preservation'' interface, rather than treating the executor as a generic conditional generator.
+
+\paragraph{Feasibility and map information.}
+We view map-derived information as a useful source of inductive bias but not a definition of support.
+Hard masking can enforce on-road outputs but risks truncating the learned distribution and entangling performance with proxy quality.
+Soft priors (e.g., road proximity fields) offer a spectrum of feasibility guidance while keeping the generator distributional.
+
+\paragraph{Limitations and scope.}
+This draft emphasizes a diagnostic evidence chain on fixed multi-modal OD cases; scaling to broader city-wide benchmarks and reporting full realism/feasibility tradeoffs are ongoing.
+We also treat census covariates only as optional ablations for semantic controllability, and do not attempt full population synthesis or attribute generation in this paper.

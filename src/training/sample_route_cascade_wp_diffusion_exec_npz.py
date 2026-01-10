@@ -9,6 +9,7 @@ from typing import Tuple
 import numpy as np
 import torch
 
+from src.features.semantic_od import SemanticODNorm, load_poi_total_and_landuse_entropy, normalize_semantic, semantic_od_features
 from src.features.skeleton_prior import build_skeleton_prior_vel_norm_k2
 from src.models.diffusion.diffusion_model import DiffusionTrajectoryModel
 from src.training.route_npz_utils import RouteNorm, denormalize_vel, load_route_windows_npz, make_default_pos_bounds, normalize_pos
@@ -109,6 +110,12 @@ def build_argparser() -> argparse.ArgumentParser:
     p.add_argument("--out_dir", type=str, required=True)
     p.add_argument("--num_samples_per_condition", type=int, default=20, help="K")
     p.add_argument("--res_scale", type=float, default=1.0, help="Scale residual velocity from execution model (0 => skeleton-only).")
+    p.add_argument(
+        "--semantic_dir",
+        type=str,
+        default=None,
+        help="Optional directory containing poi_density_*.npy and landuse_entropy.npy (required if decision checkpoint uses semantics).",
+    )
     p.add_argument("--seed", type=int, default=0)
     return p
 
@@ -172,6 +179,7 @@ def main() -> None:
     dec_hidden = int(dec_model_cfg.get("hidden_dim", 128))
     dec_steps = int(dec_model_cfg.get("diff_steps", 50))
     dec_pred_type = str(dec_model_cfg.get("pred_type", "eps"))
+    dec_cond_dim = int(dec_model_cfg.get("cond_dim", 6))
     dec_pos_norm = _load_pos_norm_from_decision_ckpt(dec_cfg if isinstance(dec_cfg, dict) else {})
 
     start_ctr = _od_bin_center(start_pos, bin_size=float(od_bin))
@@ -179,13 +187,38 @@ def main() -> None:
     start_ctr_norm = normalize_pos(start_ctr, dec_pos_norm)
     dest_ctr_norm = normalize_pos(dest_ctr, dec_pos_norm)
     obs_dec = np.concatenate([start_ctr_norm, np.zeros((n, 2), dtype=np.float32)], axis=1)[:, None, :]  # (N,1,4)
-    cond_dec = np.concatenate([np.zeros((n, 2), dtype=np.float32), start_ctr_norm, dest_ctr_norm], axis=1).astype(np.float32, copy=False)  # (N,6)
+    base_cond_dec = np.concatenate([np.zeros((n, 2), dtype=np.float32), start_ctr_norm, dest_ctr_norm], axis=1).astype(np.float32, copy=False)  # (N,6)
+
+    sem_cfg_raw = dec_cfg.get("semantic_od_norm") if isinstance(dec_cfg, dict) else None
+    if sem_cfg_raw is not None and not isinstance(sem_cfg_raw, dict):
+        raise TypeError(f"Bad semantic_od_norm in decision checkpoint config: {type(sem_cfg_raw)}")
+    sem_cfg = SemanticODNorm.from_json(sem_cfg_raw) if isinstance(sem_cfg_raw, dict) else None
+    if sem_cfg is not None:
+        if not args.semantic_dir:
+            raise ValueError("--semantic_dir is required because decision checkpoint includes semantic_od_norm")
+        poi_total, landuse_entropy = load_poi_total_and_landuse_entropy(args.semantic_dir)
+        sem_raw, keys = semantic_od_features(
+            start_ctr=start_pos,
+            dest_ctr=dest_pos,
+            poi_total=poi_total,
+            landuse_entropy=landuse_entropy,
+            log_poi=True,
+        )
+        if keys != sem_cfg.keys:
+            raise ValueError(f"Semantic keys mismatch: ckpt={sem_cfg.keys} vs computed={keys}")
+        sem_norm = normalize_semantic(sem_raw, sem_cfg)
+        cond_dec = np.concatenate([base_cond_dec, sem_norm], axis=1).astype(np.float32, copy=False)
+    else:
+        cond_dec = base_cond_dec
+
+    if int(cond_dec.shape[1]) != int(dec_cond_dim):
+        raise ValueError(f"Decision cond_dim mismatch: ckpt cond_dim={dec_cond_dim} vs built={cond_dec.shape[1]}")
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     dec_model = DiffusionTrajectoryModel(
         obs_dim=4,
         act_dim=2,
-        cond_dim=6,
+        cond_dim=int(dec_cond_dim),
         obs_len=1,
         pred_len=int(k_wp),
         hidden_dim=int(dec_hidden),

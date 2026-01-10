@@ -9,6 +9,7 @@ from typing import Optional, Tuple
 import numpy as np
 import torch
 
+from src.features.semantic_od import SemanticODNorm, load_poi_total_and_landuse_entropy, normalize_semantic, semantic_od_features
 from src.models.diffusion.diffusion_model import DiffusionTrajectoryModel
 from src.training.route_npz_utils import RouteNorm, load_route_windows_npz, make_default_pos_bounds, normalize_pos
 
@@ -102,6 +103,12 @@ def build_argparser() -> argparse.ArgumentParser:
     p.add_argument("--checkpoint", type=str, required=True)
     p.add_argument("--case_npz", type=str, required=True, help="case_XX/gt_case.npz from route_gt_baseline.py")
     p.add_argument("--out_dir", type=str, required=True)
+    p.add_argument(
+        "--semantic_dir",
+        type=str,
+        default=None,
+        help="Optional directory containing poi_density_*.npy and landuse_entropy.npy (required if checkpoint uses semantics).",
+    )
     p.add_argument("--num_samples_per_condition", type=int, default=20, help="K samples per condition")
     p.add_argument("--max_n", type=int, default=None)
     p.add_argument("--seed", type=int, default=0)
@@ -133,6 +140,7 @@ def main() -> None:
     hidden_dim = int(model_cfg.get("hidden_dim", 128))
     diff_steps = int(model_cfg.get("diff_steps", 50))
     pred_type = str(model_cfg.get("pred_type", "eps"))
+    cond_dim = int(model_cfg.get("cond_dim", 6))
 
     norm = _load_norm_from_ckpt(cfg if isinstance(cfg, dict) else {})
 
@@ -153,14 +161,36 @@ def main() -> None:
     dest_ctr_norm = normalize_pos(dest_ctr, norm)
 
     obs = np.concatenate([start_ctr_norm, np.zeros((n, 2), dtype=np.float32)], axis=1)[:, None, :]  # (N,1,4)
-    cond = np.concatenate([np.zeros((n, 2), dtype=np.float32), start_ctr_norm, dest_ctr_norm], axis=1).astype(np.float32, copy=False)  # (N,6)
+    base_cond = np.concatenate([np.zeros((n, 2), dtype=np.float32), start_ctr_norm, dest_ctr_norm], axis=1).astype(np.float32, copy=False)  # (N,6)
+
+    sem_cfg_raw = cfg.get("semantic_od_norm") if isinstance(cfg, dict) else None
+    if sem_cfg_raw is not None and not isinstance(sem_cfg_raw, dict):
+        raise TypeError(f"Bad semantic_od_norm in checkpoint config: {type(sem_cfg_raw)}")
+    sem_cfg = SemanticODNorm.from_json(sem_cfg_raw) if isinstance(sem_cfg_raw, dict) else None
+    if sem_cfg is not None:
+        if not args.semantic_dir:
+            raise ValueError("--semantic_dir is required because checkpoint includes semantic_od_norm")
+        poi_total, landuse_entropy = load_poi_total_and_landuse_entropy(args.semantic_dir)
+        sem_raw, keys = semantic_od_features(
+            start_ctr=start_pos,
+            dest_ctr=dest_pos,
+            poi_total=poi_total,
+            landuse_entropy=landuse_entropy,
+            log_poi=True,
+        )
+        if keys != sem_cfg.keys:
+            raise ValueError(f"Semantic keys mismatch: ckpt={sem_cfg.keys} vs computed={keys}")
+        sem_norm = normalize_semantic(sem_raw, sem_cfg)
+        cond = np.concatenate([base_cond, sem_norm], axis=1).astype(np.float32, copy=False)
+    else:
+        cond = base_cond
 
     obs_t = torch.from_numpy(obs).to(dtype=torch.float32)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = DiffusionTrajectoryModel(
         obs_dim=4,
         act_dim=2,
-        cond_dim=6,
+        cond_dim=int(cond_dim),
         obs_len=1,
         pred_len=int(k_wp),
         hidden_dim=int(hidden_dim),
@@ -211,7 +241,15 @@ def main() -> None:
 
     result = {
         "inputs": {"checkpoint": str(ckpt_path.resolve()), "case_npz": str(Path(args.case_npz).resolve())},
-        "config": {"K_waypoints": int(k_wp), "K_samples": int(k_samples), "od_bin": float(od_bin), "o_clip": float(o_clip), "seed": int(args.seed)},
+        "config": {
+            "K_waypoints": int(k_wp),
+            "K_samples": int(k_samples),
+            "od_bin": float(od_bin),
+            "o_clip": float(o_clip),
+            "cond_dim": int(cond.shape[1]),
+            "uses_semantics": bool(sem_cfg is not None),
+            "seed": int(args.seed),
+        },
         "stats": {"N": int(n), "F": int(f)},
         "outputs": {"samples_npz": str(out_npz.resolve())},
     }
@@ -221,4 +259,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

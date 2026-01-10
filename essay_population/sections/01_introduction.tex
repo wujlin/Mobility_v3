@@ -37,7 +37,8 @@ This decomposition turns a brittle one-shot generation problem into two conditio
 
 \paragraph{Soft priors and optional census guidance.}
 To encourage feasibility without collapsing support, we incorporate map information as \emph{soft} priors (e.g., road-proximity fields) rather than hard output masking.
-We also support injecting census-derived spatial covariates as optional semantic guidance signals that can steer route preferences without making population/attribute synthesis the main objective of this paper.
+Our decision stage also admits optional spatial semantics (e.g., POI/land-use covariates, or census-derived attributes) as conditioning signals.
+These covariates can steer route preferences and, in our ablations, can further improve corridor-level diversity, but they are \emph{not required} for the core mechanism in this paper.
 While macro-level statistics can provide useful priors for controllability, this paper focuses on the generative architecture for the \emph{route itself}; census integration is explored only as an ablation to demonstrate extensibility.
 
 \paragraph{Contributions.}

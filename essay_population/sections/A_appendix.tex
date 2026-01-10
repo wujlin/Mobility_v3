@@ -1,2 +1,20 @@
-Placeholder: implementation details, additional experiments, and extended figures.
+\begin{table}[t]
+  \centering
+  \small
+  \begin{tabular}{lcc|cc}
+    \toprule
+    Case & Div (no sem) & Cov (no sem) & Div (sem) & Cov (sem) \\
+    \midrule
+    00 & 0.725 & 1.00 & 0.896 & 1.00 \\
+    01 & 0.715 & 1.00 & 0.883 & 1.00 \\
+    02 & 0.861 & 1.00 & 0.960 & 1.00 \\
+    03 & 0.896 & 0.95 & 0.945 & 1.00 \\
+    04 & 0.898 & 1.00 & 0.956 & 1.00 \\
+    \midrule
+    Mean & 0.819 & 0.99 & 0.928 & 1.00 \\
+    \bottomrule
+  \end{tabular}
+  \caption{Decision-stage semantic ablation on five fixed multi-modal OD cases. ``Sem'' augments the waypoint decision model with coarse OD semantics derived from external rasters (POI density and POI-derived land-use entropy at origin/destination).}
+  \label{tab:semantic-ablation}
+\end{table}
 

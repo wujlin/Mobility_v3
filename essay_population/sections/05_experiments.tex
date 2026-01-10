@@ -57,7 +57,7 @@ We design ablations to map each architectural choice to a specific failure mode:
 \begin{itemize}
   \item \textbf{No decision stage:} remove waypoint commitment to test whether collapse returns.
   \item \textbf{No soft map prior:} test feasibility degradation without hard truncation.
-  \item \textbf{No semantic context:} remove POI/imagery channels to test corridor-choice realism.
+  \item \textbf{Decision semantics (optional):} augment the decision-stage conditioning with coarse OD semantics derived from external rasters (POI density and POI-derived land-use entropy at origin/destination) to test whether corridor coverage/diversity improves beyond OD-only conditioning.
   \item \textbf{Optional census guidance:} enable census covariates only as an ablation to quantify controllability/extensibility without shifting the paper's focus to population synthesis.
 \end{itemize}
 

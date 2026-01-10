@@ -61,7 +61,7 @@ Route generation is fundamentally multi-modal at the corridor level: distinct to
 Through diagnostic experiments on large-scale mobility traces, we identify two characteristic failures of end-to-end coordinate generators under this multi-modality: deterministic regression collapses to destructive averages, while stochastic generation can avoid hard collapse yet blurs corridor alternatives through mode interference.
 We propose \textbf{CascadeTraj}, a hierarchical decision--execution generator that first samples a sparse waypoint skeleton as an explicit corridor commitment, then refines it with a continuous execution model.
 We further find that naive composition can overwrite corridor commitments; treating execution as a weak residual refinement preserves corridor coverage while still capturing local geometry.
-Finally, we report a negative-but-informative finding: richer inference-observable semantic covariates provide limited benefit for corridor-level commitment in our setting, suggesting that corridor-level multi-modality is not easily predicted from these features.
+Surprisingly, inference-observable semantic features do not improve corridor commitment beyond a matched-dimension random conditioning control, suggesting that corridor-level multi-modality may arise primarily from population heterogeneity and other unobserved factors rather than directly observable environmental covariates.
 \end{abstract}
 
 \section{Introduction}

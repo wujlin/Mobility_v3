@@ -37,6 +37,10 @@ This experiment tests whether corridor coverage gained at the decision stage is 
 We find that naive composition can \emph{lose} corridor coverage even when the decision stage is diverse, indicating that execution can overwrite topological commitments.
 We therefore vary the execution refinement strength by scaling the residual component, which exposes a practical tradeoff between commitment preservation (corridor adherence) and geometric detail.
 
+\paragraph{E12: execution-stage feasibility priors (stage-specific data usage).}
+To test whether map-derived information is more useful for execution than for corridor commitment, we apply OSM-derived feasibility priors (e.g., distance-to-road / road probability fields) as an execution-stage refinement while keeping the decision stage fixed.
+We evaluate changes in on-road rate and micro metrics, and use this as evidence for a stage-specific ``what data goes where'' design principle.
+
 \paragraph{E13: full-scale evaluation (beyond diagnostic cases).}
 To ensure our findings are not limited to a small set of diagnostic OD cases, we evaluate end-to-end diffusion baselines and CascadeTraj on the full Detroit benchmark split.
 We report standard micro metrics (ADE/FDE under best-of-$K$ sampling) alongside feasibility proxies (on-road rate) and global diversity proxies.

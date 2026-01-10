@@ -28,6 +28,13 @@ We form the final route by applying a scaled residual update, with a single scal
 \end{equation}
 When $\alpha$ is too large, the executor can overwrite corridor commitments; choosing a small $\alpha$ yields a weak refinement that preserves corridor coverage while improving local geometric fidelity.
 
+\paragraph{Endpoint anchoring (sampling-time).}
+\label{sec:endpoint-anchoring}
+At sampling time, we apply a lightweight endpoint anchoring step that enforces intent consistency by making the generated route end exactly at the given destination.
+Concretely, after sampling a velocity sequence, we compute the residual displacement error relative to $(o,d)$ and distribute it uniformly across steps.
+This isolates corridor commitment and shape modeling from trivial endpoint drift and makes endpoint-only metrics less informative for comparing models.
+
 \subsection{Soft map priors for feasibility}
 We incorporate map-derived signals (e.g., road proximity) as soft priors in training and/or sampling, avoiding hard masking of the output space.
 This design prevents the generator from collapsing its support to an externally defined feasible set while still discouraging physically implausible routes.
+In our experiments, we operationalize this as an execution-stage refinement driven by OSM-derived road probability / distance-to-road fields (Sec.~\ref{sec:experiments}).

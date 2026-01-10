@@ -1,27 +1,57 @@
+\subsection{End-to-end generators fail under corridor multi-modality}
 \paragraph{Fixed diagnostic cases (no cherry-picking).}
 We first select diagnostic OD conditions with clear corridor-level multi-modality by auditing ground-truth routes (Sec.~\ref{sec:experiments}).
 All qualitative overlays and collapse metrics are reported on these fixed cases.
 In this draft, we focus on a representative Detroit case from WorldTrace \citep{opentrace_worldtrace}.
 
-\paragraph{Diagnosis: averaging vs.\ interference.}
+\paragraph{Averaging vs.\ interference.}
 Figure~\ref{fig:mode-collapse} visualizes multiple samples for the same condition.
 Deterministic L2 regression collapses to an overly direct ``mean'' route, consistent with destructive averaging under multi-modality.
 An end-to-end diffusion generator avoids hard collapse, but its samples blur corridor alternatives into mixed, implausible trajectories, suggesting mode interference in a purely continuous output space.
 
-\paragraph{Commitment: decision-stage sampling restores corridor alternatives.}
-When the decision stage explicitly samples a sparse waypoint skeleton, the generator recovers both corridor-level alternatives.
+\subsection{Hierarchical decomposition restores corridor diversity}
+\paragraph{Corridor commitment from decision-stage sampling.}
+When the decision stage explicitly samples a sparse waypoint skeleton, the generator recovers corridor-level alternatives.
 This supports the hypothesis that corridor diversity must be represented as an explicit topological commitment rather than being left implicit in continuous coordinates.
 
-\paragraph{Conditioning is not semantic reasoning (negative but informative).}
-We evaluate multiple inference-observable semantic representations for conditioning the decision stage, including endpoint covariates (POI density and land-use entropy), along-chord profiles, and OD-aligned grid encoders (including dense road-probability rasters).
-Across these settings, richer semantic representations provide limited and inconsistent benefit for corridor commitment.
-Crucially, a matched-dimension random OD-keyed embedding yields comparable gains to weak endpoint semantics, indicating that the apparent improvement is largely due to increased conditioning capacity rather than semantic content.
-Moreover, injecting dense map priors (road probability) into the decision stage can reduce diversity and coverage, suggesting a stage-specific placement of map information: corridor commitment is topological, while feasibility priors are better suited for execution.
-
-\paragraph{Preservation: naive composition can overwrite commitments.}
-We find that composing a multi-modal decision sampler with a strong continuous executor can still lose corridor coverage: the execution stage may overwrite the committed corridor choice, collapsing the final routes into a single corridor even when the skeletons are diverse.
-This failure mode is important because it shows that ``having a planner'' is not sufficient; the composition must preserve commitments.
+\subsection{Commitment preservation is necessary for composition}
+\paragraph{Naive composition can overwrite commitments.}
+Composing a multi-modal decision sampler with a strong continuous executor can still lose corridor coverage: the execution stage may overwrite the committed corridor choice, collapsing the final routes into a single corridor even when the skeletons are diverse.
+This shows that ``having a planner'' is not sufficient; the composition must preserve commitments.
 
 \paragraph{Commitment-preserving refinement via residual scaling.}
 Treating execution as a weak residual refinement (by scaling the execution residual) preserves corridor commitments while still refining local geometry.
-This provides a simple and controllable knob that balances corridor adherence against continuous-detail refinement, and is a key practical ingredient in making the cascade work end-to-end.
+This provides a controllable knob that balances corridor adherence against continuous-detail refinement and is a key practical ingredient in making the cascade work end-to-end.
+
+\subsection{Semantic features do not drive corridor commitment (negative but informative)}
+\paragraph{Conditioning is not semantic reasoning.}
+We evaluate multiple inference-observable semantic representations for conditioning the decision stage, including endpoint covariates (POI density and land-use entropy), along-chord profiles, and OD-aligned grid encoders (including dense road-probability rasters).
+Across these settings, richer semantic representations provide limited and inconsistent benefit for corridor commitment.
+Crucially, a matched-dimension random OD-keyed embedding yields comparable gains to weak endpoint semantics, indicating that apparent improvements are largely due to conditioning capacity rather than semantic content.
+Moreover, injecting dense map priors (road probability) into the decision stage can reduce diversity and coverage, suggesting a stage-specific placement of map information: corridor commitment is topological, while feasibility priors are better suited for execution.
+
+\subsection{Full-scale evaluation confirms the approach}
+\paragraph{Beyond diagnostic cases.}
+On the full Detroit benchmark split ($2295$ windows, $K=20$), CascadeTraj improves best-of-$K$ micro accuracy and feasibility over end-to-end diffusion (Table~\ref{tab:fullscale}).
+In particular, CascadeTraj reduces best-of-$K$ ADE from $97.9$ to $23.8$ and increases the on-road rate from $0.83$ to $0.91$ (road-probability threshold $0.5$).
+Because CascadeTraj enforces destination consistency via endpoint anchoring (Sec.~\ref{sec:endpoint-anchoring}), endpoint error (FDE) becomes less informative and we emphasize shape and feasibility metrics.
+
+\paragraph{Interpreting global Jaccard diversity.}
+On the full split, end-to-end diffusion exhibits higher occupancy-set Jaccard distance than CascadeTraj.
+This does not necessarily indicate better corridor modeling: this proxy can be inflated by off-road wandering and mode interference that spreads samples across many grid cells.
+We therefore interpret global Jaccard diversity jointly with feasibility and micro accuracy, and rely on corridor-level coverage metrics on fixed multi-modal cases to diagnose corridor commitment.
+
+\begin{table}[t]
+  \centering
+  \small
+  \begin{tabular}{lccc}
+    \toprule
+    Model & ADE$_{\text{best}}$ & On-road rate & Jaccard div. \\
+    \midrule
+    End-to-end Diffusion & 97.9 & 0.829 & 0.878 \\
+    CascadeTraj (res$_{0.1}$) & 23.8 & 0.912 & 0.782 \\
+    \bottomrule
+  \end{tabular}
+  \caption{Full-scale evaluation on Detroit (WorldTrace), $N=2295$ windows, $F=256$, $K=20$. ADE is best-of-$K$ in grid units. On-road rate uses OSM road probability threshold $0.5$. Jaccard diversity is the mean pairwise occupancy-set Jaccard distance (higher can be inflated by noisy off-road wandering).}
+  \label{tab:fullscale}
+\end{table}

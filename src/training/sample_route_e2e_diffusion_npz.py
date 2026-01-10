@@ -18,6 +18,12 @@ from src.training.route_npz_utils import (
     normalize_pos,
 )
 
+try:
+    from tqdm import tqdm
+except Exception:  # pragma: no cover
+    def tqdm(x, *args, **kwargs):  # type: ignore[no-redef]
+        return x
+
 
 def _set_seed(seed: int) -> None:
     random.seed(int(seed))
@@ -132,7 +138,7 @@ def main() -> None:
             raise ValueError(f"Unknown cfg_uncond_dest_mode: {mode}")
         cond_uncond_t = torch.from_numpy(cond_uncond).to(device=device, dtype=torch.float32)
     with torch.no_grad():
-        for kk in range(k):
+        for kk in tqdm(range(k), desc="sample", dynamic_ncols=True):
             # Make per-k randomness stable but distinct.
             torch.manual_seed(int(args.seed) + 1000 + int(kk))
             vel_norm = model.sample_trajectory(

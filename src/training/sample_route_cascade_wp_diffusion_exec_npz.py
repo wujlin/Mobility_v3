@@ -28,6 +28,12 @@ from src.models.diffusion.diffusion_model import DiffusionTrajectoryModel
 from src.models.semantic.grid_cnn_encoder import GridCNNEncoder
 from src.training.route_npz_utils import RouteNorm, denormalize_vel, load_route_windows_npz, make_default_pos_bounds, normalize_pos
 
+try:
+    from tqdm import tqdm
+except Exception:  # pragma: no cover
+    def tqdm(x, *args, **kwargs):  # type: ignore[no-redef]
+        return x
+
 
 def _set_seed(seed: int) -> None:
     random.seed(int(seed))
@@ -423,7 +429,7 @@ def main() -> None:
     wp_rel_k = np.zeros((n, k_samples, 2, 2), dtype=np.float32)
 
     with torch.no_grad():
-        for kk in range(k_samples):
+        for kk in tqdm(range(k_samples), desc="sample", dynamic_ncols=True):
             torch.manual_seed(int(args.seed) + 1000 + int(kk))
             rel_norm_t = dec_model.sample_trajectory(obs_dec_t, cond_dec_t, horizon=int(k_wp))  # (N,2,2)
             rel = rel_norm_t.detach().cpu().numpy().astype(np.float32, copy=False)

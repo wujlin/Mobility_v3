@@ -13,6 +13,12 @@ import torch
 import torch.optim as optim
 from torch.utils.data import DataLoader, Dataset
 
+try:
+    from tqdm import tqdm
+except Exception:  # pragma: no cover
+    def tqdm(x, *args, **kwargs):  # type: ignore[no-redef]
+        return x
+
 from src.models.diffusion.diffusion_model import DiffusionTrajectoryModel
 from src.training.route_npz_utils import (
     RouteNorm,
@@ -183,7 +189,9 @@ def main() -> None:
     for epoch in range(int(cfg.epochs)):
         epoch_loss = 0.0
         epoch_steps = 0
-        for batch_idx, batch in enumerate(loader):
+        total = int(cfg.max_batches) if cfg.max_batches is not None else len(loader)
+        pbar = tqdm(enumerate(loader), total=total, desc=f"epoch {epoch+1}/{int(cfg.epochs)}", dynamic_ncols=True)
+        for batch_idx, batch in pbar:
             if cfg.max_batches is not None and int(batch_idx) >= int(cfg.max_batches):
                 break
             obs = batch["obs"].to(device=device, non_blocking=True)
@@ -215,6 +223,8 @@ def main() -> None:
             epoch_loss += l
             epoch_steps += 1
             steps += 1
+            if epoch_steps > 0 and hasattr(pbar, "set_postfix"):
+                pbar.set_postfix(loss=float(l), avg=float(epoch_loss / max(epoch_steps, 1)))
 
         avg_loss = epoch_loss / max(epoch_steps, 1)
         torch.save(

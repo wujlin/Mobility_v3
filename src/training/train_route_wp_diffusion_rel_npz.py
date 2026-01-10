@@ -21,6 +21,7 @@ from src.features.semantic_od import (
     semantic_corridor_profile_features,
     semantic_grid_pool_features,
     semantic_od_features,
+    semantic_rand4_features,
 )
 from src.features.waypoints import WaypointConfig, extract_oracle_waypoints_from_future
 from src.models.diffusion.diffusion_model import DiffusionTrajectoryModel
@@ -188,9 +189,9 @@ def build_argparser() -> argparse.ArgumentParser:
     p.add_argument(
         "--semantic_mode",
         type=str,
-        choices=["od", "profile", "od_profile", "grid", "od_grid"],
+        choices=["od", "profile", "od_profile", "grid", "od_grid", "rand4"],
         default="od",
-        help="Semantic feature mode: od (O/D point features), profile (OD-chord strip profile; legacy), grid (OD-aligned grid pooling), or concatenations.",
+        help="Semantic feature mode: od (O/D point features), profile (OD-chord strip profile; legacy), grid (OD-aligned grid pooling), rand4 (OD-keyed random control), or concatenations.",
     )
     p.add_argument(
         "--semantic_use_bins",
@@ -288,13 +289,21 @@ def main() -> None:
     sem_norm = None
     sem_keys = None
     sem_cfg = None
-    if cfg.semantic_dir:
-        sem_o = start_ctr if bool(cfg.semantic_use_bins) else start_pos
-        sem_d = dest_ctr if bool(cfg.semantic_use_bins) else dest_pos
+    uses_semantics = bool(cfg.semantic_dir) or (str(cfg.semantic_mode) == "rand4")
+    sem_use_bins = (True if str(cfg.semantic_mode) == "rand4" else bool(cfg.semantic_use_bins))
+    if uses_semantics:
+        sem_o = start_ctr if bool(sem_use_bins) else start_pos
+        sem_d = dest_ctr if bool(sem_use_bins) else dest_pos
 
         parts = []
         keys_all = []
+        if str(cfg.semantic_mode) == "rand4":
+            sem_r, sem_keys_r = semantic_rand4_features(start_ctr=start_ctr, dest_ctr=dest_ctr)
+            parts.append(sem_r)
+            keys_all.extend(list(sem_keys_r))
         if cfg.semantic_mode in ("od", "od_profile", "od_grid"):
+            if not cfg.semantic_dir:
+                raise ValueError("--semantic_dir is required for semantic_mode=od/od_profile/od_grid")
             poi_total, landuse_entropy = load_poi_total_and_landuse_entropy(cfg.semantic_dir)
             sem_od, sem_keys_od = semantic_od_features(
                 start_ctr=sem_o,
@@ -306,6 +315,8 @@ def main() -> None:
             parts.append(sem_od)
             keys_all.extend(list(sem_keys_od))
         if cfg.semantic_mode in ("profile", "od_profile"):
+            if not cfg.semantic_dir:
+                raise ValueError("--semantic_dir is required for semantic_mode=profile/od_profile")
             poi_stack, categories, landuse_entropy = load_poi_stack_and_landuse_entropy(cfg.semantic_dir)
             offsets = _parse_float_list(cfg.profile_offsets)
             sem_prof, sem_keys_prof = semantic_corridor_profile_features(
@@ -321,6 +332,8 @@ def main() -> None:
             parts.append(sem_prof)
             keys_all.extend(list(sem_keys_prof))
         if cfg.semantic_mode in ("grid", "od_grid"):
+            if not cfg.semantic_dir:
+                raise ValueError("--semantic_dir is required for semantic_mode=grid/od_grid")
             poi_stack, categories, landuse_entropy = load_poi_stack_and_landuse_entropy(cfg.semantic_dir)
             sem_grid, sem_keys_grid = semantic_grid_pool_features(
                 start_ctr=sem_o,
@@ -428,8 +441,8 @@ def main() -> None:
                     },
                     "rel_norm": {"mean": [float(x) for x in rel_mean.tolist()], "std": [float(x) for x in rel_std.tolist()]},
                     "semantic": {
-                        "mode": (str(cfg.semantic_mode) if cfg.semantic_dir else None),
-                        "use_bins": bool(cfg.semantic_use_bins),
+                        "mode": (str(cfg.semantic_mode) if bool(uses_semantics) else None),
+                        "use_bins": bool(sem_use_bins),
                         "profile_num_steps": int(cfg.profile_num_steps),
                         "profile_offsets": str(cfg.profile_offsets),
                         "grid_patch_size": int(cfg.grid_patch_size),
@@ -452,8 +465,8 @@ def main() -> None:
             "od_bin": float(cfg.od_bin),
             "o_clip": float(cfg.o_clip),
             "semantic_dir": (str(Path(cfg.semantic_dir).resolve()) if cfg.semantic_dir else None),
-            "semantic_mode": (str(cfg.semantic_mode) if cfg.semantic_dir else None),
-            "semantic_use_bins": bool(cfg.semantic_use_bins),
+            "semantic_mode": (str(cfg.semantic_mode) if bool(uses_semantics) else None),
+            "semantic_use_bins": bool(sem_use_bins),
             "profile_num_steps": int(cfg.profile_num_steps),
             "profile_offsets": str(cfg.profile_offsets),
             "grid_patch_size": int(cfg.grid_patch_size),

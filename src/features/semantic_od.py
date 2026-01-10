@@ -362,6 +362,67 @@ def semantic_grid_pool_features(
     return feats.astype(np.float32, copy=False), tuple(keys)
 
 
+def _splitmix64(x: np.ndarray) -> np.ndarray:
+    """
+    Deterministic 64-bit mixing function (SplitMix64).
+
+    Notes:
+      - Pure integer math => stable across Python/Numpy versions.
+      - We use it to generate reproducible pseudo-random features keyed by OD intent.
+    """
+    x = np.asarray(x, dtype=np.uint64)
+    x = (x + np.uint64(0x9E3779B97F4A7C15)) & np.uint64(0xFFFFFFFFFFFFFFFF)
+    z = x
+    z = (z ^ (z >> np.uint64(30))) * np.uint64(0xBF58476D1CE4E5B9) & np.uint64(0xFFFFFFFFFFFFFFFF)
+    z = (z ^ (z >> np.uint64(27))) * np.uint64(0x94D049BB133111EB) & np.uint64(0xFFFFFFFFFFFFFFFF)
+    z = z ^ (z >> np.uint64(31))
+    return z.astype(np.uint64, copy=False)
+
+
+def semantic_rand4_features(
+    *,
+    start_ctr: np.ndarray,  # (N,2) [y,x]
+    dest_ctr: np.ndarray,  # (N,2)
+) -> Tuple[np.ndarray, Tuple[str, ...]]:
+    """
+    A control feature: 4-D pseudo-random vector keyed only by the OD intent (bin centers).
+
+    Purpose:
+      - Test whether "weak semantics" gains come from meaningful semantic information,
+        or simply from adding extra conditioning dimensions.
+
+    Design:
+      - Uses only inference-observable OD intent (no GT).
+      - Constant for the same (O_bin, D_bin) pair.
+    """
+    start_ctr = np.asarray(start_ctr, dtype=np.float32)
+    dest_ctr = np.asarray(dest_ctr, dtype=np.float32)
+    if start_ctr.ndim != 2 or start_ctr.shape[1] != 2:
+        raise ValueError(f"Expected start_ctr (N,2), got {start_ctr.shape}")
+    if dest_ctr.shape != start_ctr.shape:
+        raise ValueError(f"Shape mismatch: start_ctr={start_ctr.shape} dest_ctr={dest_ctr.shape}")
+
+    y0 = np.rint(start_ctr[:, 0]).astype(np.uint64)
+    x0 = np.rint(start_ctr[:, 1]).astype(np.uint64)
+    y1 = np.rint(dest_ctr[:, 0]).astype(np.uint64)
+    x1 = np.rint(dest_ctr[:, 1]).astype(np.uint64)
+
+    # Pack into a single 64-bit key (safe under pos_max<=1023).
+    key = (y0 & np.uint64(0xFFFF)) | ((x0 & np.uint64(0xFFFF)) << np.uint64(16)) | ((y1 & np.uint64(0xFFFF)) << np.uint64(32)) | ((x1 & np.uint64(0xFFFF)) << np.uint64(48))
+
+    z0 = _splitmix64(key)
+    z1 = _splitmix64(z0)
+    z2 = _splitmix64(z1)
+    z3 = _splitmix64(z2)
+    z = np.stack([z0, z1, z2, z3], axis=1).astype(np.uint64, copy=False)  # (N,4)
+
+    # Map uint64 -> float32 in [-1, 1].
+    u = (z.astype(np.float64) + 0.5) / float(2**64)  # (0,1)
+    feats = (2.0 * u - 1.0).astype(np.float32, copy=False)
+    keys = ("rand4_0", "rand4_1", "rand4_2", "rand4_3")
+    return feats, keys
+
+
 def fit_semantic_norm(feats: np.ndarray, *, keys: Tuple[str, ...]) -> SemanticODNorm:
     feats = np.asarray(feats, dtype=np.float32)
     if feats.ndim != 2:

@@ -17,6 +17,7 @@ from src.features.semantic_od import (
     semantic_corridor_profile_features,
     semantic_grid_pool_features,
     semantic_od_features,
+    semantic_rand4_features,
 )
 from src.features.skeleton_prior import build_skeleton_prior_vel_norm_k2
 from src.models.diffusion.diffusion_model import DiffusionTrajectoryModel
@@ -212,9 +213,6 @@ def main() -> None:
         raise TypeError(f"Bad semantic_od_norm in decision checkpoint config: {type(sem_cfg_raw)}")
     sem_cfg = SemanticODNorm.from_json(sem_cfg_raw) if isinstance(sem_cfg_raw, dict) else None
     if sem_cfg is not None:
-        if not args.semantic_dir:
-            raise ValueError("--semantic_dir is required because decision checkpoint includes semantic_od_norm")
-
         sem_meta = dec_cfg.get("semantic") if isinstance(dec_cfg, dict) else None
         if isinstance(sem_meta, dict) and sem_meta.get("mode") is not None:
             sem_mode = str(sem_meta.get("mode"))
@@ -235,11 +233,18 @@ def main() -> None:
             grid_extent = 128.0
             grid_pool = "quad"
 
+        if sem_mode != "rand4" and not args.semantic_dir:
+            raise ValueError("--semantic_dir is required because decision checkpoint includes semantic features")
+
         sem_o = start_ctr if sem_use_bins else start_pos
         sem_d = dest_ctr if sem_use_bins else dest_pos
 
         parts = []
         keys_all = []
+        if sem_mode == "rand4":
+            sem_r, sem_keys_r = semantic_rand4_features(start_ctr=start_ctr, dest_ctr=dest_ctr)
+            parts.append(sem_r)
+            keys_all.extend(list(sem_keys_r))
         if sem_mode in ("od", "od_profile", "od_grid"):
             poi_total, landuse_entropy = load_poi_total_and_landuse_entropy(args.semantic_dir)
             sem_od, sem_keys_od = semantic_od_features(

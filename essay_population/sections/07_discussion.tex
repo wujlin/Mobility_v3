@@ -14,5 +14,6 @@ Soft priors (e.g., road proximity fields) offer a spectrum of feasibility guidan
 
 \paragraph{Limitations and scope.}
 This draft emphasizes a diagnostic evidence chain on fixed multi-modal OD cases; scaling to broader city-wide benchmarks and reporting full realism/feasibility tradeoffs are ongoing.
-Our core findings do not require external semantic data; nevertheless, the decision stage offers a natural interface for optional spatial covariates (e.g., POI/land-use or census attributes), which can improve corridor diversity in ablations.
+Our core findings do not require external semantic data; nevertheless, the decision stage offers a natural interface for optional spatial covariates (e.g., POI/land-use or census attributes).
+We find that coarse OD-point semantics can improve corridor-level diversity and mixture matching, while naive corridor-agnostic ``strong'' semantic summaries may hurt, indicating that exploiting rich semantics may require corridor-aware representations (e.g., candidate corridor evaluation) rather than a single global profile.
 We do not attempt full population synthesis or attribute generation in this paper.

@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Sequence, Tuple
+from typing import Dict, List, Literal, Sequence, Tuple
 
 import numpy as np
 
@@ -228,6 +228,137 @@ def semantic_corridor_profile_features(
 
     keys: List[str] = ["poi_total_log1p_along", "landuse_entropy_mean_along"]
     keys.extend([f"poi_frac_{str(c)}_along" for c in categories])
+    return feats.astype(np.float32, copy=False), tuple(keys)
+
+
+def semantic_grid_pool_features(
+    *,
+    start_ctr: np.ndarray,  # (N,2) [y,x]
+    dest_ctr: np.ndarray,  # (N,2)
+    poi_stack: np.ndarray,  # (C,H,W)
+    categories: Sequence[str],
+    landuse_entropy: np.ndarray,  # (H,W)
+    patch_size: int = 16,
+    extent: float = 128.0,
+    pool: Literal["quad", "lr"] = "quad",
+    log_poi: bool = True,
+) -> Tuple[np.ndarray, Tuple[str, ...]]:
+    """
+    Grid-level environment semantics for corridor commitment.
+
+    We crop an OD-aligned semantic patch centered at the OD midpoint, then apply spatial pooling
+    to avoid high-dimensional flattening. This keeps coarse spatial structure (e.g., left vs right
+    of the OD chord) while remaining corridor-agnostic at inference.
+
+    Pooling modes:
+      - 'quad': 4 quadrants (back/front × left/right) => 4*C POI + 4 entropy dims
+      - 'lr':   left/right halves => 2*C POI + 2 entropy dims
+
+    Returns:
+      feats: (N, D) float32
+      keys:  feature names aligned with feats columns
+    """
+    start_ctr = np.asarray(start_ctr, dtype=np.float32)
+    dest_ctr = np.asarray(dest_ctr, dtype=np.float32)
+    if start_ctr.ndim != 2 or start_ctr.shape[1] != 2:
+        raise ValueError(f"Expected start_ctr (N,2), got {start_ctr.shape}")
+    if dest_ctr.shape != start_ctr.shape:
+        raise ValueError(f"Shape mismatch: start_ctr={start_ctr.shape} dest_ctr={dest_ctr.shape}")
+
+    poi_stack = np.asarray(poi_stack, dtype=np.float32)
+    if poi_stack.ndim != 3:
+        raise ValueError(f"Expected poi_stack (C,H,W), got {poi_stack.shape}")
+    C, H, W = poi_stack.shape
+    if int(len(categories)) != int(C):
+        raise ValueError(f"categories length mismatch: categories={len(categories)} poi_stack.C={C}")
+
+    landuse_entropy = np.asarray(landuse_entropy, dtype=np.float32)
+    if landuse_entropy.shape != (H, W):
+        raise ValueError(f"Expected landuse_entropy {(H, W)}, got {landuse_entropy.shape}")
+
+    S = int(patch_size)
+    if S <= 0 or (S % 2) != 0:
+        raise ValueError("--grid_patch_size must be a positive even integer.")
+    ext = float(extent)
+    if not np.isfinite(ext) or ext <= 0.0:
+        raise ValueError("--grid_extent must be > 0")
+    pool = str(pool)
+    if pool not in ("quad", "lr"):
+        raise ValueError("--grid_pool must be one of: quad, lr")
+
+    # Patch sampling coordinates in the aligned (par, perp) frame.
+    # Use symmetric cell centers; for even S, the seam lies between the two middle columns/rows.
+    u = ((np.arange(S, dtype=np.float32) + 0.5) - (float(S) / 2.0)) / (float(S) / 2.0) * ext  # (S,)
+    v = u.copy()
+    uu, vv = np.meshgrid(u, v, indexing="ij")  # (S,S)
+    iu, iv = np.meshgrid(np.arange(S, dtype=np.int64), np.arange(S, dtype=np.int64), indexing="ij")
+    iu_f = iu.reshape(-1)
+    iv_f = iv.reshape(-1)
+    uu_f = uu.reshape(-1).astype(np.float32, copy=False)
+    vv_f = vv.reshape(-1).astype(np.float32, copy=False)
+
+    mid_u = S // 2
+    if pool == "quad":
+        regions = (
+            ("bl", (iu_f < mid_u) & (iv_f < mid_u)),
+            ("br", (iu_f < mid_u) & (iv_f >= mid_u)),
+            ("fl", (iu_f >= mid_u) & (iv_f < mid_u)),
+            ("fr", (iu_f >= mid_u) & (iv_f >= mid_u)),
+        )
+    else:
+        regions = (
+            ("l", (iv_f < mid_u)),
+            ("r", (iv_f >= mid_u)),
+        )
+
+    reg_idx = [(name, np.where(mask)[0].astype(np.int64, copy=False)) for name, mask in regions]
+
+    R = int(len(reg_idx))
+    feats = np.zeros((int(start_ctr.shape[0]), int(R) * int(C) + int(R)), dtype=np.float32)
+
+    eps = 1e-9
+    for i in range(int(start_ctr.shape[0])):
+        a = start_ctr[i].astype(np.float32, copy=False)
+        b = dest_ctr[i].astype(np.float32, copy=False)
+        mid = 0.5 * (a + b)
+        d = b - a
+        L = float(np.linalg.norm(d))
+        if not np.isfinite(L) or L <= 1e-6:
+            e_par = np.asarray([1.0, 0.0], dtype=np.float32)
+            e_perp = np.asarray([0.0, 1.0], dtype=np.float32)
+        else:
+            e_par = (d / float(L)).astype(np.float32, copy=False)
+            e_perp = np.asarray([-e_par[1], e_par[0]], dtype=np.float32)
+
+        pts = mid[None, :] + uu_f[:, None] * e_par[None, :] + vv_f[:, None] * e_perp[None, :]  # (S*S,2)
+        yy = np.clip(np.rint(pts[:, 0]).astype(np.int64), 0, H - 1)
+        xx = np.clip(np.rint(pts[:, 1]).astype(np.int64), 0, W - 1)
+
+        patch_poi = poi_stack[:, yy, xx].astype(np.float64, copy=False)  # (C,P)
+        patch_ent = landuse_entropy[yy, xx].astype(np.float64, copy=False)  # (P,)
+
+        col = 0
+        for _, idx in reg_idx:
+            if idx.size == 0:
+                sums = np.zeros((C,), dtype=np.float64)
+                ent_mean = 0.0
+            else:
+                sums = patch_poi[:, idx].sum(axis=1)
+                ent_mean = float(np.mean(patch_ent[idx]))
+            if bool(log_poi):
+                sums = np.log1p(np.maximum(sums, 0.0))
+            feats[i, col : col + C] = sums.astype(np.float32, copy=False)
+            col += int(C)
+            feats[i, col] = float(ent_mean)
+            col += 1
+
+        if col != feats.shape[1]:
+            raise RuntimeError("Internal feature dimension mismatch.")
+
+    keys: List[str] = []
+    for name, _ in reg_idx:
+        keys.extend([f"poi_sum_log1p_{str(c)}_{name}" for c in categories])
+        keys.append(f"landuse_entropy_mean_{name}")
     return feats.astype(np.float32, copy=False), tuple(keys)
 
 

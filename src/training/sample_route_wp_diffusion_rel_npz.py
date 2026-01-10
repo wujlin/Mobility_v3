@@ -15,6 +15,7 @@ from src.features.semantic_od import (
     load_poi_total_and_landuse_entropy,
     normalize_semantic,
     semantic_corridor_profile_features,
+    semantic_grid_pool_features,
     semantic_od_features,
 )
 from src.models.diffusion.diffusion_model import DiffusionTrajectoryModel
@@ -195,19 +196,25 @@ def main() -> None:
             profile_num_steps = int(sem_meta.get("profile_num_steps", 16))
             profile_offsets_str = str(sem_meta.get("profile_offsets", "-32,0,32"))
             profile_offsets = _parse_float_list(profile_offsets_str)
+            grid_patch_size = int(sem_meta.get("grid_patch_size", 16))
+            grid_extent = float(sem_meta.get("grid_extent", 128.0))
+            grid_pool = str(sem_meta.get("grid_pool", "quad"))
         else:
             # Backward-compatible fallback for older checkpoints (OD-only semantics).
             sem_mode = "od"
             sem_use_bins = False
             profile_num_steps = 16
             profile_offsets = (-32.0, 0.0, 32.0)
+            grid_patch_size = 16
+            grid_extent = 128.0
+            grid_pool = "quad"
 
         sem_o = start_ctr if sem_use_bins else start_pos
         sem_d = dest_ctr if sem_use_bins else dest_pos
 
         parts = []
         keys_all = []
-        if sem_mode in ("od", "od_profile"):
+        if sem_mode in ("od", "od_profile", "od_grid"):
             poi_total, landuse_entropy = load_poi_total_and_landuse_entropy(args.semantic_dir)
             sem_od, sem_keys_od = semantic_od_features(
                 start_ctr=sem_o,
@@ -232,6 +239,21 @@ def main() -> None:
             )
             parts.append(sem_prof)
             keys_all.extend(list(sem_keys_prof))
+        if sem_mode in ("grid", "od_grid"):
+            poi_stack, categories, landuse_entropy = load_poi_stack_and_landuse_entropy(args.semantic_dir)
+            sem_grid, sem_keys_grid = semantic_grid_pool_features(
+                start_ctr=sem_o,
+                dest_ctr=sem_d,
+                poi_stack=poi_stack,
+                categories=categories,
+                landuse_entropy=landuse_entropy,
+                patch_size=int(grid_patch_size),
+                extent=float(grid_extent),
+                pool=str(grid_pool),
+                log_poi=True,
+            )
+            parts.append(sem_grid)
+            keys_all.extend(list(sem_keys_grid))
         if not parts:
             raise ValueError(f"Bad semantic mode in checkpoint: {sem_mode}")
         sem_raw = parts[0] if len(parts) == 1 else np.concatenate(parts, axis=1).astype(np.float32, copy=False)

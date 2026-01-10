@@ -19,6 +19,7 @@ from src.features.semantic_od import (
     load_poi_total_and_landuse_entropy,
     normalize_semantic,
     semantic_corridor_profile_features,
+    semantic_grid_pool_features,
     semantic_od_features,
 )
 from src.features.waypoints import WaypointConfig, extract_oracle_waypoints_from_future
@@ -124,6 +125,9 @@ class TrainConfig:
     semantic_use_bins: bool
     profile_num_steps: int
     profile_offsets: str
+    grid_patch_size: int
+    grid_extent: float
+    grid_pool: str
     hidden_dim: int
     diff_steps: int
     pred_type: str
@@ -184,9 +188,9 @@ def build_argparser() -> argparse.ArgumentParser:
     p.add_argument(
         "--semantic_mode",
         type=str,
-        choices=["od", "profile", "od_profile"],
+        choices=["od", "profile", "od_profile", "grid", "od_grid"],
         default="od",
-        help="Semantic feature mode: od (O/D point features), profile (OD-chord strip profile), or od_profile (concat).",
+        help="Semantic feature mode: od (O/D point features), profile (OD-chord strip profile; legacy), grid (OD-aligned grid pooling), or concatenations.",
     )
     p.add_argument(
         "--semantic_use_bins",
@@ -195,6 +199,9 @@ def build_argparser() -> argparse.ArgumentParser:
     )
     p.add_argument("--profile_num_steps", type=int, default=16, help="When semantic_mode includes 'profile': number of samples along the OD chord.")
     p.add_argument("--profile_offsets", type=str, default="-32,0,32", help="When semantic_mode includes 'profile': comma-separated perpendicular offsets (grid units).")
+    p.add_argument("--grid_patch_size", type=int, default=16, help="When semantic_mode includes 'grid': patch size S (even), pooled spatially (no flatten).")
+    p.add_argument("--grid_extent", type=float, default=128.0, help="When semantic_mode includes 'grid': patch half-extent (grid units) around OD midpoint.")
+    p.add_argument("--grid_pool", type=str, choices=["quad", "lr"], default="quad", help="When semantic_mode includes 'grid': pooling mode (quad=4 quadrants, lr=left/right halves).")
 
     p.add_argument("--hidden_dim", type=int, default=128)
     p.add_argument("--diff_steps", type=int, default=50)
@@ -224,6 +231,9 @@ def main() -> None:
         semantic_use_bins=bool(args.semantic_use_bins),
         profile_num_steps=int(args.profile_num_steps),
         profile_offsets=str(args.profile_offsets),
+        grid_patch_size=int(args.grid_patch_size),
+        grid_extent=float(args.grid_extent),
+        grid_pool=str(args.grid_pool),
         hidden_dim=int(args.hidden_dim),
         diff_steps=int(args.diff_steps),
         pred_type=str(args.pred_type),
@@ -284,7 +294,7 @@ def main() -> None:
 
         parts = []
         keys_all = []
-        if cfg.semantic_mode in ("od", "od_profile"):
+        if cfg.semantic_mode in ("od", "od_profile", "od_grid"):
             poi_total, landuse_entropy = load_poi_total_and_landuse_entropy(cfg.semantic_dir)
             sem_od, sem_keys_od = semantic_od_features(
                 start_ctr=sem_o,
@@ -310,6 +320,21 @@ def main() -> None:
             )
             parts.append(sem_prof)
             keys_all.extend(list(sem_keys_prof))
+        if cfg.semantic_mode in ("grid", "od_grid"):
+            poi_stack, categories, landuse_entropy = load_poi_stack_and_landuse_entropy(cfg.semantic_dir)
+            sem_grid, sem_keys_grid = semantic_grid_pool_features(
+                start_ctr=sem_o,
+                dest_ctr=sem_d,
+                poi_stack=poi_stack,
+                categories=categories,
+                landuse_entropy=landuse_entropy,
+                patch_size=int(cfg.grid_patch_size),
+                extent=float(cfg.grid_extent),
+                pool=str(cfg.grid_pool),
+                log_poi=True,
+            )
+            parts.append(sem_grid)
+            keys_all.extend(list(sem_keys_grid))
         if not parts:
             raise ValueError(f"Bad semantic_mode: {cfg.semantic_mode}")
         sem_raw = parts[0] if len(parts) == 1 else np.concatenate(parts, axis=1).astype(np.float32, copy=False)
@@ -407,6 +432,9 @@ def main() -> None:
                         "use_bins": bool(cfg.semantic_use_bins),
                         "profile_num_steps": int(cfg.profile_num_steps),
                         "profile_offsets": str(cfg.profile_offsets),
+                        "grid_patch_size": int(cfg.grid_patch_size),
+                        "grid_extent": float(cfg.grid_extent),
+                        "grid_pool": str(cfg.grid_pool),
                     },
                     "semantic_od_norm": (sem_cfg.to_json() if sem_cfg is not None else None),
                 },
@@ -428,6 +456,9 @@ def main() -> None:
             "semantic_use_bins": bool(cfg.semantic_use_bins),
             "profile_num_steps": int(cfg.profile_num_steps),
             "profile_offsets": str(cfg.profile_offsets),
+            "grid_patch_size": int(cfg.grid_patch_size),
+            "grid_extent": float(cfg.grid_extent),
+            "grid_pool": str(cfg.grid_pool),
             "hidden_dim": int(cfg.hidden_dim),
             "diff_steps": int(cfg.diff_steps),
             "pred_type": str(cfg.pred_type),

@@ -49,7 +49,7 @@ We report four complementary metric groups:
   \item \textbf{Intent consistency:} endpoint error and arrival/termination consistency (reaching the destination without drift).
   \item \textbf{Feasibility proxies:} on-road/off-road ratios computed against map proxies, with sensitivity audits over dilation/buffering to avoid proxy-hole artifacts.
   \item \textbf{Realism:} path-shape similarity metrics (e.g., DTW/Fr\'echet-style distances) and length/detour statistics to capture geometric fidelity beyond endpoint error.
-  \item \textbf{Diversity/coverage:} corridor-level coverage metrics (e.g., distinct corridor clusters per condition), and distributional diversity scores (e.g., self-BLEU on discretized route tokens) to distinguish ``one good path'' from ``many plausible alternatives''.
+  \item \textbf{Diversity/coverage:} corridor-level coverage metrics (e.g., distinct corridor clusters per condition), corridor mixture matching (e.g., Jensen--Shannon divergence between GT and generated corridor label distributions), and distributional diversity scores to distinguish ``one good path'' from ``many plausible alternatives''.
 \end{itemize}
 
 \paragraph{Ablations (tying design to failure modes).}
@@ -57,7 +57,7 @@ We design ablations to map each architectural choice to a specific failure mode:
 \begin{itemize}
   \item \textbf{No decision stage:} remove waypoint commitment to test whether collapse returns.
   \item \textbf{No soft map prior:} test feasibility degradation without hard truncation.
-  \item \textbf{Decision semantics (optional):} augment the decision-stage conditioning with coarse OD semantics derived from external rasters (POI density and POI-derived land-use entropy at origin/destination) to test whether corridor coverage/diversity improves beyond OD-only conditioning.
+  \item \textbf{Decision semantics (environment context):} augment the decision-stage conditioning with inference-observable environment semantics derived from external rasters (POI density and POI-derived land-use entropy), comparing weak OD-point covariates vs stronger along-chord semantic profiles, to test whether semantic strength improves corridor choice and mixture matching.
   \item \textbf{Optional census guidance:} enable census covariates only as an ablation to quantify controllability/extensibility without shifting the paper's focus to population synthesis.
 \end{itemize}
 

@@ -10,6 +10,10 @@ In practice, we sample $z$ and then generate $\tau$ conditioned on $z$.
 We represent the route skeleton as an ordered waypoint sequence $z = (w_1,\dots,w_K)$.
 A lightweight generative planner models $p_\theta(z \mid c)$ (e.g., autoregressive or diffusion), and must support multi-modal sampling to represent corridor-level alternatives.
 
+\paragraph{Environment semantics for corridor selection.}
+Corridor choice is typically driven by semantic context (what functional regions the route traverses), which can be approximated by inference-observable environment signals such as POI/land-use rasters or imagery-derived features.
+We treat these signals as additional conditioning channels for the decision stage, ranging from coarse OD-point covariates (at $o$ and $d$) to along-chord semantic profiles that summarize the environment between $o$ and $d$.
+
 \paragraph{Optional macro covariates (ablation).}
 The framework can ingest additional spatial covariates (e.g., census-derived tract-level attributes) as conditioning channels for semantic controllability.
 We treat this strictly as an ablation and keep the paper's focus on route generation.

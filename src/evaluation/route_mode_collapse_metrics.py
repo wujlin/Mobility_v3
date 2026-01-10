@@ -175,6 +175,28 @@ def _mean_pairwise_jaccard_distance(sets: List[set[int]]) -> float:
     return 0.0 if cnt <= 0 else float(s / float(cnt))
 
 
+def _prob2(counts: np.ndarray, *, eps: float = 1e-12) -> np.ndarray:
+    c = np.asarray(counts, dtype=np.float64).reshape(2)
+    c = np.maximum(c, 0.0)
+    s = float(np.sum(c))
+    if not np.isfinite(s) or s <= float(eps):
+        return np.asarray([0.5, 0.5], dtype=np.float64)
+    return (c / (s + float(eps))).astype(np.float64, copy=False)
+
+
+def _js_divergence(p: np.ndarray, q: np.ndarray, *, eps: float = 1e-12) -> float:
+    p = _prob2(p, eps=float(eps))
+    q = _prob2(q, eps=float(eps))
+    m = 0.5 * (p + q)
+
+    def _kl(a: np.ndarray, b: np.ndarray) -> float:
+        a = np.clip(a, float(eps), 1.0)
+        b = np.clip(b, float(eps), 1.0)
+        return float(np.sum(a * np.log(a / b)))
+
+    return 0.5 * (_kl(p, m) + _kl(q, m))
+
+
 def run_metrics(
     *,
     gt_report_json: Path,
@@ -214,6 +236,8 @@ def run_metrics(
     all_div = []
     all_cov = []
     all_collapse = []
+    all_mix_jsd = []
+    all_mix_l1 = []
 
     for c in cases:
         ids = c.get("window_ids")
@@ -241,6 +265,9 @@ def run_metrics(
                 feats.append(_polyline_features_segment_end_single(sp[i], tg[i]))
         feats_arr = np.stack(feats, axis=0)  # (n,3)
         cl = _fit_two_corridors(feats_arr, seed=int(cfg.seed))
+        gt_labels = np.asarray(cl["labels"], dtype=np.int64).reshape(-1)
+        gt_counts = np.bincount(gt_labels, minlength=2).astype(np.int64, copy=False)  # (2,)
+        gt_frac = _prob2(gt_counts)
 
         # Match model windows.
         ms_idx = [ms_map.get(int(k)) for k in keys.tolist()]
@@ -251,6 +278,7 @@ def run_metrics(
         div_list = []
         cov_list = []
         collapse_list = []
+        model_counts = np.zeros((2,), dtype=np.int64)
 
         d_gt = float(c.get("gt_jaccard_distance", {}).get("mean", 0.0))
         thr = float(cfg.collapse_ratio) * float(d_gt)
@@ -273,10 +301,16 @@ def run_metrics(
                     feat = _polyline_features_segment_end_single(start_i, pk[k])
                 lab = _assign_cluster(feat, mu=cl["mu"], sig=cl["sig"], centers=cl["centers"])
                 hit.add(int(lab))
+                if int(lab) in (0, 1):
+                    model_counts[int(lab)] += 1
             cov = float(len(hit)) / 2.0
             cov_list.append(float(cov))
 
             collapse_list.append(bool(d_model < thr) if d_gt > 0 else False)
+
+        model_frac = _prob2(model_counts)
+        mix_jsd = float(_js_divergence(gt_frac, model_frac))
+        mix_l1 = float(np.sum(np.abs(gt_frac - model_frac)))
 
         out_cases.append(
             {
@@ -284,6 +318,10 @@ def run_metrics(
                 "n_model_matched": int(len(ms_idx_arr)),
                 "gt_div_mean": float(d_gt),
                 "collapse_threshold": float(thr),
+                "gt_corridor_mix": {"frac": [float(x) for x in gt_frac.tolist()], "counts": [int(x) for x in gt_counts.tolist()]},
+                "model_corridor_mix": {"frac": [float(x) for x in model_frac.tolist()], "counts": [int(x) for x in model_counts.tolist()]},
+                "mixture_jsd": float(mix_jsd),
+                "mixture_l1": float(mix_l1),
                 "model_div": {
                     "mean": float(np.mean(div_list)) if div_list else 0.0,
                     "p50": float(np.percentile(div_list, 50)) if div_list else 0.0,
@@ -299,6 +337,8 @@ def run_metrics(
         all_div.extend(div_list)
         all_cov.extend(cov_list)
         all_collapse.extend(collapse_list)
+        all_mix_jsd.append(float(mix_jsd))
+        all_mix_l1.append(float(mix_l1))
 
     out = {
         "inputs": {
@@ -317,6 +357,8 @@ def run_metrics(
             "model_div_mean": float(np.mean(all_div)) if all_div else 0.0,
             "model_cov_mean": float(np.mean(all_cov)) if all_cov else 0.0,
             "collapse_rate_mean": float(np.mean(all_collapse)) if all_collapse else 0.0,
+            "mixture_jsd_mean": float(np.mean(all_mix_jsd)) if all_mix_jsd else 0.0,
+            "mixture_l1_mean": float(np.mean(all_mix_l1)) if all_mix_l1 else 0.0,
         },
         "per_case": out_cases,
     }
@@ -353,4 +395,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

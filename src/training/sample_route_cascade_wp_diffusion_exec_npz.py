@@ -9,7 +9,14 @@ from typing import Tuple
 import numpy as np
 import torch
 
-from src.features.semantic_od import SemanticODNorm, load_poi_total_and_landuse_entropy, normalize_semantic, semantic_od_features
+from src.features.semantic_od import (
+    SemanticODNorm,
+    load_poi_stack_and_landuse_entropy,
+    load_poi_total_and_landuse_entropy,
+    normalize_semantic,
+    semantic_corridor_profile_features,
+    semantic_od_features,
+)
 from src.features.skeleton_prior import build_skeleton_prior_vel_norm_k2
 from src.models.diffusion.diffusion_model import DiffusionTrajectoryModel
 from src.training.route_npz_utils import RouteNorm, denormalize_vel, load_route_windows_npz, make_default_pos_bounds, normalize_pos
@@ -75,6 +82,16 @@ def _od_bin_center(pos: np.ndarray, *, bin_size: float) -> np.ndarray:
     if not np.isfinite(b) or b <= 0.0:
         raise ValueError("--od_bin must be > 0")
     return (np.floor(pos / b) + 0.5) * b
+
+
+def _parse_float_list(s: str) -> Tuple[float, ...]:
+    items = [x.strip() for x in str(s).split(",") if str(x).strip()]
+    if not items:
+        raise ValueError("Expected a non-empty comma-separated list.")
+    out = []
+    for x in items:
+        out.append(float(x))
+    return tuple(out)
 
 
 def _waypoints_from_rel_so(
@@ -196,14 +213,55 @@ def main() -> None:
     if sem_cfg is not None:
         if not args.semantic_dir:
             raise ValueError("--semantic_dir is required because decision checkpoint includes semantic_od_norm")
-        poi_total, landuse_entropy = load_poi_total_and_landuse_entropy(args.semantic_dir)
-        sem_raw, keys = semantic_od_features(
-            start_ctr=start_pos,
-            dest_ctr=dest_pos,
-            poi_total=poi_total,
-            landuse_entropy=landuse_entropy,
-            log_poi=True,
-        )
+
+        sem_meta = dec_cfg.get("semantic") if isinstance(dec_cfg, dict) else None
+        if isinstance(sem_meta, dict) and sem_meta.get("mode") is not None:
+            sem_mode = str(sem_meta.get("mode"))
+            sem_use_bins = bool(sem_meta.get("use_bins", False))
+            profile_num_steps = int(sem_meta.get("profile_num_steps", 16))
+            profile_offsets_str = str(sem_meta.get("profile_offsets", "-32,0,32"))
+            profile_offsets = _parse_float_list(profile_offsets_str)
+        else:
+            # Backward-compatible fallback for older decision checkpoints (OD-only semantics).
+            sem_mode = "od"
+            sem_use_bins = False
+            profile_num_steps = 16
+            profile_offsets = (-32.0, 0.0, 32.0)
+
+        sem_o = start_ctr if sem_use_bins else start_pos
+        sem_d = dest_ctr if sem_use_bins else dest_pos
+
+        parts = []
+        keys_all = []
+        if sem_mode in ("od", "od_profile"):
+            poi_total, landuse_entropy = load_poi_total_and_landuse_entropy(args.semantic_dir)
+            sem_od, sem_keys_od = semantic_od_features(
+                start_ctr=sem_o,
+                dest_ctr=sem_d,
+                poi_total=poi_total,
+                landuse_entropy=landuse_entropy,
+                log_poi=True,
+            )
+            parts.append(sem_od)
+            keys_all.extend(list(sem_keys_od))
+        if sem_mode in ("profile", "od_profile"):
+            poi_stack, categories, landuse_entropy = load_poi_stack_and_landuse_entropy(args.semantic_dir)
+            sem_prof, sem_keys_prof = semantic_corridor_profile_features(
+                start_ctr=sem_o,
+                dest_ctr=sem_d,
+                poi_stack=poi_stack,
+                categories=categories,
+                landuse_entropy=landuse_entropy,
+                num_steps=int(profile_num_steps),
+                offsets=profile_offsets,
+                log_total=True,
+            )
+            parts.append(sem_prof)
+            keys_all.extend(list(sem_keys_prof))
+        if not parts:
+            raise ValueError(f"Bad semantic mode in decision checkpoint: {sem_mode}")
+        sem_raw = parts[0] if len(parts) == 1 else np.concatenate(parts, axis=1).astype(np.float32, copy=False)
+        keys = tuple(str(k) for k in keys_all)
         if keys != sem_cfg.keys:
             raise ValueError(f"Semantic keys mismatch: ckpt={sem_cfg.keys} vs computed={keys}")
         sem_norm = normalize_semantic(sem_raw, sem_cfg)

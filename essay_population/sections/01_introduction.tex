@@ -13,7 +13,8 @@ Second, feasibility can break: when emphasizing diversity (e.g., via latent-vari
 The core difficulty is \emph{topological multi-modality}.
 Even for the same origin and destination, multiple corridor-level choices can be equally reasonable.
 End-to-end coordinate generators trained with likelihood or Euclidean losses therefore face a destructive ``averaging'' pressure: the mean of several feasible routes is often an infeasible straight line.
-This suggests that route generation should be modeled as a \emph{decision--execution} process rather than a single homogeneous sequence problem.
+More importantly, corridor choice is rarely a purely geometric choice: different corridors often traverse different functional regions (e.g., commercial vs.\ residential), implying that corridor-level decisions are \emph{semantic} decisions.
+This suggests that route generation should be modeled as a \emph{decision--execution} process rather than a single homogeneous sequence problem, with an explicit interface to inject inference-observable environment semantics.
 
 \paragraph{A diagnostic baseline: averaging vs.\ blur in continuous output space.}
 We first provide a diagnostic experiment (Fig.~\ref{fig:mode-collapse}) using end-to-end baselines trained under the same data and conditioning.
@@ -31,19 +32,19 @@ Critically, our ablations show that corridor diversity must be (i) created as an
 
 \paragraph{CascadeTraj: bridging semantic intent and physical execution.}
 We propose \textbf{CascadeTraj}, a cascaded generative framework for route generation.
-At the \emph{decision} stage, the model samples a sparse route skeleton (e.g., waypoints) that represents discrete corridor-level alternatives and preserves long-horizon intent consistency.
+At the \emph{decision} stage, the model samples a sparse route skeleton (e.g., waypoints) that represents discrete corridor-level alternatives.
+This stage provides a clean handle for \emph{semantic corridor selection} by conditioning on environment semantics that are available at inference time (e.g., POI/land-use rasters, or imagery-derived context).
 At the \emph{execution} stage, the model generates a full-resolution continuous route conditioned on the skeleton, capturing local geometry and motion patterns.
 This decomposition turns a brittle one-shot generation problem into two conditional problems with clearer responsibilities: (i) committing to a coherent topological plan, and (ii) executing a physically plausible realization.
 
-\paragraph{Soft priors and optional census guidance.}
+\paragraph{Soft priors and optional macro statistics.}
 To encourage feasibility without collapsing support, we incorporate map information as \emph{soft} priors (e.g., road-proximity fields) rather than hard output masking.
-Our decision stage also admits optional spatial semantics (e.g., POI/land-use covariates, or census-derived attributes) as conditioning signals.
-These covariates can steer route preferences and, in our ablations, can further improve corridor-level diversity, but they are \emph{not required} for the core mechanism in this paper.
-While macro-level statistics can provide useful priors for controllability, this paper focuses on the generative architecture for the \emph{route itself}; census integration is explored only as an ablation to demonstrate extensibility.
+Our decision stage can condition on inference-observable environment semantics (POI/land-use/imagery) to model corridor preferences.
+We treat population-level macro statistics (e.g., census covariates) strictly as an optional ablation for controllability; the paper's focus remains the generative architecture for the \emph{route itself}, not population synthesis.
 
 \paragraph{Contributions.}
 \begin{itemize}
-  \item \textbf{Finding 1 (Diagnosis):} we provide evidence that topological multi-modality induces mode interference and destructive averaging in end-to-end long-horizon route generators, which cannot be fixed by naively scaling continuous coordinate models.
+  \item \textbf{Finding 1 (Diagnosis):} we provide evidence that topological multi-modality induces mode interference and destructive averaging in end-to-end long-horizon route generators, and argue that corridor choice is fundamentally a semantic decision that is poorly represented as implicit continuous coordinates.
   \item \textbf{Finding 2 (Mechanism):} we find that corridor-level diversity must be represented explicitly as a topological commitment and then preserved through composition: a waypoint bottleneck only helps when the skeleton is sampled multi-modally, and execution must act as a commitment-preserving refinement rather than overwriting corridor choices.
-  \item \textbf{Robustness:} we incorporate map information as \emph{soft} priors (instead of hard masking) to encourage feasibility without truncating support, and treat additional macro semantics (e.g., census covariates) strictly as optional ablations for extensibility.
+  \item \textbf{Robustness:} we incorporate map information as \emph{soft} priors (instead of hard masking) to encourage feasibility without truncating support, and treat macro statistics (e.g., census covariates) strictly as optional ablations for extensibility.
 \end{itemize}

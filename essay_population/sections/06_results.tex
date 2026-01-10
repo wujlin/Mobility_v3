@@ -15,6 +15,7 @@ This supports the hypothesis that corridor diversity must be represented as an e
 \paragraph{Optional semantics: a clean interface that can improve diversity.}
 While our main results use only OD intent conditioning, the decision stage provides a clean interface to inject additional spatial semantics (e.g., POI/land-use covariates at origin/destination).
 In an ablation on five fixed multi-modal OD cases, adding coarse OD semantics improves average corridor diversity and removes a small residual coverage gap (Appendix Table~\ref{tab:semantic-ablation}), while the collapse rate remains zero.
+We additionally audit the ground-truth corridor alternatives and find that they exhibit distinct environment semantic profiles, motivating stronger semantic conditioning beyond endpoints.
 
 \paragraph{Preservation: naive composition can overwrite commitments.}
 We find that composing a multi-modal decision sampler with a strong continuous executor can still lose corridor coverage: the execution stage may overwrite the committed corridor choice, collapsing the final routes into a single corridor even when the skeletons are diverse.

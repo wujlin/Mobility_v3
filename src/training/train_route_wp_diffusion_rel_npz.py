@@ -13,7 +13,14 @@ import torch
 import torch.optim as optim
 from torch.utils.data import DataLoader, Dataset
 
-from src.features.semantic_od import fit_semantic_norm, load_poi_total_and_landuse_entropy, normalize_semantic, semantic_od_features
+from src.features.semantic_od import (
+    fit_semantic_norm,
+    load_poi_stack_and_landuse_entropy,
+    load_poi_total_and_landuse_entropy,
+    normalize_semantic,
+    semantic_corridor_profile_features,
+    semantic_od_features,
+)
 from src.features.waypoints import WaypointConfig, extract_oracle_waypoints_from_future
 from src.models.diffusion.diffusion_model import DiffusionTrajectoryModel
 from src.training.route_npz_utils import RouteNorm, load_route_windows_npz, make_default_pos_bounds, normalize_pos
@@ -93,6 +100,16 @@ def _normalize_rel(rel: np.ndarray, *, mean: np.ndarray, std: np.ndarray) -> np.
     return ((rel - mean[None, None, :]) / std[None, None, :]).astype(np.float32, copy=False)
 
 
+def _parse_float_list(s: str) -> Tuple[float, ...]:
+    items = [x.strip() for x in str(s).split(",") if str(x).strip()]
+    if not items:
+        raise ValueError("Expected a non-empty comma-separated list.")
+    out = []
+    for x in items:
+        out.append(float(x))
+    return tuple(out)
+
+
 @dataclass(frozen=True)
 class TrainConfig:
     train_npz: str
@@ -103,6 +120,10 @@ class TrainConfig:
     od_bin: float
     o_clip: float
     semantic_dir: Optional[str]
+    semantic_mode: str
+    semantic_use_bins: bool
+    profile_num_steps: int
+    profile_offsets: str
     hidden_dim: int
     diff_steps: int
     pred_type: str
@@ -158,8 +179,22 @@ def build_argparser() -> argparse.ArgumentParser:
         "--semantic_dir",
         type=str,
         default=None,
-        help="Optional directory containing poi_density_*.npy and landuse_entropy.npy (adds OD semantics to cond).",
+        help="Optional directory containing poi_density_*.npy and landuse_entropy.npy (adds environment semantics to cond).",
     )
+    p.add_argument(
+        "--semantic_mode",
+        type=str,
+        choices=["od", "profile", "od_profile"],
+        default="od",
+        help="Semantic feature mode: od (O/D point features), profile (OD-chord strip profile), or od_profile (concat).",
+    )
+    p.add_argument(
+        "--semantic_use_bins",
+        action="store_true",
+        help="If set, compute semantic features from OD-bin centers (shared intent) instead of per-window raw O/D.",
+    )
+    p.add_argument("--profile_num_steps", type=int, default=16, help="When semantic_mode includes 'profile': number of samples along the OD chord.")
+    p.add_argument("--profile_offsets", type=str, default="-32,0,32", help="When semantic_mode includes 'profile': comma-separated perpendicular offsets (grid units).")
 
     p.add_argument("--hidden_dim", type=int, default=128)
     p.add_argument("--diff_steps", type=int, default=50)
@@ -185,6 +220,10 @@ def main() -> None:
         od_bin=float(args.od_bin),
         o_clip=float(args.o_clip),
         semantic_dir=(str(args.semantic_dir) if args.semantic_dir else None),
+        semantic_mode=str(args.semantic_mode),
+        semantic_use_bins=bool(args.semantic_use_bins),
+        profile_num_steps=int(args.profile_num_steps),
+        profile_offsets=str(args.profile_offsets),
         hidden_dim=int(args.hidden_dim),
         diff_steps=int(args.diff_steps),
         pred_type=str(args.pred_type),
@@ -240,14 +279,41 @@ def main() -> None:
     sem_keys = None
     sem_cfg = None
     if cfg.semantic_dir:
-        poi_total, landuse_entropy = load_poi_total_and_landuse_entropy(cfg.semantic_dir)
-        sem_raw, sem_keys = semantic_od_features(
-            start_ctr=start_pos,
-            dest_ctr=dest_pos,
-            poi_total=poi_total,
-            landuse_entropy=landuse_entropy,
-            log_poi=True,
-        )
+        sem_o = start_ctr if bool(cfg.semantic_use_bins) else start_pos
+        sem_d = dest_ctr if bool(cfg.semantic_use_bins) else dest_pos
+
+        parts = []
+        keys_all = []
+        if cfg.semantic_mode in ("od", "od_profile"):
+            poi_total, landuse_entropy = load_poi_total_and_landuse_entropy(cfg.semantic_dir)
+            sem_od, sem_keys_od = semantic_od_features(
+                start_ctr=sem_o,
+                dest_ctr=sem_d,
+                poi_total=poi_total,
+                landuse_entropy=landuse_entropy,
+                log_poi=True,
+            )
+            parts.append(sem_od)
+            keys_all.extend(list(sem_keys_od))
+        if cfg.semantic_mode in ("profile", "od_profile"):
+            poi_stack, categories, landuse_entropy = load_poi_stack_and_landuse_entropy(cfg.semantic_dir)
+            offsets = _parse_float_list(cfg.profile_offsets)
+            sem_prof, sem_keys_prof = semantic_corridor_profile_features(
+                start_ctr=sem_o,
+                dest_ctr=sem_d,
+                poi_stack=poi_stack,
+                categories=categories,
+                landuse_entropy=landuse_entropy,
+                num_steps=int(cfg.profile_num_steps),
+                offsets=offsets,
+                log_total=True,
+            )
+            parts.append(sem_prof)
+            keys_all.extend(list(sem_keys_prof))
+        if not parts:
+            raise ValueError(f"Bad semantic_mode: {cfg.semantic_mode}")
+        sem_raw = parts[0] if len(parts) == 1 else np.concatenate(parts, axis=1).astype(np.float32, copy=False)
+        sem_keys = tuple(str(k) for k in keys_all)
         sem_cfg = fit_semantic_norm(sem_raw, keys=sem_keys)
         sem_norm = normalize_semantic(sem_raw, sem_cfg)
         cond = np.concatenate([base_cond, sem_norm], axis=1).astype(np.float32, copy=False)
@@ -336,6 +402,12 @@ def main() -> None:
                         "pos_max": [float(x) for x in norm.pos_max.tolist()],
                     },
                     "rel_norm": {"mean": [float(x) for x in rel_mean.tolist()], "std": [float(x) for x in rel_std.tolist()]},
+                    "semantic": {
+                        "mode": (str(cfg.semantic_mode) if cfg.semantic_dir else None),
+                        "use_bins": bool(cfg.semantic_use_bins),
+                        "profile_num_steps": int(cfg.profile_num_steps),
+                        "profile_offsets": str(cfg.profile_offsets),
+                    },
                     "semantic_od_norm": (sem_cfg.to_json() if sem_cfg is not None else None),
                 },
             },
@@ -351,6 +423,11 @@ def main() -> None:
             "num_waypoints": int(cfg.num_waypoints),
             "od_bin": float(cfg.od_bin),
             "o_clip": float(cfg.o_clip),
+            "semantic_dir": (str(Path(cfg.semantic_dir).resolve()) if cfg.semantic_dir else None),
+            "semantic_mode": (str(cfg.semantic_mode) if cfg.semantic_dir else None),
+            "semantic_use_bins": bool(cfg.semantic_use_bins),
+            "profile_num_steps": int(cfg.profile_num_steps),
+            "profile_offsets": str(cfg.profile_offsets),
             "hidden_dim": int(cfg.hidden_dim),
             "diff_steps": int(cfg.diff_steps),
             "pred_type": str(cfg.pred_type),

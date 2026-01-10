@@ -4,6 +4,7 @@ Each route is a sequence of 2D positions $\tau = (p_1,\dots,p_T)$, where $p_t \i
 We condition on a minimal trip intent and context
 $c = (o, d, t_0, x)$,
 including origin $o$, destination $d$, departure time $t_0$, and optional context channels $x$ (e.g., soft map priors, POI/imagery features, or census covariates in ablations).
+In practice, we often represent intent as a \emph{coarse OD intent} by quantizing $(o,d)$ into OD-bin centers, so that multiple nearby trips share the same condition and expose corridor-level multi-modality.
 
 \paragraph{Goal.}
 Given $c$, the model samples routes $\hat{\tau} \sim p_\theta(\tau \mid c)$ that satisfy:

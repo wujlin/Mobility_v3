@@ -37,6 +37,10 @@ This experiment tests whether corridor coverage gained at the decision stage is 
 We find that naive composition can \emph{lose} corridor coverage even when the decision stage is diverse, indicating that execution can overwrite topological commitments.
 We therefore vary the execution refinement strength by scaling the residual component, which exposes a practical tradeoff between commitment preservation (corridor adherence) and geometric detail.
 
+\paragraph{E13: full-scale evaluation (beyond diagnostic cases).}
+To ensure our findings are not limited to a small set of diagnostic OD cases, we evaluate end-to-end diffusion baselines and CascadeTraj on the full Detroit benchmark split.
+We report standard micro metrics (ADE/FDE under best-of-$K$ sampling) alongside feasibility proxies (on-road rate) and global diversity proxies.
+
 \paragraph{Core evidence: mode collapse visualization.}
 To make the failure mode unambiguous, we include a primary qualitative figure comparing multiple samples for the same condition:
 end-to-end baselines vs CascadeTraj.
@@ -57,8 +61,8 @@ We design ablations to map each architectural choice to a specific failure mode:
 \begin{itemize}
   \item \textbf{No decision stage:} remove waypoint commitment to test whether collapse returns.
   \item \textbf{No soft map prior:} test feasibility degradation without hard truncation.
-  \item \textbf{Decision semantics (environment context):} augment the decision-stage conditioning with inference-observable environment semantics derived from external rasters (POI density and POI-derived land-use entropy), comparing weak OD-point covariates vs stronger along-chord semantic profiles, to test whether semantic strength improves corridor choice and mixture matching.
-  \item \textbf{Optional census guidance:} enable census covariates only as an ablation to quantify controllability/extensibility without shifting the paper's focus to population synthesis.
+  \item \textbf{Conditioning vs.\ semantics:} compare OD-only intent conditioning against (i) endpoint semantic covariates, (ii) stronger raster-based semantic encoders, and (iii) a matched-dimension random control, to test whether corridor commitment is driven by semantic content or by conditioning capacity.
+  \item \textbf{Optional census guidance:} enable census covariates only as an ablation for extensibility without shifting the paper's focus to population synthesis.
 \end{itemize}
 
 \paragraph{Failure analysis.}

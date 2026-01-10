@@ -12,7 +12,7 @@
 \ificml
   \usepackage{icml2026} % Provided by the official ICML 2026 template
   \icmlfinalcopy
-  \icmltitlerunning{CascadeTraj for Route Generation}
+  \icmltitlerunning{CascadeTraj: Corridor Commitment}
 \else
   \usepackage[margin=1in]{geometry}
   \usepackage{setspace}
@@ -31,7 +31,7 @@
 \usepackage{hyperref}
 \hypersetup{hidelinks}
 
-\title{CascadeTraj: Bridging Semantic Intent and Physical Execution for Route Generation}
+\title{CascadeTraj: Hierarchical Route Generation via Corridor Commitment}
 \author{Anonymous Author(s)}
 \date{}
 
@@ -39,7 +39,7 @@
 
 \ificml
 \twocolumn[
-\icmltitle{CascadeTraj: Bridging Semantic Intent and Physical Execution for Route Generation}
+\icmltitle{CascadeTraj: Hierarchical Route Generation via Corridor Commitment}
 
 \begin{icmlauthorlist}
 \icmlauthor{Anonymous Author(s)}{anon}
@@ -59,9 +59,9 @@ Long-horizon mobility modeling is increasingly important for simulation and gene
 We study \emph{route generation}: sampling an entire path for a trip conditioned on an origin, a destination, and time/context.
 Route generation is fundamentally multi-modal at the corridor level: distinct topological alternatives can be geometrically far apart while remaining intent-equivalent.
 Through diagnostic experiments on large-scale mobility traces, we identify two characteristic failures of end-to-end coordinate generators under this multi-modality: deterministic regression collapses to destructive averages, while stochastic generation can avoid hard collapse yet blurs corridor alternatives through mode interference.
-We propose \textbf{CascadeTraj}, a decision--execution generator that first samples a sparse waypoint skeleton as an explicit topological commitment, then refines it with a continuous execution model.
+We propose \textbf{CascadeTraj}, a hierarchical decision--execution generator that first samples a sparse waypoint skeleton as an explicit corridor commitment, then refines it with a continuous execution model.
 We further find that naive composition can overwrite corridor commitments; treating execution as a weak residual refinement preserves corridor coverage while still capturing local geometry.
-The framework supports soft map priors (e.g., road-proximity fields) for feasibility, and admits additional spatial covariates (e.g., POI/land-use or census attributes) only as optional ablations for extensibility.
+Finally, we report a negative-but-informative finding: richer inference-observable semantic covariates provide limited benefit for corridor-level commitment in our setting, suggesting that corridor-level multi-modality is not easily predicted from these features.
 \end{abstract}
 
 \section{Introduction}

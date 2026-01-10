@@ -3,7 +3,7 @@
   \small
   \begin{tabular}{lcc|cc}
     \toprule
-    Case & Div (no sem) & Cov (no sem) & Div (sem) & Cov (sem) \\
+    Case & Div (no sem) & Cov (no sem) & Div (rand4) & Cov (rand4) \\
     \midrule
     00 & 0.725 & 1.00 & 0.896 & 1.00 \\
     01 & 0.715 & 1.00 & 0.883 & 1.00 \\
@@ -14,7 +14,6 @@
     Mean & 0.819 & 0.99 & 0.928 & 1.00 \\
     \bottomrule
   \end{tabular}
-  \caption{Decision-stage semantic ablation on five fixed multi-modal OD cases. ``Sem'' augments the waypoint decision model with coarse OD semantics derived from external rasters (POI density and POI-derived land-use entropy at origin/destination).}
+  \caption{Random-control ablation on five fixed multi-modal OD cases. ``rand4'' is a deterministic OD-keyed 4D random embedding (matched dimensionality to simple endpoint covariates) that achieves similar or better corridor diversity/coverage than OD-only conditioning, indicating that apparent gains can arise without semantic content.}
   \label{tab:semantic-ablation}
 \end{table}
-

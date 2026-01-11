@@ -9,6 +9,7 @@ from typing import Optional
 import numpy as np
 import torch
 
+from src.features.temporal import encode_route_temporal_2d
 from src.models.diffusion.diffusion_model import DiffusionTrajectoryModel
 from src.training.route_npz_utils import (
     RouteNorm,
@@ -104,7 +105,14 @@ def main() -> None:
     start_pos_norm = normalize_pos(start_pos, norm)  # (N,2)
     dest_pos_norm = normalize_pos(dest_pos, norm)  # (N,2)
     obs = np.concatenate([start_pos_norm, np.zeros((n, 2), dtype=np.float32)], axis=1)[:, None, :]  # (N,1,4)
-    cond = np.stack([np.zeros((n,), dtype=np.float32), np.zeros((n,), dtype=np.float32), start_pos_norm[:, 0], start_pos_norm[:, 1], dest_pos_norm[:, 0], dest_pos_norm[:, 1]], axis=1)  # (N,6)
+    temporal_meta = cfg.get("temporal", {}) if isinstance(cfg, dict) else {}
+    temporal_mode = "zeros"
+    temporal_tz = -5.0
+    if isinstance(temporal_meta, dict):
+        temporal_mode = str(temporal_meta.get("effective") or temporal_meta.get("mode") or "zeros")
+        temporal_tz = float(temporal_meta.get("tz_offset_hours", -5.0))
+    temporal, _temporal_eff = encode_route_temporal_2d(start_t, tz_offset_hours=float(temporal_tz), mode=str(temporal_mode))
+    cond = np.concatenate([temporal.astype(np.float32, copy=False), start_pos_norm, dest_pos_norm], axis=1).astype(np.float32, copy=False)  # (N,6)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = DiffusionTrajectoryModel(

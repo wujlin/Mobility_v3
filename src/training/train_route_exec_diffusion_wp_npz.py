@@ -20,6 +20,7 @@ except Exception:  # pragma: no cover
         return x
 
 from src.features.skeleton_prior import build_skeleton_prior_vel_norm_k2
+from src.features.temporal import encode_route_temporal_2d
 from src.features.waypoints import WaypointConfig, extract_oracle_waypoints_from_future
 from src.models.diffusion.diffusion_model import DiffusionTrajectoryModel
 from src.training.route_npz_utils import (
@@ -47,6 +48,8 @@ class TrainConfig:
     out_dir: str
     pos_max: int
     max_train_n: Optional[int]
+    temporal_mode: str
+    temporal_tz_offset_hours: float
     waypoint_mode: str
     waypoint_turn_alpha: float
     num_waypoints: int
@@ -109,7 +112,10 @@ def build_argparser() -> argparse.ArgumentParser:
     p.add_argument("--pos_max", type=int, default=1023, help="Grid max coordinate (assumes y/x in [0,pos_max])")
     p.add_argument("--max_train_n", type=int, default=None, help="Optional: subsample training windows for speed")
 
-    p.add_argument("--waypoint_mode", type=str, choices=["rdp_dev", "rdp_turn"], default="rdp_dev")
+    p.add_argument("--temporal_mode", type=str, choices=["auto", "simple", "zeros"], default="auto", help="Temporal feature for the (hour,day) slots: auto/simple/zeros.")
+    p.add_argument("--temporal_tz_offset_hours", type=float, default=-5.0, help="Timezone offset used when temporal_mode!=zeros (Detroit/Columbus: -5).")
+
+    p.add_argument("--waypoint_mode", type=str, choices=["rdp_dev", "rdp_turn"], default="rdp_turn")
     p.add_argument("--waypoint_turn_alpha", type=float, default=1.0, help="When waypoint_mode=rdp_turn: weight for turn-aware waypoint selection.")
     p.add_argument("--num_waypoints", type=int, default=2, help="Only supports 2 for skeleton prior (KISS).")
     p.add_argument("--precompute_device", type=str, choices=["cpu", "cuda"], default="cpu", help="Device for prior precompute.")
@@ -151,6 +157,8 @@ def main() -> None:
         out_dir=str(args.out_dir),
         pos_max=int(args.pos_max),
         max_train_n=(int(args.max_train_n) if args.max_train_n is not None else None),
+        temporal_mode=str(args.temporal_mode),
+        temporal_tz_offset_hours=float(args.temporal_tz_offset_hours),
         waypoint_mode=str(args.waypoint_mode),
         waypoint_turn_alpha=float(args.waypoint_turn_alpha),
         num_waypoints=int(args.num_waypoints),
@@ -182,6 +190,12 @@ def main() -> None:
     n = int(start_pos.shape[0])
     f = int(targets.shape[1])
 
+    temporal, temporal_effective = encode_route_temporal_2d(
+        start_t,
+        tz_offset_hours=float(cfg.temporal_tz_offset_hours),
+        mode=str(cfg.temporal_mode),
+    )
+
     wp_cfg = WaypointConfig(mode=str(cfg.waypoint_mode), num_waypoints=int(cfg.num_waypoints), turn_alpha=float(cfg.waypoint_turn_alpha))
     waypoints = _extract_waypoints_batch(start_pos=start_pos, targets=targets, cfg=wp_cfg)  # (N,2,2)
 
@@ -203,7 +217,7 @@ def main() -> None:
     obs = np.concatenate([start_pos_norm, np.zeros((n, 2), dtype=np.float32)], axis=1)[:, None, :]  # (N,1,4)
     cond = np.concatenate(
         [
-            np.zeros((n, 2), dtype=np.float32),  # [hour, day] placeholders
+            temporal.astype(np.float32, copy=False),  # (N,2): [hour/day] temporal slots
             wp_norm.reshape(n, -1),
             dest_pos_norm,
         ],
@@ -309,6 +323,11 @@ def main() -> None:
                         "obs_len": 1,
                         "cond_dim": 8,
                     },
+                    "temporal": {
+                        "mode": str(cfg.temporal_mode),
+                        "tz_offset_hours": float(cfg.temporal_tz_offset_hours),
+                        "effective": str(temporal_effective),
+                    },
                     "waypoints": {"mode": str(cfg.waypoint_mode), "turn_alpha": float(cfg.waypoint_turn_alpha), "num_waypoints": int(cfg.num_waypoints)},
                     "norm": norm.as_jsonable(),
                 },
@@ -322,6 +341,8 @@ def main() -> None:
         "config": {
             "pos_max": int(cfg.pos_max),
             "max_train_n": (int(cfg.max_train_n) if cfg.max_train_n is not None else None),
+            "temporal_mode": str(cfg.temporal_mode),
+            "temporal_tz_offset_hours": float(cfg.temporal_tz_offset_hours),
             "waypoint_mode": str(cfg.waypoint_mode),
             "waypoint_turn_alpha": float(cfg.waypoint_turn_alpha),
             "num_waypoints": int(cfg.num_waypoints),

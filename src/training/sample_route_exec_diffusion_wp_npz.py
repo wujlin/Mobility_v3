@@ -10,6 +10,7 @@ import numpy as np
 import torch
 
 from src.features.skeleton_prior import build_skeleton_prior_vel_norm_k2
+from src.features.temporal import encode_route_temporal_2d
 from src.features.waypoints import WaypointConfig, extract_oracle_waypoints_from_future
 from src.models.diffusion.diffusion_model import DiffusionTrajectoryModel
 from src.training.route_npz_utils import (
@@ -250,6 +251,14 @@ def main() -> None:
     obs = np.concatenate([start_pos_norm, np.zeros((n, 2), dtype=np.float32)], axis=1)[:, None, :]  # (N,1,4)
     obs_t = torch.from_numpy(obs).to(dtype=torch.float32)
 
+    temporal_meta = cfg.get("temporal", {}) if isinstance(cfg, dict) else {}
+    temporal_mode = "zeros"
+    temporal_tz = -5.0
+    if isinstance(temporal_meta, dict):
+        temporal_mode = str(temporal_meta.get("effective") or temporal_meta.get("mode") or "zeros")
+        temporal_tz = float(temporal_meta.get("tz_offset_hours", -5.0))
+    temporal, _temporal_eff = encode_route_temporal_2d(start_t, tz_offset_hours=float(temporal_tz), mode=str(temporal_mode))
+
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = DiffusionTrajectoryModel(
         obs_dim=4,
@@ -290,7 +299,7 @@ def main() -> None:
 
             cond = np.concatenate(
                 [
-                    np.zeros((n, 2), dtype=np.float32),  # [hour, day] placeholders
+                    temporal.astype(np.float32, copy=False),
                     wp_norm.reshape(n, -1),
                     dest_pos_norm,
                 ],

@@ -20,6 +20,7 @@ except Exception:  # pragma: no cover
         return x
 
 from src.models.seq.seq_baseline import SeqBaseline
+from src.features.temporal import encode_route_temporal_2d
 from src.training.route_npz_utils import (
     RouteNorm,
     compute_vel_from_positions,
@@ -45,6 +46,8 @@ class TrainConfig:
     out_dir: str
     pos_max: int
     max_train_n: Optional[int]
+    temporal_mode: str
+    temporal_tz_offset_hours: float
     hidden_dim: int
     batch_size: int
     epochs: int
@@ -55,13 +58,18 @@ class TrainConfig:
 
 
 class RouteWindowsVelDataset(Dataset):
-    def __init__(self, *, data: dict, norm: RouteNorm):
+    def __init__(self, *, data: dict, norm: RouteNorm, temporal_mode: str, temporal_tz_offset_hours: float):
         self.start_pos = np.asarray(data["start_pos"], dtype=np.float32)
         self.targets = np.asarray(data["targets"], dtype=np.float32)
         self.dest_pos = np.asarray(data["dest_pos"], dtype=np.float32)
         self.traj_idx = np.asarray(data["traj_idx"], dtype=np.int64)
         self.start_t = np.asarray(data["start_t"], dtype=np.int64)
         self.norm = norm
+        self.temporal, self.temporal_effective = encode_route_temporal_2d(
+            self.start_t,
+            tz_offset_hours=float(temporal_tz_offset_hours),
+            mode=str(temporal_mode),
+        )
 
         vel = compute_vel_from_positions(self.start_pos, self.targets)  # (N,F,2)
         self.vel_norm = normalize_vel(vel, norm)  # (N,F,2)
@@ -75,8 +83,9 @@ class RouteWindowsVelDataset(Dataset):
     def __getitem__(self, idx: int) -> dict:
         idx = int(idx)
         obs = np.concatenate([self.start_pos_norm[idx], np.zeros((2,), dtype=np.float32)], axis=0)[None, :]  # (1,4)
+        t0, t1 = float(self.temporal[idx, 0]), float(self.temporal[idx, 1])
         cond = np.asarray(
-            [0.0, 0.0, float(self.start_pos_norm[idx, 0]), float(self.start_pos_norm[idx, 1]), float(self.dest_pos_norm[idx, 0]), float(self.dest_pos_norm[idx, 1])],
+            [t0, t1, float(self.start_pos_norm[idx, 0]), float(self.start_pos_norm[idx, 1]), float(self.dest_pos_norm[idx, 0]), float(self.dest_pos_norm[idx, 1])],
             dtype=np.float32,
         )
         return {
@@ -93,6 +102,8 @@ def build_argparser() -> argparse.ArgumentParser:
     p.add_argument("--out_dir", type=str, required=True)
     p.add_argument("--pos_max", type=int, default=1023, help="Grid max coordinate (assumes y/x in [0,pos_max])")
     p.add_argument("--max_train_n", type=int, default=None, help="Optional: subsample training windows for speed")
+    p.add_argument("--temporal_mode", type=str, choices=["auto", "simple", "zeros"], default="auto", help="Temporal feature for the (hour,day) slots: auto/simple/zeros.")
+    p.add_argument("--temporal_tz_offset_hours", type=float, default=-5.0, help="Timezone offset used when temporal_mode!=zeros (Detroit/Columbus: -5).")
     p.add_argument("--hidden_dim", type=int, default=128)
     p.add_argument("--batch_size", type=int, default=64)
     p.add_argument("--epochs", type=int, default=30)
@@ -110,6 +121,8 @@ def main() -> None:
         out_dir=str(args.out_dir),
         pos_max=int(args.pos_max),
         max_train_n=(int(args.max_train_n) if args.max_train_n is not None else None),
+        temporal_mode=str(args.temporal_mode),
+        temporal_tz_offset_hours=float(args.temporal_tz_offset_hours),
         hidden_dim=int(args.hidden_dim),
         batch_size=int(args.batch_size),
         epochs=int(args.epochs),
@@ -143,7 +156,12 @@ def main() -> None:
         vel_std=vel_std.astype(np.float32, copy=False),
     )
 
-    dataset = RouteWindowsVelDataset(data=data, norm=norm)
+    dataset = RouteWindowsVelDataset(
+        data=data,
+        norm=norm,
+        temporal_mode=str(cfg.temporal_mode),
+        temporal_tz_offset_hours=float(cfg.temporal_tz_offset_hours),
+    )
     g = torch.Generator()
     g.manual_seed(int(cfg.seed))
     loader = DataLoader(
@@ -198,6 +216,11 @@ def main() -> None:
                     "task": "route_e2e_l2_npz",
                     "F": int(f),
                     "model": {"hidden_dim": int(cfg.hidden_dim), "obs_len": 1, "cond_dim": 6},
+                    "temporal": {
+                        "mode": str(cfg.temporal_mode),
+                        "tz_offset_hours": float(cfg.temporal_tz_offset_hours),
+                        "effective": str(dataset.temporal_effective),
+                    },
                     "norm": norm.as_jsonable(),
                 },
             },
@@ -210,6 +233,8 @@ def main() -> None:
         "config": {
             "pos_max": int(cfg.pos_max),
             "max_train_n": (int(cfg.max_train_n) if cfg.max_train_n is not None else None),
+            "temporal_mode": str(cfg.temporal_mode),
+            "temporal_tz_offset_hours": float(cfg.temporal_tz_offset_hours),
             "hidden_dim": int(cfg.hidden_dim),
             "batch_size": int(cfg.batch_size),
             "epochs": int(cfg.epochs),

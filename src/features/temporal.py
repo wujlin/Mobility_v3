@@ -227,6 +227,40 @@ def encode_temporal_simple(
     return np.stack([hour_norm, dow_norm], axis=1).astype(np.float32, copy=False)
 
 
+def encode_route_temporal_2d(
+    start_t: np.ndarray,
+    *,
+    tz_offset_hours: float = 0.0,
+    mode: str = "auto",
+    unix_threshold: int = 1_000_000_000,
+) -> Tuple[np.ndarray, str]:
+    """
+    Return a (N,2) temporal feature for route conditioning, compatible with existing
+    (hour, day) placeholder slots in cond vectors.
+
+    Modes:
+      - zeros: always zeros
+      - simple: encode_temporal_simple (assumes start_t is Unix seconds)
+      - auto: use `simple` only when start_t looks like Unix seconds; otherwise zeros
+    """
+    mode = str(mode)
+    if mode not in ("zeros", "simple", "auto"):
+        raise ValueError(f"Bad temporal mode: {mode} (expected zeros|simple|auto)")
+    start_t = np.asarray(start_t, dtype=np.int64).reshape(-1)
+    n = int(start_t.shape[0])
+    if n <= 0:
+        return np.zeros((0, 2), dtype=np.float32), "zeros"
+    if mode == "zeros":
+        return np.zeros((n, 2), dtype=np.float32), "zeros"
+    if mode == "simple":
+        return encode_temporal_simple(start_t, tz_offset_hours=float(tz_offset_hours)), "simple"
+    # auto
+    mx = int(np.max(start_t)) if start_t.size > 0 else 0
+    if mx >= int(unix_threshold):
+        return encode_temporal_simple(start_t, tz_offset_hours=float(tz_offset_hours)), "simple"
+    return np.zeros((n, 2), dtype=np.float32), "zeros"
+
+
 if __name__ == "__main__":
     # Test
     import sys

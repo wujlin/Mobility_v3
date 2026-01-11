@@ -23,8 +23,11 @@ from src.features.semantic_od import (
     semantic_od_features,
     semantic_rand4_features,
 )
+from src.features.temporal import encode_route_temporal_2d
 from src.models.diffusion.diffusion_model import DiffusionTrajectoryModel
+from src.models.semantic.grid_cross_attention_control import GridCrossAttentionControlMid
 from src.models.semantic.grid_cnn_encoder import GridCNNEncoder
+from src.models.semantic.waypoint_semantic_posenc import WaypointSemanticPosEnc
 from src.training.route_npz_utils import RouteNorm, load_route_windows_npz, make_default_pos_bounds, normalize_pos
 
 try:
@@ -161,6 +164,12 @@ def main() -> None:
         raise ValueError("Checkpoint missing K_waypoints")
     od_bin = float(cfg.get("od_bin", 128.0))
     o_clip = float(cfg.get("o_clip", 2.0))
+    temporal_meta = cfg.get("temporal", {}) if isinstance(cfg, dict) else {}
+    temporal_mode = "zeros"
+    temporal_tz = -5.0
+    if isinstance(temporal_meta, dict):
+        temporal_mode = str(temporal_meta.get("effective") or temporal_meta.get("mode") or "zeros")
+        temporal_tz = float(temporal_meta.get("tz_offset_hours", -5.0))
 
     rel_norm = cfg.get("rel_norm", {}) if isinstance(cfg, dict) else {}
     rel_mean = np.asarray(rel_norm.get("mean", [0.0, 0.0]), dtype=np.float32).reshape(2)
@@ -191,7 +200,8 @@ def main() -> None:
     dest_ctr_norm = normalize_pos(dest_ctr, norm)
 
     obs = np.concatenate([start_ctr_norm, np.zeros((n, 2), dtype=np.float32)], axis=1)[:, None, :]  # (N,1,4)
-    base_cond = np.concatenate([np.zeros((n, 2), dtype=np.float32), start_ctr_norm, dest_ctr_norm], axis=1).astype(np.float32, copy=False)  # (N,6)
+    temporal, _temporal_eff = encode_route_temporal_2d(start_t, tz_offset_hours=float(temporal_tz), mode=str(temporal_mode))
+    base_cond = np.concatenate([temporal, start_ctr_norm, dest_ctr_norm], axis=1).astype(np.float32, copy=False)  # (N,6)
 
     sem_cfg_raw = cfg.get("semantic_od_norm") if isinstance(cfg, dict) else None
     if sem_cfg_raw is not None and not isinstance(sem_cfg_raw, dict):
@@ -210,6 +220,11 @@ def main() -> None:
         grid_pool = str(sem_meta.get("grid_pool", "quad"))
         grid_channels = str(sem_meta.get("grid_channels", "poi,entropy"))
         grid_emb_dim = int(sem_meta.get("grid_emb_dim", 64))
+        posenc_hidden_dim = int(sem_meta.get("posenc_hidden_dim", 256))
+        posenc_weight = float(sem_meta.get("posenc_weight", 1.0))
+        grid_frame = str(sem_meta.get("grid_frame", "raw"))
+        attn_heads = int(sem_meta.get("attn_heads", 4))
+        attn_weight = float(sem_meta.get("attn_weight", 1.0))
     else:
         sem_mode = None
         sem_use_bins = False
@@ -220,6 +235,11 @@ def main() -> None:
         grid_pool = "quad"
         grid_channels = "poi,entropy"
         grid_emb_dim = 64
+        posenc_hidden_dim = 256
+        posenc_weight = 1.0
+        grid_frame = "raw"
+        attn_heads = 4
+        attn_weight = 1.0
 
     # Backward-compatible fallback for older checkpoints with OD-only semantics.
     if sem_mode is None and sem_cfg is not None:
@@ -229,16 +249,18 @@ def main() -> None:
     uses_semantics = bool(sem_mode is not None)
 
     if sem_mode is not None:
-        if sem_mode not in ("rand4",) and (sem_mode not in ("gridcnn", "od_gridcnn")) and not args.semantic_dir:
+        if sem_mode not in ("rand4",) and (
+            sem_mode not in ("gridcnn", "od_gridcnn", "gridpos", "od_gridpos", "gridattn", "od_gridattn")
+        ) and not args.semantic_dir:
             raise ValueError("--semantic_dir is required because checkpoint includes semantic features")
-        if sem_mode in ("gridcnn", "od_gridcnn") and not args.semantic_dir:
-            raise ValueError("--semantic_dir is required because checkpoint includes gridcnn semantics")
+        if sem_mode in ("gridcnn", "od_gridcnn", "gridpos", "od_gridpos", "gridattn", "od_gridattn") and not args.semantic_dir:
+            raise ValueError("--semantic_dir is required because checkpoint includes grid semantics")
 
         sem_o = start_ctr if sem_use_bins else start_pos
         sem_d = dest_ctr if sem_use_bins else dest_pos
 
         # Vector semantics (normalized by semantic_od_norm).
-        if sem_mode in ("rand4", "od", "od_profile", "od_grid", "profile", "grid", "od_gridcnn"):
+        if sem_mode in ("rand4", "od", "od_profile", "od_grid", "profile", "grid", "od_gridcnn", "od_gridpos", "od_gridattn"):
             if sem_cfg is None:
                 raise ValueError("Checkpoint semantic mode requires semantic_od_norm, but it is missing.")
             parts = []
@@ -297,15 +319,15 @@ def main() -> None:
             cond_parts.append(sem_norm.astype(np.float32, copy=False))
 
         # Grid-CNN semantics.
-        if sem_mode in ("gridcnn", "od_gridcnn"):
+        if sem_mode in ("gridcnn", "od_gridcnn", "gridpos", "od_gridpos", "gridattn", "od_gridattn"):
             grid_norm_raw = cfg.get("semantic_grid_norm") if isinstance(cfg, dict) else None
             if grid_norm_raw is None or not isinstance(grid_norm_raw, dict):
-                raise ValueError("Checkpoint includes gridcnn but missing semantic_grid_norm.")
+                raise ValueError("Checkpoint includes grid semantics but missing semantic_grid_norm.")
             grid_norm = SemanticGridNorm.from_json(grid_norm_raw)
 
             enc_state = ckpt.get("grid_encoder_state_dict")
-            if enc_state is None or not isinstance(enc_state, dict):
-                raise ValueError("Checkpoint includes gridcnn but missing grid_encoder_state_dict.")
+            posenc_state = ckpt.get("semantic_posenc_state_dict")
+            attn_state = ckpt.get("semantic_attn_state_dict")
 
             chans = {x.strip() for x in str(grid_channels).split(",") if x.strip()}
             need_poi = ("poi" in chans) or ("entropy" in chans)
@@ -318,9 +340,11 @@ def main() -> None:
             if "road_prob" in chans:
                 osm_road_prob = load_osm_road_prob(args.semantic_dir)
 
+            patch_o = start_pos if sem_mode in ("gridpos", "od_gridpos") else sem_o
+            patch_d = dest_pos if sem_mode in ("gridpos", "od_gridpos") else sem_d
             grid_patch_raw, grid_keys = semantic_grid_patch_tensor(
-                start_ctr=sem_o,
-                dest_ctr=sem_d,
+                start_ctr=patch_o,
+                dest_ctr=patch_d,
                 poi_stack=poi_stack,
                 categories=categories,
                 landuse_entropy=landuse_entropy,
@@ -334,14 +358,24 @@ def main() -> None:
                 raise ValueError(f"Grid keys mismatch: ckpt={grid_norm.keys} vs computed={grid_keys}")
             grid_patch = normalize_grid_patch(grid_patch_raw, grid_norm)
 
-            device_enc = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-            grid_encoder = GridCNNEncoder(in_channels=int(grid_patch.shape[1]), out_dim=int(grid_emb_dim)).to(device=device_enc)
-            grid_encoder.load_state_dict(enc_state)
-            grid_encoder.eval()
-            with torch.no_grad():
-                patch_t = torch.from_numpy(grid_patch).to(device=device_enc, dtype=torch.float32)
-                emb = grid_encoder(patch_t).detach().cpu().numpy().astype(np.float32, copy=False)
-            cond_parts.append(emb)
+            if sem_mode in ("gridcnn", "od_gridcnn"):
+                if enc_state is None or not isinstance(enc_state, dict):
+                    raise ValueError("Checkpoint includes gridcnn but missing grid_encoder_state_dict.")
+                device_enc = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+                grid_encoder = GridCNNEncoder(in_channels=int(grid_patch.shape[1]), out_dim=int(grid_emb_dim)).to(device=device_enc)
+                grid_encoder.load_state_dict(enc_state)
+                grid_encoder.eval()
+                with torch.no_grad():
+                    patch_t = torch.from_numpy(grid_patch).to(device=device_enc, dtype=torch.float32)
+                    emb = grid_encoder(patch_t).detach().cpu().numpy().astype(np.float32, copy=False)
+                cond_parts.append(emb)
+            else:
+                if sem_mode in ("gridpos", "od_gridpos"):
+                    if posenc_state is None or not isinstance(posenc_state, dict):
+                        raise ValueError("Checkpoint includes gridpos but missing semantic_posenc_state_dict.")
+                if sem_mode in ("gridattn", "od_gridattn"):
+                    if attn_state is None or not isinstance(attn_state, dict):
+                        raise ValueError("Checkpoint includes gridattn but missing semantic_attn_state_dict.")
 
     cond = np.concatenate(cond_parts, axis=1).astype(np.float32, copy=False)
 
@@ -369,10 +403,73 @@ def main() -> None:
     k_samples = int(args.num_samples_per_condition)
     preds_k = np.zeros((n, k_samples, f, 2), dtype=np.float32)
 
+    posenc = None
+    patch_t = None
+    start_t_t = None
+    dest_t_t = None
+    rel_mean_t = torch.from_numpy(rel_mean).to(device=device, dtype=torch.float32)
+    rel_std_t = torch.from_numpy(rel_std).to(device=device, dtype=torch.float32)
+    if sem_mode in ("gridpos", "od_gridpos"):
+        if grid_patch is None:
+            raise ValueError("gridpos requires grid_patch")
+        posenc_state = ckpt.get("semantic_posenc_state_dict")
+        if posenc_state is None or not isinstance(posenc_state, dict):
+            raise ValueError("Checkpoint includes gridpos but missing semantic_posenc_state_dict.")
+        posenc = WaypointSemanticPosEnc(
+            in_channels=int(grid_patch.shape[1]),
+            num_waypoints=int(k_wp),
+            extent=float(grid_extent),
+            rel_mean=rel_mean_t,
+            rel_std=rel_std_t,
+            emb_dim=int(hidden_dim) * 4,
+            diff_steps=int(diff_steps),
+            mlp_hidden_dim=int(posenc_hidden_dim),
+            weight=float(posenc_weight),
+        ).to(device=device)
+        posenc.load_state_dict(posenc_state)
+        posenc.eval()
+        patch_t = torch.from_numpy(grid_patch).to(device=device, dtype=torch.float32)
+        start_t_t = torch.from_numpy(start_pos).to(device=device, dtype=torch.float32)
+        dest_t_t = torch.from_numpy(dest_pos).to(device=device, dtype=torch.float32)
+    attn_control = None
+    if sem_mode in ("gridattn", "od_gridattn"):
+        if grid_patch is None:
+            raise ValueError("gridattn requires grid_patch")
+        attn_state = ckpt.get("semantic_attn_state_dict")
+        if attn_state is None or not isinstance(attn_state, dict):
+            raise ValueError("Checkpoint includes gridattn but missing semantic_attn_state_dict.")
+        attn_control = GridCrossAttentionControlMid(
+            in_channels=int(grid_patch.shape[1]),
+            act_dim=2,
+            model_dim=int(hidden_dim) * 4,
+            num_heads=int(attn_heads),
+            diff_steps=int(diff_steps),
+            weight=float(attn_weight),
+        ).to(device=device)
+        attn_control.load_state_dict(attn_state)
+        attn_control.eval()
+        patch_t = torch.from_numpy(grid_patch).to(device=device, dtype=torch.float32)
+
     with torch.no_grad():
         for kk in tqdm(range(k_samples), desc="sample", dynamic_ncols=True):
             torch.manual_seed(int(args.seed) + 1000 + int(kk))
-            rel_norm_t = model.sample_trajectory(obs_t, cond_t, horizon=int(k_wp))  # (N,K_wp,2)
+            if posenc is not None:
+
+                def _extra(x_t: torch.Tensor, ts: torch.Tensor) -> torch.Tensor:
+                    assert patch_t is not None and start_t_t is not None and dest_t_t is not None
+                    return posenc(x_t, ts, grid_patch=patch_t, start_pos=start_t_t, dest_pos=dest_t_t)
+
+                rel_norm_t = model.sample_trajectory(obs_t, cond_t, horizon=int(k_wp), cond_emb_extra_fn=_extra)  # (N,K_wp,2)
+            elif attn_control is not None:
+
+                def _unet_kwargs(x_t: torch.Tensor, ts: torch.Tensor) -> dict:
+                    assert patch_t is not None
+                    ctrl_mid, _ = attn_control(x_t, ts, grid_patch=patch_t)
+                    return {"control_mid": ctrl_mid}
+
+                rel_norm_t = model.sample_trajectory(obs_t, cond_t, horizon=int(k_wp), unet_kwargs_fn=_unet_kwargs)  # (N,K_wp,2)
+            else:
+                rel_norm_t = model.sample_trajectory(obs_t, cond_t, horizon=int(k_wp))  # (N,K_wp,2)
             rel = rel_norm_t.detach().cpu().numpy().astype(np.float32, copy=False)
             rel = rel * rel_std[None, None, :] + rel_mean[None, None, :]
 

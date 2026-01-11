@@ -170,6 +170,10 @@ Implementation Plan, Task List and Thought in Chinese
 > 说明：以下以“窗口级 GT samples.npz”作为输入（必须包含 `start_pos/targets/traj_idx/start_t`，可选 `dest_pos`）。  
 > Legacy 深圳可参考 `src/evaluation/dump_gt_windows_npz.py`；Phase D（WorldTrace×Detroit）请先用你现有的导出脚本生成同口径 npz（不要在这里工程化）。
 
+> [!IMPORTANT]
+> **WorldTrace 路线（Detroit/Columbus）如果要启用时间条件（hour/dow）或对齐 `open_hours`，务必保证 `start_t` 是 Unix epoch seconds。**
+> 我们的 `src/data/worldtrace/dump_route_windows_from_segments.py` 默认会把 `start_t` 写成 segment 内的 window offset（不是时间戳），需要显式加 `--use_epoch_start_t` 才会写入 epoch 秒；否则训练侧 `temporal_mode=auto` 会退化为全 0。
+
 ```bash
 export RAW_ROOT="$HOME/data/geoexplicit_data"
 export EXP_ROOT="$RAW_ROOT/experiments/icml2026_routegen"

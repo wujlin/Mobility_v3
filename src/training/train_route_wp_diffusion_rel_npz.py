@@ -24,6 +24,9 @@ from src.features.semantic_od import (
     fit_semantic_norm,
     fit_grid_norm,
     load_osm_road_prob,
+    load_osm_road_prob_major,
+    load_osm_road_prob_minor,
+    load_osm_road_prob_service,
     load_poi_stack_and_landuse_entropy,
     load_poi_total_and_landuse_entropy,
     normalize_grid_patch,
@@ -515,10 +518,19 @@ def main() -> None:
             categories = None
             landuse_entropy = None
             osm_road_prob = None
+            osm_road_prob_major = None
+            osm_road_prob_minor = None
+            osm_road_prob_service = None
             if need_poi:
                 poi_stack, categories, landuse_entropy = load_poi_stack_and_landuse_entropy(cfg.semantic_dir)
             if "road_prob" in chans:
                 osm_road_prob = load_osm_road_prob(cfg.semantic_dir)
+            if "road_prob_major" in chans:
+                osm_road_prob_major = load_osm_road_prob_major(cfg.semantic_dir)
+            if "road_prob_minor" in chans:
+                osm_road_prob_minor = load_osm_road_prob_minor(cfg.semantic_dir)
+            if "road_prob_service" in chans:
+                osm_road_prob_service = load_osm_road_prob_service(cfg.semantic_dir)
             # Important: gridpos/grid semantics must align with the waypoint (s,o) frame, which is defined by raw start/dest.
             patch_o = start_pos if sem_mode in ("gridpos", "od_gridpos") else sem_o
             patch_d = dest_pos if sem_mode in ("gridpos", "od_gridpos") else sem_d
@@ -529,6 +541,9 @@ def main() -> None:
                 categories=categories,
                 landuse_entropy=landuse_entropy,
                 osm_road_prob=osm_road_prob,
+                osm_road_prob_major=osm_road_prob_major,
+                osm_road_prob_minor=osm_road_prob_minor,
+                osm_road_prob_service=osm_road_prob_service,
                 patch_size=int(cfg.grid_patch_size),
                 extent=float(cfg.grid_extent),
                 grid_channels=str(cfg.grid_channels),

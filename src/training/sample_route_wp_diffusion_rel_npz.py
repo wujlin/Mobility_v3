@@ -13,6 +13,9 @@ from src.features.semantic_od import (
     SemanticGridNorm,
     SemanticODNorm,
     load_osm_road_prob,
+    load_osm_road_prob_major,
+    load_osm_road_prob_minor,
+    load_osm_road_prob_service,
     load_poi_stack_and_landuse_entropy,
     load_poi_total_and_landuse_entropy,
     normalize_grid_patch,
@@ -337,10 +340,19 @@ def main() -> None:
             categories = None
             landuse_entropy = None
             osm_road_prob = None
+            osm_road_prob_major = None
+            osm_road_prob_minor = None
+            osm_road_prob_service = None
             if need_poi:
                 poi_stack, categories, landuse_entropy = load_poi_stack_and_landuse_entropy(args.semantic_dir)
             if "road_prob" in chans:
                 osm_road_prob = load_osm_road_prob(args.semantic_dir)
+            if "road_prob_major" in chans:
+                osm_road_prob_major = load_osm_road_prob_major(args.semantic_dir)
+            if "road_prob_minor" in chans:
+                osm_road_prob_minor = load_osm_road_prob_minor(args.semantic_dir)
+            if "road_prob_service" in chans:
+                osm_road_prob_service = load_osm_road_prob_service(args.semantic_dir)
 
             patch_o = start_pos if sem_mode in ("gridpos", "od_gridpos") else sem_o
             patch_d = dest_pos if sem_mode in ("gridpos", "od_gridpos") else sem_d
@@ -351,6 +363,9 @@ def main() -> None:
                 categories=categories,
                 landuse_entropy=landuse_entropy,
                 osm_road_prob=osm_road_prob,
+                osm_road_prob_major=osm_road_prob_major,
+                osm_road_prob_minor=osm_road_prob_minor,
+                osm_road_prob_service=osm_road_prob_service,
                 patch_size=int(grid_patch_size),
                 extent=float(grid_extent),
                 grid_channels=str(grid_channels),

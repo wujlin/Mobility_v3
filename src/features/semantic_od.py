@@ -67,11 +67,44 @@ def load_osm_road_prob(semantic_dir: str | Path) -> np.ndarray:
     return a
 
 
+def load_osm_road_prob_major(semantic_dir: str | Path) -> np.ndarray:
+    d = Path(semantic_dir)
+    p = d / "osm_road_prob_major.npy"
+    if not p.exists():
+        raise FileNotFoundError(f"Missing osm_road_prob_major.npy under: {d}")
+    a = np.load(p).astype(np.float32, copy=False)
+    if a.ndim != 2:
+        raise ValueError(f"Bad osm_road_prob_major shape in {p}: {a.shape} (expected H,W)")
+    return a
+
+
+def load_osm_road_prob_minor(semantic_dir: str | Path) -> np.ndarray:
+    d = Path(semantic_dir)
+    p = d / "osm_road_prob_minor.npy"
+    if not p.exists():
+        raise FileNotFoundError(f"Missing osm_road_prob_minor.npy under: {d}")
+    a = np.load(p).astype(np.float32, copy=False)
+    if a.ndim != 2:
+        raise ValueError(f"Bad osm_road_prob_minor shape in {p}: {a.shape} (expected H,W)")
+    return a
+
+
+def load_osm_road_prob_service(semantic_dir: str | Path) -> np.ndarray:
+    d = Path(semantic_dir)
+    p = d / "osm_road_prob_service.npy"
+    if not p.exists():
+        raise FileNotFoundError(f"Missing osm_road_prob_service.npy under: {d}")
+    a = np.load(p).astype(np.float32, copy=False)
+    if a.ndim != 2:
+        raise ValueError(f"Bad osm_road_prob_service shape in {p}: {a.shape} (expected H,W)")
+    return a
+
+
 def _parse_grid_channels(s: str) -> Tuple[str, ...]:
     items = [x.strip() for x in str(s).split(",") if str(x).strip()]
     if not items:
         raise ValueError("--grid_channels must be a non-empty comma-separated list.")
-    ok = {"poi", "entropy", "road_prob"}
+    ok = {"poi", "entropy", "road_prob", "road_prob_major", "road_prob_minor", "road_prob_service"}
     out = []
     for x in items:
         if x not in ok:
@@ -89,6 +122,9 @@ def semantic_grid_patch_tensor(
     categories: Sequence[str] | None,
     landuse_entropy: np.ndarray | None,  # (H,W)
     osm_road_prob: np.ndarray | None,  # (H,W)
+    osm_road_prob_major: np.ndarray | None = None,  # (H,W)
+    osm_road_prob_minor: np.ndarray | None = None,  # (H,W)
+    osm_road_prob_service: np.ndarray | None = None,  # (H,W)
     patch_size: int = 16,
     extent: float = 128.0,
     grid_channels: str = "poi,entropy",
@@ -101,6 +137,7 @@ def semantic_grid_patch_tensor(
       - poi:        POI density stack (per category)
       - entropy:    landuse entropy
       - road_prob:  OSM road probability (soft prior; dense)
+      - road_prob_major/minor/service: tiered OSM road probabilities (major/minor/service)
 
     Returns:
       patch: (N,C_in,S,S) float32
@@ -157,6 +194,39 @@ def semantic_grid_patch_tensor(
         if osm_road_prob.shape != (H, W):
             raise ValueError(f"Raster shape mismatch: osm_road_prob={osm_road_prob.shape} expected {(H, W)}")
         keys.append("osm_road_prob")
+    if "road_prob_major" in chans:
+        if osm_road_prob_major is None:
+            raise ValueError("osm_road_prob_major required when grid_channels includes 'road_prob_major'")
+        osm_road_prob_major = np.asarray(osm_road_prob_major, dtype=np.float32)
+        if osm_road_prob_major.ndim != 2:
+            raise ValueError(f"Expected osm_road_prob_major (H,W), got {osm_road_prob_major.shape}")
+        if H is None:
+            H, W = osm_road_prob_major.shape
+        if osm_road_prob_major.shape != (H, W):
+            raise ValueError(f"Raster shape mismatch: osm_road_prob_major={osm_road_prob_major.shape} expected {(H, W)}")
+        keys.append("osm_road_prob_major")
+    if "road_prob_minor" in chans:
+        if osm_road_prob_minor is None:
+            raise ValueError("osm_road_prob_minor required when grid_channels includes 'road_prob_minor'")
+        osm_road_prob_minor = np.asarray(osm_road_prob_minor, dtype=np.float32)
+        if osm_road_prob_minor.ndim != 2:
+            raise ValueError(f"Expected osm_road_prob_minor (H,W), got {osm_road_prob_minor.shape}")
+        if H is None:
+            H, W = osm_road_prob_minor.shape
+        if osm_road_prob_minor.shape != (H, W):
+            raise ValueError(f"Raster shape mismatch: osm_road_prob_minor={osm_road_prob_minor.shape} expected {(H, W)}")
+        keys.append("osm_road_prob_minor")
+    if "road_prob_service" in chans:
+        if osm_road_prob_service is None:
+            raise ValueError("osm_road_prob_service required when grid_channels includes 'road_prob_service'")
+        osm_road_prob_service = np.asarray(osm_road_prob_service, dtype=np.float32)
+        if osm_road_prob_service.ndim != 2:
+            raise ValueError(f"Expected osm_road_prob_service (H,W), got {osm_road_prob_service.shape}")
+        if H is None:
+            H, W = osm_road_prob_service.shape
+        if osm_road_prob_service.shape != (H, W):
+            raise ValueError(f"Raster shape mismatch: osm_road_prob_service={osm_road_prob_service.shape} expected {(H, W)}")
+        keys.append("osm_road_prob_service")
 
     if H is None or W is None:
         raise ValueError("No valid grid channels selected.")
@@ -202,6 +272,18 @@ def semantic_grid_patch_tensor(
         if "road_prob" in chans:
             assert osm_road_prob is not None
             out[i, col] = osm_road_prob[yy, xx].astype(np.float32, copy=False)
+            col += 1
+        if "road_prob_major" in chans:
+            assert osm_road_prob_major is not None
+            out[i, col] = osm_road_prob_major[yy, xx].astype(np.float32, copy=False)
+            col += 1
+        if "road_prob_minor" in chans:
+            assert osm_road_prob_minor is not None
+            out[i, col] = osm_road_prob_minor[yy, xx].astype(np.float32, copy=False)
+            col += 1
+        if "road_prob_service" in chans:
+            assert osm_road_prob_service is not None
+            out[i, col] = osm_road_prob_service[yy, xx].astype(np.float32, copy=False)
             col += 1
         if col != C_in:
             raise RuntimeError("Internal channel packing mismatch.")

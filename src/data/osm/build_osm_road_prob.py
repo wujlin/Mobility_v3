@@ -108,14 +108,14 @@ def _tier_prob_from_roads(
     buffer_m: float,
     sigma_m: float,
     tier_weights: Tuple[float, float, float],
-) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """
     Build a tiered road probability field using three masks:
     - major roads: high probability
     - minor roads: medium probability
     - service roads: low probability
 
-    Returns: (mask_union, dist_m, road_prob)
+    Returns: (mask_union, dist_m, road_prob, road_prob_major, road_prob_minor, road_prob_service)
     """
     if "highway" not in roads.columns:
         raise SystemExit("Expected 'highway' column in OSM roads GeoDataFrame.")
@@ -151,15 +151,13 @@ def _tier_prob_from_roads(
     if not (0.0 < w_service <= w_minor <= w_major <= 1.0):
         raise SystemExit("--tier_weights must satisfy 0 < service <= minor <= major <= 1")
 
-    prob = np.zeros((grid.H, grid.W), dtype=np.float32)
-    if dist_major is not None:
-        prob = np.maximum(prob, (w_major * np.exp(-dist_major / float(sigma_m))).astype(np.float32))
-    if dist_minor is not None:
-        prob = np.maximum(prob, (w_minor * np.exp(-dist_minor / float(sigma_m))).astype(np.float32))
-    if dist_service is not None:
-        prob = np.maximum(prob, (w_service * np.exp(-dist_service / float(sigma_m))).astype(np.float32))
+    zeros = np.zeros((grid.H, grid.W), dtype=np.float32)
+    prob_major = (w_major * np.exp(-dist_major / float(sigma_m))).astype(np.float32) if dist_major is not None else zeros
+    prob_minor = (w_minor * np.exp(-dist_minor / float(sigma_m))).astype(np.float32) if dist_minor is not None else zeros
+    prob_service = (w_service * np.exp(-dist_service / float(sigma_m))).astype(np.float32) if dist_service is not None else zeros
+    prob = np.maximum(np.maximum(prob_major, prob_minor), prob_service).astype(np.float32, copy=False)
 
-    return np.asarray(mask_union, np.uint8), dist_union, prob
+    return np.asarray(mask_union, np.uint8), dist_union, prob, prob_major, prob_minor, prob_service
 
 
 def main() -> None:
@@ -192,6 +190,11 @@ def main() -> None:
         default=[1.0, 0.7, 0.4],
         metavar=("MAJOR", "MINOR", "SERVICE"),
         help="Weights for tiered road_prob (must satisfy 0 < SERVICE <= MINOR <= MAJOR <= 1).",
+    )
+    ap.add_argument(
+        "--save_tier_probs",
+        action="store_true",
+        help="When road_prob_variant=tiered: also save osm_road_prob_{major,minor,service}.npy for downstream semantic conditioning.",
     )
     args = ap.parse_args()
 
@@ -226,7 +229,7 @@ def main() -> None:
 
     res_y_m, res_x_m = grid.resolution_m()
     if args.road_prob_variant == "tiered":
-        mask_u8, dist_m, road_prob = _tier_prob_from_roads(
+        mask_u8, dist_m, road_prob, prob_major, prob_minor, prob_service = _tier_prob_from_roads(
             roads,
             grid=grid,
             buffer_m=float(args.buffer_m),
@@ -246,6 +249,10 @@ def main() -> None:
     np.save(args.out_dir / "osm_road_mask.npy", np.asarray(mask, np.uint8))
     np.save(args.out_dir / "osm_dist_to_road_m.npy", dist_m)
     np.save(args.out_dir / "osm_road_prob.npy", road_prob)
+    if bool(args.save_tier_probs) and args.road_prob_variant == "tiered":
+        np.save(args.out_dir / "osm_road_prob_major.npy", np.asarray(prob_major, np.float32))
+        np.save(args.out_dir / "osm_road_prob_minor.npy", np.asarray(prob_minor, np.float32))
+        np.save(args.out_dir / "osm_road_prob_service.npy", np.asarray(prob_service, np.float32))
 
     meta = {
         "grid": {"H": grid.H, "W": grid.W, "bbox": bbox.__dict__},
@@ -254,6 +261,7 @@ def main() -> None:
         "road_prob_sigma_m": float(args.road_prob_sigma_m),
         "road_prob_variant": str(args.road_prob_variant),
         "tier_weights": [float(x) for x in args.tier_weights],
+        "save_tier_probs": bool(args.save_tier_probs),
         "res_x_m": res_x_m,
         "res_y_m": res_y_m,
     }

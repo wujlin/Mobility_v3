@@ -118,8 +118,37 @@ def run_stats(*, segments_parquet: Path, out_json: Path, cfg: Config) -> Dict[st
             pre_detour[i] = d
             pre_step_mean[i] = sm
 
+    # NOTE: chord/total lengths are in grid units (cells), not meters.
     keep = (n_points >= int(cfg.min_points)) & (chord >= float(cfg.chord_min)) & (detour >= float(cfg.detour_min))
     n_keep = int(np.sum(keep))
+
+    paired = None
+    if win_len > 1:
+        mask = np.isfinite(pre_detour) & np.isfinite(detour) & np.isfinite(pre_chord) & np.isfinite(chord)
+        n_pair = int(np.sum(mask))
+        if n_pair > 0:
+            detour_full = detour[mask].astype(np.float64, copy=False)
+            detour_pre = pre_detour[mask].astype(np.float64, copy=False)
+            chord_full = chord[mask].astype(np.float64, copy=False)
+            chord_pre = pre_chord[mask].astype(np.float64, copy=False)
+
+            detour_delta = detour_full - detour_pre
+            chord_ratio = chord_pre / np.maximum(chord_full, 1e-6)
+
+            # Pairwise correlation: does prefix preserve "how detoured" the route is?
+            detour_corr = float(np.corrcoef(detour_full, detour_pre)[0, 1]) if n_pair >= 2 else float("nan")
+
+            # How often does prefix miss substantial detours present in the full segment?
+            # Thresholds are heuristic and only for diagnosis.
+            lost_detour_frac = float(np.mean(detour_delta >= 0.2)) if n_pair > 0 else 0.0
+
+            paired = {
+                "n_pairs": int(n_pair),
+                "detour_corr": float(detour_corr),
+                "detour_delta": _summ(detour_delta),
+                "lost_detour_frac_thr0p2": float(lost_detour_frac),
+                "chord_ratio_prefix_over_full": _summ(chord_ratio),
+            }
 
     report: Dict[str, object] = {
         "inputs": {"segments_parquet": str(segments_parquet)},
@@ -136,6 +165,7 @@ def run_stats(*, segments_parquet: Path, out_json: Path, cfg: Config) -> Dict[st
             "num_segments_prefix_valid": int(np.sum(np.isfinite(pre_chord))),
             "num_segments_keep": int(n_keep),
         },
+        "units": {"length": "grid_cells", "note": "Lengths are in grid cells (see DATA_CONTRACT.md for approx meters-per-cell)."},
         "full": {
             "n_points": _summ(n_points),
             "chord_len": _summ(chord),
@@ -158,6 +188,7 @@ def run_stats(*, segments_parquet: Path, out_json: Path, cfg: Config) -> Dict[st
                 "detour_ratio": _hist(pre_detour, bins=int(cfg.hist_bins)),
             },
         },
+        "paired": paired,
         "meta": {"created_at": datetime.now(tz=TZ_SHANGHAI).isoformat()},
     }
 
@@ -172,7 +203,7 @@ def build_argparser() -> argparse.ArgumentParser:
     p.add_argument("--out_json", type=str, required=True)
     p.add_argument("--prefix_len", type=int, default=256, help="Also report prefix stats for the first 1+prefix_len points (to diagnose window artifacts).")
     p.add_argument("--min_points", type=int, default=0, help="Filter threshold (report only): min points per segment.")
-    p.add_argument("--chord_min", type=float, default=0.0, help="Filter threshold (report only): min chord length.")
+    p.add_argument("--chord_min", type=float, default=0.0, help="Filter threshold (report only): min chord length (grid cells, not meters).")
     p.add_argument("--detour_min", type=float, default=0.0, help="Filter threshold (report only): min detour ratio.")
     p.add_argument("--hist_bins", type=int, default=50)
     p.add_argument("--seed", type=int, default=0)
@@ -205,6 +236,15 @@ def main() -> None:
             "chord_p50": report["prefix"]["chord_len"]["p50"],
             "detour_p50": report["prefix"]["detour_ratio"]["p50"],
         },
+        "paired": (
+            {
+                "n_pairs": report["paired"]["n_pairs"],
+                "detour_corr": report["paired"]["detour_corr"],
+                "lost_detour_frac_thr0p2": report["paired"]["lost_detour_frac_thr0p2"],
+            }
+            if isinstance(report.get("paired"), dict)
+            else None
+        ),
         "keep": report["stats"]["num_segments_keep"],
         "out_json": str(Path(args.out_json).resolve()),
     }
@@ -213,4 +253,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

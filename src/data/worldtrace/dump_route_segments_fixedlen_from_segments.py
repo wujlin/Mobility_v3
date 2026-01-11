@@ -181,8 +181,9 @@ def build_argparser() -> argparse.ArgumentParser:
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--max_segments", type=int, default=None, help="Optional cap on number of segments (sample without replacement).")
     p.add_argument("--min_points", type=int, default=300, help="Minimum raw points per segment before resampling.")
-    p.add_argument("--chord_min", type=float, default=500.0, help="Minimum chord length (grid units).")
-    p.add_argument("--total_min", type=float, default=800.0, help="Minimum total path length (grid units).")
+    # NOTE: y/x in segments.parquet are grid cells (not meters). For Detroit 1024x1024, ~25m/cell.
+    p.add_argument("--chord_min", type=float, default=40.0, help="Minimum chord length (grid cells). ~40 ~= 1km in Detroit.")
+    p.add_argument("--total_min", type=float, default=60.0, help="Minimum total path length (grid cells). ~60 ~= 1.5km in Detroit.")
     p.add_argument("--detour_min", type=float, default=1.2, help="Minimum detour ratio (total/chord).")
     return p
 
@@ -215,4 +216,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

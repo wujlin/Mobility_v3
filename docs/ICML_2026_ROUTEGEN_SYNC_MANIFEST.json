@@ -1,6 +1,6 @@
 {
   "root": "_sync/wsA/icml2026_routegen",
-  "num_entries": 28,
+  "num_entries": 29,
   "entries": [
     {
       "name": "E0_gt_baseline_detroit_F256_n200k_seed0",
@@ -690,6 +690,21 @@
       "symlink_target": "E20a_audit_gridpos_sc_case04_seed0",
       "name_gate": 22,
       "checkpoint_gate": 22,
+      "issues": []
+    },
+    {
+      "name": "E23_fullscale_detroit_E22tierroad_K20_res0p1_seed0",
+      "path": "E23_fullscale_detroit_E22tierroad_K20_res0p1_seed0",
+      "is_symlink": false,
+      "kind": "other",
+      "files": [
+        "metrics_fullscale.json",
+        "metrics_fullscale.stdout.json"
+      ],
+      "subdirs": [
+        "cascade_res0p1"
+      ],
+      "name_gate": 23,
       "issues": []
     },
     {

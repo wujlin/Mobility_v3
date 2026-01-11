@@ -1,7 +1,7 @@
 # ICML 2026 RouteGen: 本地同步结果索引（_sync）
 
 - root: `_sync/wsA/icml2026_routegen`
-- num_entries: `28`
+- num_entries: `29`
 
 ## Experiments
 
@@ -36,6 +36,7 @@
   - symlink -> `E20a_audit_gridpos_sc_case04_seed0`
   - checkpoint: `/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E22_gridpos_sc_tierroad_detroit_F256_od128_seed0/last.pt`
   - best(mixture_jsd): none jsd=0.028173435458265984 l1=0.4329411764705978 cov=1.0
+- `E23_fullscale_detroit_E22tierroad_K20_res0p1_seed0` — `other` — `E23_fullscale_detroit_E22tierroad_K20_res0p1_seed0`
 - `E2_exec_diffusion_wp_residual_npz_detroit_F256_case01_seed0` — `other` — `E2_exec_diffusion_wp_residual_npz_detroit_F256_case01_seed0`
 - `E2s_skeleton_only_detroit_F256_case01_seed0` — `other` — `E2s_skeleton_only_detroit_F256_case01_seed0`
 - `E3_wp_diffusion_rel_detroit_F256_od128_seed0` — `train` — `E3_wp_diffusion_rel_detroit_F256_od128_seed0`

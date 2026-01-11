@@ -88,10 +88,12 @@ def _extract_oracle_waypoints(
     start_pos: np.ndarray,  # (N,2)
     targets: np.ndarray,  # (N,F,2)
     num_waypoints: int,
+    waypoint_mode: str,
+    waypoint_turn_alpha: float,
 ) -> np.ndarray:
     n = int(start_pos.shape[0])
     k = int(num_waypoints)
-    cfg = WaypointConfig(mode="rdp_dev", num_waypoints=k)
+    cfg = WaypointConfig(mode=str(waypoint_mode), num_waypoints=k, turn_alpha=float(waypoint_turn_alpha))
     out = np.zeros((n, k, 2), dtype=np.float32)
     for i in range(n):
         _, wp = extract_oracle_waypoints_from_future(start_pos=start_pos[i], future_pos=targets[i], cfg=cfg)
@@ -131,6 +133,8 @@ class TrainConfig:
     pos_max: int
     max_train_n: Optional[int]
     num_waypoints: int
+    waypoint_mode: str
+    waypoint_turn_alpha: float
     od_bin: float
     o_clip: float
     semantic_dir: Optional[str]
@@ -243,6 +247,8 @@ def build_argparser() -> argparse.ArgumentParser:
     p.add_argument("--max_train_n", type=int, default=None)
 
     p.add_argument("--num_waypoints", type=int, default=2)
+    p.add_argument("--waypoint_mode", type=str, choices=["rdp_dev", "rdp_turn"], default="rdp_dev")
+    p.add_argument("--waypoint_turn_alpha", type=float, default=1.0, help="When waypoint_mode=rdp_turn: weight for turn-aware waypoint selection.")
     p.add_argument("--od_bin", type=float, default=128.0, help="Bin size (grid units) for OD intent conditioning.")
     p.add_argument("--o_clip", type=float, default=2.0, help="Clip signed offset o (in chord-normalized units) for stability.")
     p.add_argument(
@@ -292,6 +298,8 @@ def main() -> None:
         pos_max=int(args.pos_max),
         max_train_n=(int(args.max_train_n) if args.max_train_n is not None else None),
         num_waypoints=int(args.num_waypoints),
+        waypoint_mode=str(args.waypoint_mode),
+        waypoint_turn_alpha=float(args.waypoint_turn_alpha),
         od_bin=float(args.od_bin),
         o_clip=float(args.o_clip),
         semantic_dir=(str(args.semantic_dir) if args.semantic_dir else None),
@@ -465,7 +473,13 @@ def main() -> None:
         cond = np.concatenate([base_cond, sem_norm], axis=1).astype(np.float32, copy=False) if sem_norm is not None else base_cond
 
     # Oracle targets: waypoints -> chord-relative (s,o).
-    wp_abs = _extract_oracle_waypoints(start_pos=start_pos, targets=targets, num_waypoints=int(cfg.num_waypoints))  # (N,K,2)
+    wp_abs = _extract_oracle_waypoints(
+        start_pos=start_pos,
+        targets=targets,
+        num_waypoints=int(cfg.num_waypoints),
+        waypoint_mode=str(cfg.waypoint_mode),
+        waypoint_turn_alpha=float(cfg.waypoint_turn_alpha),
+    )  # (N,K,2)
     rel = _waypoints_rel_so(start=start_pos, dest=dest_pos, waypoints=wp_abs)  # (N,K,2)
     rel[:, :, 0] = np.clip(rel[:, :, 0], 0.0, 1.0)
     if float(cfg.o_clip) > 0.0:
@@ -578,6 +592,10 @@ def main() -> None:
                     },
                     "od_bin": float(cfg.od_bin),
                     "o_clip": float(cfg.o_clip),
+                    "waypoints": {
+                        "mode": str(cfg.waypoint_mode),
+                        "turn_alpha": float(cfg.waypoint_turn_alpha),
+                    },
                     "pos_norm": {
                         "pos_min": [float(x) for x in norm.pos_min.tolist()],
                         "pos_max": [float(x) for x in norm.pos_max.tolist()],
@@ -608,6 +626,8 @@ def main() -> None:
             "pos_max": int(cfg.pos_max),
             "max_train_n": (int(cfg.max_train_n) if cfg.max_train_n is not None else None),
             "num_waypoints": int(cfg.num_waypoints),
+            "waypoint_mode": str(cfg.waypoint_mode),
+            "waypoint_turn_alpha": float(cfg.waypoint_turn_alpha),
             "od_bin": float(cfg.od_bin),
             "o_clip": float(cfg.o_clip),
             "semantic_dir": (str(Path(cfg.semantic_dir).resolve()) if cfg.semantic_dir else None),

@@ -6,13 +6,14 @@ from typing import Literal, Tuple
 import numpy as np
 
 
-WaypointMode = Literal["rdp_dev"]
+WaypointMode = Literal["rdp_dev", "rdp_turn"]
 
 
 @dataclass(frozen=True)
 class WaypointConfig:
     mode: WaypointMode = "rdp_dev"
     num_waypoints: int = 2
+    turn_alpha: float = 1.0
 
 
 def _distance_point_to_segment(points: np.ndarray, a: np.ndarray, b: np.ndarray) -> np.ndarray:
@@ -28,6 +29,30 @@ def _distance_point_to_segment(points: np.ndarray, a: np.ndarray, b: np.ndarray)
     t = np.clip(t, 0.0, 1.0)
     proj = a[None, :] + t[:, None] * ab[None, :]
     return np.linalg.norm(points - proj, axis=-1).astype(np.float32)
+
+
+def _turn_score_1m_cos(points: np.ndarray) -> np.ndarray:
+    points = np.asarray(points, dtype=np.float32)
+    if points.ndim != 2 or points.shape[1] != 2:
+        raise ValueError(f"Expected points (T,2), got {points.shape}")
+    T = int(points.shape[0])
+    out = np.zeros((T,), dtype=np.float32)
+    if T < 3:
+        return out
+
+    v1 = points[1:-1] - points[:-2]  # (T-2,2)
+    v2 = points[2:] - points[1:-1]  # (T-2,2)
+    n1 = np.linalg.norm(v1, axis=1)
+    n2 = np.linalg.norm(v2, axis=1)
+    valid = (n1 > 1e-6) & (n2 > 1e-6)
+    # Default cos=1 (=> turn score 0) for invalid near-zero steps.
+    cos = np.ones((T - 2,), dtype=np.float32)
+    if bool(np.any(valid)):
+        dot = np.sum(v1[valid] * v2[valid], axis=1)
+        cos_v = dot / (n1[valid] * n2[valid] + 1e-6)
+        cos[valid] = np.clip(cos_v.astype(np.float32, copy=False), -1.0, 1.0)
+    out[1:-1] = (1.0 - cos).astype(np.float32, copy=False)  # in [0,2]
+    return out
 
 
 def pick_waypoint_indices_rdp_fixed_k(points: np.ndarray, *, k: int) -> np.ndarray:
@@ -97,6 +122,77 @@ def pick_waypoint_indices_rdp_fixed_k(points: np.ndarray, *, k: int) -> np.ndarr
     return np.asarray(idx, dtype=np.int64)
 
 
+def pick_waypoint_indices_rdp_turn_fixed_k(points: np.ndarray, *, k: int, turn_alpha: float) -> np.ndarray:
+    """
+    Fixed-K RDP (largest deviation first) with turn-aware weighting.
+
+    Score(mid) = deviation(mid) * (1 + turn_alpha * turn_score(mid)),
+    where turn_score is (1 - cos(theta)) in [0,2].
+    """
+    points = np.asarray(points, dtype=np.float32)
+    if points.ndim != 2 or points.shape[1] != 2:
+        raise ValueError(f"Expected points (T,2), got {points.shape}")
+    T = int(points.shape[0])
+    if int(k) <= 0 or T < 3:
+        return np.zeros((0,), dtype=np.int64)
+
+    a = float(turn_alpha)
+    if not np.isfinite(a) or a < 0.0:
+        raise ValueError(f"turn_alpha must be finite and >= 0, got {turn_alpha}")
+    turn = _turn_score_1m_cos(points)  # (T,)
+
+    segs = [(0, T - 1)]
+    picks: list[int] = []
+
+    for _ in range(int(k)):
+        best_score = None
+        best_seg_i = None
+        best_mid = None
+        for si, (a_idx, b_idx) in enumerate(segs):
+            if int(b_idx) - int(a_idx) <= 1:
+                continue
+            pa = points[int(a_idx)]
+            pb = points[int(b_idx)]
+            mid_points = points[int(a_idx) + 1 : int(b_idx)]
+            if mid_points.size == 0:
+                continue
+            d = _distance_point_to_segment(mid_points, pa, pb).reshape(-1)
+            mid_ids = np.arange(int(a_idx) + 1, int(b_idx), dtype=np.int64)
+            score = d * (1.0 + float(a) * turn[mid_ids].astype(np.float32, copy=False))
+            mid_off = int(np.argmax(score))
+            sc = float(score[mid_off])
+            mid_idx = int(a_idx) + 1 + int(mid_off)
+            if best_score is None or sc > float(best_score):
+                best_score = sc
+                best_seg_i = si
+                best_mid = mid_idx
+        if best_seg_i is None or best_mid is None:
+            break
+        if best_mid in picks:
+            break
+        picks.append(int(best_mid))
+        a_idx, b_idx = segs.pop(int(best_seg_i))
+        segs.append((int(a_idx), int(best_mid)))
+        segs.append((int(best_mid), int(b_idx)))
+
+    idx = [p for p in picks if 1 <= int(p) <= int(T - 2)]
+    idx = sorted(set(int(p) for p in idx))[: int(k)]
+
+    # Fallback: time quantiles if not enough picks.
+    if len(idx) < int(k):
+        cand = np.linspace(1, T - 2, num=int(k), dtype=np.float32)
+        fill = [int(np.rint(x)) for x in cand.tolist()]
+        for j in fill:
+            if len(idx) >= int(k):
+                break
+            j = int(np.clip(j, 1, T - 2))
+            if j not in idx:
+                idx.append(j)
+        idx = sorted(idx)[: int(k)]
+
+    return np.asarray(idx, dtype=np.int64)
+
+
 def extract_oracle_waypoints_from_future(
     start_pos: np.ndarray,  # (2,)
     future_pos: np.ndarray,  # (F,2)
@@ -121,10 +217,14 @@ def extract_oracle_waypoints_from_future(
         return np.zeros((k,), dtype=np.int64), np.repeat(future_pos[:1], repeats=k, axis=0).astype(np.float32)
 
     if str(cfg.mode) != "rdp_dev":
-        raise ValueError(f"Unknown waypoint mode: {cfg.mode}")
+        if str(cfg.mode) != "rdp_turn":
+            raise ValueError(f"Unknown waypoint mode: {cfg.mode}")
 
     poly = np.concatenate([start_pos[None, :], future_pos], axis=0)  # (F+1,2)
-    idx_poly = pick_waypoint_indices_rdp_fixed_k(poly, k=k)  # indices in [1, F-1]
+    if str(cfg.mode) == "rdp_dev":
+        idx_poly = pick_waypoint_indices_rdp_fixed_k(poly, k=k)  # indices in [1, F-1]
+    else:
+        idx_poly = pick_waypoint_indices_rdp_turn_fixed_k(poly, k=k, turn_alpha=float(cfg.turn_alpha))  # indices in [1, F-1]
     if idx_poly.size == 0:
         return np.zeros((0,), dtype=np.int64), np.zeros((0, 2), dtype=np.float32)
     idx_future = np.clip(idx_poly - 1, 0, max(F - 2, 0)).astype(np.int64)

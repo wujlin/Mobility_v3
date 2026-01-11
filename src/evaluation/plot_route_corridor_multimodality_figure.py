@@ -23,6 +23,7 @@ class Config:
     seed: int
     pad_frac: float
     png_dpi: int
+    bbox_from: str
 
 
 def _key64(traj_idx: np.ndarray, start_t: np.ndarray) -> np.ndarray:
@@ -221,6 +222,15 @@ def build_argparser() -> argparse.ArgumentParser:
     p.add_argument("--pad_frac", type=float, default=0.08)
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--png_dpi", type=int, default=300)
+    p.add_argument(
+        "--bbox_from",
+        type=str,
+        default="gt_l2_ours",
+        choices=["gt_l2_ours", "all"],
+        help="Which polylines define the shared axis limits. Use 'gt_l2_ours' to avoid huge blank areas when E2E diverges.",
+    )
+    p.add_argument("--rep_traj_idx", type=int, default=None, help="Optional: force representative window traj_idx instead of the first in gt_case.")
+    p.add_argument("--rep_start_t", type=int, default=None, help="Optional: force representative window start_t (used with --rep_traj_idx).")
     return p
 
 
@@ -234,6 +244,7 @@ def main() -> None:
         seed=int(args.seed),
         pad_frac=float(args.pad_frac),
         png_dpi=int(args.png_dpi),
+        bbox_from=str(args.bbox_from),
     )
 
     gt = np.load(str(Path(args.gt_case_npz)), allow_pickle=True)
@@ -256,10 +267,20 @@ def main() -> None:
     labels_gt = np.asarray(cl["labels"], dtype=np.int64)
     labels_gt, label_map_info = _remap_corridor_labels_by_signed_dev(feats_gt, labels_gt)
 
-    # Representative window: use the first one for consistent O/D.
-    rep_key = int(_key64(gt_traj_idx[:1], gt_start_t[:1])[0])
-    rep_start = gt_start[0]
-    rep_dest = gt_dest[0]
+    # Representative window: default to the first one, or override via (traj_idx,start_t).
+    if (args.rep_traj_idx is None) ^ (args.rep_start_t is None):
+        raise ValueError("rep_traj_idx and rep_start_t must be both set or both None.")
+    if args.rep_traj_idx is not None and args.rep_start_t is not None:
+        rep_key = int(_key64(np.asarray([args.rep_traj_idx], dtype=np.int64), np.asarray([args.rep_start_t], dtype=np.int64))[0])
+    else:
+        rep_key = int(_key64(gt_traj_idx[:1], gt_start_t[:1])[0])
+    gt_keys = _key64(gt_traj_idx, gt_start_t)
+    hit = np.where(gt_keys == np.int64(rep_key))[0]
+    if hit.size <= 0:
+        raise RuntimeError(f"Cannot find rep window key={rep_key} in gt_case_npz.")
+    rep_i = int(hit[0])
+    rep_start = gt_start[rep_i]
+    rep_dest = gt_dest[rep_i]
 
     # Load model samples and locate rep window.
     l2 = np.load(str(Path(args.l2_samples_npz)), allow_pickle=True)
@@ -295,17 +316,19 @@ def main() -> None:
     gt_pick = _sample_indices_stratified(labels_gt, max_n=int(cfg.max_gt), seed=int(cfg.seed))
     gt_pick = gt_pick.astype(np.int64, copy=False)
 
-    # BBox from all plotted polylines (shared extent across panels).
+    # BBox for shared extent across panels.
+    # Important: if E2E samples diverge far away, including them in the bbox can make other panels unreadable.
     polys = []
     polys.append(_poly_points(rep_start, rep_dest[None, :]))  # O/D
     for i in gt_pick.tolist():
         polys.append(_poly_points(gt_start[i], gt_targets[i]))
     for p in l2_paths:
         polys.append(_poly_points(rep_start, p))
-    for p in diff_paths:
-        polys.append(_poly_points(rep_start, p))
     for p in ours_paths:
         polys.append(_poly_points(rep_start, p))
+    if str(cfg.bbox_from) == "all":
+        for p in diff_paths:
+            polys.append(_poly_points(rep_start, p))
     all_pts = np.concatenate(polys, axis=0)
     y0, y1, x0, x1 = _compute_bbox(all_pts, pad_frac=float(cfg.pad_frac))
 
@@ -327,7 +350,7 @@ def main() -> None:
         panels = [
             (ax_gt, "Ground Truth (N=%d)" % int(gt_pick.size), "a"),
             (ax_l2, "L2 Regression (Collapse)", "b"),
-            (ax_diff, "End-to-end Diffusion (Blur)", "c"),
+            (ax_diff, "End-to-end Diffusion (Divergence)", "c"),
             (ax_ours, "CascadeTraj (Ours)", "d"),
         ]
 

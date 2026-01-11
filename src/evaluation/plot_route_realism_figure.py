@@ -23,6 +23,7 @@ class Config:
     hist_bins_onroad: int
     smooth_sigma_bins: float
     seed: int
+    min_chord_m: float
 
 
 def _key64(traj_idx: np.ndarray, start_t: np.ndarray) -> np.ndarray:
@@ -195,6 +196,39 @@ def _route_onroad_rate_from_road_prob(road_prob_seq: np.ndarray, *, thr: float) 
     return np.mean(on, axis=-1).astype(np.float64, copy=False)
 
 
+def _turn_angles_deg_from_pos(pos: np.ndarray, *, min_step: float = 1e-3) -> np.ndarray:
+    """
+    Unsigned turn angles between consecutive displacement vectors, in degrees.
+
+    Args:
+        pos: (B, T, 2) positions in grid space [y, x]
+        min_step: filter threshold on displacement magnitude (grid units)
+    """
+    pos = np.asarray(pos, dtype=np.float32)
+    if pos.ndim != 3 or pos.shape[-1] != 2:
+        raise ValueError(f"Expected pos (B,T,2), got {pos.shape}")
+    if pos.shape[1] < 3:
+        return np.zeros((0,), dtype=np.float64)
+
+    disp = pos[:, 1:] - pos[:, :-1]  # (B,T-1,2)
+    v1 = disp[:, :-1]
+    v2 = disp[:, 1:]
+    n1 = np.linalg.norm(v1, axis=-1)
+    n2 = np.linalg.norm(v2, axis=-1)
+    valid = (n1 > float(min_step)) & (n2 > float(min_step))
+
+    dot = np.sum(v1 * v2, axis=-1)
+    cos = dot / (n1 * n2 + 1e-8)
+    cos = np.clip(cos, -1.0, 1.0)
+    ang = np.arccos(cos)
+    ang[~valid] = np.nan
+
+    out = ang.reshape(-1)
+    out = out[np.isfinite(out)]
+    out = out * (180.0 / float(np.pi))
+    return out.astype(np.float64, copy=False)
+
+
 def _plot_map_panel(
     ax: plt.Axes,
     *,
@@ -202,18 +236,44 @@ def _plot_map_panel(
     road_prob: Optional[np.ndarray],
     start_pos: np.ndarray,  # (2,)
     dest_pos: np.ndarray,  # (2,)
-    gt_targets: np.ndarray,  # (F,2)
-    preds_k: np.ndarray,  # (K,F,2)
+    gt_targets_all: np.ndarray,  # (N,F,2)
+    ours_preds_k: np.ndarray,  # (K,F,2)
+    e2e_preds_k: Optional[np.ndarray],  # (K,F,2) or None
     k_plot: int,
     crop_margin: int,
+    max_gt_plot: int,
+    seed: int,
 ) -> Dict[str, object]:
     start_pos = np.asarray(start_pos, dtype=np.float32).reshape(2)
     dest_pos = np.asarray(dest_pos, dtype=np.float32).reshape(2)
-    gt_targets = np.asarray(gt_targets, dtype=np.float32).reshape(-1, 2)
-    preds_k = np.asarray(preds_k, dtype=np.float32).reshape(preds_k.shape[0], -1, 2)
+    gt_targets_all = np.asarray(gt_targets_all, dtype=np.float32)
+    if gt_targets_all.ndim != 3 or gt_targets_all.shape[-1] != 2:
+        raise ValueError(f"Expected gt_targets_all (N,F,2), got {gt_targets_all.shape}")
 
-    k_plot = int(min(int(k_plot), int(preds_k.shape[0])))
-    pts = np.concatenate([start_pos[None, :], dest_pos[None, :], gt_targets, preds_k[:k_plot].reshape(-1, 2)], axis=0)
+    ours_preds_k = np.asarray(ours_preds_k, dtype=np.float32).reshape(ours_preds_k.shape[0], -1, 2)
+    if ours_preds_k.ndim != 3 or ours_preds_k.shape[-1] != 2:
+        raise ValueError(f"Expected ours_preds_k (K,F,2), got {ours_preds_k.shape}")
+
+    if e2e_preds_k is not None:
+        e2e_preds_k = np.asarray(e2e_preds_k, dtype=np.float32).reshape(e2e_preds_k.shape[0], -1, 2)
+        if e2e_preds_k.ndim != 3 or e2e_preds_k.shape[-1] != 2:
+            raise ValueError(f"Expected e2e_preds_k (K,F,2), got {e2e_preds_k.shape}")
+
+    rng = np.random.default_rng(int(seed))
+    n_gt = int(gt_targets_all.shape[0])
+    if int(max_gt_plot) > 0 and n_gt > int(max_gt_plot):
+        pick = rng.choice(n_gt, size=int(max_gt_plot), replace=False)
+        pick = np.sort(pick)
+        gt_plot = gt_targets_all[np.asarray(pick, dtype=np.int64)]
+    else:
+        gt_plot = gt_targets_all
+
+    k_plot = int(min(int(k_plot), int(ours_preds_k.shape[0])))
+    # Crop uses GT + Ours (exclude E2E) so divergence appears as trajectories leaving the panel.
+    pts = np.concatenate(
+        [start_pos[None, :], dest_pos[None, :], gt_plot.reshape(-1, 2), ours_preds_k[:k_plot].reshape(-1, 2)],
+        axis=0,
+    )
     y0 = int(np.floor(np.min(pts[:, 0]) - float(crop_margin)))
     y1 = int(np.ceil(np.max(pts[:, 0]) + float(crop_margin)))
     x0 = int(np.floor(np.min(pts[:, 1]) - float(crop_margin)))
@@ -235,13 +295,18 @@ def _plot_map_panel(
         extent = (float(x0) - 0.5, float(x1) + 0.5, float(y1) + 0.5, float(y0) - 0.5)
         ax.imshow(crop, cmap="Greys", vmin=0.0, vmax=1.0, alpha=0.25, origin="upper", extent=extent, interpolation="nearest")
 
-    # GT (gray) + Ours samples (blue).
-    ax.plot(gt_targets[:, 1], gt_targets[:, 0], color=OKABE_ITO["gray"], lw=2.0, alpha=0.9, label="GT")
+    # GT (gray) + E2E (vermillion) + Ours (blue).
+    for i in range(int(gt_plot.shape[0])):
+        ax.plot(gt_plot[i, :, 1], gt_plot[i, :, 0], color=OKABE_ITO["gray"], lw=1.2, alpha=0.18)
+    if e2e_preds_k is not None:
+        k_e2e = int(min(k_plot, int(e2e_preds_k.shape[0])))
+        for kk in range(k_e2e):
+            ax.plot(e2e_preds_k[kk, :, 1], e2e_preds_k[kk, :, 0], color=OKABE_ITO["vermillion"], lw=1.0, alpha=0.12)
     for kk in range(k_plot):
-        ax.plot(preds_k[kk, :, 1], preds_k[kk, :, 0], color=OKABE_ITO["blue"], lw=1.2, alpha=0.18)
+        ax.plot(ours_preds_k[kk, :, 1], ours_preds_k[kk, :, 0], color=OKABE_ITO["blue"], lw=1.1, alpha=0.18)
 
-    ax.scatter([start_pos[1]], [start_pos[0]], s=18, color=OKABE_ITO["black"], marker="o", zorder=5)
-    ax.scatter([dest_pos[1]], [dest_pos[0]], s=22, color=OKABE_ITO["black"], marker="x", zorder=5)
+    ax.scatter([start_pos[1]], [start_pos[0]], s=26, color="black", marker="o", zorder=5, edgecolors="white", linewidths=1.0)
+    ax.scatter([dest_pos[1]], [dest_pos[0]], s=26, color="black", marker="s", zorder=5, edgecolors="white", linewidths=1.0)
 
     ax.set_title(str(title))
     ax.set_aspect("equal", adjustable="box")
@@ -252,7 +317,12 @@ def _plot_map_panel(
     for spine in ax.spines.values():
         spine.set_linewidth(1.2)
 
-    return {"crop": {"y0": int(y0), "y1": int(y1), "x0": int(x0), "x1": int(x1)}, "k_plot": int(k_plot)}
+    return {
+        "crop": {"y0": int(y0), "y1": int(y1), "x0": int(x0), "x1": int(x1)},
+        "k_plot": int(k_plot),
+        "gt_plotted": int(gt_plot.shape[0]),
+        "gt_total": int(n_gt),
+    }
 
 
 def build_argparser() -> argparse.ArgumentParser:
@@ -268,6 +338,8 @@ def build_argparser() -> argparse.ArgumentParser:
     p.add_argument("--k_plot", type=int, default=20)
     p.add_argument("--crop_margin", type=int, default=40)
     p.add_argument("--smooth_sigma_bins", type=float, default=1.2)
+    p.add_argument("--min_chord_m", type=float, default=200.0, help="Filter threshold for detour metrics: only windows with chord >= min_chord_m are used.")
+    p.add_argument("--max_gt_plot", type=int, default=50, help="Max number of GT routes to overlay in each map panel.")
     p.add_argument("--seed", type=int, default=0)
     return p
 
@@ -281,6 +353,7 @@ def main() -> None:
         hist_bins_onroad=40,
         smooth_sigma_bins=float(args.smooth_sigma_bins),
         seed=int(args.seed),
+        min_chord_m=float(args.min_chord_m),
     )
 
     out_dir = Path(args.out_dir)
@@ -334,6 +407,12 @@ def main() -> None:
     det_ours = _safe_detour_ratio(len_ours_m, np.repeat(chord_m, repeats=int(ours_preds.shape[1]), axis=0))
     det_e2e = _safe_detour_ratio(len_e2e_m, np.repeat(chord_m, repeats=int(e2e_preds.shape[1]), axis=0))
 
+    # Detour factor is ill-defined for near-zero chord windows; filter them out for all methods.
+    det_mask = chord_m >= float(cfg.min_chord_m)
+    det_gt_use = det_gt[det_mask]
+    det_ours_use = det_ours[np.repeat(det_mask, repeats=int(ours_preds.shape[1]), axis=0)]
+    det_e2e_use = det_e2e[np.repeat(det_mask, repeats=int(e2e_preds.shape[1]), axis=0)]
+
     on_gt = None
     on_ours = None
     on_e2e = None
@@ -347,7 +426,7 @@ def main() -> None:
 
     # Hist ranges (robust, shared).
     len_range_m = _choose_range(len_gt_m, len_ours_m, len_e2e_m, clamp_min=0.0, clamp_max=None)
-    det_range = _choose_range(det_gt, det_ours, det_e2e, clamp_min=1.0, clamp_max=None)
+    det_range = _choose_range(det_gt_use, det_ours_use, det_e2e_use, clamp_min=1.0, clamp_max=None)
     on_range = (0.0, 1.0)
 
     jsd_len_ours = compute_jsd_from_samples(
@@ -362,8 +441,8 @@ def main() -> None:
         bins=int(cfg.hist_bins_len),
         value_range=(len_range_m[0] / 1000.0, len_range_m[1] / 1000.0),
     )
-    jsd_det_ours = compute_jsd_from_samples(det_ours, det_gt, bins=int(cfg.hist_bins_detour), value_range=det_range)
-    jsd_det_e2e = compute_jsd_from_samples(det_e2e, det_gt, bins=int(cfg.hist_bins_detour), value_range=det_range)
+    jsd_det_ours = compute_jsd_from_samples(det_ours_use, det_gt_use, bins=int(cfg.hist_bins_detour), value_range=det_range)
+    jsd_det_e2e = compute_jsd_from_samples(det_e2e_use, det_gt_use, bins=int(cfg.hist_bins_detour), value_range=det_range)
     jsd_on_ours = None
     jsd_on_e2e = None
     if on_gt is not None and on_ours is not None and on_e2e is not None:
@@ -375,9 +454,9 @@ def main() -> None:
     _, y_len_ours = _hist_density_smooth(len_ours_m / 1000.0, bins=int(cfg.hist_bins_len), value_range=(len_range_m[0] / 1000.0, len_range_m[1] / 1000.0), sigma_bins=float(cfg.smooth_sigma_bins))
     _, y_len_e2e = _hist_density_smooth(len_e2e_m / 1000.0, bins=int(cfg.hist_bins_len), value_range=(len_range_m[0] / 1000.0, len_range_m[1] / 1000.0), sigma_bins=float(cfg.smooth_sigma_bins))
 
-    x_det, y_det_gt = _hist_density_smooth(det_gt, bins=int(cfg.hist_bins_detour), value_range=det_range, sigma_bins=float(cfg.smooth_sigma_bins))
-    _, y_det_ours = _hist_density_smooth(det_ours, bins=int(cfg.hist_bins_detour), value_range=det_range, sigma_bins=float(cfg.smooth_sigma_bins))
-    _, y_det_e2e = _hist_density_smooth(det_e2e, bins=int(cfg.hist_bins_detour), value_range=det_range, sigma_bins=float(cfg.smooth_sigma_bins))
+    x_det, y_det_gt = _hist_density_smooth(det_gt_use, bins=int(cfg.hist_bins_detour), value_range=det_range, sigma_bins=float(cfg.smooth_sigma_bins))
+    _, y_det_ours = _hist_density_smooth(det_ours_use, bins=int(cfg.hist_bins_detour), value_range=det_range, sigma_bins=float(cfg.smooth_sigma_bins))
+    _, y_det_e2e = _hist_density_smooth(det_e2e_use, bins=int(cfg.hist_bins_detour), value_range=det_range, sigma_bins=float(cfg.smooth_sigma_bins))
 
     on_hist = None
     if on_gt is not None and on_ours is not None and on_e2e is not None:
@@ -385,6 +464,23 @@ def main() -> None:
         _, y_on_ours = _hist_density_smooth(on_ours, bins=int(cfg.hist_bins_onroad), value_range=on_range, sigma_bins=float(cfg.smooth_sigma_bins))
         _, y_on_e2e = _hist_density_smooth(on_e2e, bins=int(cfg.hist_bins_onroad), value_range=on_range, sigma_bins=float(cfg.smooth_sigma_bins))
         on_hist = {"x": x_on, "gt": y_on_gt, "ours": y_on_ours, "e2e": y_on_e2e}
+
+    # Turn angles (degrees): GT vs Ours vs E2E.
+    pos_gt = np.concatenate([start_m[:, None, :], targets_m], axis=1)  # (N,F+1,2)
+    pos_ours = np.concatenate([start_m[:, None, None, :], ours_preds], axis=2).reshape(-1, int(ours_preds.shape[2]) + 1, 2)
+    pos_e2e = np.concatenate([start_m[:, None, None, :], e2e_preds], axis=2).reshape(-1, int(e2e_preds.shape[2]) + 1, 2)
+
+    turn_gt_deg = _turn_angles_deg_from_pos(pos_gt)
+    turn_ours_deg = _turn_angles_deg_from_pos(pos_ours)
+    turn_e2e_deg = _turn_angles_deg_from_pos(pos_e2e)
+
+    turn_range = (0.0, 180.0)
+    jsd_turn_ours = compute_jsd_from_samples(turn_ours_deg, turn_gt_deg, bins=60, value_range=turn_range, clamp_min=0.0, clamp_max=180.0)
+    jsd_turn_e2e = compute_jsd_from_samples(turn_e2e_deg, turn_gt_deg, bins=60, value_range=turn_range, clamp_min=0.0, clamp_max=180.0)
+
+    x_turn, y_turn_gt = _hist_density_smooth(turn_gt_deg, bins=60, value_range=turn_range, sigma_bins=float(cfg.smooth_sigma_bins))
+    _, y_turn_ours = _hist_density_smooth(turn_ours_deg, bins=60, value_range=turn_range, sigma_bins=float(cfg.smooth_sigma_bins))
+    _, y_turn_e2e = _hist_density_smooth(turn_e2e_deg, bins=60, value_range=turn_range, sigma_bins=float(cfg.smooth_sigma_bins))
 
     # ---- Figure (a) map: 3 cases; (b) distributions: length/detour/on-road ----
     case_files = [Path(p) for p in (args.case_npz or [])]
@@ -412,12 +508,20 @@ def main() -> None:
     case_reports: List[Dict[str, object]] = []
     ours_key = _key64(np.asarray(ours["traj_idx"]), np.asarray(ours["start_t"]))
     ours_map = {int(k): int(j) for j, k in enumerate(ours_key.tolist())}
+    e2e_key = _key64(np.asarray(e2e["traj_idx"]), np.asarray(e2e["start_t"]))
+    e2e_map = {int(k): int(j) for j, k in enumerate(e2e_key.tolist())}
     with paper_style():
         fig = plt.figure(figsize=FIGSIZE_FULL)
         gs = fig.add_gridspec(nrows=3, ncols=2, width_ratios=[1.15, 1.0], wspace=0.20, hspace=0.22)
 
         map_axes = [fig.add_subplot(gs[i, 0]) for i in range(3)]
-        stat_axes = [fig.add_subplot(gs[i, 1]) for i in range(3)]
+        stat_gs = gs[:, 1].subgridspec(2, 2, wspace=0.30, hspace=0.38)
+        stat_axes = [
+            fig.add_subplot(stat_gs[0, 0]),
+            fig.add_subplot(stat_gs[0, 1]),
+            fig.add_subplot(stat_gs[1, 0]),
+            fig.add_subplot(stat_gs[1, 1]),
+        ]
 
         # Panel labels
         add_panel_label(map_axes[0], "a")
@@ -435,15 +539,19 @@ def main() -> None:
             # Use the first window in the case as representative.
             c_start = np.asarray(case["start_pos"], dtype=np.float32)[0]
             c_dest = np.asarray(case["dest_pos"], dtype=np.float32)[0]
-            c_targets = np.asarray(case["targets"], dtype=np.float32)[0]
+            c_targets_all = np.asarray(case["targets"], dtype=np.float32)
             c_traj = int(np.asarray(case["traj_idx"], dtype=np.int64)[0])
             c_t = int(np.asarray(case["start_t"], dtype=np.int64)[0])
             key = int(_key64(np.asarray([c_traj], dtype=np.int64), np.asarray([c_t], dtype=np.int64))[0])
 
             if key not in ours_map:
                 raise RuntimeError(f"Case window not found in ours_samples_npz by (traj_idx,start_t)=({c_traj},{c_t}).")
+            if key not in e2e_map:
+                raise RuntimeError(f"Case window not found in e2e_samples_npz by (traj_idx,start_t)=({c_traj},{c_t}).")
             j = int(ours_map[int(key)])
-            c_preds = np.asarray(ours["preds_k"], dtype=np.float32)[j]
+            jj = int(e2e_map[int(key)])
+            c_preds_ours = np.asarray(ours["preds_k"], dtype=np.float32)[j]
+            c_preds_e2e = np.asarray(e2e["preds_k"], dtype=np.float32)[jj]
 
             rep = _plot_map_panel(
                 ax,
@@ -451,10 +559,13 @@ def main() -> None:
                 road_prob=road_prob,
                 start_pos=c_start,
                 dest_pos=c_dest,
-                gt_targets=c_targets,
-                preds_k=c_preds,
+                gt_targets_all=c_targets_all,
+                ours_preds_k=c_preds_ours,
+                e2e_preds_k=c_preds_e2e,
                 k_plot=int(args.k_plot),
                 crop_margin=int(args.crop_margin),
+                max_gt_plot=int(args.max_gt_plot),
+                seed=int(cfg.seed),
             )
             rep.update({"case_npz": str(p), "traj_idx": int(c_traj), "start_t": int(c_t)})
             case_reports.append(rep)
@@ -464,7 +575,7 @@ def main() -> None:
         col_ours = OKABE_ITO["blue"]
         col_e2e = OKABE_ITO["vermillion"]
 
-        ax0, ax1, ax2 = stat_axes
+        ax0, ax1, ax2, ax3 = stat_axes
 
         ax0.plot(x_len, y_len_gt, color=col_gt, lw=2.0, label="GT")
         ax0.plot(x_len, y_len_ours, color=col_ours, lw=2.0, label="Ours")
@@ -489,6 +600,13 @@ def main() -> None:
             ax2.set_title("On-road")
         else:
             ax2.axis("off")
+
+        ax3.plot(x_turn, y_turn_gt, color=col_gt, lw=2.0)
+        ax3.plot(x_turn, y_turn_ours, color=col_ours, lw=2.0)
+        ax3.plot(x_turn, y_turn_e2e, color=col_e2e, lw=2.0)
+        ax3.set_xlabel("Turn angle (deg)")
+        ax3.set_ylabel("Density")
+        ax3.set_title("Turn")
 
         handles, labels = ax0.get_legend_handles_labels()
         fig.legend(handles, labels, loc="lower center", bbox_to_anchor=(0.62, 0.01), ncol=3, frameon=False)
@@ -522,7 +640,8 @@ def main() -> None:
             "crop_margin": int(args.crop_margin),
             "smooth_sigma_bins": float(cfg.smooth_sigma_bins),
             "seed": int(cfg.seed),
-            "detour_definition": "length / straight_line_distance (both in meters from osm bbox resolution)",
+            "min_chord_m": float(cfg.min_chord_m),
+            "detour_definition": "length / straight_line_distance (meters), computed only for windows with chord >= min_chord_m",
         },
         "stats": {"num_windows_matched": int(len(gt_idx)), "K_ours": int(ours_preds.shape[1]), "K_e2e": int(e2e_preds.shape[1]), "F": int(ours_preds.shape[2])},
         "units": {"res_y_m": float(res_y_m), "res_x_m": float(res_x_m)},
@@ -535,9 +654,16 @@ def main() -> None:
             },
             "detour_factor": {
                 "jsd": {"ours": float(jsd_det_ours), "e2e": float(jsd_det_e2e)},
-                "gt": _summ(det_gt),
-                "ours": _summ(det_ours),
-                "e2e": _summ(det_e2e),
+                "gt": _summ(det_gt_use),
+                "ours": _summ(det_ours_use),
+                "e2e": _summ(det_e2e_use),
+                "num_windows_used": int(np.sum(det_mask)),
+            },
+            "turn_angle_deg": {
+                "jsd": {"ours": float(jsd_turn_ours), "e2e": float(jsd_turn_e2e)},
+                "gt": _summ(turn_gt_deg),
+                "ours": _summ(turn_ours_deg),
+                "e2e": _summ(turn_e2e_deg),
             },
             "onroad_rate": (
                 {

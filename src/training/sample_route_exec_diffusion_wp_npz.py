@@ -201,6 +201,7 @@ def main() -> None:
         raise TypeError(f"Unsupported checkpoint format: {type(ckpt)}")
     cfg = ckpt.get("config", {})
     model_cfg = cfg.get("model", {}) if isinstance(cfg, dict) else {}
+    wp_cfg_raw = cfg.get("waypoints", {}) if isinstance(cfg, dict) else {}
 
     f = int(cfg.get("F", 0) if isinstance(cfg, dict) else 0)
     hidden_dim = int(model_cfg.get("hidden_dim", 128))
@@ -222,8 +223,13 @@ def main() -> None:
         raise ValueError(f"F mismatch: checkpoint F={f} vs case targets F={f_case}")
     f = int(f_case)
 
-    # Build waypoint bank from GT case trajectories.
-    wp_cfg = WaypointConfig(mode="rdp_dev", num_waypoints=2)
+    # Build waypoint bank from GT case trajectories (match training waypoint mode).
+    wp_mode = str(wp_cfg_raw.get("mode", "rdp_dev")) if isinstance(wp_cfg_raw, dict) else "rdp_dev"
+    wp_turn_alpha = float(wp_cfg_raw.get("turn_alpha", 1.0)) if isinstance(wp_cfg_raw, dict) else 1.0
+    wp_k = int(wp_cfg_raw.get("num_waypoints", 2)) if isinstance(wp_cfg_raw, dict) else 2
+    if int(wp_k) != 2:
+        raise ValueError(f"sample_route_exec_diffusion_wp_npz currently expects num_waypoints=2, got {wp_k}")
+    wp_cfg = WaypointConfig(mode=wp_mode, num_waypoints=wp_k, turn_alpha=wp_turn_alpha)
     wp_bank = np.zeros((n, 2, 2), dtype=np.float32)
     for i in range(n):
         _, wp = extract_oracle_waypoints_from_future(start_pos=start_pos[i], future_pos=targets[i], cfg=wp_cfg)
@@ -344,4 +350,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

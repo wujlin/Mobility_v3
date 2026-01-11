@@ -26,6 +26,7 @@ class AuditConfig:
     seed: int
     jacc_cell: float
     waypoint_mode: str
+    waypoint_turn_alpha: float
     num_waypoints: int
     save_case_npz: bool
 
@@ -267,7 +268,7 @@ def _plot_case_gt(
 
         # Waypoint audit: plot oracle waypoints for a few random trajectories per cluster.
         rng = np.random.default_rng(int(cfg.seed) + int(case_id))
-        wcfg = WaypointConfig(mode=str(cfg.waypoint_mode), num_waypoints=int(cfg.num_waypoints))
+        wcfg = WaypointConfig(mode=str(cfg.waypoint_mode), num_waypoints=int(cfg.num_waypoints), turn_alpha=float(cfg.waypoint_turn_alpha))
         for k in (0, 1):
             idx = np.where(labels == k)[0]
             if idx.size == 0:
@@ -443,6 +444,7 @@ def run_audit(*, samples_npz: Path, out_dir: Path, cfg: AuditConfig) -> Dict[str
             "seed": int(cfg.seed),
             "jacc_cell": float(cfg.jacc_cell),
             "waypoint_mode": str(cfg.waypoint_mode),
+            "waypoint_turn_alpha": float(cfg.waypoint_turn_alpha),
             "num_waypoints": int(cfg.num_waypoints),
             "save_case_npz": bool(cfg.save_case_npz),
         },
@@ -481,7 +483,8 @@ def build_argparser() -> argparse.ArgumentParser:
 
     p.add_argument("--jacc_cell", type=float, default=8.0, help="Occupancy cell size in grid units for Jaccard diversity.")
 
-    p.add_argument("--waypoint_mode", type=str, default="rdp_dev", choices=["rdp_dev"])
+    p.add_argument("--waypoint_mode", type=str, default="rdp_dev", choices=["rdp_dev", "rdp_turn"])
+    p.add_argument("--waypoint_turn_alpha", type=float, default=1.0, help="When waypoint_mode=rdp_turn: weight for turn-aware waypoint selection.")
     p.add_argument("--num_waypoints", type=int, default=2)
     p.add_argument("--save_case_npz", action="store_true", help="Save per-case gt_case.npz with traj_idx/start_t subset.")
     return p
@@ -500,6 +503,7 @@ def main() -> None:
         seed=int(args.seed),
         jacc_cell=float(args.jacc_cell),
         waypoint_mode=str(args.waypoint_mode),
+        waypoint_turn_alpha=float(args.waypoint_turn_alpha),
         num_waypoints=int(args.num_waypoints),
         save_case_npz=bool(args.save_case_npz),
     )
@@ -509,4 +513,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

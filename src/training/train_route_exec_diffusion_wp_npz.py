@@ -48,6 +48,7 @@ class TrainConfig:
     pos_max: int
     max_train_n: Optional[int]
     waypoint_mode: str
+    waypoint_turn_alpha: float
     num_waypoints: int
     hidden_dim: int
     diff_steps: int
@@ -108,7 +109,8 @@ def build_argparser() -> argparse.ArgumentParser:
     p.add_argument("--pos_max", type=int, default=1023, help="Grid max coordinate (assumes y/x in [0,pos_max])")
     p.add_argument("--max_train_n", type=int, default=None, help="Optional: subsample training windows for speed")
 
-    p.add_argument("--waypoint_mode", type=str, choices=["rdp_dev"], default="rdp_dev")
+    p.add_argument("--waypoint_mode", type=str, choices=["rdp_dev", "rdp_turn"], default="rdp_dev")
+    p.add_argument("--waypoint_turn_alpha", type=float, default=1.0, help="When waypoint_mode=rdp_turn: weight for turn-aware waypoint selection.")
     p.add_argument("--num_waypoints", type=int, default=2, help="Only supports 2 for skeleton prior (KISS).")
     p.add_argument("--precompute_device", type=str, choices=["cpu", "cuda"], default="cpu", help="Device for prior precompute.")
 
@@ -150,6 +152,7 @@ def main() -> None:
         pos_max=int(args.pos_max),
         max_train_n=(int(args.max_train_n) if args.max_train_n is not None else None),
         waypoint_mode=str(args.waypoint_mode),
+        waypoint_turn_alpha=float(args.waypoint_turn_alpha),
         num_waypoints=int(args.num_waypoints),
         precompute_device=str(args.precompute_device),
         hidden_dim=int(args.hidden_dim),
@@ -179,7 +182,7 @@ def main() -> None:
     n = int(start_pos.shape[0])
     f = int(targets.shape[1])
 
-    wp_cfg = WaypointConfig(mode=str(cfg.waypoint_mode), num_waypoints=int(cfg.num_waypoints))
+    wp_cfg = WaypointConfig(mode=str(cfg.waypoint_mode), num_waypoints=int(cfg.num_waypoints), turn_alpha=float(cfg.waypoint_turn_alpha))
     waypoints = _extract_waypoints_batch(start_pos=start_pos, targets=targets, cfg=wp_cfg)  # (N,2,2)
 
     pos_min, pos_max_arr = make_default_pos_bounds(pos_max=int(cfg.pos_max))
@@ -306,7 +309,7 @@ def main() -> None:
                         "obs_len": 1,
                         "cond_dim": 8,
                     },
-                    "waypoints": {"mode": str(cfg.waypoint_mode), "num_waypoints": int(cfg.num_waypoints)},
+                    "waypoints": {"mode": str(cfg.waypoint_mode), "turn_alpha": float(cfg.waypoint_turn_alpha), "num_waypoints": int(cfg.num_waypoints)},
                     "norm": norm.as_jsonable(),
                 },
             },
@@ -320,6 +323,7 @@ def main() -> None:
             "pos_max": int(cfg.pos_max),
             "max_train_n": (int(cfg.max_train_n) if cfg.max_train_n is not None else None),
             "waypoint_mode": str(cfg.waypoint_mode),
+            "waypoint_turn_alpha": float(cfg.waypoint_turn_alpha),
             "num_waypoints": int(cfg.num_waypoints),
             "precompute_device": str(cfg.precompute_device),
             "hidden_dim": int(cfg.hidden_dim),

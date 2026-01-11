@@ -7,7 +7,7 @@ In this draft, we focus on a representative Detroit case from WorldTrace \citep{
 \paragraph{Averaging vs.\ interference.}
 Figure~\ref{fig:mode-collapse} visualizes multiple samples for the same condition.
 Deterministic L2 regression collapses to an overly direct ``mean'' route, consistent with destructive averaging under multi-modality.
-An end-to-end diffusion generator avoids hard collapse, but its samples blur corridor alternatives into mixed, implausible trajectories, suggesting mode interference in a purely continuous output space.
+An end-to-end diffusion generator avoids hard collapse, but in long-horizon generation its samples can become destination-inconsistent and diverge off-road, producing globally implausible trajectories.
 
 \subsection{Hierarchical decomposition restores corridor diversity}
 \paragraph{Corridor commitment from decision-stage sampling.}
@@ -38,12 +38,12 @@ This contrast---the same data source hurting decision but helping execution---pr
 \paragraph{Realistic route validation beyond scalar metrics.}
 Figure~\ref{fig:realism} qualitatively and statistically validates realism.
 On three fixed OD cases, our $K=20$ samples largely adhere to the road prior while maintaining diversity.
-On the full split, our generated routes better match the ground-truth distributions of path length, detour factor (relative to straight-line distance), and per-route on-road rate than end-to-end diffusion.
+On the full split, our generated routes better match the ground-truth distributions of path length, detour factor (relative to straight-line distance; excluding degenerate near-zero chords), per-route on-road rate, and turn-angle statistics than end-to-end diffusion.
 
 \begin{figure}[t]
   \centering
   \includegraphics[width=\linewidth]{figures/fig_realism_validation.pdf}
-  \caption{Realistic route generation validation (Detroit). \textbf{(a)} $K=20$ samples for three fixed OD cases overlaid on an OSM-derived road-probability basemap. \textbf{(b)} Distribution alignment for path length, detour factor (vs.\ straight-line distance), and per-route on-road rate (fraction of points with road probability $\ge 0.5$).}
+  \caption{Realistic route generation validation (Detroit). \textbf{(a)} For three fixed OD cases, we overlay ground-truth routes (gray), $K=20$ samples from CascadeTraj (blue), and end-to-end diffusion (orange) on an OSM-derived road-probability basemap. \textbf{(b)} Distribution alignment for path length, detour factor (vs.\ straight-line distance; filtering near-zero chords), per-route on-road rate (fraction of points with road probability $\ge 0.5$), and turn-angle statistics.}
   \label{fig:realism}
 \end{figure}
 

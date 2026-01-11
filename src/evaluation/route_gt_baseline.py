@@ -22,6 +22,7 @@ class AuditConfig:
     sep_thr: float
     max_buckets: int
     num_cases: int
+    num_unimodal_cases: int
     max_traj_per_case: int
     seed: int
     jacc_cell: float
@@ -29,6 +30,64 @@ class AuditConfig:
     waypoint_turn_alpha: float
     num_waypoints: int
     save_case_npz: bool
+    save_png_preview: bool
+
+
+def _hour_and_dow_from_epoch(start_t: np.ndarray, *, tz_offset_hours: float) -> Tuple[np.ndarray, np.ndarray]:
+    start_t = np.asarray(start_t, dtype=np.int64).reshape(-1)
+    start_t_local = start_t + int(float(tz_offset_hours) * 3600)
+    seconds_per_day = 86400
+    days_since_epoch = start_t_local // seconds_per_day
+    seconds_in_day = start_t_local % seconds_per_day
+    hour = (seconds_in_day // 3600).astype(np.int64)
+    dow = ((days_since_epoch + 3) % 7).astype(np.int64)  # 0=Mon,...,6=Sun
+    return hour, dow
+
+
+def _od_stats(
+    *,
+    start_pos: np.ndarray,
+    dest_pos: Optional[np.ndarray],
+) -> Dict[str, object]:
+    start_pos = np.asarray(start_pos, dtype=np.float64)
+    out: Dict[str, object] = {
+        "start_mean_yx": [float(np.mean(start_pos[:, 0])), float(np.mean(start_pos[:, 1]))],
+        "start_std_yx": [float(np.std(start_pos[:, 0])), float(np.std(start_pos[:, 1]))],
+        "start_min_yx": [float(np.min(start_pos[:, 0])), float(np.min(start_pos[:, 1]))],
+        "start_max_yx": [float(np.max(start_pos[:, 0])), float(np.max(start_pos[:, 1]))],
+    }
+    if dest_pos is None:
+        return out
+    dest_pos = np.asarray(dest_pos, dtype=np.float64)
+    out.update(
+        {
+            "dest_mean_yx": [float(np.mean(dest_pos[:, 0])), float(np.mean(dest_pos[:, 1]))],
+            "dest_std_yx": [float(np.std(dest_pos[:, 0])), float(np.std(dest_pos[:, 1]))],
+            "dest_min_yx": [float(np.min(dest_pos[:, 0])), float(np.min(dest_pos[:, 1]))],
+            "dest_max_yx": [float(np.max(dest_pos[:, 0])), float(np.max(dest_pos[:, 1]))],
+        }
+    )
+    return out
+
+
+def _time_stats(start_t: Optional[np.ndarray], *, tz_offset_hours: float) -> Optional[Dict[str, object]]:
+    if start_t is None:
+        return None
+    start_t = np.asarray(start_t, dtype=np.int64).reshape(-1)
+    if start_t.size == 0:
+        return None
+    # Heuristic: only treat as epoch seconds when values look like unix seconds.
+    if int(np.max(start_t)) < 1_000_000_000:
+        return {"effective": "zeros", "reason": "start_t_not_epoch_seconds"}
+    hour, dow = _hour_and_dow_from_epoch(start_t, tz_offset_hours=float(tz_offset_hours))
+    return {
+        "effective": "simple",
+        "tz_offset_hours": float(tz_offset_hours),
+        "hour_hist_24": np.bincount(hour, minlength=24).astype(np.int64).tolist(),
+        "dow_hist_7": np.bincount(dow, minlength=7).astype(np.int64).tolist(),
+        "start_t_min": int(np.min(start_t)),
+        "start_t_max": int(np.max(start_t)),
+    }
 
 
 def _keys_from_od(start_pos: np.ndarray, end_pos: np.ndarray, *, od_bin: float) -> np.ndarray:
@@ -287,6 +346,8 @@ def _plot_case_gt(
         ax.invert_yaxis()
         add_panel_label(ax, f"case{case_id}")
         save_figure(fig, out_path)
+        if bool(cfg.save_png_preview) and str(out_path).lower().endswith(".pdf"):
+            save_figure(fig, out_path.with_suffix(".png"))
         plt.close(fig)
 
 
@@ -347,11 +408,18 @@ def run_audit(*, samples_npz: Path, out_dir: Path, cfg: AuditConfig) -> Dict[str
 
     multimodal = [b for b in bucket_reports if bool(b.get("multimodal"))]
     multimodal = sorted(multimodal, key=lambda r: (int(r.get("n", 0)), float(r.get("score", 0.0))), reverse=True)
-    selected = multimodal[: int(cfg.num_cases)]
+    selected_multi = multimodal[: int(cfg.num_cases)]
+
+    # Unimodal controls: require stable two-cluster fit (no 'reason'), but score below sep_thr.
+    unimodal = [b for b in bucket_reports if (not bool(b.get("multimodal"))) and (b.get("reason") is None)]
+    unimodal = sorted(unimodal, key=lambda r: (float(r.get("score", 0.0)), -int(r.get("n", 0))))
+    selected_uni = unimodal[: int(cfg.num_unimodal_cases)]
+
+    selected = [(b, "multimodal") for b in selected_multi] + [(b, "unimodal") for b in selected_uni]
 
     out_dir.mkdir(parents=True, exist_ok=True)
     cases: List[Dict[str, object]] = []
-    for ci, b in enumerate(selected):
+    for ci, (b, case_type) in enumerate(selected):
         k = tuple(int(x) for x in b["key"])
         idxs_all = buckets.get(k, [])
         if not idxs_all:
@@ -413,11 +481,15 @@ def run_audit(*, samples_npz: Path, out_dir: Path, cfg: AuditConfig) -> Dict[str
         cases.append(
             {
                 "case_id": int(ci),
+                "case_type": str(case_type),
                 "od_key": list(k),
                 "od_end": str(od_end),
                 "n_used": int(idxs.size),
+                "bucket": {kk: b.get(kk) for kk in ("multimodal", "score", "sep", "scatter", "n0", "n1", "frac0", "frac1", "n", "key", "reason")},
                 "cluster": {kk: rep.get(kk) for kk in ("multimodal", "score", "sep", "scatter", "n0", "n1", "frac0", "frac1")},
                 "gt_jaccard_distance": jac,
+                "od_stats": _od_stats(start_pos=sp, dest_pos=dp),
+                "time_stats": _time_stats((ids["start_t"] if ids is not None else None), tz_offset_hours=-5.0),
                 "paths": {"gt_corridor_clusters_pdf": str(fig_path)},
                 "window_ids": (
                     {
@@ -440,6 +512,7 @@ def run_audit(*, samples_npz: Path, out_dir: Path, cfg: AuditConfig) -> Dict[str
             "sep_thr": float(cfg.sep_thr),
             "max_buckets": int(cfg.max_buckets),
             "num_cases": int(cfg.num_cases),
+            "num_unimodal_cases": int(cfg.num_unimodal_cases),
             "max_traj_per_case": int(cfg.max_traj_per_case),
             "seed": int(cfg.seed),
             "jacc_cell": float(cfg.jacc_cell),
@@ -447,6 +520,7 @@ def run_audit(*, samples_npz: Path, out_dir: Path, cfg: AuditConfig) -> Dict[str
             "waypoint_turn_alpha": float(cfg.waypoint_turn_alpha),
             "num_waypoints": int(cfg.num_waypoints),
             "save_case_npz": bool(cfg.save_case_npz),
+            "save_png_preview": bool(cfg.save_png_preview),
         },
         "stats": {
             "N": int(targets.shape[0]),
@@ -454,6 +528,9 @@ def run_audit(*, samples_npz: Path, out_dir: Path, cfg: AuditConfig) -> Dict[str
             "num_od_buckets_total": int(len(buckets)),
             "num_buckets_reported": int(len(bucket_reports)),
             "num_buckets_multimodal": int(len(multimodal)),
+            "num_buckets_unimodal": int(len(unimodal)),
+            "num_cases_multimodal": int(len(selected_multi)),
+            "num_cases_unimodal": int(len(selected_uni)),
         },
         "top_buckets": bucket_reports[: min(len(bucket_reports), 50)],
         "selected_cases": cases,
@@ -478,6 +555,7 @@ def build_argparser() -> argparse.ArgumentParser:
     p.add_argument("--max_buckets", type=int, default=500)
 
     p.add_argument("--num_cases", type=int, default=5)
+    p.add_argument("--num_unimodal_cases", type=int, default=0, help="Also pick unimodal control OD buckets (score < sep_thr).")
     p.add_argument("--max_traj_per_case", type=int, default=200)
     p.add_argument("--seed", type=int, default=0)
 
@@ -487,6 +565,7 @@ def build_argparser() -> argparse.ArgumentParser:
     p.add_argument("--waypoint_turn_alpha", type=float, default=1.0, help="When waypoint_mode=rdp_turn: weight for turn-aware waypoint selection.")
     p.add_argument("--num_waypoints", type=int, default=2)
     p.add_argument("--save_case_npz", action="store_true", help="Save per-case gt_case.npz with traj_idx/start_t subset.")
+    p.add_argument("--save_png_preview", action="store_true", help="Also save a .png preview alongside each .pdf figure.")
     return p
 
 
@@ -499,6 +578,7 @@ def main() -> None:
         sep_thr=float(args.sep_thr),
         max_buckets=int(args.max_buckets),
         num_cases=int(args.num_cases),
+        num_unimodal_cases=int(args.num_unimodal_cases),
         max_traj_per_case=int(args.max_traj_per_case),
         seed=int(args.seed),
         jacc_cell=float(args.jacc_cell),
@@ -506,6 +586,7 @@ def main() -> None:
         waypoint_turn_alpha=float(args.waypoint_turn_alpha),
         num_waypoints=int(args.num_waypoints),
         save_case_npz=bool(args.save_case_npz),
+        save_png_preview=bool(args.save_png_preview),
     )
     report = run_audit(samples_npz=Path(args.samples_npz), out_dir=Path(args.out_dir), cfg=cfg)
     print(json.dumps(report, ensure_ascii=False))

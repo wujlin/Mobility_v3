@@ -1,0 +1,78 @@
+{
+  "ok": true,
+  "npz": "_sync/wsA/icml2026_routegen/E0s_gt_baseline_detroit_segF256_seed0_od128_min10_sep2/case_00/gt_case.npz",
+  "N": 22,
+  "start_t": {
+    "min": 1657232879,
+    "max": 1677950779,
+    "zero_frac": 0.0
+  },
+  "temporal": {
+    "mode": "auto",
+    "tz_offset_hours": -5.0,
+    "effective": "simple",
+    "sample_5": [
+      [
+        0.2113889455795288,
+        1.0
+      ],
+      [
+        0.7060648202896118,
+        0.0
+      ],
+      [
+        0.455532431602478,
+        0.0
+      ],
+      [
+        0.7893749475479126,
+        -0.3333333134651184
+      ],
+      [
+        0.7123147249221802,
+        0.0
+      ]
+    ]
+  },
+  "hour_hist_24": [
+    1,
+    0,
+    2,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    1,
+    1,
+    0,
+    2,
+    2,
+    0,
+    1,
+    1,
+    0,
+    3,
+    6,
+    1,
+    1
+  ],
+  "dow_hist_7": [
+    1,
+    3,
+    4,
+    5,
+    2,
+    2,
+    5
+  ],
+  "commute": {
+    "weekday_commute_n": 2,
+    "weekday_commute_frac": 0.09090909090909091,
+    "weekday_n": 15
+  },
+  "meta": null
+}

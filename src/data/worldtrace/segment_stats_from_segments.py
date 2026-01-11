@@ -122,33 +122,37 @@ def run_stats(*, segments_parquet: Path, out_json: Path, cfg: Config) -> Dict[st
     keep = (n_points >= int(cfg.min_points)) & (chord >= float(cfg.chord_min)) & (detour >= float(cfg.detour_min))
     n_keep = int(np.sum(keep))
 
-    paired = None
-    if win_len > 1:
-        mask = np.isfinite(pre_detour) & np.isfinite(detour) & np.isfinite(pre_chord) & np.isfinite(chord)
+    def _paired_stats(mask: np.ndarray) -> Optional[Dict[str, object]]:
+        mask = np.asarray(mask, dtype=bool).reshape(-1)
         n_pair = int(np.sum(mask))
-        if n_pair > 0:
-            detour_full = detour[mask].astype(np.float64, copy=False)
-            detour_pre = pre_detour[mask].astype(np.float64, copy=False)
-            chord_full = chord[mask].astype(np.float64, copy=False)
-            chord_pre = pre_chord[mask].astype(np.float64, copy=False)
+        if n_pair <= 0:
+            return None
+        detour_full = detour[mask].astype(np.float64, copy=False)
+        detour_pre = pre_detour[mask].astype(np.float64, copy=False)
+        chord_full = chord[mask].astype(np.float64, copy=False)
+        chord_pre = pre_chord[mask].astype(np.float64, copy=False)
 
-            detour_delta = detour_full - detour_pre
-            chord_ratio = chord_pre / np.maximum(chord_full, 1e-6)
+        detour_delta = detour_full - detour_pre
+        chord_ratio = chord_pre / np.maximum(chord_full, 1e-6)
 
-            # Pairwise correlation: does prefix preserve "how detoured" the route is?
-            detour_corr = float(np.corrcoef(detour_full, detour_pre)[0, 1]) if n_pair >= 2 else float("nan")
+        detour_corr = float(np.corrcoef(detour_full, detour_pre)[0, 1]) if n_pair >= 2 else float("nan")
+        lost_detour_frac = float(np.mean(detour_delta >= 0.2)) if n_pair > 0 else 0.0
+        return {
+            "n_pairs": int(n_pair),
+            "detour_corr": float(detour_corr),
+            "detour_delta": _summ(detour_delta),
+            "lost_detour_frac_thr0p2": float(lost_detour_frac),
+            "chord_ratio_prefix_over_full": _summ(chord_ratio),
+        }
 
-            # How often does prefix miss substantial detours present in the full segment?
-            # Thresholds are heuristic and only for diagnosis.
-            lost_detour_frac = float(np.mean(detour_delta >= 0.2)) if n_pair > 0 else 0.0
-
-            paired = {
-                "n_pairs": int(n_pair),
-                "detour_corr": float(detour_corr),
-                "detour_delta": _summ(detour_delta),
-                "lost_detour_frac_thr0p2": float(lost_detour_frac),
-                "chord_ratio_prefix_over_full": _summ(chord_ratio),
-            }
+    paired = None
+    paired_keep = None
+    if win_len > 1:
+        base = np.isfinite(pre_detour) & np.isfinite(detour) & np.isfinite(pre_chord) & np.isfinite(chord)
+        # Avoid degenerate near-zero chords that can explode detour ratios.
+        base = base & (pre_chord >= 1.0) & (chord >= 1.0)
+        paired = _paired_stats(base)
+        paired_keep = _paired_stats(base & keep)
 
     report: Dict[str, object] = {
         "inputs": {"segments_parquet": str(segments_parquet)},
@@ -189,6 +193,7 @@ def run_stats(*, segments_parquet: Path, out_json: Path, cfg: Config) -> Dict[st
             },
         },
         "paired": paired,
+        "paired_keep": paired_keep,
         "meta": {"created_at": datetime.now(tz=TZ_SHANGHAI).isoformat()},
     }
 
@@ -243,6 +248,15 @@ def main() -> None:
                 "lost_detour_frac_thr0p2": report["paired"]["lost_detour_frac_thr0p2"],
             }
             if isinstance(report.get("paired"), dict)
+            else None
+        ),
+        "paired_keep": (
+            {
+                "n_pairs": report["paired_keep"]["n_pairs"],
+                "detour_corr": report["paired_keep"]["detour_corr"],
+                "lost_detour_frac_thr0p2": report["paired_keep"]["lost_detour_frac_thr0p2"],
+            }
+            if isinstance(report.get("paired_keep"), dict)
             else None
         ),
         "keep": report["stats"]["num_segments_keep"],

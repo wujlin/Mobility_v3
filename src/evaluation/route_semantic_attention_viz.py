@@ -245,9 +245,27 @@ def main() -> None:
     w = attn.last_attn.detach().cpu().numpy()
     # (B,H,L,N) -> (S,S) heatmap by averaging over heads and query positions.
     w = w[0]  # (H,L,N)
-    heat = np.mean(w, axis=(0, 1))  # (N,)
+    heat = np.mean(w, axis=(0, 1))  # (N,) non-negative, should sum to ~1
+    heat = np.asarray(heat, dtype=np.float64).reshape(-1)
+    heat_sum = float(np.sum(heat))
+    if not np.isfinite(heat_sum) or heat_sum <= 0:
+        raise RuntimeError(f"Bad attention heatmap sum: {heat_sum}")
+    heat = (heat / heat_sum).astype(np.float64, copy=False)
     s = int(grid_patch_size)
     heat2 = heat.reshape(s, s).astype(np.float32, copy=False)
+
+    # Uniformity diagnostics.
+    n_tok = int(heat.shape[0])
+    uni = np.full((n_tok,), 1.0 / float(n_tok), dtype=np.float64)
+    eps = 1e-12
+    ent = float(-np.sum(heat * np.log(heat + eps)))
+    ent_norm = float(ent / max(np.log(float(n_tok)), eps))
+    l1_uni = float(np.sum(np.abs(heat - uni)))
+    max_p = float(np.max(heat))
+    topk_stats = {}
+    for k_top in (1, 4, 16, 32):
+        k_top = int(min(k_top, n_tok))
+        topk_stats[f"top{k_top}_mass"] = float(np.sum(np.sort(heat)[-k_top:]))
 
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -274,7 +292,17 @@ def main() -> None:
             "seed": int(args.seed),
         },
         "outputs": {"attn_heatmap_npy": str(out_npy.resolve()), "attn_heatmap_png": str(out_png.resolve()), "attn_heatmap_pdf": str(out_pdf.resolve())},
-        "stats": {"heat_min": float(np.min(heat2)), "heat_max": float(np.max(heat2)), "heat_mean": float(np.mean(heat2))},
+        "stats": {
+            "heat_min": float(np.min(heat2)),
+            "heat_max": float(np.max(heat2)),
+            "heat_mean": float(np.mean(heat2)),
+            "heat_sum": float(np.sum(heat)),
+            "entropy_nats": float(ent),
+            "entropy_norm_0to1": float(ent_norm),
+            "l1_to_uniform": float(l1_uni),
+            "max_prob": float(max_p),
+            **topk_stats,
+        },
     }
     (out_dir / "report.json").write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
     print(json.dumps(report, ensure_ascii=False, indent=2))

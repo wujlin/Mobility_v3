@@ -1,0 +1,41 @@
+{
+  "ok": true,
+  "npz": "_sync/wsa/icml2026_routegen/E0_gt_baseline_detroit_F256_n200k_seed0_od128_n10_sep2/case_04/gt_case.npz",
+  "N": 17,
+  "start_t": {
+    "min": 0,
+    "max": 0,
+    "zero_frac": 1.0
+  },
+  "temporal": {
+    "mode": "auto",
+    "tz_offset_hours": -5.0,
+    "effective": "zeros",
+    "sample_5": [
+      [
+        0.0,
+        0.0
+      ],
+      [
+        0.0,
+        0.0
+      ],
+      [
+        0.0,
+        0.0
+      ],
+      [
+        0.0,
+        0.0
+      ],
+      [
+        0.0,
+        0.0
+      ]
+    ]
+  },
+  "hour_hist_24": null,
+  "dow_hist_7": null,
+  "commute": null,
+  "meta": null
+}

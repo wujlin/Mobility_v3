@@ -536,7 +536,7 @@ def main() -> None:
 
                 if bool(posenc_self_correct):
 
-                    def _extra_x0(x0_pred: torch.Tensor, ts: torch.Tensor) -> torch.Tensor:
+                    def _extra_x0(x_t: torch.Tensor, ts: torch.Tensor, x0_pred: torch.Tensor) -> torch.Tensor:
                         assert patch_t is not None and start_pos_t is not None and dest_pos_t is not None
                         return posenc(x0_pred, ts, grid_patch=patch_t, start_pos=start_pos_t, dest_pos=dest_pos_t)
 

@@ -283,6 +283,7 @@ def main() -> None:
         grid_emb_dim = int(sem_meta.get("grid_emb_dim", 64))
         posenc_hidden_dim = int(sem_meta.get("posenc_hidden_dim", 256))
         posenc_weight = float(sem_meta.get("posenc_weight", 1.0))
+        posenc_self_correct = bool(sem_meta.get("posenc_self_correct", False))
         grid_frame = str(sem_meta.get("grid_frame", "raw"))
         attn_heads = int(sem_meta.get("attn_heads", 4))
         attn_weight = float(sem_meta.get("attn_weight", 1.0))
@@ -298,6 +299,7 @@ def main() -> None:
         grid_emb_dim = 64
         posenc_hidden_dim = 256
         posenc_weight = 1.0
+        posenc_self_correct = False
         grid_frame = "raw"
         attn_heads = 4
         attn_weight = 1.0
@@ -518,7 +520,15 @@ def main() -> None:
                         assert patch_t is not None and start_pos_t is not None and dest_pos_t is not None
                         return posenc(x_t, ts, grid_patch=patch_t, start_pos=start_pos_t, dest_pos=dest_pos_t)
 
-                    rel_norm_t = model.sample_trajectory(obs_t, cond_t, horizon=int(k_wp), cond_emb_extra_fn=_extra)  # (N,K_wp,2)
+                    if bool(posenc_self_correct):
+
+                        def _extra_x0(x_t: torch.Tensor, ts: torch.Tensor, x0_pred: torch.Tensor) -> torch.Tensor:
+                            assert patch_t is not None and start_pos_t is not None and dest_pos_t is not None
+                            return posenc(x0_pred, ts, grid_patch=patch_t, start_pos=start_pos_t, dest_pos=dest_pos_t)
+
+                        rel_norm_t = model.sample_trajectory(obs_t, cond_t, horizon=int(k_wp), cond_emb_extra_fn_x0=_extra_x0)  # (N,K_wp,2)
+                    else:
+                        rel_norm_t = model.sample_trajectory(obs_t, cond_t, horizon=int(k_wp), cond_emb_extra_fn=_extra)  # (N,K_wp,2)
                 elif attn_control is not None:
 
                     def _unet_kwargs(x_t: torch.Tensor, ts: torch.Tensor) -> dict:

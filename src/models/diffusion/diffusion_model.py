@@ -74,6 +74,7 @@ class DiffusionTrajectoryModel(BaseTrajectoryModel):
         *,
         sample_weight: Optional[torch.Tensor] = None,
         cond_emb_extra_fn: Optional[Callable[[torch.Tensor, torch.Tensor], torch.Tensor]] = None,
+        cond_emb_extra_fn_x0: Optional[Callable[[torch.Tensor, torch.Tensor, torch.Tensor], torch.Tensor]] = None,
         unet_kwargs_fn: Optional[Callable[[torch.Tensor, torch.Tensor], Dict[str, Any]]] = None,
         return_x0_pred: bool = False,
         return_timesteps: bool = False,
@@ -119,6 +120,23 @@ class DiffusionTrajectoryModel(BaseTrajectoryModel):
             extra_kwargs = unet_kwargs_fn(x_t, timesteps)
             if extra_kwargs:
                 unet_kwargs.update(extra_kwargs)
+
+        def _x0_from_model_out(x_t_in: torch.Tensor, model_out_in: torch.Tensor) -> torch.Tensor:
+            sqrt_alpha_prod = self.scheduler.sqrt_alphas_cumprod[timesteps].flatten()[:, None, None]
+            sqrt_one_minus_alpha_prod = self.scheduler.sqrt_one_minus_alphas_cumprod[timesteps].flatten()[:, None, None]
+            if self.prediction_type == "v":
+                return sqrt_alpha_prod * x_t_in - sqrt_one_minus_alpha_prod * model_out_in
+            return (x_t_in - sqrt_one_minus_alpha_prod * model_out_in) / (sqrt_alpha_prod + 1e-8)
+
+        if cond_emb_extra_fn_x0 is not None:
+            # Self-correcting semantic guidance: use a no-grad x0 estimate to build extra conditioning.
+            with torch.no_grad():
+                model_out_0 = self.unet(x_t, timesteps, cond=global_cond, **unet_kwargs)
+                x0_pred_0 = _x0_from_model_out(x_t, model_out_0)
+            extra_x0 = cond_emb_extra_fn_x0(x_t, timesteps, x0_pred_0)
+            if extra_x0 is not None:
+                global_cond = global_cond + extra_x0.to(device=device, dtype=global_cond.dtype)
+
         model_out = self.unet(x_t, timesteps, cond=global_cond, **unet_kwargs)
 
         sqrt_alpha_prod = self.scheduler.sqrt_alphas_cumprod[timesteps].flatten()[:, None, None]
@@ -185,6 +203,7 @@ class DiffusionTrajectoryModel(BaseTrajectoryModel):
         cond_uncond: Optional[torch.Tensor] = None,
         cfg_scale: float = 0.0,
         cond_emb_extra_fn: Optional[Callable[[torch.Tensor, torch.Tensor], torch.Tensor]] = None,
+        cond_emb_extra_fn_x0: Optional[Callable[[torch.Tensor, torch.Tensor, torch.Tensor], torch.Tensor]] = None,
         unet_kwargs_fn: Optional[Callable[[torch.Tensor, torch.Tensor], Dict[str, Any]]] = None,
         **kwargs,
     ) -> torch.Tensor:
@@ -208,6 +227,8 @@ class DiffusionTrajectoryModel(BaseTrajectoryModel):
         global_cond_uncond = None
         if use_cfg:
             global_cond_uncond = self.get_global_cond(obs, cond_uncond.to(device=device, dtype=cond.dtype))
+        if use_cfg and cond_emb_extra_fn_x0 is not None:
+            raise ValueError("cond_emb_extra_fn_x0 is not supported with CFG (cond_uncond/cfg_scale).")
 
         # 2. Random Noise
         # Shape: (B, Act_Dim, Horizon)
@@ -219,6 +240,7 @@ class DiffusionTrajectoryModel(BaseTrajectoryModel):
             # Broadcast timestep
             ts = torch.full((B,), t, device=device, dtype=torch.long)
             extra = None
+            extra_x0 = None
             if cond_emb_extra_fn is not None:
                 extra = cond_emb_extra_fn(x_t, ts)
                 if extra is not None:
@@ -241,6 +263,19 @@ class DiffusionTrajectoryModel(BaseTrajectoryModel):
                 model_out = out_u + float(cfg_scale) * (out_c - out_u)
             else:
                 cond_c = global_cond + extra if extra is not None else global_cond
+                if cond_emb_extra_fn_x0 is not None:
+                    with torch.no_grad():
+                        out_0 = self.unet(x_t, ts, cond=cond_c, **unet_kwargs)
+                        alpha = self.scheduler.sqrt_alphas_cumprod[t].to(device=device, dtype=x_t.dtype)
+                        sigma = self.scheduler.sqrt_one_minus_alphas_cumprod[t].to(device=device, dtype=x_t.dtype)
+                        if self.prediction_type == "v":
+                            x0_pred_0 = alpha * x_t - sigma * out_0
+                        else:
+                            x0_pred_0 = (x_t - sigma * out_0) / (alpha + 1e-8)
+                    extra_x0 = cond_emb_extra_fn_x0(x_t, ts, x0_pred_0)
+                    if extra_x0 is not None:
+                        extra_x0 = extra_x0.to(device=device, dtype=global_cond.dtype)
+                        cond_c = cond_c + extra_x0
                 model_out = self.unet(x_t, ts, cond=cond_c, **unet_kwargs)
 
             # Convert v-prediction to epsilon for DDPM step (scheduler expects epsilon).

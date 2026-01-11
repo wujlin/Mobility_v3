@@ -155,6 +155,7 @@ class TrainConfig:
     grid_emb_dim: int
     semantic_posenc_hidden_dim: int
     semantic_posenc_weight: float
+    semantic_posenc_self_correct: bool
     semantic_attn_heads: int
     semantic_attn_weight: float
     semantic_loss_weight: float
@@ -321,6 +322,11 @@ def build_argparser() -> argparse.ArgumentParser:
     p.add_argument("--grid_emb_dim", type=int, default=64, help="When semantic_mode includes 'gridcnn': CNN output embedding dim.")
     p.add_argument("--semantic_posenc_hidden_dim", type=int, default=256, help="When semantic_mode includes 'gridpos': MLP hidden dim for position-aligned semantic conditioning.")
     p.add_argument("--semantic_posenc_weight", type=float, default=1.0, help="When semantic_mode includes 'gridpos': scale for semantic extra embedding.")
+    p.add_argument(
+        "--semantic_posenc_self_correct",
+        action="store_true",
+        help="When semantic_mode includes 'gridpos': use a no-grad x0 estimate to sample semantics (self-correcting guidance).",
+    )
     p.add_argument("--semantic_attn_heads", type=int, default=4, help="When semantic_mode includes 'gridattn': number of attention heads.")
     p.add_argument("--semantic_attn_weight", type=float, default=1.0, help="When semantic_mode includes 'gridattn': scale for attention control_mid.")
     p.add_argument("--semantic_loss_weight", type=float, default=0.0, help="Optional (Scheme-C): weight for semantic consistency loss computed along skeleton.")
@@ -365,6 +371,7 @@ def main() -> None:
         grid_emb_dim=int(args.grid_emb_dim),
         semantic_posenc_hidden_dim=int(args.semantic_posenc_hidden_dim),
         semantic_posenc_weight=float(args.semantic_posenc_weight),
+        semantic_posenc_self_correct=bool(args.semantic_posenc_self_correct),
         semantic_attn_heads=int(args.semantic_attn_heads),
         semantic_attn_weight=float(args.semantic_attn_weight),
         semantic_loss_weight=float(args.semantic_loss_weight),
@@ -682,14 +689,30 @@ def main() -> None:
 
                 need_x0 = bool(float(cfg.semantic_loss_weight) > 0.0)
                 if posenc is not None:
-                    out = model.compute_loss(
-                        obs_b,
-                        cond_b,
-                        target_b,
-                        cond_emb_extra_fn=_extra,
-                        unet_kwargs_fn=None,
-                        return_x0_pred=need_x0,
-                    )
+                    if bool(cfg.semantic_posenc_self_correct):
+
+                        def _extra_x0(x_t: torch.Tensor, t: torch.Tensor, x0_pred: torch.Tensor) -> torch.Tensor:
+                            assert posenc is not None and patch_b is not None and start_b is not None and dest_b is not None
+                            return posenc(x0_pred, t, grid_patch=patch_b, start_pos=start_b, dest_pos=dest_b)
+
+                        out = model.compute_loss(
+                            obs_b,
+                            cond_b,
+                            target_b,
+                            cond_emb_extra_fn=None,
+                            cond_emb_extra_fn_x0=_extra_x0,
+                            unet_kwargs_fn=None,
+                            return_x0_pred=need_x0,
+                        )
+                    else:
+                        out = model.compute_loss(
+                            obs_b,
+                            cond_b,
+                            target_b,
+                            cond_emb_extra_fn=_extra,
+                            unet_kwargs_fn=None,
+                            return_x0_pred=need_x0,
+                        )
                 elif attn_control is not None:
                     out = model.compute_loss(
                         obs_b,
@@ -790,6 +813,7 @@ def main() -> None:
                         "grid_frame": ("raw" if sem_mode in ("gridpos", "od_gridpos") else ("bins" if bool(sem_use_bins) else "raw")),
                         "posenc_hidden_dim": int(cfg.semantic_posenc_hidden_dim),
                         "posenc_weight": float(cfg.semantic_posenc_weight),
+                        "posenc_self_correct": bool(cfg.semantic_posenc_self_correct),
                         "attn_heads": int(cfg.semantic_attn_heads),
                         "attn_weight": float(cfg.semantic_attn_weight),
                         "semantic_loss_weight": float(cfg.semantic_loss_weight),

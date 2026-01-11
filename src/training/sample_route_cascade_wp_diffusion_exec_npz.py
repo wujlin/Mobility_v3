@@ -13,6 +13,9 @@ from src.features.semantic_od import (
     SemanticGridNorm,
     SemanticODNorm,
     load_osm_road_prob,
+    load_osm_road_prob_major,
+    load_osm_road_prob_minor,
+    load_osm_road_prob_service,
     load_poi_stack_and_landuse_entropy,
     load_poi_total_and_landuse_entropy,
     normalize_grid_patch,
@@ -250,6 +253,7 @@ def main() -> None:
         grid_frame = str(sem_meta.get("grid_frame", "raw"))
         attn_heads = int(sem_meta.get("attn_heads", 4))
         attn_weight = float(sem_meta.get("attn_weight", 1.0))
+        posenc_self_correct = bool(sem_meta.get("posenc_self_correct", False))
     else:
         sem_mode = None
         sem_use_bins = False
@@ -265,6 +269,7 @@ def main() -> None:
         grid_frame = "raw"
         attn_heads = 4
         attn_weight = 1.0
+        posenc_self_correct = False
 
     if sem_mode is None and sem_cfg is not None:
         sem_mode = "od"
@@ -356,10 +361,19 @@ def main() -> None:
             categories = None
             landuse_entropy = None
             osm_road_prob = None
+            osm_road_prob_major = None
+            osm_road_prob_minor = None
+            osm_road_prob_service = None
             if need_poi:
                 poi_stack, categories, landuse_entropy = load_poi_stack_and_landuse_entropy(args.semantic_dir)
             if "road_prob" in chans:
                 osm_road_prob = load_osm_road_prob(args.semantic_dir)
+            if "road_prob_major" in chans:
+                osm_road_prob_major = load_osm_road_prob_major(args.semantic_dir)
+            if "road_prob_minor" in chans:
+                osm_road_prob_minor = load_osm_road_prob_minor(args.semantic_dir)
+            if "road_prob_service" in chans:
+                osm_road_prob_service = load_osm_road_prob_service(args.semantic_dir)
 
             patch_o = start_pos if sem_mode in ("gridpos", "od_gridpos") else sem_o
             patch_d = dest_pos if sem_mode in ("gridpos", "od_gridpos") else sem_d
@@ -370,6 +384,9 @@ def main() -> None:
                 categories=categories,
                 landuse_entropy=landuse_entropy,
                 osm_road_prob=osm_road_prob,
+                osm_road_prob_major=osm_road_prob_major,
+                osm_road_prob_minor=osm_road_prob_minor,
+                osm_road_prob_service=osm_road_prob_service,
                 patch_size=int(grid_patch_size),
                 extent=float(grid_extent),
                 grid_channels=str(grid_channels),
@@ -517,7 +534,20 @@ def main() -> None:
                     assert patch_t is not None and start_pos_t is not None and dest_pos_t is not None
                     return posenc(x_t, ts, grid_patch=patch_t, start_pos=start_pos_t, dest_pos=dest_pos_t)
 
-                rel_norm_t = dec_model.sample_trajectory(obs_dec_t, cond_dec_t, horizon=int(k_wp), cond_emb_extra_fn=_extra)  # (N,2,2)
+                if bool(posenc_self_correct):
+
+                    def _extra_x0(x0_pred: torch.Tensor, ts: torch.Tensor) -> torch.Tensor:
+                        assert patch_t is not None and start_pos_t is not None and dest_pos_t is not None
+                        return posenc(x0_pred, ts, grid_patch=patch_t, start_pos=start_pos_t, dest_pos=dest_pos_t)
+
+                    rel_norm_t = dec_model.sample_trajectory(
+                        obs_dec_t,
+                        cond_dec_t,
+                        horizon=int(k_wp),
+                        cond_emb_extra_fn_x0=_extra_x0,
+                    )  # (N,2,2)
+                else:
+                    rel_norm_t = dec_model.sample_trajectory(obs_dec_t, cond_dec_t, horizon=int(k_wp), cond_emb_extra_fn=_extra)  # (N,2,2)
             elif attn_control is not None:
 
                 def _unet_kwargs(x_t: torch.Tensor, ts: torch.Tensor) -> dict:

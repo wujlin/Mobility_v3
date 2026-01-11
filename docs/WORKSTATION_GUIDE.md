@@ -197,6 +197,22 @@ rsync -avP wsA:"$RAW_ROOT/worldtrace/detroit_core_v1/story/" \
 - 只拉 `png/pdf/json` 等小文件，不要拉 zip/pbf 大文件到本地
 - 若网络不稳：加 `--partial --append-verify` 断点续传
 
+### 6.1 本地 `_sync` 目录口径（ICML 2026 RouteGen）
+
+> 目的：让“跑完→rsync→写论文引用”这一链路可持续，不因目录命名漂移而丢证据或找不到文件。
+
+- **统一落点**：本地一律同步到 `/_sync/wsA/icml2026_routegen/<EXP_DIR>/`。
+- **不移动原始同步目录**：避免下一次 rsync 把目录“同步回去”导致冲突；若发现命名不一致，优先用**软链接别名**解决。
+  - 例：`E22a_audit_... -> E20a_audit_...`（保证旧路径仍可增量同步，同时论文引用用新名字）。
+- **同步结果索引**：每次同步后可生成一份可检索清单（便于 PI review / 写作引用）：
+
+```bash
+python tools/gen_routegen_sync_manifest.py \
+  --root _sync/wsA/icml2026_routegen \
+  --out_json docs/ICML_2026_ROUTEGEN_SYNC_MANIFEST.json \
+  --out_md docs/ICML_2026_ROUTEGEN_SYNC_MANIFEST.md
+```
+
 ---
 
 ## 7) 代理与网络（Wayback / Census 常见问题）

@@ -23,12 +23,29 @@ This shows that ``having a planner'' is not sufficient; the composition must pre
 Treating execution as a weak residual refinement (by scaling the execution residual) preserves corridor commitments while still refining local geometry.
 This provides a controllable knob that balances corridor adherence against continuous-detail refinement and is a key practical ingredient in making the cascade work end-to-end.
 
-\subsection{Semantic features do not drive corridor commitment (negative but informative)}
-\paragraph{Conditioning is not semantic reasoning.}
-We evaluate multiple inference-observable semantic representations for conditioning the decision stage, including endpoint covariates (POI density and land-use entropy), along-chord profiles, and OD-aligned grid encoders (including dense road-probability rasters).
+\subsection{Data utility is stage-specific (design principle)}
+\paragraph{Decision stage: semantics and map priors do not drive corridor commitment.}
+We evaluate multiple inference-observable semantic representations for conditioning the decision stage, including endpoint covariates (POI density and land-use entropy), along-chord profiles, and OD-aligned grid encoders.
 Across these settings, richer semantic representations provide limited and inconsistent benefit for corridor commitment.
 Crucially, a matched-dimension random OD-keyed embedding yields comparable gains to weak endpoint semantics, indicating that apparent improvements are largely due to conditioning capacity rather than semantic content.
-Moreover, injecting dense map priors (road probability) into the decision stage can reduce diversity and coverage, suggesting a stage-specific placement of map information: corridor commitment is topological, while feasibility priors are better suited for execution.
+Moreover, injecting dense map priors into the decision stage can reduce corridor diversity and coverage (Table~\ref{tab:stage-specific}), reinforcing the view that corridor commitment is primarily topological.
+
+\paragraph{Execution stage: soft road priors improve feasibility without accuracy loss.}
+In contrast, applying OSM-derived feasibility priors at the execution stage yields a large and clean improvement.
+Starting from the full-scale CascadeTraj outputs, a lightweight road-prior refinement improves the on-road rate from $0.91$ to $0.96$ without degrading best-of-$K$ ADE (Table~\ref{tab:stage-specific}).
+This contrast---the same data source hurting decision but helping execution---provides actionable guidance on integrating heterogeneous urban data into hierarchical route generators.
+
+\paragraph{Realistic route validation beyond scalar metrics.}
+Figure~\ref{fig:realism} qualitatively and statistically validates realism.
+On three fixed OD cases, our $K=20$ samples largely adhere to the road prior while maintaining diversity.
+On the full split, our generated routes better match the ground-truth distributions of path length, detour factor (relative to straight-line distance), and per-route on-road rate than end-to-end diffusion.
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=\linewidth]{figures/fig_realism_validation.pdf}
+  \caption{Realistic route generation validation (Detroit). \textbf{(a)} $K=20$ samples for three fixed OD cases overlaid on an OSM-derived road-probability basemap. \textbf{(b)} Distribution alignment for path length, detour factor (vs.\ straight-line distance), and per-route on-road rate (fraction of points with road probability $\ge 0.5$).}
+  \label{fig:realism}
+\end{figure}
 
 \subsection{Full-scale evaluation confirms the approach}
 \paragraph{Beyond diagnostic cases.}
@@ -54,4 +71,24 @@ We therefore interpret global Jaccard diversity jointly with feasibility and mic
   \end{tabular}
   \caption{Full-scale evaluation on Detroit (WorldTrace), $N=2295$ windows, $F=256$, $K=20$. ADE is best-of-$K$ in grid units. On-road rate uses OSM road probability threshold $0.5$. Jaccard diversity is the mean pairwise occupancy-set Jaccard distance (higher can be inflated by noisy off-road wandering).}
   \label{tab:fullscale}
+\end{table}
+
+\begin{table}[t]
+  \centering
+  \small
+  \begin{tabular}{lccc}
+    \toprule
+    Variant & Cov / On-road & Div / road\_prob & JSD / ADE$_{best}$ \\
+    \midrule
+    \multicolumn{4}{l}{\textbf{Decision stage (E11, 5 diagnostic cases):} Cov$\uparrow$, Div$\uparrow$, JSD$\downarrow$} \\
+    gridcnn (poi+entropy) & 1.000 & 0.928 & 0.013 \\
+    gridcnn\_road (+road\_prob) & 0.904 & 0.763 & 0.032 \\
+    \midrule
+    \multicolumn{4}{l}{\textbf{Execution stage (E12, full-scale):} On-road$\uparrow$, road\_prob$\uparrow$, ADE$_{best}\downarrow$} \\
+    baseline cascade & 0.912 & 0.894 & 23.8 \\
+    +road prior (strong) & 0.964 & 0.958 & 23.8 \\
+    \bottomrule
+  \end{tabular}
+  \caption{Stage-specific data utility. The same OSM-derived road signal harms decision-stage corridor modeling when used as conditioning (E11) but improves execution-stage feasibility when used as a soft refinement (E12).}
+  \label{tab:stage-specific}
 \end{table}

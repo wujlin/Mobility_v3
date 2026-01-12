@@ -29,7 +29,7 @@
 
 \usepackage[round,authoryear]{natbib}
 
-\title{CascadeTraj: Hierarchical Route Generation with Road Topology and Urban Semantics}
+\title{CascadeTraj: Behaviorally Realistic Route Generation via Temporal-Spatial Semantic Guidance}
 \author{TODO (PI review draft)}
 \date{\today}
 
@@ -41,7 +41,7 @@
 \maketitle
 
 \begin{abstract}
-TODO: one-paragraph abstract.
+We argue that ``realistic'' route generation is not only a geometric constraint (being on roads), but a behavioral constraint (being plausible \emph{under a given temporal--spatial context}). Existing methods often satisfy at most one: map-free generators drift off-road or collapse, while shortest-path routing is structurally valid but behaviorally implausible and insensitive to context. We propose \textbf{CascadeTraj}, a hierarchical route generation framework that uses road topology as a structural mechanism and treats temporal--spatial semantics (time, road hierarchy, POI context) as a \emph{core conditioning signal} that modulates corridor choice. The decision stage selects a corridor on the road graph conditioned on semantics and time; the execution stage generates a continuous trajectory within the selected corridor via residual diffusion. As diagnostic evidence, we show that map-free continuous generation fails to converge to road corridors at trip scale: decision-stage waypoints remain far from ground-truth corridors even with soft road priors (median error 24.7 grid units with tier-road; 49.5 without), and generated samples exhibit off-road zigzags. We then define behavioral realism as matching the context-conditioned corridor distribution, and outline an evaluation protocol for corridor accuracy, on-road rate, and semantic control.
 \end{abstract}
 
 \section{Introduction}

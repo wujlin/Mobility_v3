@@ -3,16 +3,26 @@
 \subsection{Diagnostic: map-free generation fails at corridor-level realism}
 \label{sec:results-diagnostic}
 
-We first establish a diagnostic finding: continuous map-free generation struggles to produce trip-scale routes that align with road corridors.
+We first establish a diagnostic finding under the redefined notion of realism (Sec.~\ref{sec:intro}): without an explicit structural mechanism, map-free continuous generation struggles to produce trip-scale routes that align with road corridors.
 Figure~\ref{fig:diagnosis-mapfree} visualizes a representative OD pair with multiple GT trajectories that form two distinct corridors. In contrast, an L2 regressor collapses to a straight-line-like mode; end-to-end diffusion tends to blur around the origin; and the current map-free CascadeTraj produces zigzag trajectories that frequently cross non-road areas.
 Moreover, even when GT corridors are approximately balanced, the generated samples can be heavily skewed toward one corridor, indicating a biased decision distribution.
+
+For the case shown in Fig.~\ref{fig:diagnosis-mapfree}, GT corridors are close to balanced ($10$ vs.\ $12$ trajectories), while the map-free CascadeTraj samples are skewed ($16$ vs.\ $4$ out of $20$), suggesting that decision-stage uncertainty is not well-calibrated.
 
 \begin{figure}[t]
   \centering
   \maybeincludegraphics[width=\linewidth]{figures/fig1_diagnosis_mapfree.png}
   \caption{\textbf{Map-free generation fails at corridor-level realism.}
-  GT trajectories exhibit multi-modal corridor structure, while map-free baselines either collapse (L2), blur (end-to-end diffusion), or produce off-road zigzags (map-free CascadeTraj).}
+  GT trajectories exhibit multi-modal corridor structure, while map-free baselines either collapse (L2), diverge/blur (end-to-end diffusion), or produce off-road zigzags (map-free CascadeTraj). All methods use the same OD pair and $K{=}20$ samples.}
   \label{fig:diagnosis-mapfree}
+\end{figure}
+
+\begin{figure}[t]
+  \centering
+  \maybeincludegraphics[width=0.9\linewidth]{figures/fig2_gt_corridors.png}
+  \caption{\textbf{Ground-truth corridor multi-modality.}
+  For the same OD, GT trajectories cluster into two distinct corridors, motivating corridor-level modeling and distributional evaluation.}
+  \label{fig:gt-corridors}
 \end{figure}
 
 \subsection{Waypoint audit: soft priors help but do not solve the measure-zero problem}
@@ -59,4 +69,8 @@ Tier-road reduces the error substantially, but the median distance remains far b
 \subsection{Road-graph corridor selection (preliminary)}
 \label{sec:results-roadaware}
 
-The diagnostic evidence above motivates our road-graph corridor selection stage: by moving the coarse decision onto a discrete corridor space, we avoid relying on weak continuous penalties to hit a measure-zero manifold. We are integrating a $k$-shortest-path corridor generator and a semantic/temporal corridor selector (Sec.~\ref{sec:method}) and will report (i) corridor selection accuracy, (ii) on-road rate, and (iii) semantic control effects (time-of-day, POI features) in the final version.
+The diagnostic evidence above motivates our road-graph corridor selection stage: by moving the coarse decision onto a discrete corridor space, we avoid relying on weak continuous penalties to hit a measure-zero manifold. Importantly, behavioral realism requires that corridor probabilities \emph{change with context} rather than being random.
+We are integrating a $k$-shortest-path corridor generator and a semantic/temporal corridor selector (Sec.~\ref{sec:method}). The final evaluation will report:
+(i) corridor selection accuracy (against GT corridor assignment),
+(ii) structural realism via on-road rate and distance-to-road,
+and (iii) behavioral realism via context-conditioned distribution matching (Sec.~\ref{sec:experiments}), including time-of-day effects and POI/road-tier conditioning.

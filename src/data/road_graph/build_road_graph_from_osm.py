@@ -5,7 +5,7 @@ import json
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Dict, Iterable, Iterator, Optional, Tuple
+from typing import Dict, Iterator, Optional, Tuple
 
 import numpy as np
 
@@ -49,32 +49,44 @@ def _tier_id(highway: str) -> int:
     return 3
 
 
-def _iter_geom_endpoints_lonlat(geom) -> Iterator[Tuple[float, float, float, float]]:
+def _iter_geom_coords_lonlat(geom) -> Iterator[np.ndarray]:
     """
-    Yield (lon0, lat0, lon1, lat1) for LineString geometries.
+    Yield Nx2 arrays of (lon, lat) coords for LineString/MultiLineString geometries.
     """
     if geom is None:
         return
     gtype = getattr(geom, "geom_type", None)
     if gtype == "LineString":
-        coords = np.asarray(geom.coords, dtype=np.float64)
-        if coords.shape[0] >= 2:
-            lon0, lat0 = float(coords[0, 0]), float(coords[0, 1])
-            lon1, lat1 = float(coords[-1, 0]), float(coords[-1, 1])
-            yield lon0, lat0, lon1, lat1
+        yield np.asarray(geom.coords, dtype=np.float64)
     elif gtype == "MultiLineString":
-        # Fall back: take the first and last segment endpoints.
-        first = None
-        last = None
         for part in geom.geoms:
             coords = np.asarray(part.coords, dtype=np.float64)
-            if coords.shape[0] < 2:
-                continue
-            if first is None:
-                first = (float(coords[0, 0]), float(coords[0, 1]))
-            last = (float(coords[-1, 0]), float(coords[-1, 1]))
-        if first is not None and last is not None:
-            yield first[0], first[1], last[0], last[1]
+            if coords.shape[0] >= 2:
+                yield coords
+
+
+def _bresenham(y0: int, x0: int, y1: int, x1: int) -> Iterator[Tuple[int, int]]:
+    """
+    Bresenham line rasterization in (y,x).
+    """
+    dy = abs(int(y1) - int(y0))
+    dx = abs(int(x1) - int(x0))
+    sy = 1 if int(y0) < int(y1) else -1
+    sx = 1 if int(x0) < int(x1) else -1
+    err = dx - dy
+
+    y, x = int(y0), int(x0)
+    while True:
+        yield y, x
+        if y == int(y1) and x == int(x1):
+            break
+        e2 = 2 * err
+        if e2 > -dy:
+            err -= dy
+            x += sx
+        if e2 < dx:
+            err += dx
+            y += sy
 
 
 def _load_grid_from_semantic_dir(semantic_dir: Path) -> GridSpec:
@@ -130,96 +142,96 @@ def build_graph(
     if len(roads) == 0:
         raise SystemExit("No roads after filtering by road_types. Try --road_types B.")
 
-    # Node coordinate registry (OSM node id -> (y,x) in grid).
-    node_xy: Dict[int, Tuple[float, float]] = {}
+    # We build a graph in grid space:
+    # - node_id is the grid cell id (y*W + x)
+    # - nodes are unique road cells visited by OSM polylines
+    # - edges connect consecutive rasterized cells along road polylines
+    H, W = int(grid.H), int(grid.W)
+    res_y_m, res_x_m = grid.resolution_m()
 
-    # Directed edges as (u_id, v_id, weight_m, tier_id).
-    edges_u: list[int] = []
-    edges_v: list[int] = []
-    edges_w: list[float] = []
-    edges_tier: list[int] = []
+    cell_to_idx: Dict[int, int] = {}
+    node_id_list: list[int] = []
+
+    # Directed edge map: (u_idx,v_idx) -> (len_m, tier_id)
+    edge_map: Dict[Tuple[int, int], Tuple[float, int]] = {}
+
+    def _node_idx(y: int, x: int) -> Tuple[int, int]:
+        cid = int(y) * int(W) + int(x)
+        idx = cell_to_idx.get(cid)
+        if idx is None:
+            idx = int(len(node_id_list))
+            cell_to_idx[cid] = idx
+            node_id_list.append(int(cid))
+        return int(idx), int(cid)
+
+    def _add_edge(u: int, v: int, *, w_m: float, tier: int) -> None:
+        key = (int(u), int(v))
+        prev = edge_map.get(key)
+        if prev is None:
+            edge_map[key] = (float(w_m), int(tier))
+            return
+        w0, t0 = prev
+        edge_map[key] = (float(min(float(w0), float(w_m))), int(min(int(t0), int(tier))))
 
     n_edge_rows = 0
+    n_geom = 0
+    n_raster_steps = 0
     for _, row in roads.iterrows():
         n_edge_rows += 1
-        try:
-            u_id = int(row.get("u"))
-            v_id = int(row.get("v"))
-        except Exception:
-            continue
         geom = row.get("geometry")
         highway = _normalize_highway_tag(row.get("highway"))
         if not highway:
             continue
         tier = _tier_id(highway)
-        length_m = row.get("length")
-        w_m = float(length_m) if length_m is not None and float(length_m) > 0 else None
+        for coords in _iter_geom_coords_lonlat(geom):
+            n_geom += 1
+            if coords.shape[0] < 2:
+                continue
+            lon = coords[:, 0]
+            lat = coords[:, 1]
+            yy, xx = grid.latlon_to_yx(lat, lon)
+            inb = grid.in_bounds(yy, xx)
+            yy = yy[inb]
+            xx = xx[inb]
+            if yy.size < 2:
+                continue
 
-        # Determine endpoints in grid space.
-        lon0 = lat0 = lon1 = lat1 = None
-        for a, b, c, d in _iter_geom_endpoints_lonlat(geom):
-            lon0, lat0, lon1, lat1 = a, b, c, d
-            break
-        if lon0 is None or lat0 is None or lon1 is None or lat1 is None:
-            continue
-        y0, x0 = grid.latlon_to_yx(np.asarray([lat0]), np.asarray([lon0]))
-        y1, x1 = grid.latlon_to_yx(np.asarray([lat1]), np.asarray([lon1]))
-        y0f, x0f = float(y0[0]), float(x0[0])
-        y1f, x1f = float(y1[0]), float(x1[0])
-        node_xy.setdefault(u_id, (y0f, x0f))
-        node_xy.setdefault(v_id, (y1f, x1f))
+            prev_cell: Optional[Tuple[int, int]] = None
+            for i in range(int(yy.size) - 1):
+                y0, x0 = int(yy[i]), int(xx[i])
+                y1, x1 = int(yy[i + 1]), int(xx[i + 1])
+                for yx in _bresenham(y0, x0, y1, x1):
+                    cy, cx = int(yx[0]), int(yx[1])
+                    if not (0 <= cy < H and 0 <= cx < W):
+                        continue
+                    if prev_cell is not None and (cy, cx) != prev_cell:
+                        py, px = prev_cell
+                        u_idx, _ = _node_idx(py, px)
+                        v_idx, _ = _node_idx(cy, cx)
+                        dy = abs(int(cy) - int(py))
+                        dx = abs(int(cx) - int(px))
+                        step_m = float(np.hypot(float(dy) * float(res_y_m), float(dx) * float(res_x_m)))
+                        if step_m > 0:
+                            _add_edge(u_idx, v_idx, w_m=step_m, tier=int(tier))
+                            _add_edge(v_idx, u_idx, w_m=step_m, tier=int(tier))
+                            n_raster_steps += 1
+                    prev_cell = (cy, cx)
 
-        if w_m is None:
-            # Fallback: grid-distance in meters (approx).
-            res_y_m, res_x_m = grid.resolution_m()
-            dy_m = float(abs(y1f - y0f)) * float(res_y_m)
-            dx_m = float(abs(x1f - x0f)) * float(res_x_m)
-            w_m = float(np.hypot(dy_m, dx_m))
+    if not node_id_list or not edge_map:
+        raise SystemExit("Built an empty road graph (0 nodes or 0 edges). Check OSM extract / bbox / road_types.")
 
-        oneway = row.get("oneway")
-        is_oneway = bool(oneway) if oneway is not None else False
+    node_id = np.asarray(node_id_list, dtype=np.int64)
+    n_nodes = int(node_id.shape[0])
+    node_y = (node_id // int(W)).astype(np.float32, copy=False)
+    node_x = (node_id % int(W)).astype(np.float32, copy=False)
 
-        edges_u.append(u_id)
-        edges_v.append(v_id)
-        edges_w.append(float(w_m))
-        edges_tier.append(int(tier))
-        if not is_oneway:
-            edges_u.append(v_id)
-            edges_v.append(u_id)
-            edges_w.append(float(w_m))
-            edges_tier.append(int(tier))
-
-    # Build node index mapping.
-    node_ids = np.asarray(sorted(node_xy.keys()), dtype=np.int64)
-    n_nodes = int(node_ids.shape[0])
-    id_to_idx = {int(nid): int(i) for i, nid in enumerate(node_ids.tolist())}
-    node_y = np.zeros((n_nodes,), dtype=np.float32)
-    node_x = np.zeros((n_nodes,), dtype=np.float32)
-    for i, nid in enumerate(node_ids.tolist()):
-        yy, xx = node_xy[int(nid)]
-        node_y[i] = float(yy)
-        node_x[i] = float(xx)
-
-    # Map edges to indices (drop edges with missing endpoints).
-    u_idx = []
-    v_idx = []
-    w_m = []
-    tier_id = []
-    u_node = []
-    v_node = []
-    dropped = 0
-    for uu, vv, ww, tt in zip(edges_u, edges_v, edges_w, edges_tier):
-        iu = id_to_idx.get(int(uu))
-        iv = id_to_idx.get(int(vv))
-        if iu is None or iv is None:
-            dropped += 1
-            continue
-        u_idx.append(int(iu))
-        v_idx.append(int(iv))
-        u_node.append(int(uu))
-        v_node.append(int(vv))
-        w_m.append(float(ww))
-        tier_id.append(int(tt))
+    # Unpack edges.
+    u_idx = np.asarray([k[0] for k in edge_map.keys()], dtype=np.int32)
+    v_idx = np.asarray([k[1] for k in edge_map.keys()], dtype=np.int32)
+    edge_len_m = np.asarray([v[0] for v in edge_map.values()], dtype=np.float32)
+    edge_tier = np.asarray([v[1] for v in edge_map.values()], dtype=np.uint8)
+    u_node = node_id[u_idx].astype(np.int64, copy=False)
+    v_node = node_id[v_idx].astype(np.int64, copy=False)
 
     out_dir.mkdir(parents=True, exist_ok=True)
     out_npz = out_dir / "road_graph.npz"
@@ -235,24 +247,25 @@ def build_graph(
             "n_edge_rows": int(n_edge_rows),
             "n_nodes": int(n_nodes),
             "n_edges_directed": int(len(u_idx)),
-            "dropped_edges": int(dropped),
+            "n_geom": int(n_geom),
+            "n_raster_steps": int(n_raster_steps),
         },
     }
 
     np.savez_compressed(
         out_npz,
-        node_id=node_ids,
+        node_id=node_id,
         node_y=node_y,
         node_x=node_x,
         node_yx=np.stack([node_y, node_x], axis=1).astype(np.float32, copy=False),
-        edge_u=np.asarray(u_idx, dtype=np.int32),
-        edge_v=np.asarray(v_idx, dtype=np.int32),
-        edge_uv=np.stack([np.asarray(u_idx, dtype=np.int32), np.asarray(v_idx, dtype=np.int32)], axis=1).astype(np.int32, copy=False),
-        edge_u_node_id=np.asarray(u_node, dtype=np.int64),
-        edge_v_node_id=np.asarray(v_node, dtype=np.int64),
-        edge_w_m=np.asarray(w_m, dtype=np.float32),
-        edge_len_m=np.asarray(w_m, dtype=np.float32),
-        edge_tier=np.asarray(tier_id, dtype=np.uint8),
+        edge_u=u_idx,
+        edge_v=v_idx,
+        edge_uv=np.stack([u_idx, v_idx], axis=1).astype(np.int32, copy=False),
+        edge_u_node_id=u_node,
+        edge_v_node_id=v_node,
+        edge_w_m=edge_len_m,
+        edge_len_m=edge_len_m,
+        edge_tier=edge_tier,
         meta=meta,
     )
     report_json.write_text(json.dumps({"ok": True, "out_npz": str(out_npz), "meta": meta}, ensure_ascii=False, indent=2), encoding="utf-8")

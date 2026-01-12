@@ -1,0 +1,13 @@
+\label{sec:related-work}
+
+\paragraph{Map-free trajectory generation.}
+Early work on trajectory generation models continuous coordinates with recurrent networks, variational autoencoders, or adversarial objectives. Recent diffusion-based generators improve sample quality and diversity, but map-free generation remains fundamentally challenging for road-constrained mobility: in continuous space, the set of on-road trajectories occupies vanishing volume, and weak priors (e.g., distance-to-road penalties) often fail to enforce corridor-level realism at trip scale.
+
+\paragraph{Map-aware routing and generative models.}
+Classical routing algorithms (shortest path, $k$-shortest paths) provide strong structural validity by operating on a road graph. Learning-based approaches---including graph neural networks, inverse reinforcement learning, and imitation learning---learn costs or policies on road networks, but many focus on optimality or predictive accuracy rather than on controllable multi-modal generation. Recent generative models incorporate maps as constraints or conditioning signals; our work aligns with this direction but focuses on \emph{semantic control} of corridor choice rather than purely topological guidance.\footnote{TODO: add citations for recent road-network conditioned diffusion and hierarchical map-informed generators (e.g., arXiv:2507.13366; SIGSPATIAL'25 GCDM).}
+
+\paragraph{Hierarchical route choice.}
+Empirically, trips often exhibit corridor-level multi-modality: a small number of plausible macro-routes exist between an OD pair, while local deviations occur within each corridor. Hierarchical formulations have been used in transportation (e.g., route--link decomposition) and in modern sequence modeling (coarse-to-fine generation). CascadeTraj operationalizes this hierarchy as a discrete decision on the road graph followed by continuous execution.
+
+\paragraph{Urban semantics and temporal context.}
+Route preferences depend on functional context---POI distributions, land use, road hierarchy, and time-of-day. Semantic features have been used as covariates for mobility prediction and as conditioning signals for generative models. We emphasize semantics as the \emph{behavioral} driver of corridor selection: given the same OD, semantics and time can shift the probability mass across corridors even when shortest-path geometry remains unchanged.

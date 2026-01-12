@@ -54,9 +54,23 @@ def estimate_vel_stats(vel: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
     return vel_mean, vel_std
 
 
-def make_default_pos_bounds(*, pos_max: int = 1023) -> Tuple[np.ndarray, np.ndarray]:
+def make_default_pos_bounds(
+    *,
+    pos_max: int = 1023,
+    pos_max_y: Optional[int] = None,
+    pos_max_x: Optional[int] = None,
+) -> Tuple[np.ndarray, np.ndarray]:
+    """
+    Default grid bounds in (y,x).
+
+    Backward-compatible behavior:
+      - If only pos_max is provided: y_max=x_max=pos_max (square grid).
+      - If pos_max_y/pos_max_x are provided: allow non-square bounds.
+    """
+    y_max = float(int(pos_max_y) if pos_max_y is not None else int(pos_max))
+    x_max = float(int(pos_max_x) if pos_max_x is not None else int(pos_max))
     pos_min = np.asarray([0.0, 0.0], dtype=np.float32)
-    pos_max_arr = np.asarray([float(pos_max), float(pos_max)], dtype=np.float32)
+    pos_max_arr = np.asarray([y_max, x_max], dtype=np.float32)
     return pos_min, pos_max_arr
 
 
@@ -134,4 +148,3 @@ def load_route_windows_npz(
         "traj_idx": traj_idx.astype(np.int64, copy=False),
         "start_t": start_t.astype(np.int64, copy=False),
     }
-

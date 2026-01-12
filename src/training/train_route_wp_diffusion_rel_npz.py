@@ -138,6 +138,8 @@ class TrainConfig:
     train_npz: str
     out_dir: str
     pos_max: int
+    pos_max_y: Optional[int]
+    pos_max_x: Optional[int]
     max_train_n: Optional[int]
     num_waypoints: int
     waypoint_mode: str
@@ -276,6 +278,8 @@ def build_argparser() -> argparse.ArgumentParser:
     p.add_argument("--train_npz", type=str, required=True, help="npz with start_pos/targets/dest_pos/traj_idx/start_t")
     p.add_argument("--out_dir", type=str, required=True)
     p.add_argument("--pos_max", type=int, default=1023)
+    p.add_argument("--pos_max_y", type=int, default=None, help="Optional y max (grid units) for non-square canvases (overrides --pos_max for y).")
+    p.add_argument("--pos_max_x", type=int, default=None, help="Optional x max (grid units) for non-square canvases (overrides --pos_max for x).")
     p.add_argument("--max_train_n", type=int, default=None)
 
     p.add_argument("--num_waypoints", type=int, default=2)
@@ -354,6 +358,8 @@ def main() -> None:
         train_npz=str(args.train_npz),
         out_dir=str(args.out_dir),
         pos_max=int(args.pos_max),
+        pos_max_y=(int(args.pos_max_y) if args.pos_max_y is not None else None),
+        pos_max_x=(int(args.pos_max_x) if args.pos_max_x is not None else None),
         max_train_n=(int(args.max_train_n) if args.max_train_n is not None else None),
         num_waypoints=int(args.num_waypoints),
         waypoint_mode=str(args.waypoint_mode),
@@ -412,7 +418,7 @@ def main() -> None:
     start_ctr = _od_bin_center(start_pos, bin_size=float(cfg.od_bin))
     dest_ctr = _od_bin_center(dest_pos, bin_size=float(cfg.od_bin))
 
-    pos_min, pos_max_arr = make_default_pos_bounds(pos_max=int(cfg.pos_max))
+    pos_min, pos_max_arr = make_default_pos_bounds(pos_max=int(cfg.pos_max), pos_max_y=cfg.pos_max_y, pos_max_x=cfg.pos_max_x)
     pos_range = (pos_max_arr - pos_min + 1e-6).astype(np.float32)
     norm = RouteNorm(
         pos_min=pos_min.astype(np.float32, copy=False),
@@ -661,6 +667,9 @@ def main() -> None:
     rel_mean_t = torch.from_numpy(rel_mean).to(device=device, dtype=torch.float32)
     rel_std_t = torch.from_numpy(rel_std).to(device=device, dtype=torch.float32)
 
+    batches_per_epoch = int(min(len(loader), int(cfg.max_batches))) if cfg.max_batches is not None else int(len(loader))
+    updates_total = int(cfg.epochs) * int(max(batches_per_epoch, 0))
+
     start_wall = time.time()
     model.train()
     for epoch in range(int(cfg.epochs)):
@@ -846,6 +855,8 @@ def main() -> None:
         "inputs": {"train_npz": str(Path(cfg.train_npz).resolve())},
         "config": {
             "pos_max": int(cfg.pos_max),
+            "pos_max_y": (int(cfg.pos_max_y) if cfg.pos_max_y is not None else None),
+            "pos_max_x": (int(cfg.pos_max_x) if cfg.pos_max_x is not None else None),
             "max_train_n": (int(cfg.max_train_n) if cfg.max_train_n is not None else None),
             "num_waypoints": int(cfg.num_waypoints),
             "waypoint_mode": str(cfg.waypoint_mode),
@@ -881,7 +892,14 @@ def main() -> None:
             "max_batches": (int(cfg.max_batches) if cfg.max_batches is not None else None),
             "seed": int(cfg.seed),
         },
-        "stats": {"N": int(n), "F": int(targets.shape[1]), "rel_mean": [float(x) for x in rel_mean.tolist()], "rel_std": [float(x) for x in rel_std.tolist()]},
+        "stats": {
+            "N": int(n),
+            "F": int(targets.shape[1]),
+            "rel_mean": [float(x) for x in rel_mean.tolist()],
+            "rel_std": [float(x) for x in rel_std.tolist()],
+            "batches_per_epoch": int(batches_per_epoch),
+            "updates_total": int(updates_total),
+        },
         "outputs": {"checkpoint": str(ckpt_path.resolve())},
         "timing": {"elapsed_s": float(elapsed_s)},
     }

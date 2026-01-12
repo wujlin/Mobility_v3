@@ -1,0 +1,23 @@
+\label{sec:experiments}
+
+\paragraph{Data.}
+We use WorldTrace trajectories for the Detroit core region. To focus on trip-scale corridor choice, we operate on \emph{segment-level} trajectories (full segments) rather than short sliding windows. Each trajectory is resampled to a fixed length $F=256$ for training and evaluation. Start times are stored as Unix epoch seconds, enabling time-of-day and day-of-week conditioning.
+
+\paragraph{Semantic context.}
+We construct raster channels on a shared Detroit grid, including road hierarchy (tier-road), POI-related features (SafeGraph), and temporal encodings derived from $t$. In this draft, we use these semantics primarily for diagnostic audits and as planned conditioning inputs to the corridor selector.
+
+\paragraph{Baselines.}
+We compare against representative families:
+(i) \textbf{Shortest path / $k$-shortest paths} on the road graph (map-aware but not behavioral);
+(ii) \textbf{L2 regression} that deterministically predicts a trajectory (often collapses toward a straight line);
+(iii) \textbf{End-to-end diffusion} that generates continuous trajectories without an explicit corridor decision;
+(iv) \textbf{Map-free CascadeTraj} with a waypoint-based decision stage and residual diffusion execution.
+
+\paragraph{Metrics.}
+We report both quantitative and qualitative evidence:
+\textbf{(a) Waypoint audit} measures the distance between decision-stage waypoints and GT corridors (Table~\ref{tab:wp-audit}).
+\textbf{(b) Corridor diversity} evaluates whether generated samples cover multiple GT corridors for the same OD (Fig.~\ref{fig:diagnosis-mapfree}).
+\textbf{(c) Structural realism} (planned) will include on-road rate and distance-to-road statistics once the road-graph corridor selector is integrated end-to-end.
+
+\paragraph{Visualization protocol.}
+Following the principle that metrics can be misleading, we pair every gate with case-level visualizations: GT corridor structure, generated samples overlaid with a road mask, and intervention-style ablations (none/zeros/shuffle) for semantic channels.

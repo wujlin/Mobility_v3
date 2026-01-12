@@ -1,0 +1,62 @@
+\label{sec:results}
+
+\subsection{Diagnostic: map-free generation fails at corridor-level realism}
+\label{sec:results-diagnostic}
+
+We first establish a diagnostic finding: continuous map-free generation struggles to produce trip-scale routes that align with road corridors.
+Figure~\ref{fig:diagnosis-mapfree} visualizes a representative OD pair with multiple GT trajectories that form two distinct corridors. In contrast, an L2 regressor collapses to a straight-line-like mode; end-to-end diffusion tends to blur around the origin; and the current map-free CascadeTraj produces zigzag trajectories that frequently cross non-road areas.
+Moreover, even when GT corridors are approximately balanced, the generated samples can be heavily skewed toward one corridor, indicating a biased decision distribution.
+
+\begin{figure}[t]
+  \centering
+  \maybeincludegraphics[width=\linewidth]{figures/fig1_diagnosis_mapfree.png}
+  \caption{\textbf{Map-free generation fails at corridor-level realism.}
+  GT trajectories exhibit multi-modal corridor structure, while map-free baselines either collapse (L2), blur (end-to-end diffusion), or produce off-road zigzags (map-free CascadeTraj).}
+  \label{fig:diagnosis-mapfree}
+\end{figure}
+
+\subsection{Waypoint audit: soft priors help but do not solve the measure-zero problem}
+\label{sec:results-waypoint-audit}
+
+To quantify the decision-stage failure mode, we audit decision-stage waypoints against GT corridors.
+We measure the distance from generated waypoints to the GT polyline in \emph{grid units} (lower is better).
+Table~\ref{tab:wp-audit} compares two map-free decision settings: OD-only conditioning and tier-road conditioning.
+Tier-road reduces the error substantially, but the median distance remains far beyond the scale of road width under our grid, indicating that soft map priors alone do not yield corridor-level convergence.
+
+\begin{table}[t]
+  \centering
+  \caption{\textbf{Decision waypoint distance to GT corridor (grid units).}
+  Even with tier-road conditioning, waypoints remain far from GT corridors.}
+  \label{tab:wp-audit}
+  \begin{tabular}{lccc}
+    \toprule
+    Setting & Mean & P50 & P90 \\
+    \midrule
+    OD-only (map-free) & 59.37 & 49.51 & 125.19 \\
+    + tier-road (soft prior) & 35.00 & 24.70 & 83.03 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\begin{figure}[t]
+  \centering
+  \begin{subfigure}[t]{0.49\linewidth}
+    \centering
+    \maybeincludegraphics[width=\linewidth]{figures/fig_waypoint_audit_odonly.png}
+    \caption{OD-only decision vs.\ GT}
+  \end{subfigure}
+  \hfill
+  \begin{subfigure}[t]{0.49\linewidth}
+    \centering
+    \maybeincludegraphics[width=\linewidth]{figures/fig_waypoint_scatter_tierroad.png}
+    \caption{Tier-road conditioned decision}
+  \end{subfigure}
+  \caption{\textbf{Decision-stage waypoints do not converge to roads.}
+  Soft conditioning (tier-road) reduces error but still leaves large off-road dispersion, motivating discrete corridor selection on the road graph.}
+  \label{fig:waypoint-audit}
+\end{figure}
+
+\subsection{Road-graph corridor selection (preliminary)}
+\label{sec:results-roadaware}
+
+The diagnostic evidence above motivates our road-graph corridor selection stage: by moving the coarse decision onto a discrete corridor space, we avoid relying on weak continuous penalties to hit a measure-zero manifold. We are integrating a $k$-shortest-path corridor generator and a semantic/temporal corridor selector (Sec.~\ref{sec:method}) and will report (i) corridor selection accuracy, (ii) on-road rate, and (iii) semantic control effects (time-of-day, POI features) in the final version.

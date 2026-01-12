@@ -47,6 +47,8 @@ class TrainConfig:
     train_npz: str
     out_dir: str
     pos_max: int
+    pos_max_y: Optional[int]
+    pos_max_x: Optional[int]
     max_train_n: Optional[int]
     temporal_mode: str
     temporal_tz_offset_hours: float
@@ -110,6 +112,8 @@ def build_argparser() -> argparse.ArgumentParser:
     p.add_argument("--train_npz", type=str, required=True, help="npz with start_pos/targets/dest_pos/traj_idx/start_t")
     p.add_argument("--out_dir", type=str, required=True)
     p.add_argument("--pos_max", type=int, default=1023, help="Grid max coordinate (assumes y/x in [0,pos_max])")
+    p.add_argument("--pos_max_y", type=int, default=None, help="Optional y max (grid units) for non-square canvases (overrides --pos_max for y).")
+    p.add_argument("--pos_max_x", type=int, default=None, help="Optional x max (grid units) for non-square canvases (overrides --pos_max for x).")
     p.add_argument("--max_train_n", type=int, default=None, help="Optional: subsample training windows for speed")
 
     p.add_argument("--temporal_mode", type=str, choices=["auto", "simple", "zeros"], default="auto", help="Temporal feature for the (hour,day) slots: auto/simple/zeros.")
@@ -156,6 +160,8 @@ def main() -> None:
         train_npz=str(args.train_npz),
         out_dir=str(args.out_dir),
         pos_max=int(args.pos_max),
+        pos_max_y=(int(args.pos_max_y) if args.pos_max_y is not None else None),
+        pos_max_x=(int(args.pos_max_x) if args.pos_max_x is not None else None),
         max_train_n=(int(args.max_train_n) if args.max_train_n is not None else None),
         temporal_mode=str(args.temporal_mode),
         temporal_tz_offset_hours=float(args.temporal_tz_offset_hours),
@@ -199,7 +205,7 @@ def main() -> None:
     wp_cfg = WaypointConfig(mode=str(cfg.waypoint_mode), num_waypoints=int(cfg.num_waypoints), turn_alpha=float(cfg.waypoint_turn_alpha))
     waypoints = _extract_waypoints_batch(start_pos=start_pos, targets=targets, cfg=wp_cfg)  # (N,2,2)
 
-    pos_min, pos_max_arr = make_default_pos_bounds(pos_max=int(cfg.pos_max))
+    pos_min, pos_max_arr = make_default_pos_bounds(pos_max=int(cfg.pos_max), pos_max_y=cfg.pos_max_y, pos_max_x=cfg.pos_max_x)
     pos_range = (pos_max_arr - pos_min + 1e-6).astype(np.float32)
     vel = compute_vel_from_positions(start_pos, targets)
     vel_mean, vel_std = estimate_vel_stats(vel)
@@ -263,6 +269,9 @@ def main() -> None:
         pin_memory=bool(torch.cuda.is_available()),
         persistent_workers=(int(cfg.num_workers) > 0),
     )
+
+    batches_per_epoch = int(min(len(loader), int(cfg.max_batches))) if cfg.max_batches is not None else int(len(loader))
+    updates_total = int(cfg.epochs) * int(max(batches_per_epoch, 0))
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = DiffusionTrajectoryModel(
@@ -340,6 +349,8 @@ def main() -> None:
         "inputs": {"train_npz": str(Path(cfg.train_npz).resolve())},
         "config": {
             "pos_max": int(cfg.pos_max),
+            "pos_max_y": (int(cfg.pos_max_y) if cfg.pos_max_y is not None else None),
+            "pos_max_x": (int(cfg.pos_max_x) if cfg.pos_max_x is not None else None),
             "max_train_n": (int(cfg.max_train_n) if cfg.max_train_n is not None else None),
             "temporal_mode": str(cfg.temporal_mode),
             "temporal_tz_offset_hours": float(cfg.temporal_tz_offset_hours),
@@ -357,7 +368,14 @@ def main() -> None:
             "max_batches": (int(cfg.max_batches) if cfg.max_batches is not None else None),
             "seed": int(cfg.seed),
         },
-        "stats": {"N": int(n), "F": int(f), "steps": int(steps), "elapsed_s": float(elapsed_s)},
+        "stats": {
+            "N": int(n),
+            "F": int(f),
+            "batches_per_epoch": int(batches_per_epoch),
+            "updates_total": int(updates_total),
+            "updates_done": int(steps),
+        },
+        "timing": {"elapsed_s": float(elapsed_s)},
         "outputs": {"checkpoint": str(ckpt_path.resolve())},
     }
     (out_dir / "train_summary.json").write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")

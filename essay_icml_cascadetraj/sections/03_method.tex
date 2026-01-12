@@ -1,0 +1,44 @@
+\label{sec:method}
+
+\paragraph{Problem setup.}
+We consider trip-scale route generation on a fixed urban region.
+Given an origin $o\in\mathbb{R}^2$, destination $d\in\mathbb{R}^2$, start time $t$ (Unix epoch seconds), and semantic context $s$ (e.g., POI density, road hierarchy, and other raster channels), the goal is to generate a trajectory
+$x_{1:F}\in(\mathbb{R}^2)^F$ that is both \emph{structurally realistic} (on-road, smooth) and \emph{behaviorally plausible} (captures multi-modal corridor choice conditioned on $s$ and $t$).
+
+\paragraph{Road topology as a discrete corridor space.}
+Let $G=(V,E)$ be a road graph extracted from OpenStreetMap.
+We map $o$ and $d$ to nearby nodes (or projected points on edges) and compute a set of $K$ candidate corridors $\mathcal{C}=\{c_1,\dots,c_K\}$ using $k$-shortest paths under a travel cost (e.g., length or road-class weighted length).
+Each corridor $c_k$ is represented by its polyline geometry and/or a sequence of edges.
+
+\paragraph{CascadeTraj: decision then execution.}
+CascadeTraj decomposes generation into two stages:
+\textbf{(i) Decision} selects a corridor index $z\in\{1,\dots,K\}$,
+and \textbf{(ii) Execution} generates a continuous trajectory conditioned on the chosen corridor.
+Formally,
+\[
+  p(x_{1:F}\mid o,d,t,s)\;=\;\sum_{z=1}^K p(z\mid o,d,t,s)\;p(x_{1:F}\mid z,o,d,t,s).
+\]
+
+\paragraph{Decision stage (corridor selection, in progress).}
+The decision model predicts $p(z\mid o,d,t,s)$ using embeddings of candidate corridors and semantic/temporal features.
+Semantics can enter both \emph{globally} (e.g., raster summaries around the OD box) and \emph{corridor-wise} (e.g., pooling semantic channels along each corridor polyline).
+Supervision can be obtained by assigning each GT trajectory to its closest corridor under a path similarity metric (e.g., Hausdorff or average distance) or via corridor clustering. We report the map-free waypoint audit first (Sec.~\ref{sec:results}) and include full corridor-selection results once the corridor-labeling pipeline is finalized.
+
+\paragraph{Execution stage (trajectory generation within a corridor).}
+Conditioned on a corridor polyline, execution generates a dense trajectory using a residual diffusion model. Intuitively, the corridor provides a coarse skeleton, while the diffusion residual models within-corridor variations (lane choice, local detours, smoothing).
+In our current implementation, a \emph{skeleton} trajectory is produced by interpolating corridor geometry (or predicted waypoints), and a diffusion model predicts a residual that is blended with a scale parameter (\texttt{res\_scale}).
+This stage is compatible with additional conditioning signals (semantics/time) and with post-processing refinement toward a road prior.
+
+\begin{figure}[t]
+  \centering
+  \maybeincludegraphics[width=\linewidth]{figures/fig3_method_comparison.pdf}
+  \caption{\textbf{Method overview (placeholder).} We will replace this with a schematic comparing end-to-end generation, map-free CascadeTraj, and road-graph CascadeTraj.}
+  \label{fig:method-comparison}
+\end{figure}
+
+\begin{figure}[t]
+  \centering
+  \maybeincludegraphics[width=\linewidth]{figures/fig4_road_graph.pdf}
+  \caption{\textbf{Road graph corridor space (placeholder).} Detroit road network with an example OD pair and $K$ candidate corridors (e.g., $k$-shortest paths).}
+  \label{fig:road-graph}
+\end{figure}

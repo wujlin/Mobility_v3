@@ -1,0 +1,68 @@
+\documentclass[12pt]{article}
+
+% ============================================================
+% Draft paper skeleton (Overleaf-friendly)
+% Switch to ICML template when ready.
+% ============================================================
+
+\usepackage[margin=1in]{geometry}
+\usepackage{setspace}
+\onehalfspacing
+
+\usepackage{newtxtext}
+\usepackage{newtxmath}
+
+\usepackage{microtype}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{subcaption}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{siunitx}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,fit,calc}
+\usepackage[section]{placeins}
+\usepackage{hyperref}
+\hypersetup{hidelinks}
+
+\usepackage[round,authoryear]{natbib}
+
+\title{CascadeTraj: Hierarchical Route Generation with Road Topology and Urban Semantics}
+\author{TODO (PI review draft)}
+\date{\today}
+
+\newcommand{\maybeincludegraphics}[2][]{%
+  \IfFileExists{#2}{\includegraphics[#1]{#2}}{\fbox{Missing file: #2}}%
+}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+TODO: one-paragraph abstract.
+\end{abstract}
+
+\section{Introduction}
+\input{sections/01_introduction.tex}
+
+\section{Related Work}
+\input{sections/02_related_work.tex}
+
+\section{Method}
+\input{sections/03_method.tex}
+
+\section{Experiments}
+\input{sections/04_experiments.tex}
+
+\section{Results}
+\input{sections/05_results.tex}
+
+\section{Conclusion}
+\input{sections/06_conclusion.tex}
+
+\bibliographystyle{plainnat}
+\bibliography{references}
+
+\end{document}

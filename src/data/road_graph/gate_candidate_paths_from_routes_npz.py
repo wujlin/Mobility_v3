@@ -96,6 +96,35 @@ def _path_cells(nodes_yx: np.ndarray, *, H: int, W: int) -> np.ndarray:
     return np.sort(ids.astype(np.int64, copy=False))
 
 
+def _dilate_cells(cells: np.ndarray, *, H: int, W: int, r: int) -> np.ndarray:
+    """
+    Chebyshev-radius dilation in grid cells.
+    r=1 expands each cell to a 3x3 neighborhood. This is a cheap robustness trick
+    to handle 1-2 cell misalignment between road centerlines and GT polylines.
+    """
+    r = int(r)
+    cells = np.asarray(cells, dtype=np.int64).reshape(-1)
+    if r <= 0 or cells.size == 0:
+        return np.sort(np.unique(cells))
+    y = (cells // int(W)).astype(np.int32, copy=False)
+    x = (cells % int(W)).astype(np.int32, copy=False)
+    out = []
+    for dy in range(-r, r + 1):
+        yy = y + int(dy)
+        if yy.size == 0:
+            continue
+        for dx in range(-r, r + 1):
+            xx = x + int(dx)
+            m = (yy >= 0) & (yy < int(H)) & (xx >= 0) & (xx < int(W))
+            if not np.any(m):
+                continue
+            out.append(yy[m].astype(np.int64) * int(W) + xx[m].astype(np.int64))
+    if not out:
+        return np.sort(np.unique(cells))
+    ids = np.unique(np.concatenate(out, axis=0).astype(np.int64, copy=False))
+    return np.sort(ids.astype(np.int64, copy=False))
+
+
 def _jaccard(a: np.ndarray, b: np.ndarray) -> float:
     a = np.asarray(a, dtype=np.int64).reshape(-1)
     b = np.asarray(b, dtype=np.int64).reshape(-1)
@@ -315,6 +344,7 @@ def build_argparser() -> argparse.ArgumentParser:
     p.add_argument("--min_jaccard", type=float, default=0.5, help="A trajectory is covered if its best candidate Jaccard >= this.")
     p.add_argument("--coverage_threshold", type=float, default=0.85, help="Gate passes if covered trajectory fraction >= this.")
     p.add_argument("--coverage_thr", type=float, default=None, help="DEPRECATED alias for --min_jaccard (kept for compatibility).")
+    p.add_argument("--dilate_r", type=int, default=0, help="Optional grid-cell dilation radius when computing Jaccard (robust to 1-2 cell misalignment).")
     p.add_argument("--min_traj_per_od", type=int, default=2, help="Only compute OD diversity for groups with >= this many trajectories.")
     p.add_argument("--multimodal_thr", type=float, default=0.3, help="OD is multimodal if mean pairwise Jaccard distance >= this.")
     p.add_argument("--max_od", type=int, default=0, help="Optional cap on unique OD pairs for speed (0=all).")
@@ -334,6 +364,7 @@ def main() -> None:
         min_jacc = float(args.coverage_thr)
     cov_thr = float(args.coverage_threshold)
     mm_thr = float(args.multimodal_thr)
+    dilate_r = int(args.dilate_r)
     if not (0.0 <= min_jacc <= 1.0 and 0.0 <= cov_thr <= 1.0):
         raise ValueError("--min_jaccard/--coverage_threshold must be in [0,1].")
 
@@ -454,9 +485,12 @@ def main() -> None:
     best_j = np.full((n,), np.nan, dtype=np.float32)
     best_k = np.full((n,), -1, dtype=np.int32)
     gt_cells_all: List[np.ndarray] = []
+    gt_cells_all_dil: List[np.ndarray] = []
     for i in range(n):
         poly = np.concatenate([start_pos[i : i + 1], targets[i]], axis=0)
-        gt_cells_all.append(_poly_cells(poly, H=H, W=W))
+        base = _poly_cells(poly, H=H, W=W)
+        gt_cells_all.append(base)
+        gt_cells_all_dil.append(_dilate_cells(base, H=H, W=W, r=int(dilate_r)) if int(dilate_r) > 0 else base)
 
     for i in tqdm(range(n), desc="coverage", dynamic_ncols=True):
         if not eval_mask[i]:
@@ -464,12 +498,17 @@ def main() -> None:
         od = (int(s_idx[i]), int(t_idx[i]))
         paths = od_to_paths.get(od, [])
         gt_cells = gt_cells_all[i]
+        gt_cells_dil = gt_cells_all_dil[i]
         bj = 0.0
         bk = -1
         for kk, p in enumerate(paths):
             nodes_yx = np.stack([g.node_y[np.asarray(p, dtype=np.int32)], g.node_x[np.asarray(p, dtype=np.int32)]], axis=1)
             cand_cells = _path_cells(nodes_yx, H=H, W=W)
-            j = _jaccard(gt_cells, cand_cells)
+            if int(dilate_r) > 0:
+                cand_cells = _dilate_cells(cand_cells, H=H, W=W, r=int(dilate_r))
+                j = _jaccard(gt_cells_dil, cand_cells)
+            else:
+                j = _jaccard(gt_cells, cand_cells)
             if j > bj:
                 bj = float(j)
                 bk = int(kk)
@@ -546,6 +585,7 @@ def main() -> None:
             "K": int(args.K),
             "min_jaccard": float(min_jacc),
             "coverage_threshold": float(cov_thr),
+            "dilate_r": int(dilate_r),
             "min_traj_per_od": int(args.min_traj_per_od),
             "multimodal_thr": float(mm_thr),
             "max_od": int(args.max_od),

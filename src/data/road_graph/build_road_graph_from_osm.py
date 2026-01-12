@@ -31,6 +31,10 @@ TIER_SERVICE = {"service", "unclassified"}
 
 
 def _normalize_highway_tag(tag: object) -> str:
+    if isinstance(tag, (list, tuple, set)):
+        if not tag:
+            return ""
+        tag = next(iter(tag))
     s = str(tag or "").strip()
     if not s:
         return ""
@@ -219,6 +223,11 @@ def build_graph(
 
     if not node_id_list or not edge_map:
         raise SystemExit("Built an empty road graph (0 nodes or 0 edges). Check OSM extract / bbox / road_types.")
+    if len(node_id_list) < 10 or len(edge_map) < 10:
+        raise SystemExit(
+            f"Built a degenerate road graph (n_nodes={len(node_id_list)}, n_edges={len(edge_map)}). "
+            "This usually indicates a bbox/grid mismatch or overly aggressive road filtering."
+        )
 
     node_id = np.asarray(node_id_list, dtype=np.int64)
     n_nodes = int(node_id.shape[0])

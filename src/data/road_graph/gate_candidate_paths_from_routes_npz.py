@@ -354,7 +354,54 @@ def main() -> None:
     start_t = np.asarray(data["start_t"], dtype=np.int64).reshape(-1)
     n = int(start_pos.shape[0])
 
+    # Basic graph sanity checks (avoid silently producing NaNs / degenerate OD collapse).
     node_xy = np.stack([g.node_y, g.node_x], axis=1).astype(np.float32, copy=False)
+    graph_stats = {
+        "n_nodes": int(node_xy.shape[0]),
+        "n_edges_directed": int(len(g.edge_cost)),
+        "node_y_min": float(np.min(g.node_y)) if g.node_y.size else None,
+        "node_y_max": float(np.max(g.node_y)) if g.node_y.size else None,
+        "node_x_min": float(np.min(g.node_x)) if g.node_x.size else None,
+        "node_x_max": float(np.max(g.node_x)) if g.node_x.size else None,
+        "node_xy_finite_frac": float(np.mean(np.isfinite(node_xy).astype(np.float32))) if node_xy.size else 0.0,
+    }
+
+    def _write_early_fail(*, reason: str) -> None:
+        report = {
+            "ok": False,
+            "created_at": datetime.now(tz=TZ_SHANGHAI).isoformat(),
+            "gate": "candidate_paths_graph_gate",
+            "gate_passed": False,
+            "reason": str(reason),
+            "inputs": {"routes_npz": str(Path(args.routes_npz)), "road_graph_npz": str(Path(args.road_graph_npz))},
+            "config": {
+                "K": int(args.K),
+                "min_jaccard": float(min_jacc),
+                "coverage_threshold": float(cov_thr),
+                "min_traj_per_od": int(args.min_traj_per_od),
+                "multimodal_thr": float(mm_thr),
+                "max_od": int(args.max_od),
+            },
+            "stats": {"N": int(n), "graph": graph_stats},
+            "outputs": {"report_json": str((out_dir / "report.json").resolve())},
+        }
+        (out_dir / "report.json").write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+        print(json.dumps({"ok": False, "gate_passed": False, "reason": str(reason), "report_json": report["outputs"]["report_json"]}, ensure_ascii=False, indent=2))
+
+    if node_xy.shape[0] < 10 or graph_stats["n_edges_directed"] < 10:
+        _write_early_fail(reason="degenerate_road_graph (too few nodes/edges); rebuild road_graph.npz")
+        return
+    if not np.isfinite(node_xy).all():
+        _write_early_fail(reason="invalid_road_graph (non-finite node coords); rebuild road_graph.npz")
+        return
+
+    # Raw OD uniqueness (before snapping) for diagnostics.
+    s_raw = np.rint(start_pos).astype(np.int32, copy=False)
+    t_raw = np.rint(dest_pos).astype(np.int32, copy=False)
+    od_raw = np.concatenate([s_raw, t_raw], axis=1)
+    od_raw_view = od_raw.view([("", od_raw.dtype)] * od_raw.shape[1])
+    num_unique_od_raw = int(np.unique(od_raw_view).shape[0])
+
     tree = cKDTree(node_xy.astype(np.float64, copy=False))
 
     # Snap OD endpoints to nearest nodes.
@@ -373,6 +420,12 @@ def main() -> None:
     unique_ods = sorted(set(od_list))
     if int(args.max_od) > 0:
         unique_ods = unique_ods[: int(args.max_od)]
+    if len(unique_ods) <= 1 and num_unique_od_raw > 1:
+        # This almost always indicates a snapping / graph mismatch (e.g., empty/degenerate graph).
+        _write_early_fail(
+            reason=f"degenerate_snapping (raw_unique_od={num_unique_od_raw}, snapped_unique_od={len(unique_ods)}); check bbox/grid and rebuild road_graph.npz"
+        )
+        return
 
     try:
         from tqdm import tqdm  # type: ignore
@@ -476,7 +529,9 @@ def main() -> None:
         },
         "stats": {
             "N": int(n),
+            "num_unique_ods_raw": int(num_unique_od_raw),
             "num_unique_ods": int(len(unique_ods)),
+            "graph": graph_stats,
             "snap_dist_grid": {
                 "start_p50": float(np.quantile(s_dist, 0.5)),
                 "start_p90": float(np.quantile(s_dist, 0.9)),

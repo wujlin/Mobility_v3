@@ -24,7 +24,7 @@ We report both quantitative and qualitative evidence:
 \textbf{(d) Behavioral realism} (planned) measures \emph{context-conditioned distribution matching}.
 We bucket trajectories by temporal context (e.g., rush hour vs.\ midnight; weekday vs.\ weekend) and (optionally) by semantic context (e.g., high vs.\ low POI activity or road-tier exposure).
 For each bucket, we compute a GT corridor distribution over $\mathcal{C}$ and compare it to the generated distribution using Jensen--Shannon divergence (JSD) or earth mover's distance (EMD).
-Removing semantic/temporal conditioning should increase this distribution gap if semantics are truly causal for corridor choice.
+As a counterfactual test (semantic intervention), disabling or zeroing the semantic/temporal inputs should increase this distribution gap if semantics are truly causal for corridor choice.
 
 \paragraph{Visualization protocol.}
 Following the principle that metrics can be misleading, we pair every gate with case-level visualizations: GT corridor structure, generated samples overlaid with a road mask, and intervention-style ablations (none/zeros/shuffle) for semantic channels.

@@ -417,14 +417,26 @@ def main() -> None:
     od_list: List[Tuple[int, int]] = []
     for si, ti in zip(s_idx.tolist(), t_idx.tolist()):
         od_list.append((int(si), int(ti)))
-    unique_ods = sorted(set(od_list))
-    if int(args.max_od) > 0:
-        unique_ods = unique_ods[: int(args.max_od)]
-    if len(unique_ods) <= 1 and num_unique_od_raw > 1:
+    unique_ods_total = sorted(set(od_list))
+    num_unique_ods_total = int(len(unique_ods_total))
+    if num_unique_ods_total <= 1 and num_unique_od_raw > 1:
         # This almost always indicates a snapping / graph mismatch (e.g., empty/degenerate graph).
         _write_early_fail(
-            reason=f"degenerate_snapping (raw_unique_od={num_unique_od_raw}, snapped_unique_od={len(unique_ods)}); check bbox/grid and rebuild road_graph.npz"
+            reason=f"degenerate_snapping (raw_unique_od={num_unique_od_raw}, snapped_unique_od={num_unique_ods_total}); check bbox/grid and rebuild road_graph.npz"
         )
+        return
+    # Subsample unique ODs for quick runs (and evaluate ONLY on the selected ODs).
+    max_od = int(args.max_od)
+    unique_ods = unique_ods_total
+    if max_od > 0 and num_unique_ods_total > max_od:
+        rng = np.random.default_rng(int(args.seed))
+        pick = rng.choice(num_unique_ods_total, size=int(max_od), replace=False)
+        unique_ods = [unique_ods_total[i] for i in np.sort(pick)]
+    eval_od_set = set(unique_ods)
+    eval_mask = np.asarray([(od in eval_od_set) for od in od_list], dtype=np.uint8)
+    n_eval = int(np.sum(eval_mask).item())
+    if n_eval <= 0:
+        _write_early_fail(reason="no_eval_trajectories (max_od sub-sample produced 0 trajectories)")
         return
 
     try:
@@ -439,7 +451,7 @@ def main() -> None:
         od_to_paths[(si, ti)] = paths
 
     # Evaluate coverage per trajectory (match candidates against GT).
-    best_j = np.zeros((n,), dtype=np.float32)
+    best_j = np.full((n,), np.nan, dtype=np.float32)
     best_k = np.full((n,), -1, dtype=np.int32)
     gt_cells_all: List[np.ndarray] = []
     for i in range(n):
@@ -447,6 +459,8 @@ def main() -> None:
         gt_cells_all.append(_poly_cells(poly, H=H, W=W))
 
     for i in tqdm(range(n), desc="coverage", dynamic_ncols=True):
+        if not eval_mask[i]:
+            continue
         od = (int(s_idx[i]), int(t_idx[i]))
         paths = od_to_paths.get(od, [])
         gt_cells = gt_cells_all[i]
@@ -462,11 +476,14 @@ def main() -> None:
         best_j[i] = float(bj)
         best_k[i] = int(bk)
 
-    covered = best_j >= float(min_jacc)
+    best_j_eval = best_j[np.isfinite(best_j)]
+    covered = best_j_eval >= float(min_jacc)
 
     # OD diversity based on GT (not candidates).
     od_to_indices: Dict[Tuple[int, int], List[int]] = {}
     for i, od in enumerate(od_list):
+        if not eval_mask[i]:
+            continue
         if od not in od_to_indices:
             od_to_indices[od] = []
         od_to_indices[od].append(int(i))
@@ -496,6 +513,7 @@ def main() -> None:
     od_any = []
     for od, idxs in od_to_indices.items():
         bj = best_j[np.asarray(idxs, dtype=np.int64)]
+        bj = bj[np.isfinite(bj)]
         if bj.size == 0:
             continue
         od_best_p50.append(float(np.quantile(bj, 0.5)))
@@ -506,12 +524,17 @@ def main() -> None:
     od_any = np.asarray(od_any, dtype=np.uint8)
 
     def q(x: np.ndarray, p: float) -> Optional[float]:
+        x = np.asarray(x)
+        x = x[np.isfinite(x)]
         if x.size == 0:
             return None
         return float(np.quantile(x, float(p)))
 
-    traj_covered_frac = float(np.mean(covered.astype(np.float32)))
+    traj_covered_frac = float(np.mean(covered.astype(np.float32))) if covered.size else 0.0
     gate_passed = bool(traj_covered_frac >= float(cov_thr))
+
+    od_num_paths = np.asarray([len(od_to_paths.get(od, [])) for od in unique_ods], dtype=np.float32)
+    od_reachable_frac = float(np.mean((od_num_paths > 0).astype(np.float32))) if od_num_paths.size else None
 
     report = {
         "ok": True,
@@ -528,9 +551,11 @@ def main() -> None:
             "max_od": int(args.max_od),
         },
         "stats": {
-            "N": int(n),
-            "num_unique_ods_raw": int(num_unique_od_raw),
-            "num_unique_ods": int(len(unique_ods)),
+            "N_total": int(n),
+            "N_eval": int(n_eval),
+            "num_unique_ods_raw_total": int(num_unique_od_raw),
+            "num_unique_ods_total": int(num_unique_ods_total),
+            "num_unique_ods_eval": int(len(unique_ods)),
             "graph": graph_stats,
             "snap_dist_grid": {
                 "start_p50": float(np.quantile(s_dist, 0.5)),
@@ -538,11 +563,15 @@ def main() -> None:
                 "dest_p50": float(np.quantile(t_dist, 0.5)),
                 "dest_p90": float(np.quantile(t_dist, 0.9)),
             },
+            "od_candidate_paths": {
+                "od_reachable_frac": od_reachable_frac,
+                "num_paths_p50": q(od_num_paths, 0.5),
+            },
             "traj_coverage": {
                 "covered_frac": float(traj_covered_frac),
-                "best_jaccard_mean": float(np.mean(best_j)),
-                "best_jaccard_p50": q(best_j, 0.5),
-                "best_jaccard_p90": q(best_j, 0.9),
+                "best_jaccard_mean": float(np.mean(best_j_eval)) if best_j_eval.size else 0.0,
+                "best_jaccard_p50": q(best_j_eval, 0.5),
+                "best_jaccard_p90": q(best_j_eval, 0.9),
             },
             "od_coverage": {
                 "od_any_frac": float(np.mean(od_any.astype(np.float32))) if od_any.size else None,

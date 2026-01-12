@@ -20,15 +20,9 @@ Trip-scale route choice is naturally hierarchical. At a coarse level, travelers 
 \paragraph{CascadeTraj.}
 We propose \textbf{CascadeTraj}, a hierarchical route generation framework that combines road network topology for structural realism with urban semantic features for behavioral fidelity. The decision stage selects corridors on the road graph conditioned on semantic context; the execution stage generates realistic trajectories within the selected corridor. This design turns the measure-zero road constraint into a first-class discrete decision, while preserving flexibility for continuous dynamics.
 
-\paragraph{Claims.}
-\textbf{Claim A (diagnostic):} map-free continuous generation does not reliably converge to road corridors at trip scale, even with soft road-proximity conditioning.\;
-\textbf{Claim B (mechanistic fix):} modeling the coarse decision as \emph{discrete corridor selection on the road graph} provides a structural prior that eliminates the main failure mode.\;
-\textbf{Claim C (semantic value):} temporal--spatial semantics are a \emph{core mechanism} for behavioral realism: conditioning on time, road hierarchy, and POI context shifts corridor probabilities beyond shortest-path routing, enabling controllable multi-modal route choice.
+We identify a fundamental limitation: map-free continuous generation cannot reliably converge to road corridors at trip scale, even with soft road priors. This motivates a core architectural insight---treating corridor choice as a \emph{discrete decision} on the road graph rather than a continuous optimization toward a measure-zero target. Crucially, temporal--spatial semantics enter this discrete decision as first-class conditioning signals, enabling context-dependent behavioral diversity rather than random perturbations. We substantiate the diagnostic with waypoint audits and case-level visualizations (Sec.~\ref{sec:results}), and present CascadeTraj as a mechanism that unifies structural realism with behaviorally grounded, context-conditioned route choice.
 
-\paragraph{Contributions.}
-(1) \textbf{Problem redefinition:} we define route realism as both \emph{structural} (on-road) and \emph{behavioral} (contextually plausible), and argue that temporal--spatial semantics are required to make diversity meaningful.\;
-(2) \textbf{Diagnostic finding:} we show that map-free continuous generation fails to converge to road corridors at trip scale, even with road-proximity soft conditioning. Waypoints remain far from ground-truth (GT) corridors in a waypoint audit (Table~\ref{tab:wp-audit}), and generated trajectories exhibit off-road zigzags (Fig.~\ref{fig:diagnosis-mapfree}).\;
-(3) \textbf{Mechanistic solution:} we propose a hierarchical decision--execution framework where corridor selection operates on the discrete road graph and is conditioned on temporal--spatial semantics, while execution generates continuous trajectories within the selected corridor.
-
-\paragraph{Paper organization.}
-Section~\ref{sec:related-work} reviews route generation across map-free and map-aware paradigms. Section~\ref{sec:method} describes CascadeTraj. Sections~\ref{sec:experiments}--\ref{sec:results} present a diagnostic evaluation and the planned road-graph corridor selection results.
+The remainder of the paper develops this framing.
+Section~\ref{sec:related-work} positions our work against recent trajectory foundation models, map-conditioned generators, and road-constrained diffusion---arguing that reconstruction fidelity is not the same as behavioral mechanism.
+Section~\ref{sec:method} introduces CascadeTraj as a decision--execution framework where temporal--spatial semantics condition corridor choice.
+Sections~\ref{sec:experiments}--\ref{sec:results} establish the diagnostic evidence: waypoint audits and case visualizations demonstrate the measure-zero failure mode of map-free generation, motivating the discrete corridor formulation.

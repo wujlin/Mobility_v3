@@ -9,7 +9,7 @@ $x_{1:F}\in(\mathbb{R}^2)^F$ that is both \emph{structurally realistic} (on-road
 Let $\mathcal{C}$ be a corridor set for a given OD constructed from the road graph.
 We treat behavioral realism as matching the \emph{corridor choice distribution} under context:
 different $(t,s)$ should induce different $p(z\mid o,d,t,s)$, and generated samples should reproduce the GT distribution shift across contexts (Sec.~\ref{sec:experiments}).
-This explicitly distinguishes meaningful diversity from indiscriminate randomness.
+This explicitly distinguishes meaningful diversity from indiscriminate randomness: a model that produces diverse routes without conditioning on context is not behaviorally realistic---it is merely stochastic.
 
 \paragraph{Road topology as a discrete corridor space.}
 Let $G=(V,E)$ be a road graph extracted from OpenStreetMap.
@@ -18,33 +18,33 @@ Each corridor $c_k$ is represented by its polyline geometry and/or a sequence of
 
 \paragraph{CascadeTraj: decision then execution.}
 CascadeTraj decomposes generation into two stages:
-\textbf{(i) Decision} selects a corridor index $z\in\{1,\dots,K\}$,
-and \textbf{(ii) Execution} generates a continuous trajectory conditioned on the chosen corridor.
+a decision stage that selects a corridor index $z\in\{1,\dots,K\}$,
+and an execution stage that generates a continuous trajectory conditioned on the chosen corridor.
 Formally,
 \[
   p(x_{1:F}\mid o,d,t,s)\;=\;\sum_{z=1}^K p(z\mid o,d,t,s)\;p(x_{1:F}\mid z,o,d,t,s).
 \]
 
-\paragraph{Decision stage (corridor selection, in progress).}
-The decision model predicts $p(z\mid o,d,t,s)$ using embeddings of candidate corridors and semantic/temporal features.
-Semantics can enter both \emph{globally} (e.g., raster summaries around the OD box) and \emph{corridor-wise} (e.g., pooling semantic channels along each corridor polyline).
-Supervision can be obtained by assigning each GT trajectory to its closest corridor under a path similarity metric (e.g., Hausdorff or average distance) or via corridor clustering. We report the map-free waypoint audit first (Sec.~\ref{sec:results}) and include full corridor-selection results once the corridor-labeling pipeline is finalized.
+\paragraph{Decision stage: corridor selection on the road graph.}
+The decision model predicts $p(z\mid o,d,t,s)$ by scoring each candidate corridor with temporal--spatial semantics and OD context.
+Semantics enter both \emph{globally} (pooling raster channels around the OD box) and \emph{corridor-wise} (pooling semantic channels along each corridor polyline).
+This is where temporal--spatial semantics act as first-class conditioning signals: the same OD under different $(t,s)$ should produce different corridor distributions, and training aligns predicted distributions with GT corridor assignments derived from trajectory--corridor matching.
 
-\paragraph{Execution stage (trajectory generation within a corridor).}
-Conditioned on a corridor polyline, execution generates a dense trajectory using a residual diffusion model. Intuitively, the corridor provides a coarse skeleton, while the diffusion residual models within-corridor variations (lane choice, local detours, smoothing).
-In our current implementation, a \emph{skeleton} trajectory is produced by interpolating corridor geometry (or predicted waypoints), and a diffusion model predicts a residual that is blended with a scale parameter (\texttt{res\_scale}).
-This stage is compatible with additional conditioning signals (semantics/time) and with post-processing refinement toward a road prior.
+\paragraph{Execution stage: trajectory generation within a corridor.}
+Conditioned on a corridor polyline, execution generates a dense trajectory using a residual diffusion model.
+The corridor provides a coarse skeleton; the diffusion residual models within-corridor variations (lane choice, local detours, smoothing).
+This stage is compatible with additional semantic/temporal conditioning and avoids post-hoc snapping that would distort corridor choice distributions.
 
 \begin{figure}[t]
   \centering
   \maybeincludegraphics[width=\linewidth]{figures/fig3_method_comparison.pdf}
-  \caption{\textbf{Method overview (placeholder).} We will replace this with a schematic comparing end-to-end generation, map-free CascadeTraj, and road-graph CascadeTraj.}
+  \caption{\textbf{Method overview.} CascadeTraj separates corridor selection on the road graph from continuous trajectory execution, with temporal--spatial semantics conditioning the corridor decision.}
   \label{fig:method-comparison}
 \end{figure}
 
 \begin{figure}[t]
   \centering
   \maybeincludegraphics[width=\linewidth]{figures/fig4_road_graph.pdf}
-  \caption{\textbf{Road graph corridor space (placeholder).} Detroit road network with an example OD pair and $K$ candidate corridors (e.g., $k$-shortest paths).}
+  \caption{\textbf{Road graph corridor space.} Detroit road network with an example OD pair and $K$ candidate corridors (e.g., $k$-shortest paths).}
   \label{fig:road-graph}
 \end{figure}

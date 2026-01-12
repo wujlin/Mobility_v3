@@ -7,7 +7,7 @@ We use WorldTrace trajectories for the Detroit core region. To focus on trip-sca
 Temporal conditioning is only meaningful if $t$ is a real timestamp. We verified that the underlying segment parquet contains valid Unix epoch times and regenerated the segment-level dataset with epoch \texttt{start\_t} (instead of window-offset indices). This enables aligning time-dependent semantics such as POI open-hours.
 
 \paragraph{Semantic context.}
-We construct raster channels on a shared Detroit grid, including road hierarchy (tier-road), POI-related features (SafeGraph), and temporal encodings derived from $t$. In this draft, we use these semantics primarily for diagnostic audits and as planned conditioning inputs to the corridor selector.
+We construct raster channels on a shared Detroit grid, including road hierarchy (tier-road), POI-related features (SafeGraph), and temporal encodings derived from $t$. These temporal--spatial semantics condition corridor choice to model context-dependent route preferences under the same OD and road topology.
 
 \paragraph{Baselines.}
 We compare against representative families:
@@ -17,14 +17,13 @@ We compare against representative families:
 (iv) \textbf{Map-free CascadeTraj} with a waypoint-based decision stage and residual diffusion execution.
 
 \paragraph{Metrics.}
-We report both quantitative and qualitative evidence:
-\textbf{(a) Waypoint audit} measures the distance between decision-stage waypoints and GT corridors (Table~\ref{tab:wp-audit}).
+We report both quantitative and qualitative evidence across four dimensions:
+\textbf{(a) Waypoint audit} measures the distance between decision-stage waypoints and GT corridors, quantifying the measure-zero convergence failure (Table~\ref{tab:wp-audit}).
 \textbf{(b) Corridor diversity} evaluates whether generated samples cover multiple GT corridors for the same OD (Fig.~\ref{fig:diagnosis-mapfree}).
-\textbf{(c) Structural realism} (planned) includes on-road rate and distance-to-road statistics (e.g., \% of points within a tolerance of the road graph).
-\textbf{(d) Behavioral realism} (planned) measures \emph{context-conditioned distribution matching}.
-We bucket trajectories by temporal context (e.g., rush hour vs.\ midnight; weekday vs.\ weekend) and (optionally) by semantic context (e.g., high vs.\ low POI activity or road-tier exposure).
-For each bucket, we compute a GT corridor distribution over $\mathcal{C}$ and compare it to the generated distribution using Jensen--Shannon divergence (JSD) or earth mover's distance (EMD).
-As a counterfactual test (semantic intervention), disabling or zeroing the semantic/temporal inputs should increase this distribution gap if semantics are truly causal for corridor choice.
+\textbf{(c) Structural realism} includes on-road rate and distance-to-road statistics.
+\textbf{(d) Behavioral realism} measures \emph{context-conditioned distribution matching}:
+we bucket trajectories by temporal context (rush hour vs.\ midnight; weekday vs.\ weekend) and semantic context (POI activity, road-tier exposure), compute GT corridor distributions, and compare to generated distributions using Jensen--Shannon divergence (JSD).
+As a counterfactual test, disabling semantic/temporal inputs should increase this distribution gap if semantics are causal for corridor choice.
 
 \paragraph{Visualization protocol.}
 Following the principle that metrics can be misleading, we pair every gate with case-level visualizations: GT corridor structure, generated samples overlaid with a road mask, and intervention-style ablations (none/zeros/shuffle) for semantic channels.

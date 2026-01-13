@@ -470,6 +470,20 @@ def main() -> None:
         _write_early_fail(reason="no_eval_trajectories (max_od sub-sample produced 0 trajectories)")
         return
 
+    # GT on-road diagnostic: how far are *all* GT points from the road graph?
+    # This is crucial because route npz may contain interpolated points that drift off centerlines.
+    eval_idx = np.nonzero(eval_mask)[0].astype(np.int64, copy=False)
+    pts_all = np.concatenate(
+        [
+            start_pos[eval_idx],
+            targets[eval_idx].reshape(-1, 2),
+            dest_pos[eval_idx],
+        ],
+        axis=0,
+    ).astype(np.float64, copy=False)
+    gt_all_dist, _ = tree.query(pts_all, k=1)
+    gt_all_dist = np.asarray(gt_all_dist, dtype=np.float64).reshape(-1)
+
     try:
         from tqdm import tqdm  # type: ignore
     except Exception:  # pragma: no cover
@@ -602,6 +616,13 @@ def main() -> None:
                 "start_p90": float(np.quantile(s_dist, 0.9)),
                 "dest_p50": float(np.quantile(t_dist, 0.5)),
                 "dest_p90": float(np.quantile(t_dist, 0.9)),
+            },
+            "gt_point_snap_dist_grid": {
+                "eval_points": int(gt_all_dist.size),
+                "p50": float(np.quantile(gt_all_dist, 0.5)) if gt_all_dist.size else None,
+                "p90": float(np.quantile(gt_all_dist, 0.9)) if gt_all_dist.size else None,
+                "frac_le_1": float(np.mean((gt_all_dist <= 1.0).astype(np.float32))) if gt_all_dist.size else None,
+                "frac_le_2": float(np.mean((gt_all_dist <= 2.0).astype(np.float32))) if gt_all_dist.size else None,
             },
             "od_candidate_paths": {
                 "od_reachable_frac": od_reachable_frac,

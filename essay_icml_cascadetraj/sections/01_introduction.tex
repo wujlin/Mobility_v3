@@ -1,28 +1,23 @@
 \label{sec:intro}
 
-Route generation is a core primitive for mobility simulation, transport planning, and urban computing. However, real-world routes are neither purely geometric curves nor deterministic shortest paths: they are shaped by \emph{road topology} (connectivity, bottlenecks, and hierarchy) and by \emph{urban semantics} (activity centers, functional land use, and time-dependent demand).
+Route generation is a primitive for mobility simulation, transportation planning, and urban computing~\citep{kong2023mobility_survey,zhang2025codiffmob,chu2023trajgdm}.
+Real-world routes between a fixed origin and destination are diverse; they are neither purely geometric curves nor deterministic shortest paths, as route selection often depends on temporal--spatial context---time of day, surrounding land use, and perceived conditions along candidate paths.
+However, the majority of existing works generate such paths by primarily using road topology features as constraints~\citep{wei2024diffrntraj,zhu2024controltraj,rao2025seed,guo2025cardiff}.
+Specifically, road connectivity, intersection bottlenecks, and the hierarchical attributes of roads (e.g., highways, main roads, and residential roads) are the most common elements serving as constraints for route generation.
 
-This creates a tension in existing trajectory generators. \emph{Map-free} models that generate continuous coordinates directly often produce trajectories that drift off-road or collapse to trivial straight lines, because the road network is a measure-zero set in continuous space and soft regularizers provide only weak guidance. At the other extreme, \emph{map-aware} baselines that rely on shortest paths or hand-crafted costs can be structurally valid but behaviorally implausible: they do not capture multi-modal corridor choice and do not express how semantics (e.g., POIs, road hierarchy, and time-of-day) shift route preferences.
+While such methods can generate routes that match aggregate traffic flow or cover specific regions, they fail to capture how \emph{the same origin--destination pair yields different route choices under different contexts}---a phenomenon we term \textbf{corridor diversification}.
+In practice, travelers do not randomly diversify; they systematically shift toward alternative corridors in response to temporal--spatial cues (e.g., rush-hour congestion, nighttime safety concerns, or proximity to certain land uses), which results in the emergence of distinct corridors with context-dependent flow distributions.
+A few works have incorporated elements related to the physical and social urban environment into route generation~\citep{cao2025hoser,su2024uen}.
+However, these methods treat context as auxiliary features rather than as the mechanism that governs corridor choice, and thus fail to estimate how corridor distributions shift under different conditions.
 
-\paragraph{Redefining realism.}
-We distinguish two notions of realism:
-\textbf{structural realism} (geometric validity, e.g., on-road trajectories) and
-\textbf{behavioral realism} (contextual plausibility, i.e., humans choose different corridors under different temporal--spatial conditions).
-Structural realism is largely an engineering constraint; behavioral realism is the scientific question.
-Crucially, behavioral realism cannot be achieved by learning only $p(\text{route}\mid o,d)$: diversity without context becomes indiscriminate randomness rather than meaningful behavioral differences.
-
-\paragraph{Why naïve fixes are insufficient.}
-One can enforce roads by post-hoc snapping or map matching, but this changes the sample distribution and can destroy the very behavioral signals we aim to model. Likewise, graph routing with random perturbations can create diverse paths, but the diversity is not tied to temporal--spatial context and therefore does not explain \emph{why} travelers prefer one corridor over another.
-
-\paragraph{Key insight.}
-Trip-scale route choice is naturally hierarchical. At a coarse level, travelers choose among a small number of plausible \emph{corridors} connecting an origin--destination (OD) pair; at a fine level, they execute a realistic continuous trajectory within the chosen corridor. Both levels are modulated by semantics and temporal context. This suggests separating \emph{discrete corridor selection} from \emph{continuous trajectory execution}, and letting road topology provide a structural prior only where it is essential.
-
-\paragraph{CascadeTraj.}
-We propose \textbf{CascadeTraj}, a hierarchical route generation framework that combines road network topology for structural realism with urban semantic features for behavioral fidelity. The decision stage selects corridors on the road graph conditioned on semantic context; the execution stage generates realistic trajectories within the selected corridor. This design turns the measure-zero road constraint into a first-class discrete decision, while preserving flexibility for continuous dynamics.
-
-We identify a fundamental limitation: map-free continuous generation cannot reliably converge to road corridors at trip scale, even with soft road priors. This motivates a core architectural insight---treating corridor choice as a \emph{discrete decision} on the road graph rather than a continuous optimization toward a measure-zero target. Crucially, temporal--spatial semantics enter this discrete decision as first-class conditioning signals, enabling context-dependent behavioral diversity rather than random perturbations. We substantiate the diagnostic with waypoint audits and case-level visualizations (Sec.~\ref{sec:results}), and present CascadeTraj as a mechanism that unifies structural realism with behaviorally grounded, context-conditioned route choice.
+To address these challenges, we propose \textbf{CascadeTraj}, a hierarchical route generation framework that treats temporal--spatial semantics as the conditioning signal for corridor choice, not merely a regularization feature.
+The key insight is that corridor selection is a \emph{discrete decision} that should respond to context, while within-corridor trajectory execution is a continuous generation problem.
+We operationalize this with two stages:
+(1) the \textbf{decision stage}, which selects a corridor on the road network graph conditioned on semantic context and time;
+(2) the \textbf{execution stage}, which generates a realistic trajectory within the selected corridor via residual diffusion.
+As diagnostic evidence, we show that map-free continuous generation fails at corridor-level convergence---waypoints remain far from ground-truth corridors even with soft road priors (Sec.~\ref{sec:results})---motivating the discrete corridor formulation and demonstrating that semantic conditioning shifts corridor distributions under fixed OD.
 
 The remainder of the paper develops this framing.
-Section~\ref{sec:related-work} positions our work against recent trajectory foundation models, map-conditioned generators, and road-constrained diffusion---arguing that reconstruction fidelity is not the same as behavioral mechanism.
+Section~\ref{sec:related-work} positions our work against recent trajectory foundation models~\citep{zhu2025unitraj,lin2024trajfm}, map-conditioned generators~\citep{tao2025map2traj,wang2025gtg}, and road-constrained diffusion---arguing that reconstruction fidelity is not the same as behavioral mechanism.
 Section~\ref{sec:method} introduces CascadeTraj as a decision--execution framework where temporal--spatial semantics condition corridor choice.
 Sections~\ref{sec:experiments}--\ref{sec:results} establish the diagnostic evidence: waypoint audits and case visualizations demonstrate the measure-zero failure mode of map-free generation, motivating the discrete corridor formulation.

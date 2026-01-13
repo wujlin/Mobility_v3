@@ -1,27 +1,33 @@
 \label{sec:related-work}
 
 \paragraph{Map-free trajectory generation.}
-Early work on trajectory generation models continuous coordinates with recurrent networks, variational autoencoders, or adversarial objectives. Recent diffusion-based generators improve sample quality and diversity, but map-free generation remains fundamentally challenging for road-constrained mobility: in continuous space, the set of on-road trajectories occupies vanishing volume, and weak priors (e.g., distance-to-road penalties) often fail to enforce corridor-level realism at trip scale. Our work differs by diagnosing this failure at the \emph{corridor} scale and motivating a discrete decision formulation rather than stronger continuous penalties.
+Early work on trajectory generation models continuous coordinates with recurrent networks, variational autoencoders, or adversarial objectives~\citep{kong2023mobility_survey}.
+Recent diffusion-based generators improve sample quality and diversity~\citep{zhu2023difftraj,zhang2025codiffmob}, but map-free generation remains fundamentally challenging for road-constrained mobility: in continuous space, the set of on-road trajectories occupies vanishing volume, and weak priors (e.g., distance-to-road penalties) often fail to enforce corridor-level realism at trip scale.
+Our work differs by diagnosing this failure at the \emph{corridor} scale and motivating a discrete decision formulation rather than stronger continuous penalties.
 
 \paragraph{Road-constrained diffusion and the measure-zero issue.}
-Recent road-constrained diffusion work (e.g., Cardiff, arXiv:2507.13366, 2025; Diff-RNTraj and related variants) highlights that geometry constraints are necessary to avoid off-road artifacts. Our results are consistent with this perspective, and further show that even soft road priors (tier-road) leave decision waypoints far from GT corridors (Table~\ref{tab:wp-audit}). Our work differs by connecting the measure-zero issue to \emph{corridor-level} decision making and motivating corridor selection as a discrete structural mechanism.
+Recent road-constrained diffusion work~\citep{wei2024diffrntraj,zhu2024controltraj,guo2025cardiff} highlights that geometry constraints are necessary to avoid off-road artifacts.
+Our results are consistent with this perspective, and further show that even soft road priors (tier-road) leave decision waypoints far from GT corridors (Table~\ref{tab:wp-audit}).
+Our work differs by connecting the measure-zero issue to \emph{corridor-level} decision making and motivating corridor selection as a discrete structural mechanism.
 
 \paragraph{Map-conditioned generation and cross-city generalization.}
-Map-conditioned generators such as Map2Traj (IJCAI 2025) demonstrate that road topology can substantially improve \emph{structural} realism and even enable strong zero-shot transfer. Cross-city generators such as GTG (AAAI 2025) show that mobility patterns can be transferable across regions. We agree with the structural and transfer insights, but argue that these approaches leave an essential question unanswered: \emph{what modulates corridor choice under fixed OD and topology?} Our answer is temporal--spatial semantics; our work differs by making this modulation explicit via corridor selection conditioned on time, road hierarchy, and POI context.
+Map-conditioned generators such as Map2Traj~\citep{tao2025map2traj} demonstrate that road topology can substantially improve \emph{structural} realism and even enable strong zero-shot transfer.
+Cross-city generators such as GTG~\citep{wang2025gtg} show that mobility patterns can be transferable across regions.
+We agree with the structural and transfer insights, but argue that these approaches leave an essential question unanswered: \emph{what modulates corridor choice under fixed OD and topology?}
+Our answer is temporal--spatial semantics; our work differs by making this modulation explicit via corridor selection conditioned on time, road hierarchy, and POI context.
 
 \paragraph{Hierarchical route choice.}
-Empirically, trips often exhibit corridor-level multi-modality: a small number of plausible macro-routes exist between an OD pair, while local deviations occur within each corridor. Hierarchical formulations have been used in transportation (e.g., route--link decomposition) and in modern sequence modeling (coarse-to-fine generation). Our work differs by instantiating the hierarchy on a road graph corridor space and separating corridor selection from continuous execution.
+Empirically, trips often exhibit corridor-level multi-modality: a small number of plausible macro-routes exist between an OD pair, while local deviations occur within each corridor.
+Hierarchical formulations have been used in transportation (e.g., route--link decomposition) and in modern sequence modeling (coarse-to-fine generation)~\citep{guo2025cardiff,rao2025seed}.
+Our work differs by instantiating the hierarchy on a road graph corridor space and separating corridor selection from continuous execution.
 
 \paragraph{Urban semantics and temporal context.}
-Route preferences depend on functional context---POI distributions, land use, road hierarchy, and time-of-day. Semantic/temporal conditioning has been explored in recent mobility generation models (e.g., CoDiffMob-style conditioning; SIGSPATIAL 2025 GCDM). Our key positioning is that semantics are not auxiliary features: they define behavioral realism by inducing \emph{context-conditioned} corridor distribution shifts under the same OD and topology.
+Route preferences depend on functional context---POI distributions, land use, road hierarchy, and time-of-day.
+Semantic/temporal conditioning has been explored in recent mobility generation models~\citep{cao2025hoser,su2024uen,zhang2025codiffmob}.
+Our key positioning is that semantics are not auxiliary features: they define behavioral realism by inducing \emph{context-conditioned} corridor distribution shifts under the same OD and topology.
 
 \paragraph{Foundation models and why mechanism matters.}
-Trajectory foundation models such as UniTraj/WorldTrace (2025) aim to learn region-independent representations from large-scale data via masking-and-recovery style objectives. Our perspective is complementary: reconstruction optimizes trajectory-level statistical regularities, but corridor choice is a \emph{decision problem}. A model may reconstruct coordinates accurately yet fail to capture that the same OD should route through different corridors under different temporal--spatial contexts. Our work differs by treating corridor selection as a discrete decision conditioned on semantics/time, targeting the behavioral mechanism rather than only reconstruction fidelity.
-
-\paragraph{Positioning with 2024--2025 trends.}
-CascadeTraj sits at the intersection of several emerging trends:
-\emph{coarse-to-fine/hierarchical generation} (decision--execution decomposition),
-\emph{AR + diffusion hybrids} (discrete planning followed by continuous refinement),
-\emph{map-conditioned generation} (road topology for structural realism),
-and \emph{semantic/temporal conditioning} (context as a behavioral mechanism).
-We position CascadeTraj as a concrete instantiation of ``corridor as a discrete latent'' (e.g., GCDM-style hierarchical latent structure) with semantics/time as the modulation signal for behavioral realism---not merely an add-on feature.
+Trajectory foundation models such as UniTraj~\citep{zhu2025unitraj} and TrajFM~\citep{lin2024trajfm} aim to learn region-independent representations from large-scale data via masking-and-recovery style objectives.
+Our perspective is complementary: reconstruction optimizes trajectory-level statistical regularities, but corridor choice is a \emph{decision problem}.
+A model may reconstruct coordinates accurately yet fail to capture that the same OD should route through different corridors under different temporal--spatial contexts.
+Our work differs by treating corridor selection as a discrete decision conditioned on semantics/time, targeting the behavioral mechanism rather than only reconstruction fidelity.

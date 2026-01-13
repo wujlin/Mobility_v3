@@ -32,6 +32,25 @@ TIER_MINOR = {"tertiary", "residential"}
 TIER_SERVICE = {"service", "unclassified"}
 
 
+def _load_grid_from_semantic_dir(semantic_dir: Path) -> GridSpec:
+    meta_path = Path(semantic_dir) / "osm_road_prob_meta.json"
+    if not meta_path.exists():
+        raise FileNotFoundError(f"Missing {meta_path} (needed for bbox/grid).")
+    meta = json.loads(meta_path.read_text(encoding="utf-8"))
+    g = meta.get("grid", {})
+    bbox = g.get("bbox", {})
+    return GridSpec(
+        H=int(g["H"]),
+        W=int(g["W"]),
+        bbox=BBox(
+            min_lon=float(bbox["min_lon"]),
+            min_lat=float(bbox["min_lat"]),
+            max_lon=float(bbox["max_lon"]),
+            max_lat=float(bbox["max_lat"]),
+        ),
+    )
+
+
 def _iter_geom_coords(geom) -> Iterator[np.ndarray]:
     """
     Yield Nx2 arrays of (lon, lat) coords for LineString/MultiLineString geometries.
@@ -163,7 +182,13 @@ def _tier_prob_from_roads(
 def main() -> None:
     ap = argparse.ArgumentParser(description="Build OSM-based road_mask/dist_to_road/road_prob for a city grid (default: Detroit core).")
     ap.add_argument("--osm_pbf", type=Path, required=True, help="OSM .pbf file path (Detroit region)")
-    ap.add_argument("--out_dir", type=Path, required=True, help="Output directory (e.g. data/processed_worldtrace_detroit)")
+    ap.add_argument(
+        "--semantic_dir",
+        type=Path,
+        default=None,
+        help="Optional city semantic_dir containing osm_road_prob_meta.json; if set, bbox/H/W will be loaded from it. (out_dir defaults to semantic_dir)",
+    )
+    ap.add_argument("--out_dir", type=Path, default=None, help="Output directory (default: semantic_dir if provided)")
     ap.add_argument(
         "--bbox",
         type=float,
@@ -196,6 +221,11 @@ def main() -> None:
         action="store_true",
         help="When road_prob_variant=tiered: also save osm_road_prob_{major,minor,service}.npy for downstream semantic conditioning.",
     )
+    ap.add_argument(
+        "--tier_only",
+        action="store_true",
+        help="When road_prob_variant=tiered and save_tier_probs: only save tier prob rasters (do not overwrite osm_road_prob.npy/meta).",
+    )
     args = ap.parse_args()
 
     try:
@@ -203,7 +233,13 @@ def main() -> None:
     except ModuleNotFoundError as e:
         raise SystemExit("Missing dependency: pyrosm. Install via conda/pip (plus shapely/geopandas).") from e
 
-    if args.bbox is None and args.grid_h is None and args.grid_w is None:
+    if args.out_dir is None and args.semantic_dir is None:
+        raise SystemExit("Provide --out_dir or --semantic_dir (to infer out_dir and grid).")
+    out_dir = Path(args.out_dir) if args.out_dir is not None else Path(args.semantic_dir)  # type: ignore[arg-type]
+
+    if args.semantic_dir is not None:
+        grid = _load_grid_from_semantic_dir(Path(args.semantic_dir))
+    elif args.bbox is None and args.grid_h is None and args.grid_w is None:
         grid = _default_detroit_core_grid()
     else:
         bbox_vals = args.bbox or [-83.25, 42.25, -82.95, 42.50]
@@ -245,14 +281,34 @@ def main() -> None:
         dist_m = distance_transform_edt(~mask, sampling=(res_y_m, res_x_m)).astype(np.float32)
         road_prob = np.exp(-dist_m / float(args.road_prob_sigma_m)).astype(np.float32)
 
-    args.out_dir.mkdir(parents=True, exist_ok=True)
-    np.save(args.out_dir / "osm_road_mask.npy", np.asarray(mask, np.uint8))
-    np.save(args.out_dir / "osm_dist_to_road_m.npy", dist_m)
-    np.save(args.out_dir / "osm_road_prob.npy", road_prob)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    if bool(args.tier_only):
+        if args.road_prob_variant != "tiered" or not bool(args.save_tier_probs):
+            raise SystemExit("--tier_only requires --road_prob_variant tiered and --save_tier_probs.")
+        np.save(out_dir / "osm_road_prob_major.npy", np.asarray(prob_major, np.float32))
+        np.save(out_dir / "osm_road_prob_minor.npy", np.asarray(prob_minor, np.float32))
+        np.save(out_dir / "osm_road_prob_service.npy", np.asarray(prob_service, np.float32))
+        print(
+            json.dumps(
+                {
+                    "ok": True,
+                    "out_dir": str(out_dir),
+                    "tier_only": True,
+                    "grid": {"H": int(grid.H), "W": int(grid.W), "bbox": bbox.__dict__},
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
+        return
+
+    np.save(out_dir / "osm_road_mask.npy", np.asarray(mask, np.uint8))
+    np.save(out_dir / "osm_dist_to_road_m.npy", dist_m)
+    np.save(out_dir / "osm_road_prob.npy", road_prob)
     if bool(args.save_tier_probs) and args.road_prob_variant == "tiered":
-        np.save(args.out_dir / "osm_road_prob_major.npy", np.asarray(prob_major, np.float32))
-        np.save(args.out_dir / "osm_road_prob_minor.npy", np.asarray(prob_minor, np.float32))
-        np.save(args.out_dir / "osm_road_prob_service.npy", np.asarray(prob_service, np.float32))
+        np.save(out_dir / "osm_road_prob_major.npy", np.asarray(prob_major, np.float32))
+        np.save(out_dir / "osm_road_prob_minor.npy", np.asarray(prob_minor, np.float32))
+        np.save(out_dir / "osm_road_prob_service.npy", np.asarray(prob_service, np.float32))
 
     meta = {
         "grid": {"H": grid.H, "W": grid.W, "bbox": bbox.__dict__},
@@ -265,8 +321,8 @@ def main() -> None:
         "res_x_m": res_x_m,
         "res_y_m": res_y_m,
     }
-    (args.out_dir / "osm_road_prob_meta.json").write_text(json.dumps(meta, indent=2), encoding="utf-8")
-    print(json.dumps({"out_dir": str(args.out_dir), **meta}, indent=2))
+    (out_dir / "osm_road_prob_meta.json").write_text(json.dumps(meta, indent=2), encoding="utf-8")
+    print(json.dumps({"out_dir": str(out_dir), **meta}, indent=2))
 
 
 if __name__ == "__main__":

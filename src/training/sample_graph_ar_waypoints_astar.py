@@ -387,6 +387,7 @@ def run(
 
         rows = []
         best_j_list = []
+        best_j_succ_list = []
         succ_rate_list = []
         base_best_list = []
 
@@ -527,6 +528,7 @@ def run(
             pred_wps = wps_list
             succ = 0
             best_j = 0.0
+            best_j_succ = 0.0
             for wps, ok, segs in zip(wps_list, ok_mask, seg_pairs_by_sample):
                 if not ok or not segs:
                     pred_paths.append([int(s)])
@@ -540,11 +542,14 @@ def run(
                         ok2 = False
                         break
                     full.extend([int(x) for x in seg[1:]])
-                if ok2 and full and full[-1] == int(d):
+                is_succ = bool(ok2 and full and full[-1] == int(d))
+                if is_succ:
                     succ += 1
                 pred_paths.append(full)
                 j = _jaccard_edges(_edge_set(full), gt_es)
                 best_j = float(max(best_j, j))
+                if is_succ:
+                    best_j_succ = float(max(best_j_succ, j))
 
             succ_rate = float(succ) / float(max(1, int(cfg_s.K)))
 
@@ -566,11 +571,13 @@ def run(
                     "dest": int(d),
                     "gt_len": int(len(gt_seq)),
                     "best_jaccard": float(best_j),
+                    "best_jaccard_success": float(best_j_succ),
                     "success_rate": float(succ_rate),
                     "baseline_best_jaccard_kshortest": (float(base_best) if base_best is not None else None),
                 }
             )
             best_j_list.append(float(best_j))
+            best_j_succ_list.append(float(best_j_succ))
             succ_rate_list.append(float(succ_rate))
             if base_best is not None:
                 base_best_list.append(float(base_best))
@@ -594,7 +601,7 @@ def run(
                     pred_paths=pred_paths,
                     gt_wp=gt_wp,
                     pred_wps=pred_wps,
-                    title=f"rid={int(rid)} bestJ={best_j:.3f} succ={succ_rate:.2f}",
+                    title=f"rid={int(rid)} bestJ={best_j:.3f} bestJ_s={best_j_succ:.3f} succ={succ_rate:.2f}",
                 )
                 viz += 1
 
@@ -608,6 +615,7 @@ def run(
                             "pct": float(int(i_idx) + 1) / float(max(1, int(total))),
                             "elapsed_s": float(time.time() - t0),
                             "best_j_mean_sofar": float(np.mean(np.asarray(best_j_list, dtype=np.float64))) if best_j_list else None,
+                            "best_j_succ_mean_sofar": float(np.mean(np.asarray(best_j_succ_list, dtype=np.float64))) if best_j_succ_list else None,
                             "succ_rate_mean_sofar": float(np.mean(np.asarray(succ_rate_list, dtype=np.float64))) if succ_rate_list else None,
                         },
                         ensure_ascii=False,
@@ -653,6 +661,7 @@ def run(
             "num_routes_sampled": int(len(rows)),
             "success_rate": {"mean": float(np.mean(np.asarray(succ_rate_list, dtype=np.float64))) if succ_rate_list else None, "p50": _q(succ_rate_list, 50), "p90": _q(succ_rate_list, 90)},
             "best_jaccard": {"mean": float(np.mean(np.asarray(best_j_list, dtype=np.float64))) if best_j_list else None, "p50": _q(best_j_list, 50), "p90": _q(best_j_list, 90)},
+            "best_jaccard_success": {"mean": float(np.mean(np.asarray(best_j_succ_list, dtype=np.float64))) if best_j_succ_list else None, "p50": _q(best_j_succ_list, 50), "p90": _q(best_j_succ_list, 90)},
             "baseline_best_jaccard_kshortest": {
                 "mean": float(np.mean(np.asarray(base_best_list, dtype=np.float64))) if base_best_list else None,
                 "p50": _q(base_best_list, 50) if base_best_list else None,
@@ -733,6 +742,7 @@ def main() -> None:
         "out_dir": report["outputs"]["out_dir"],
         "num_routes_sampled": report["stats"]["num_routes_sampled"],
         "best_jaccard_mean": report["stats"]["best_jaccard"]["mean"],
+        "best_jaccard_success_mean": report["stats"]["best_jaccard_success"]["mean"],
         "success_rate_mean": report["stats"]["success_rate"]["mean"],
         "report_json": report["outputs"]["report_json"],
     }

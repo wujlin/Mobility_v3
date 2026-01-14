@@ -56,7 +56,7 @@ route generation 的 corridor-level 多模态在连续坐标空间里会诱发�
 **Experiments/Results**
 - Gate-1（候选覆盖）：说明为什么候选集不够。
 - Gate-2（语义信息量）：`AUC(time+tier)` 是否 >0.6（支持 context-conditioned diversity 的前提）。
-- T4 原型：waypoint AR 的 val acc、A* success_rate、best-of-K Jaccard；用可视化解释失败来自“bin→node 可达性”而非“AR 步数太多”。
+- T4 原型：waypoint AR 的 val acc、A* success/bestJ、oracle 上界；用可视化解释瓶颈来自“bin 粒度/实例化策略导致的走廊混淆”，而不是“600-step node AR 的累积误差”。
 
 ---
 
@@ -67,13 +67,14 @@ routegen 主线的图表建议：
 - **Fig 2（Gate）**：K-shortest 覆盖不足（bestJ 分布）+ 诊断可视化（GT 在路上但候选走别处）。
 - **Fig 3（Go/No-Go）**：语义信息量 gate（AUC by feature：time / tier / time+tier）。
 - **Fig 4（T4 结果）**：waypoint AR + A* 的 success/bestJ 分位数 + 典型失败可视化（解释“可达性约束”的必要性）。
+  - 如果 success 已经稳定（例如跨城 disjoint-union 修复后），Fig 4 更应该强调 oracle ceiling 与 `wp_bin` 粒度的 trade-off，并用可视化展示“bin 内多走廊混淆”的失败模式。
 
 ---
 
 ### A4) 结果未收敛时怎么写（不造假也不误导 PI）
 
 - 论文里所有数字都必须能点到仓库产物路径（`_sync/wsa/.../report.json` 或 `$RAW_ROOT/.../report.json`）。
-- 如果某一阶段仍是 prototype（例如 T4 的 success_rate 偏低），要把它写成“发现/诊断”而不是“性能结果”。
+- 如果某一阶段仍是 prototype（例如 oracle ceiling 偏低、需要更细 `wp_bin`），要把它写成“发现/诊断”而不是“性能结果”。  
 
 ---
 

@@ -25,8 +25,8 @@ This motivates learning structured corridor commitments rather than depending on
 \subsection{Context carries measurable corridor-level signal (gate)}
 \paragraph{AUC on corridor clusters.}
 Using OD buckets and edge-Jaccard clustering within each bucket, we form a corridor-label prediction gate.
-On Columbus, time+tier features achieve a strong signal (mean AUC $\approx 0.84$ over 18 usable OD groups).
-Detroit exhibits a weaker but above-chance signal (mean AUC $\approx 0.61$ over 4 groups), highlighting the role of data volume and OD repetition.
+Across Detroit and Columbus, time+tier features achieve a clear above-chance signal (mean AUC $\approx 0.80$ over 22 usable OD groups).
+Per-city, Columbus exhibits a stronger signal (mean AUC $\approx 0.84$ over 18 groups) while Detroit is weaker but still above chance (mean AUC $\approx 0.61$ over 4 groups), highlighting the role of data volume and OD repetition.
 
 \begin{table}[t]
   \centering
@@ -37,6 +37,7 @@ Detroit exhibits a weaker but above-chance signal (mean AUC $\approx 0.61$ over 
     \midrule
     Detroit & 4 & 0.613 & GO \\
     Columbus & 18 & 0.844 & STRONG\_GO \\
+    Detroit+Columbus & 22 & 0.802 & STRONG\_GO \\
     \bottomrule
   \end{tabular}
   \caption{Semantic informativeness gate (cluster-based). AUC is computed for predicting the top-2 corridor clusters within multi-modal OD buckets using time and road-tier features.}
@@ -50,8 +51,10 @@ This reflects compounding error over hundreds of steps.
 
 \paragraph{Waypoint AR + A* reduces the decision horizon but needs reachability-aware decoding.}
 Our waypoint AR model predicts a 4-step waypoint commitment in a coarse $32\times 32$ bin space (best validation accuracy $\approx 0.34$).
-Executing sampled waypoints with A* guarantees graph-validity for successful samples, but the current prototype has a low success rate because sampled waypoint bins can map to unreachable node pairs.
-This indicates the bottleneck is reachability constraints rather than long-horizon exposure bias.
+Executing sampled waypoints with A* guarantees graph-validity for successful samples.
+In the multi-city setting, we found that a naive ``bin$\rightarrow$node'' instantiation can fail catastrophically by mixing nodes across disjoint city subgraphs that share a normalized grid coordinate system.
+After enforcing city-consistent decoding and a simple reachability-friendly bin instantiation heuristic (major-road preference + OD-aligned direction), waypoint AR + A* achieves near-perfect completion.
+However, an oracle experiment that replaces predicted bins with GT-derived bins shows only a small gain in corridor match, indicating that the remaining bottleneck is the coarse bin granularity rather than the bin predictor.
 
 \begin{table}[t]
   \centering
@@ -61,7 +64,8 @@ This indicates the bottleneck is reachability constraints rather than long-horiz
     Method & Success (mean) & $J_{\mathrm{best}}$ (mean) & Notes \\
     \midrule
     Node-level AR (T3) & 0.376 & 0.204 & long-horizon drift \\
-    Waypoint AR + A* (T4) & 0.115 & 0.179 & unreachable waypoint segments \\
+    Waypoint AR + A* (T4) & 1.000 & 0.270 & city-consistent + reachable instantiation \\
+    Waypoint AR + A* (T4, oracle bins) & 1.000 & 0.276 & ceiling limited by bin granularity \\
     \bottomrule
   \end{tabular}
   \caption{Graph corridor generation on the combined Detroit+Columbus dataset (200 sampled routes, $K=20$). Success denotes completion to $d$; $J_{\mathrm{best}}$ is best-of-$K$ edge Jaccard to the GT corridor.}

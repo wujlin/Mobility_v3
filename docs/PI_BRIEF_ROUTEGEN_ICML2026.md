@@ -99,12 +99,13 @@
 ### 4.3 Go/No-Go：语义/时间是否能在 corridor 层提供可观测信号？
 
 - 用 OD 分桶 + 走廊聚类得到二分类标签，计算 `AUC(time+tier)`。  
-  当前结论：在少量可用 OD 组上 AUC>0.6（GO），但可用 OD 组数仍是瓶颈 → 需要更多城市 / 更多数据。
+  当前结论：Detroit+Columbus 合并后可用 OD 组数提升到 22，`AUC(time+tier)` 均值约 0.80（STRONG\_GO）。其中 Detroit 约 0.61（4 组），Columbus 约 0.84（18 组）。
 
 ### 4.4 当前原型：Waypoint AR + A*
 
 - 训练侧：waypoint-bin AR 在 1024 类上能学到非随机信号（val acc≈0.34）。
-- 推理侧：A* 连接的成功率与 best-Jaccard 仍偏低，主要瓶颈是“bin→node 实例化缺少可达性约束”，会导致大量 A* 段不可达。
+- 推理侧：已修复跨城 disjoint-union 下的 bin→node 混选（会把 waypoint 采到另一城市子图导致 A* 不可达），并引入更稳健的 bin 内选点策略（major-road + OD 方向一致）。当前评估已达到 `success_rate≈1.0`。
+- 关键瓶颈已转移：oracle（GT bin）上界仅略高于 baseline（best-of-K Jaccard 均值约 0.276 vs 0.270），说明主要限制来自 **bin 粒度过粗（32×32）导致的走廊混淆**；下一步优先验证 `wp_bin: 32→16` 是否能显著抬高 oracle 上界（目标 0.5+）。
 
 ---
 

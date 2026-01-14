@@ -54,12 +54,12 @@ route generation 的 corridor-level 多模态在连续坐标空间里会诱发�
 ### 2.4 当前原型：Waypoint AR + A*（T4）
 
 - 训练：`train_graph_ar_waypoint_bins.py`（val acc≈0.34，说明不是随机猜 bin）
-- 评估：`sample_graph_ar_waypoints_astar.py`（当前瓶颈：bin→node 实例化缺少可达性约束，导致 success_rate 偏低）
+- 评估：`sample_graph_ar_waypoints_astar.py`（已修复跨城混选导致的不可达：`success_rate≈1.0`；当前瓶颈转移为 **bin 粒度过粗导致走廊混淆**，oracle 上界仅 `bestJ≈0.276`）
 
 ---
 
 ## 3) 下一步（给 PI 的决策点）
 
-1) Columbus 补齐 tier-road（解锁多城 time+tier gate 与 AR 训练一致口径）。
-2) 改善 waypoint 采样的“可达性”（bin→node 需要连通性/可达性约束），优先把 `success_rate` 从 ~0.1 拉到可用区间。
-3) 补齐对照：在同一评估脚本里输出 `K-shortest` baseline 的 bestJ（避免只看单模型）。
+1) 缩小 `wp_bin` 粒度（`32→16`）做 oracle 上界审计：目标是把 `bestJ` ceiling 拉到 `0.5+`，否则说明“bin 分类”表述本身不适合。
+2) 继续保持可视化审计：固定若干 `rid` case 对比 `wp_bin=32` vs `16`，确认走廊混淆是否显著减少。
+3) （并行）补齐对照：在同一评估脚本里输出 `K-shortest` baseline 的 bestJ（避免只看单模型）。

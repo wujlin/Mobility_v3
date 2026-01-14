@@ -1,0 +1,30 @@
+{
+  "ok": true,
+  "task": "dump_waypoints_from_paths_graph_npz",
+  "inputs": {
+    "paths_graph_npz": "_sync/wsa/icml2026_routegen/T3_combo_detroit_columbus_seed0/paths_graph_combo.npz",
+    "road_graph_npz": "_sync/wsa/icml2026_routegen/T3_combo_detroit_columbus_seed0/road_graph_combo.npz"
+  },
+  "config": {
+    "num_waypoints": 4,
+    "mode": "rdp_turn",
+    "turn_alpha": 1.0,
+    "seed": 0,
+    "viz_cases": 0
+  },
+  "stats": {
+    "n_routes": 3385,
+    "n_good": 3385,
+    "gt_len": {
+      "p50": 566.0,
+      "p90": 848.0
+    }
+  },
+  "outputs": {
+    "out_npz": "_tmp_wp_dump_local/waypoints_graph.npz",
+    "report_json": "_tmp_wp_dump_local/report.json"
+  },
+  "meta": {
+    "created_at": "2026-01-14T10:00:07.153472+08:00"
+  }
+}

@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import random
+import sys
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -34,6 +35,8 @@ class DumpCfg:
     mode: str
     turn_alpha: float
     seed: int
+    progress: str
+    log_every: int
 
 
 def _load_graph_npz(path: Path) -> Dict[str, np.ndarray]:
@@ -108,13 +111,25 @@ def run_dump(*, paths_graph_npz: Path, road_graph_npz: Path, out_dir: Path, cfg:
     meta_p = p["meta"]
 
     N = int(start_node.size)
+    print(json.dumps({"event": "loaded", "N": int(N)}, ensure_ascii=False), flush=True)
     K = int(cfg.num_waypoints)
     wp_seq = np.full((N, K + 2), -1, dtype=np.int32)
     wp_len = np.full((N,), K + 2, dtype=np.int32)
     gt_len = np.asarray(node_seq_len, dtype=np.int32, copy=False).reshape(-1)
 
     good = 0
-    for i in tqdm(range(N), desc="dump_waypoints", dynamic_ncols=True):
+    progress_mode = str(cfg.progress)
+    if progress_mode == "auto":
+        # tqdm's carriage-return output is not friendly when piped to files (tee). Use JSON lines in that case.
+        progress_mode = "tqdm" if bool(sys.stderr.isatty()) else "json"
+    if progress_mode not in {"tqdm", "json", "none"}:
+        raise ValueError(f"--progress must be one of auto|tqdm|json|none, got {cfg.progress!r}")
+
+    it = range(N)
+    if progress_mode == "tqdm":
+        it = tqdm(it, desc="dump_waypoints", dynamic_ncols=True)  # type: ignore[assignment]
+
+    for i in it:
         L = int(node_seq_len[i])
         if L < 2:
             continue
@@ -124,28 +139,37 @@ def run_dump(*, paths_graph_npz: Path, road_graph_npz: Path, out_dir: Path, cfg:
         xx = node_x[seq]
         pts = np.stack([yy, xx], axis=1).astype(np.float32, copy=False)
 
-        if L < (K + 2):
-            # Fallback: time quantiles (always include endpoints).
-            idx = np.linspace(1, max(1, L - 2), num=K, dtype=np.float32)
-            idx = np.clip(np.rint(idx), 1, max(1, L - 2)).astype(np.int64, copy=False)
-            idx = np.unique(idx)[:K]
-            while idx.size < K:
-                idx = np.unique(np.concatenate([idx, idx[-1:]], axis=0))
-            idx = idx[:K]
+        if L <= 2:
+            # Degenerate path: only [start, dest]. Repeat dest as internal waypoints.
+            nodes = [int(seq[0])] + [int(seq[-1])] * int(K) + [int(seq[-1])]
         else:
-            idx = _pick_idx(pts, cfg=cfg)
-            if idx.size < K:
-                # Ensure fixed K.
-                fill = np.linspace(1, L - 2, num=K, dtype=np.float32)
-                fill = np.clip(np.rint(fill), 1, L - 2).astype(np.int64, copy=False)
-                idx = np.unique(np.concatenate([idx, fill], axis=0))[:K]
+            if L < (K + 2):
+                # Fallback: time quantiles (duplicates allowed; fixed K).
+                hi = int(max(1, L - 2))
+                fill = np.linspace(1, hi, num=K, dtype=np.float32)
+                idx = np.clip(np.rint(fill), 1, hi).astype(np.int64, copy=False)[: int(K)]
+            else:
+                idx = _pick_idx(pts, cfg=cfg)
                 if idx.size < K:
-                    idx = np.pad(idx, (0, K - idx.size), mode="edge")
-                idx = idx[:K]
+                    # Ensure fixed K (prefer RDP picks, then fill by time quantiles; duplicates allowed).
+                    fill = np.linspace(1, L - 2, num=K, dtype=np.float32)
+                    fill = np.clip(np.rint(fill), 1, L - 2).astype(np.int64, copy=False)
+                    idx = np.concatenate([idx.astype(np.int64, copy=False), fill.astype(np.int64, copy=False)], axis=0)[: int(K)]
+                if idx.size < K:
+                    idx = np.pad(idx, (0, int(K) - int(idx.size)), mode="edge")
+                idx = idx[: int(K)]
 
-        nodes = [int(seq[0])] + [int(seq[int(j)]) for j in idx.tolist()] + [int(seq[-1])]
+            nodes = [int(seq[0])] + [int(seq[int(j)]) for j in idx.tolist()] + [int(seq[-1])]
         wp_seq[i, :] = np.asarray(nodes, dtype=np.int32)
         good += 1
+        if progress_mode == "json" and (int(i) % int(max(1, cfg.log_every)) == 0 or int(i) == int(N) - 1):
+            print(
+                json.dumps(
+                    {"task": "dump_waypoints_from_paths_graph_npz", "i": int(i), "N": int(N), "done": int(good), "pct": float(good) / float(max(1, int(N)))},
+                    ensure_ascii=False,
+                ),
+                flush=True,
+            )
 
     meta = {
         "created_at": datetime.now(tz=TZ_SHANGHAI).isoformat(),
@@ -155,7 +179,10 @@ def run_dump(*, paths_graph_npz: Path, road_graph_npz: Path, out_dir: Path, cfg:
         "graph_meta": meta_g,
         "paths_meta": meta_p,
     }
-    np.savez_compressed(
+    print(json.dumps({"event": "extracted", "done": int(good)}, ensure_ascii=False), flush=True)
+    print(json.dumps({"event": "saving", "out_npz": str(out_npz)}, ensure_ascii=False), flush=True)
+    # NOTE: This file is small (~KB/MB). Prefer uncompressed npz for robustness and speed on different filesystems.
+    np.savez(
         out_npz,
         wp_seq=wp_seq,
         wp_len=wp_len,
@@ -167,6 +194,7 @@ def run_dump(*, paths_graph_npz: Path, road_graph_npz: Path, out_dir: Path, cfg:
         route_city=(route_city.astype(np.int8, copy=False) if route_city is not None else None),
         meta=meta,
     )
+    print(json.dumps({"event": "saved", "out_npz": str(out_npz)}, ensure_ascii=False), flush=True)
 
     report: Dict[str, object] = {
         "ok": True,
@@ -196,6 +224,8 @@ def build_argparser() -> argparse.ArgumentParser:
     p.add_argument("--num_waypoints", type=int, default=4, help="Number of INTERNAL waypoints (excluding start/dest).")
     p.add_argument("--mode", type=str, default="rdp_turn", choices=["rdp_dev", "rdp_turn"])
     p.add_argument("--turn_alpha", type=float, default=1.0)
+    p.add_argument("--progress", type=str, default="auto", choices=["auto", "tqdm", "json", "none"])
+    p.add_argument("--log_every", type=int, default=200, help="Only used when --progress=json.")
     p.add_argument("--viz_cases", type=int, default=0, help="Reserved for future; kept for naming consistency.")
     p.add_argument("--seed", type=int, default=0)
     return p
@@ -204,7 +234,14 @@ def build_argparser() -> argparse.ArgumentParser:
 def main() -> None:
     args = build_argparser().parse_args()
     _set_seed(int(args.seed))
-    cfg = DumpCfg(num_waypoints=int(args.num_waypoints), mode=str(args.mode), turn_alpha=float(args.turn_alpha), seed=int(args.seed))
+    cfg = DumpCfg(
+        num_waypoints=int(args.num_waypoints),
+        mode=str(args.mode),
+        turn_alpha=float(args.turn_alpha),
+        seed=int(args.seed),
+        progress=str(args.progress),
+        log_every=int(args.log_every),
+    )
     report = run_dump(
         paths_graph_npz=Path(args.paths_graph_npz),
         road_graph_npz=Path(args.road_graph_npz),
@@ -218,4 +255,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

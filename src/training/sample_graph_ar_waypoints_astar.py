@@ -115,6 +115,35 @@ def _build_bin_to_nodes(*, node_y: np.ndarray, node_x: np.ndarray, wp_bin: int, 
     return out, int(n_by), int(n_bx)
 
 
+def _build_bin_to_nodes_by_city(
+    *,
+    node_y: np.ndarray,
+    node_x: np.ndarray,
+    node_city: np.ndarray,
+    wp_bin: int,
+    H: int,
+    W: int,
+) -> Tuple[List[List[np.ndarray]], int, int]:
+    wp_bin = int(wp_bin)
+    n_by = int((int(H) + wp_bin - 1) // wp_bin)
+    n_bx = int((int(W) + wp_bin - 1) // wp_bin)
+    node_city_i = np.asarray(node_city, dtype=np.int64).reshape(-1)
+    num_cities = int(np.max(node_city_i)) + 1 if int(node_city_i.size) > 0 else 1
+
+    bins: List[List[List[int]]] = [[[] for _ in range(int(n_by * n_bx))] for _ in range(int(num_cities))]
+    for nid, (yy, xx, cc) in enumerate(zip(node_y.tolist(), node_x.tolist(), node_city_i.tolist())):
+        city = int(cc)
+        if city < 0 or city >= int(num_cities):
+            continue
+        cls, _, _ = _bin_id_from_yx(float(yy), float(xx), wp_bin=wp_bin, H=H, W=W)
+        bins[int(city)][int(cls)].append(int(nid))
+
+    out_by_city: List[List[np.ndarray]] = []
+    for c in range(int(num_cities)):
+        out_by_city.append([np.asarray(v, dtype=np.int64) if v else np.zeros((0,), dtype=np.int64) for v in bins[int(c)]])
+    return out_by_city, int(n_by), int(n_bx)
+
+
 def _pick_node_in_bin(
     *,
     bin_nodes: np.ndarray,
@@ -136,6 +165,56 @@ def _pick_node_in_bin(
     order = np.argsort(d2, kind="mergesort")
     top = bin_nodes[order[: min(int(order.size), 64)]]
     return int(rng.choice(top))
+
+
+def _pick_node_in_bin_tier_dir(
+    *,
+    bin_nodes: np.ndarray,
+    node_y: np.ndarray,
+    node_x: np.ndarray,
+    node_tier_min: np.ndarray,
+    prev_y: float,
+    prev_x: float,
+    dest_y: float,
+    dest_x: float,
+    by: int,
+    bx: int,
+    wp_bin: int,
+    rng: np.random.Generator,
+) -> Optional[int]:
+    if bin_nodes.size == 0:
+        return None
+
+    tiers = node_tier_min[bin_nodes].astype(np.int64, copy=False)
+    major_mask = tiers <= 1
+    candidates = bin_nodes[major_mask] if bool(np.any(major_mask)) else bin_nodes
+
+    # Keep a small set near the bin center to avoid tiny dead-ends.
+    cy = float(by * int(wp_bin) + int(wp_bin) * 0.5)
+    cx = float(bx * int(wp_bin) + int(wp_bin) * 0.5)
+    yy = node_y[candidates].astype(np.float64, copy=False)
+    xx = node_x[candidates].astype(np.float64, copy=False)
+    d2_center = (yy - cy) ** 2 + (xx - cx) ** 2
+    order = np.argsort(d2_center, kind="mergesort")
+    candidates = candidates[order[: min(int(order.size), 128)]]
+    if candidates.size == 0:
+        return None
+
+    # Prefer nodes aligned with the (prev -> dest) direction.
+    dy = float(dest_y - prev_y)
+    dx = float(dest_x - prev_x)
+    norm = float(math.hypot(dy, dx)) + 1e-6
+    dy /= norm
+    dx /= norm
+    yy = node_y[candidates].astype(np.float64, copy=False)
+    xx = node_x[candidates].astype(np.float64, copy=False)
+    proj = (yy - float(prev_y)) * dy + (xx - float(prev_x)) * dx
+
+    top_k = min(8, int(candidates.size))
+    if top_k <= 1:
+        return int(candidates[0])
+    idx = np.argsort(-proj, kind="mergesort")[:top_k]
+    return int(rng.choice(candidates[idx]))
 
 
 @dataclass(frozen=True)
@@ -208,6 +287,7 @@ def run(
     num_routes: int,
     baseline_k: int,
     oracle: bool,
+    pick_strategy: str,
     astar_workers: int,
     tz_offset_hours: float,
     seed: int,
@@ -240,6 +320,7 @@ def run(
     node_x = np.asarray(raw["node_x"], dtype=np.float32).reshape(-1)
     edge_u = np.asarray(raw["edge_u"], dtype=np.int32).reshape(-1)
     edge_tier = np.asarray(raw["edge_tier"], dtype=np.uint8).reshape(-1)
+    node_city = np.asarray(raw["node_city"], dtype=np.int8).reshape(-1) if "node_city" in raw.files else None
     n_nodes = int(node_y.size)
 
     node_tier_min = _build_node_tier_min(n_nodes, edge_u=edge_u, edge_tier=edge_tier)
@@ -283,8 +364,14 @@ def run(
         node_tier_min_t = torch.from_numpy(node_tier_min.astype(np.int64, copy=False)).to(device=device, dtype=torch.long)
         tf = _time_features(start_t, tz_offset_hours=float(tz_offset_hours))
 
-        # Bin index (for sampling bins -> nodes)
-        bin_to_nodes, n_by, n_bx = _build_bin_to_nodes(node_y=node_y, node_x=node_x, wp_bin=wp_bin, H=H, W=W)
+        # Bin index (for sampling bins -> nodes). If `node_city` exists, filter candidates by route city
+        # to avoid mixing disjoint city subgraphs that share the same normalized grid coordinate system.
+        bin_to_nodes = None
+        bin_to_nodes_by_city = None
+        if node_city is not None and int(node_city.size) == int(n_nodes):
+            bin_to_nodes_by_city, n_by, n_bx = _build_bin_to_nodes_by_city(node_y=node_y, node_x=node_x, node_city=node_city, wp_bin=wp_bin, H=H, W=W)
+        else:
+            bin_to_nodes, n_by, n_bx = _build_bin_to_nodes(node_y=node_y, node_x=node_x, wp_bin=wp_bin, H=H, W=W)
         if int(n_by * n_bx) != int(n_classes):
             # Keep going but report mismatch.
             pass
@@ -376,8 +463,29 @@ def run(
 
                     by = int(cls // int(n_bx))
                     bx = int(cls % int(n_bx))
-                    cand_nodes = bin_to_nodes[int(cls)]
-                    nxt = _pick_node_in_bin(bin_nodes=cand_nodes, node_y=node_y, node_x=node_x, by=by, bx=bx, wp_bin=wp_bin, rng=rng)
+                    if bin_to_nodes_by_city is not None:
+                        city_clamped = int(np.clip(int(city), 0, int(len(bin_to_nodes_by_city)) - 1))
+                        cand_nodes = bin_to_nodes_by_city[int(city_clamped)][int(cls)]
+                    else:
+                        cand_nodes = bin_to_nodes[int(cls)] if bin_to_nodes is not None else np.zeros((0,), dtype=np.int64)
+
+                    if str(pick_strategy) == "tier_dir":
+                        nxt = _pick_node_in_bin_tier_dir(
+                            bin_nodes=cand_nodes,
+                            node_y=node_y,
+                            node_x=node_x,
+                            node_tier_min=node_tier_min,
+                            prev_y=float(node_y[int(cur)]),
+                            prev_x=float(node_x[int(cur)]),
+                            dest_y=float(node_y[int(d)]),
+                            dest_x=float(node_x[int(d)]),
+                            by=by,
+                            bx=bx,
+                            wp_bin=wp_bin,
+                            rng=rng,
+                        )
+                    else:
+                        nxt = _pick_node_in_bin(bin_nodes=cand_nodes, node_y=node_y, node_x=node_x, by=by, bx=bx, wp_bin=wp_bin, rng=rng)
                     if nxt is None:
                         ok = False
                         break
@@ -533,6 +641,8 @@ def run(
             "num_routes": int(num_routes),
             "baseline_k": int(baseline_k),
             "oracle": bool(oracle),
+            "pick_strategy": str(pick_strategy),
+            "bin_filter_city": bool(bin_to_nodes_by_city is not None),
             "astar_workers": int(astar_workers_i),
             "seed": int(seed),
             "tz_offset_hours": float(tz_offset_hours),
@@ -575,6 +685,13 @@ def build_argparser() -> argparse.ArgumentParser:
         help="Oracle upper bound: use GT-derived waypoint bins instead of model predictions (still samples a node within each bin).",
     )
     p.add_argument(
+        "--pick_strategy",
+        type=str,
+        default="tier_dir",
+        choices=["tier_dir", "center"],
+        help="How to instantiate a graph node inside a predicted bin. tier_dir=prefer major roads + OD-aligned direction; center=original bin-center sampling.",
+    )
+    p.add_argument(
         "--astar_workers",
         type=int,
         default=0,
@@ -603,6 +720,7 @@ def main() -> None:
         num_routes=int(args.num_routes),
         baseline_k=int(args.baseline_k),
         oracle=bool(args.oracle),
+        pick_strategy=str(args.pick_strategy),
         astar_workers=int(args.astar_workers),
         tz_offset_hours=float(args.tz_offset_hours),
         seed=int(args.seed),

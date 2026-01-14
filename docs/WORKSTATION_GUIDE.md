@@ -272,6 +272,21 @@ python -m src.training.sample_graph_ar_waypoints_astar \
   --astar_workers -1 --progress json --log_every 10 --seed 0 \
   |& tee "$RAW_ROOT/experiments/icml2026_routegen/T4_wp_ar_astar_combo_seed0/T3_eval_wp_ar_astar_K20_seed0/run.log"
 ```
+
+> 说明：该脚本会自动按 `route_city` 过滤 bin→node 候选（避免多城市 graph 混选导致 A* 大量失败），并默认使用 `--pick_strategy tier_dir`（主干道优先 + OD 方向一致）来实例化 bin 内节点。
+
+**(6) Oracle 上界（T4 Step-3b，判定瓶颈在决策层还是执行层）**：
+
+```bash
+python -m src.training.sample_graph_ar_waypoints_astar \
+  --checkpoint "$RAW_ROOT/experiments/icml2026_routegen/T4_wp_ar_astar_combo_seed0/T2_train_wp_ar_bin_seed0/last.pt" \
+  --road_graph_npz "$RAW_ROOT/experiments/icml2026_routegen/T3_combo_detroit_columbus_seed0/road_graph_combo.npz" \
+  --paths_graph_npz "$RAW_ROOT/experiments/icml2026_routegen/T3_combo_detroit_columbus_seed0/paths_graph_combo.npz" \
+  --waypoints_npz "$RAW_ROOT/experiments/icml2026_routegen/T4_wp_ar_astar_combo_seed0/T1_dump_waypoints/waypoints_graph.npz" \
+  --out_dir "$RAW_ROOT/experiments/icml2026_routegen/T4_wp_ar_astar_combo_seed0/T3_eval_wp_ar_astar_K20_seed0_oracle" \
+  --oracle --K 20 --temperature 0.8 --num_routes 200 --viz_cases 10 \
+  --astar_workers -1 --progress json --log_every 10 --seed 0 \
+  |& tee "$RAW_ROOT/experiments/icml2026_routegen/T4_wp_ar_astar_combo_seed0/T3_eval_wp_ar_astar_K20_seed0_oracle/run.log"
 ```
 
 ---

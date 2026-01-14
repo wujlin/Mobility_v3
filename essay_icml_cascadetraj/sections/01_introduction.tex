@@ -1,23 +1,52 @@
-\label{sec:intro}
+\paragraph{From short-horizon forecasting to route generation.}
+Urban mobility traces record how people realize intent through space: not only \emph{where} they go, but \emph{how} they get there.
+Recent progress in sequence models and diffusion models \citep{vaswani2017attention,ho2020ddpm} has made short-horizon trajectory prediction increasingly accurate.
+Yet many practical and scientific tasks require a different capability: \emph{route generation} over a full trip.
+Given an origin--destination intent and context (e.g., departure time and neighborhood semantics), a route generator must sample an entire path that is realistic, feasible, and diverse.
 
-Route generation is a primitive for mobility simulation, transportation planning, and urban computing~\citep{kong2023mobility_survey,zhang2025codiffmob,chu2023trajgdm}.
-Real-world routes between a fixed origin and destination are diverse; they are neither purely geometric curves nor deterministic shortest paths, as route selection often depends on temporal--spatial context---time of day, surrounding land use, and perceived conditions along candidate paths.
-However, the majority of existing works generate such paths by primarily using road topology features as constraints~\citep{wei2024diffrntraj,zhu2024controltraj,rao2025seed,guo2025cardiff}.
-Specifically, road connectivity, intersection bottlenecks, and the hierarchical attributes of roads (e.g., highways, main roads, and residential roads) are the most common elements serving as constraints for route generation.
+\paragraph{Why long-horizon route generation fails.}
+We observe two recurrent failure modes when extending generative modeling from seconds to full trips.
+First, intent can drift: purely autoregressive rollouts accumulate small errors and become globally inconsistent with the destination.
+Second, feasibility can break: when emphasizing diversity (e.g., via latent-variable models \citep{kingma2014auto} or standard diffusion), generators often hallucinate physically invalid paths that cut through obstacles or deviate systematically from the road network---especially when explicit map supervision is absent or unreliable.
 
-While such methods can generate routes that match aggregate traffic flow or cover specific regions, they fail to capture how \emph{the same origin--destination pair yields different route choices under different contexts}---a phenomenon we term \textbf{corridor diversification}.
-In practice, travelers do not randomly diversify; they systematically shift toward alternative corridors in response to temporal--spatial cues (e.g., rush-hour congestion, nighttime safety concerns, or proximity to certain land uses), which results in the emergence of distinct corridors with context-dependent flow distributions.
-A few works have incorporated elements related to the physical and social urban environment into route generation~\citep{cao2025hoser,su2024uen}.
-However, these methods treat context as auxiliary features rather than as the mechanism that governs corridor choice, and thus fail to estimate how corridor distributions shift under different conditions.
+\paragraph{Root cause: topological multi-modality and destructive averaging.}
+The core difficulty is \emph{topological multi-modality}.
+Even for the same origin and destination, multiple corridor-level choices can be equally reasonable.
+End-to-end coordinate generators trained with likelihood or Euclidean losses therefore face a destructive ``averaging'' pressure: the mean of several feasible routes is often an infeasible straight line.
+More importantly, this multi-modality is \emph{structured}: corridor-level alternatives are discrete and topological, while variations \emph{within} a corridor are comparatively continuous.
+Representing this structure only implicitly in a continuous coordinate output space leads to brittle long-horizon behavior: samples can collapse to destructive averages or drift off-road and become destination-inconsistent.
+This suggests that route generation should be modeled as a \emph{decision--execution} process rather than a single homogeneous sequence problem, with an explicit \emph{corridor commitment} variable that separates discrete corridor choice from continuous geometric realization.
 
-To address these challenges, we propose \textbf{CascadeTraj}, a hierarchical route generation framework that treats temporal--spatial semantics as the conditioning signal for corridor choice, not merely a regularization feature.
-The key insight is that corridor selection is a \emph{discrete decision} that should respond to context, while within-corridor trajectory execution is a continuous generation problem.
-We operationalize this with two stages:
-(1) the \textbf{decision stage}, which selects a corridor on the road network graph conditioned on semantic context and time;
-(2) the \textbf{execution stage}, which generates a realistic trajectory within the selected corridor via residual diffusion.
-As diagnostic evidence, we show that map-free continuous generation fails at corridor-level convergence---waypoints remain far from ground-truth corridors even with soft road priors (Sec.~\ref{sec:results})---motivating the discrete corridor formulation and demonstrating that semantic conditioning shifts corridor distributions under fixed OD.
+\paragraph{A diagnostic baseline: averaging vs.\ blur in continuous output space.}
+We first provide diagnostic evidence that corridor-level multi-modality is not well represented in a continuous coordinate output space.
+On segment-level routes, deterministic regression collapses to overly direct ``average'' routes, while stochastic end-to-end generators can drift and become destination-inconsistent.
+These failure modes motivate a representation shift: corridor choice should be an explicit \emph{structured} decision rather than an implicit continuous optimization.
 
-The remainder of the paper develops this framing.
-Section~\ref{sec:related-work} positions our work against recent trajectory foundation models~\citep{zhu2025unitraj,lin2024trajfm}, map-conditioned generators~\citep{tao2025map2traj,wang2025gtg}, and road-constrained diffusion---arguing that reconstruction fidelity is not the same as behavioral mechanism.
-Section~\ref{sec:method} introduces CascadeTraj as a decision--execution framework where temporal--spatial semantics condition corridor choice.
-Sections~\ref{sec:experiments}--\ref{sec:results} establish the diagnostic evidence: waypoint audits and case visualizations demonstrate the measure-zero failure mode of map-free generation, motivating the discrete corridor formulation.
+Beyond model behavior, we also diagnose the \emph{candidate-set} approach.
+We find that heuristic candidate sets such as $K$-shortest paths can have low coverage of ground-truth corridors, even when ground-truth trajectories are well aligned to the road network.
+This makes ``classify among $K$ candidates'' an unreliable mechanism for learning corridor distributions and motivates learning corridor commitments directly on the road graph.
+
+\begin{figure}[t]
+  \centering
+  \maybeincludegraphics[width=0.78\linewidth]{figures/fig_wp_ar_astar_example.png}
+  \caption{Waypoint commitments on a road graph. We overlay the ground-truth graph path (black) and multiple samples generated by waypoint AR + A* (blue), with waypoint commitments shown as sparse node selections. This visualization is used as a sanity check to verify corridor commitments and failure modes (e.g., unreachable waypoint segments).}
+  \label{fig:wp-ar-astar}
+\end{figure}
+
+\paragraph{CascadeTraj: hierarchical route generation via corridor commitment.}
+We propose \textbf{CascadeTraj}, a hierarchical generative framework for route generation.
+At the \emph{decision} stage, the model samples a sparse waypoint sequence on a road graph as an explicit corridor commitment.
+At the \emph{execution} stage, the model converts this commitment into a valid corridor path by connecting adjacent waypoints with A* (and optionally refines geometry with a continuous executor).
+This decomposition turns a brittle one-shot generation problem into two conditional problems with clearer responsibilities: (i) committing to a coherent topological plan, and (ii) executing a physically plausible realization.
+
+\paragraph{Soft priors and optional macro statistics.}
+To encourage feasibility without collapsing support, we incorporate map information as \emph{soft} priors and treat the road graph as a structural constraint at the execution stage (A*).
+We use a minimal context set in the decision stage (time and road hierarchy) to test whether corridor commitments can be meaningfully context-conditioned.
+The paper's focus remains the generative architecture for the \emph{route itself}, not population synthesis.
+
+\paragraph{Contributions.}
+\begin{itemize}
+  \item \textbf{Finding 1 (Diagnosis):} we characterize structural failures of end-to-end coordinate generators under corridor-level multi-modality (destructive averaging and long-horizon drift).
+  \item \textbf{Finding 2 (Mechanism):} we show that heuristic candidate sets (e.g., $K$-shortest paths) can have low corridor coverage, motivating explicit corridor commitments learned on the road graph rather than classification among predefined candidates.
+  \item \textbf{Method:} we propose a graph-based decision--execution route generator where a short-horizon waypoint AR model samples corridor commitments conditioned on time and road hierarchy, and A* executes these commitments into valid graph paths.
+\end{itemize}

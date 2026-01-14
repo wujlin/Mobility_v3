@@ -498,9 +498,9 @@ def main() -> None:
         # Local WSL fallback (synced artifacts).
         cand.extend(
             [
-                Path("_sync/wsA/icml2026_routegen/E0_gt_baseline_detroit_F256_n200k_seed0_od128_n10_sep2/case_01/gt_case.npz"),
-                Path("_sync/wsA/icml2026_routegen/E0_gt_baseline_detroit_F256_n200k_seed0_od128_n10_sep2/case_02/gt_case.npz"),
-                Path("_sync/wsA/icml2026_routegen/E0_gt_baseline_detroit_F256_n200k_seed0_od128_n10_sep2/case_03/gt_case.npz"),
+                Path("_sync/wsa/icml2026_routegen/E0_gt_baseline_detroit_F256_n200k_seed0_od128_n10_sep2/case_01/gt_case.npz"),
+                Path("_sync/wsa/icml2026_routegen/E0_gt_baseline_detroit_F256_n200k_seed0_od128_n10_sep2/case_02/gt_case.npz"),
+                Path("_sync/wsa/icml2026_routegen/E0_gt_baseline_detroit_F256_n200k_seed0_od128_n10_sep2/case_03/gt_case.npz"),
             ]
         )
         case_files = [p for p in cand if p.exists()]

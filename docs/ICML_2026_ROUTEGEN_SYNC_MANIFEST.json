@@ -1,6 +1,6 @@
 {
-  "root": "_sync/wsA/icml2026_routegen",
-  "num_entries": 29,
+  "root": "_sync/wsa/icml2026_routegen",
+  "num_entries": 61,
   "entries": [
     {
       "name": "E0_gt_baseline_detroit_F256_n200k_seed0",
@@ -35,6 +35,64 @@
         "case_02",
         "case_03",
         "case_04"
+      ],
+      "gate": null,
+      "summary": {
+        "gate": null
+      },
+      "name_gate": 0,
+      "issues": []
+    },
+    {
+      "name": "E0s_gt_baseline_detroit_segF256_epoch_seed0_od128_min10_sep2_uni2",
+      "path": "E0s_gt_baseline_detroit_segF256_epoch_seed0_od128_min10_sep2_uni2",
+      "is_symlink": false,
+      "kind": "other",
+      "files": [
+        "run.log"
+      ],
+      "subdirs": [],
+      "name_gate": 0,
+      "issues": []
+    },
+    {
+      "name": "E0s_gt_baseline_detroit_segF256_seed0_od128_min10_sep2",
+      "path": "E0s_gt_baseline_detroit_segF256_seed0_od128_min10_sep2",
+      "is_symlink": false,
+      "kind": "report",
+      "files": [
+        "report.json",
+        "run.log"
+      ],
+      "subdirs": [
+        "case_00",
+        "case_01",
+        "case_02",
+        "case_03"
+      ],
+      "gate": null,
+      "summary": {
+        "gate": null
+      },
+      "name_gate": 0,
+      "issues": []
+    },
+    {
+      "name": "E0s_gt_baseline_detroit_segF256_seed0_od128_min10_sep2_uni2_png",
+      "path": "E0s_gt_baseline_detroit_segF256_seed0_od128_min10_sep2_uni2_png",
+      "is_symlink": false,
+      "kind": "report",
+      "files": [
+        "report.json",
+        "run.log"
+      ],
+      "subdirs": [
+        "case_00",
+        "case_01",
+        "case_02",
+        "case_03",
+        "case_04",
+        "case_05"
       ],
       "gate": null,
       "summary": {
@@ -548,6 +606,94 @@
       "issues": []
     },
     {
+      "name": "E1seg_e2e_diffusion_detroit_segF256_epoch_seed0",
+      "path": "E1seg_e2e_diffusion_detroit_segF256_epoch_seed0",
+      "is_symlink": false,
+      "kind": "train",
+      "files": [
+        "run.log",
+        "train_summary.json"
+      ],
+      "subdirs": [],
+      "summary": {
+        "train_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E_S1_segments_fixedlen_detroit_F256_p300_c40_t60_d1p2_seed0/detroit_segments_route_F256_epoch_seed0.npz",
+        "waypoint_mode": null,
+        "semantic_mode": null,
+        "grid_channels": null,
+        "temporal_effective": null,
+        "checkpoint": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E1seg_e2e_diffusion_detroit_segF256_epoch_seed0/last.pt"
+      },
+      "name_gate": 1,
+      "checkpoint_gate": 1,
+      "issues": []
+    },
+    {
+      "name": "E1seg_e2e_diffusion_detroit_segF256_seed0",
+      "path": "E1seg_e2e_diffusion_detroit_segF256_seed0",
+      "is_symlink": false,
+      "kind": "train",
+      "files": [
+        "run.log",
+        "train_summary.json"
+      ],
+      "subdirs": [],
+      "summary": {
+        "train_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E_S1_segments_fixedlen_detroit_F256_p300_c40_t60_d1p2_seed0/detroit_segments_route_F256_epoch_seed0.npz",
+        "waypoint_mode": null,
+        "semantic_mode": null,
+        "grid_channels": null,
+        "temporal_effective": null,
+        "checkpoint": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E1seg_e2e_diffusion_detroit_segF256_seed0/last.pt"
+      },
+      "name_gate": 1,
+      "checkpoint_gate": 1,
+      "issues": []
+    },
+    {
+      "name": "E1seg_e2e_l2_detroit_segF256_epoch_seed0",
+      "path": "E1seg_e2e_l2_detroit_segF256_epoch_seed0",
+      "is_symlink": false,
+      "kind": "train",
+      "files": [
+        "run.log",
+        "train_summary.json"
+      ],
+      "subdirs": [],
+      "summary": {
+        "train_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E_S1_segments_fixedlen_detroit_F256_p300_c40_t60_d1p2_seed0/detroit_segments_route_F256_epoch_seed0.npz",
+        "waypoint_mode": null,
+        "semantic_mode": null,
+        "grid_channels": null,
+        "temporal_effective": null,
+        "checkpoint": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E1seg_e2e_l2_detroit_segF256_epoch_seed0/last.pt"
+      },
+      "name_gate": 1,
+      "checkpoint_gate": 1,
+      "issues": []
+    },
+    {
+      "name": "E1seg_e2e_l2_detroit_segF256_seed0",
+      "path": "E1seg_e2e_l2_detroit_segF256_seed0",
+      "is_symlink": false,
+      "kind": "train",
+      "files": [
+        "run.log",
+        "train_summary.json"
+      ],
+      "subdirs": [],
+      "summary": {
+        "train_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E_S1_segments_fixedlen_detroit_F256_p300_c40_t60_d1p2_seed0/detroit_segments_route_F256_epoch_seed0.npz",
+        "waypoint_mode": null,
+        "semantic_mode": null,
+        "grid_channels": null,
+        "temporal_effective": null,
+        "checkpoint": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E1seg_e2e_l2_detroit_segF256_seed0/last.pt"
+      },
+      "name_gate": 1,
+      "checkpoint_gate": 1,
+      "issues": []
+    },
+    {
       "name": "E20a_audit_gridpos_sc_case04_seed0",
       "path": "E20a_audit_gridpos_sc_case04_seed0",
       "is_symlink": false,
@@ -708,6 +854,101 @@
       "issues": []
     },
     {
+      "name": "E24_fullscale_detroit_E24tierroad_K20_res0p1_seed0",
+      "path": "E24_fullscale_detroit_E24tierroad_K20_res0p1_seed0",
+      "is_symlink": false,
+      "kind": "other",
+      "files": [
+        "metrics_fullscale.json",
+        "metrics_fullscale.stdout.json"
+      ],
+      "subdirs": [
+        "cascade_res0p1"
+      ],
+      "name_gate": 24,
+      "issues": []
+    },
+    {
+      "name": "E25_fullscale_detroit_decTierRoad_execPriorDist_K20_res0p1_seed0",
+      "path": "E25_fullscale_detroit_decTierRoad_execPriorDist_K20_res0p1_seed0",
+      "is_symlink": false,
+      "kind": "report",
+      "files": [
+        "metrics_baseline.json",
+        "metrics_baseline.stdout.json",
+        "metrics_dist_step0p5_it5.json",
+        "metrics_dist_step0p5_it5.stdout.json",
+        "metrics_dist_step1p0_it10.json",
+        "metrics_dist_step1p0_it10.stdout.json",
+        "refine_dist_step0p5_it5.json",
+        "refine_dist_step0p5_it5.run.log",
+        "refine_dist_step1p0_it10.json",
+        "refine_dist_step1p0_it10.run.log",
+        "report.json",
+        "report.stdout.json"
+      ],
+      "subdirs": [
+        "cascade_res0p1"
+      ],
+      "gate": "E25_fullscale_exec_prior_refine",
+      "summary": {
+        "gate": "E25_fullscale_exec_prior_refine"
+      },
+      "name_gate": 25,
+      "issues": []
+    },
+    {
+      "name": "E26_fullscale_detroit_decOD_execPriorDist_K20_res0p1_seed0",
+      "path": "E26_fullscale_detroit_decOD_execPriorDist_K20_res0p1_seed0",
+      "is_symlink": false,
+      "kind": "report",
+      "files": [
+        "metrics_baseline.json",
+        "metrics_baseline.stdout.json",
+        "metrics_dist_step1p0_it10.json",
+        "metrics_dist_step1p0_it10.stdout.json",
+        "refine_dist_step1p0_it10.json",
+        "refine_dist_step1p0_it10.run.log",
+        "report.json",
+        "report.stdout.json"
+      ],
+      "subdirs": [
+        "cascade_res0p1"
+      ],
+      "gate": "E26_fullscale_decOD_execPriorDist",
+      "summary": {
+        "gate": "E26_fullscale_decOD_execPriorDist"
+      },
+      "name_gate": 26,
+      "issues": []
+    },
+    {
+      "name": "E27_viz_e25_vs_e26_detroit_seed0",
+      "path": "E27_viz_e25_vs_e26_detroit_seed0",
+      "is_symlink": false,
+      "kind": "report",
+      "files": [
+        "report.json",
+        "run.log"
+      ],
+      "subdirs": [
+        "case_01",
+        "case_02",
+        "case_03",
+        "case_04",
+        "case_05",
+        "case_06",
+        "case_07",
+        "case_08"
+      ],
+      "gate": "E27_viz_e25_vs_e26_metric_conflict",
+      "summary": {
+        "gate": "E27_viz_e25_vs_e26_metric_conflict"
+      },
+      "name_gate": 27,
+      "issues": []
+    },
+    {
       "name": "E2_exec_diffusion_wp_residual_npz_detroit_F256_case01_seed0",
       "path": "E2_exec_diffusion_wp_residual_npz_detroit_F256_case01_seed0",
       "is_symlink": false,
@@ -749,6 +990,50 @@
       "issues": []
     },
     {
+      "name": "E2seg_exec_diffusion_wp_detroit_segF256_seed0",
+      "path": "E2seg_exec_diffusion_wp_detroit_segF256_seed0",
+      "is_symlink": false,
+      "kind": "train",
+      "files": [
+        "run.log",
+        "train_summary.json"
+      ],
+      "subdirs": [],
+      "summary": {
+        "train_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E_S1_segments_fixedlen_detroit_F256_p300_c40_t60_d1p2_seed0/detroit_segments_route_F256_epoch_seed0.npz",
+        "waypoint_mode": "rdp_turn",
+        "semantic_mode": null,
+        "grid_channels": null,
+        "temporal_effective": null,
+        "checkpoint": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E2seg_exec_diffusion_wp_detroit_segF256_seed0/last.pt"
+      },
+      "name_gate": 2,
+      "checkpoint_gate": 2,
+      "issues": []
+    },
+    {
+      "name": "E2seg_exec_residual_detroit_segF256_epoch_seed0_wpK2",
+      "path": "E2seg_exec_residual_detroit_segF256_epoch_seed0_wpK2",
+      "is_symlink": false,
+      "kind": "train",
+      "files": [
+        "run.log",
+        "train_summary.json"
+      ],
+      "subdirs": [],
+      "summary": {
+        "train_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E_S1_segments_fixedlen_detroit_F256_p300_c40_t60_d1p2_seed0/detroit_segments_route_F256_epoch_seed0.npz",
+        "waypoint_mode": "rdp_turn",
+        "semantic_mode": null,
+        "grid_channels": null,
+        "temporal_effective": null,
+        "checkpoint": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E2seg_exec_residual_detroit_segF256_epoch_seed0_wpK2/last.pt"
+      },
+      "name_gate": 2,
+      "checkpoint_gate": 2,
+      "issues": []
+    },
+    {
       "name": "E3_wp_diffusion_rel_detroit_F256_od128_seed0",
       "path": "E3_wp_diffusion_rel_detroit_F256_od128_seed0",
       "is_symlink": false,
@@ -779,6 +1064,65 @@
       "issues": []
     },
     {
+      "name": "E3seg_tierroad_case00_sample_K20_res0p1_seed0",
+      "path": "E3seg_tierroad_case00_sample_K20_res0p1_seed0",
+      "is_symlink": false,
+      "kind": "other",
+      "files": [
+        "audit_metrics.json",
+        "audit_tier_road.png"
+      ],
+      "subdirs": [
+        "cascade_res0p1"
+      ],
+      "name_gate": 3,
+      "issues": []
+    },
+    {
+      "name": "E3seg_wp_diffusion_rel_detroit_segF256_epoch_seed0_od128_wpK2",
+      "path": "E3seg_wp_diffusion_rel_detroit_segF256_epoch_seed0_od128_wpK2",
+      "is_symlink": false,
+      "kind": "train",
+      "files": [
+        "run.log",
+        "train_summary.json"
+      ],
+      "subdirs": [],
+      "summary": {
+        "train_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E_S1_segments_fixedlen_detroit_F256_p300_c40_t60_d1p2_seed0/detroit_segments_route_F256_epoch_seed0.npz",
+        "waypoint_mode": "rdp_turn",
+        "semantic_mode": null,
+        "grid_channels": "poi,entropy",
+        "temporal_effective": "simple",
+        "checkpoint": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E3seg_wp_diffusion_rel_detroit_segF256_epoch_seed0_od128_wpK2/last.pt"
+      },
+      "name_gate": 3,
+      "checkpoint_gate": 3,
+      "issues": []
+    },
+    {
+      "name": "E3seg_wp_diffusion_rel_detroit_segF256_od128_seed0",
+      "path": "E3seg_wp_diffusion_rel_detroit_segF256_od128_seed0",
+      "is_symlink": false,
+      "kind": "train",
+      "files": [
+        "run.log",
+        "train_summary.json"
+      ],
+      "subdirs": [],
+      "summary": {
+        "train_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E_S1_segments_fixedlen_detroit_F256_p300_c40_t60_d1p2_seed0/detroit_segments_route_F256_epoch_seed0.npz",
+        "waypoint_mode": "rdp_turn",
+        "semantic_mode": null,
+        "grid_channels": "poi,entropy",
+        "temporal_effective": "simple",
+        "checkpoint": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E3seg_wp_diffusion_rel_detroit_segF256_od128_seed0/last.pt"
+      },
+      "name_gate": 3,
+      "checkpoint_gate": 3,
+      "issues": []
+    },
+    {
       "name": "E4_cascade_wpdec_exec_npz_detroit_F256_case01_seed0",
       "path": "E4_cascade_wpdec_exec_npz_detroit_F256_case01_seed0",
       "is_symlink": false,
@@ -798,6 +1142,23 @@
       "issues": []
     },
     {
+      "name": "E4s_seg_viz_detroit_segF256_epoch_K20_res0p1_seed0",
+      "path": "E4s_seg_viz_detroit_segF256_epoch_K20_res0p1_seed0",
+      "is_symlink": false,
+      "kind": "other",
+      "files": [],
+      "subdirs": [
+        "case_00",
+        "case_01",
+        "case_02",
+        "case_03",
+        "case_04",
+        "case_05"
+      ],
+      "name_gate": 4,
+      "issues": []
+    },
+    {
       "name": "E5_cascade_wpdec_exec_res0p1_detroit_F256_case01_seed0",
       "path": "E5_cascade_wpdec_exec_res0p1_detroit_F256_case01_seed0",
       "is_symlink": false,
@@ -813,6 +1174,53 @@
         "sample.stdout.json",
         "sample_summary.json",
         "samples.npz"
+      ],
+      "subdirs": [],
+      "name_gate": 5,
+      "issues": []
+    },
+    {
+      "name": "E5seg_case00_sample_K20_res0p1_seed0",
+      "path": "E5seg_case00_sample_K20_res0p1_seed0",
+      "is_symlink": false,
+      "kind": "other",
+      "files": [
+        "run.log",
+        "sample_summary.json",
+        "samples.npz"
+      ],
+      "subdirs": [],
+      "name_gate": 5,
+      "issues": []
+    },
+    {
+      "name": "E5seg_exec_residual_detroit_segF256_epoch_seed0_wpK2",
+      "path": "E5seg_exec_residual_detroit_segF256_epoch_seed0_wpK2",
+      "is_symlink": false,
+      "kind": "train",
+      "files": [
+        "train_summary.json"
+      ],
+      "subdirs": [],
+      "summary": {
+        "train_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E_S1_segments_fixedlen_detroit_F256_p300_c40_t60_d1p2_seed0/detroit_segments_route_F256_epoch_seed0.npz",
+        "waypoint_mode": "rdp_turn",
+        "semantic_mode": null,
+        "grid_channels": null,
+        "temporal_effective": null,
+        "checkpoint": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E5seg_exec_residual_detroit_segF256_epoch_seed0_wpK2/last.pt"
+      },
+      "name_gate": 5,
+      "checkpoint_gate": 5,
+      "issues": []
+    },
+    {
+      "name": "E5seg_wp_diffusion_rel_detroit_segF256_epoch_seed0_od128_wpK2_gridpos_tierroad",
+      "path": "E5seg_wp_diffusion_rel_detroit_segF256_epoch_seed0_od128_wpK2_gridpos_tierroad",
+      "is_symlink": false,
+      "kind": "other",
+      "files": [
+        "run.log"
       ],
       "subdirs": [],
       "name_gate": 5,
@@ -897,7 +1305,188 @@
       },
       "name_gate": 9,
       "issues": []
+    },
+    {
+      "name": "E_D0_segment_stats_detroit_seed0",
+      "path": "E_D0_segment_stats_detroit_seed0",
+      "is_symlink": false,
+      "kind": "report",
+      "files": [
+        "report.json",
+        "run.log"
+      ],
+      "subdirs": [],
+      "gate": null,
+      "summary": {
+        "gate": null
+      },
+      "issues": []
+    },
+    {
+      "name": "E_S1_segments_fixedlen_detroit_F256_p300_c40_t60_d1p2_seed0",
+      "path": "E_S1_segments_fixedlen_detroit_F256_p300_c40_t60_d1p2_seed0",
+      "is_symlink": false,
+      "kind": "other",
+      "files": [
+        "detroit_segments_route_F256_epoch_seed0.npz",
+        "run.log"
+      ],
+      "subdirs": [],
+      "issues": []
+    },
+    {
+      "name": "E_T0_temporal_audit_detroit_windows_seed0",
+      "path": "E_T0_temporal_audit_detroit_windows_seed0",
+      "is_symlink": false,
+      "kind": "other",
+      "files": [],
+      "subdirs": [],
+      "issues": [
+        "empty_dir"
+      ]
+    },
+    {
+      "name": "E_W0_window_stats_detroit_seed0",
+      "path": "E_W0_window_stats_detroit_seed0",
+      "is_symlink": false,
+      "kind": "report",
+      "files": [
+        "report.json"
+      ],
+      "subdirs": [],
+      "gate": null,
+      "summary": {
+        "gate": null
+      },
+      "issues": []
+    },
+    {
+      "name": "G2_candidates_detroit_seed0_quick",
+      "path": "G2_candidates_detroit_seed0_quick",
+      "is_symlink": false,
+      "kind": "report",
+      "files": [
+        "candidates.jsonl",
+        "report.json",
+        "run.log"
+      ],
+      "subdirs": [],
+      "gate": "candidate_paths_graph_gate",
+      "summary": {
+        "gate": "candidate_paths_graph_gate"
+      },
+      "issues": []
+    },
+    {
+      "name": "G2_candidates_detroit_seed0_quick_r1K20",
+      "path": "G2_candidates_detroit_seed0_quick_r1K20",
+      "is_symlink": false,
+      "kind": "report",
+      "files": [
+        "candidates.jsonl",
+        "report.json",
+        "run.log"
+      ],
+      "subdirs": [],
+      "gate": "candidate_paths_graph_gate",
+      "summary": {
+        "gate": "candidate_paths_graph_gate"
+      },
+      "issues": []
+    },
+    {
+      "name": "G2_diagnose_detroit_seed0",
+      "path": "G2_diagnose_detroit_seed0",
+      "is_symlink": false,
+      "kind": "other",
+      "files": [
+        "case_00_traj1367.png",
+        "case_01_traj1284.png",
+        "case_02_traj1782.png",
+        "case_03_traj1051.png",
+        "case_04_traj2057.png",
+        "case_05_traj1756.png",
+        "case_06_traj2222.png",
+        "case_07_traj1880.png",
+        "case_08_traj1404.png",
+        "case_09_traj2069.png",
+        "diagnose_report.json",
+        "run.log"
+      ],
+      "subdirs": [],
+      "issues": []
+    },
+    {
+      "name": "G3_argraph_columbus_seed0",
+      "path": "G3_argraph_columbus_seed0",
+      "is_symlink": false,
+      "kind": "other",
+      "files": [],
+      "subdirs": [
+        "T2_cluster_gate_ob128_mt10_t0p5_seed0",
+        "T2_cluster_gate_ob128_mt10_t0p5_seed0_viz"
+      ],
+      "issues": []
+    },
+    {
+      "name": "G3_argraph_combo_detroit_columbus_seed0",
+      "path": "G3_argraph_combo_detroit_columbus_seed0",
+      "is_symlink": false,
+      "kind": "other",
+      "files": [
+        "aggregate_report.json"
+      ],
+      "subdirs": [],
+      "issues": []
+    },
+    {
+      "name": "G3_argraph_detroit_seed0",
+      "path": "G3_argraph_detroit_seed0",
+      "is_symlink": false,
+      "kind": "other",
+      "files": [],
+      "subdirs": [
+        "T2_branch_gate",
+        "T2_cluster_gate",
+        "T2_cluster_gate_ob64_mt5_t0p6_seed0",
+        "T2_cluster_gate_viz"
+      ],
+      "issues": []
+    },
+    {
+      "name": "T3_combo_detroit_columbus_seed0",
+      "path": "T3_combo_detroit_columbus_seed0",
+      "is_symlink": false,
+      "kind": "other",
+      "files": [
+        "T3a_build_combo.run.log",
+        "combo_report.json",
+        "paths_graph_combo.npz",
+        "road_graph_combo.npz"
+      ],
+      "subdirs": [
+        "T3_eval_ar_markov_K20_seed0",
+        "T3_train_ar_markov_seed0"
+      ],
+      "issues": []
+    },
+    {
+      "name": "T4_wp_ar_astar_combo_seed0",
+      "path": "T4_wp_ar_astar_combo_seed0",
+      "is_symlink": false,
+      "kind": "other",
+      "files": [],
+      "subdirs": [
+        "T2_train_wp_ar_bin_seed0",
+        "T3_eval_wp_ar_astar_K20_seed0"
+      ],
+      "issues": []
     }
   ],
-  "issues": []
+  "issues": [
+    {
+      "name": "E_T0_temporal_audit_detroit_windows_seed0",
+      "issue": "empty_dir"
+    }
+  ]
 }

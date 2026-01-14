@@ -111,6 +111,57 @@ $RAW_ROOT/
     └── detroit_core_v1/
 ```
 
+### 2.1.1 ICML RouteGen（Graph）关键实验产物（不进 git）
+
+> 这些产物统一落在：`$RAW_ROOT/experiments/icml2026_routegen/`（工作站），本地用 `rsync` 同步到仓库 `_sync/wsa/...`。
+
+**(A) Segment-level 路线（固定长度，F=256）**
+
+```text
+$RAW_ROOT/experiments/icml2026_routegen/gt_segments/
+  detroit_segments_route_F256_epoch_seed0.npz
+  columbus_segments_route_F256_epoch_seed0.npz
+```
+
+典型字段（以实际 npz 为准）：
+- `start_pos: (N,2)`、`dest_pos: (N,2)`、`targets: (N,F,2)`（grid `[y,x]`）
+- `traj_idx: (N,)`、`start_t: (N,)`（Unix epoch 秒）
+
+**(B) Road graph（OSM → graph）**
+
+```text
+$RAW_ROOT/experiments/icml2026_routegen/G1_roadgraph_*/road_graph.npz
+$RAW_ROOT/experiments/icml2026_routegen/T3_combo_detroit_columbus_seed0/road_graph_combo.npz
+```
+
+典型字段：
+- `node_y/node_x: (N_nodes,)`（grid）
+- `edge_u/edge_v/edge_w_m: (N_edges,)`
+- `edge_tier: (N_edges,)`（major/minor/service 等分级编码）
+- `meta: dict`（包含 grid bbox/H/W、城市 id 映射等）
+
+**(C) GT graph paths（route → node 序列）**
+
+```text
+$RAW_ROOT/experiments/icml2026_routegen/T3_combo_detroit_columbus_seed0/paths_graph_combo.npz
+```
+
+典型字段：
+- `start_node/dest_node: (N,)`
+- `node_seq_pad: (N, Lmax)`、`node_seq_len: (N,)`
+- `start_t: (N,)`、`traj_idx: (N,)`
+- `route_city: (N,)`（用于多城共享模型但区分城市）
+
+**(D) Waypoints graph（GT path → 固定 K waypoint 序列）**
+
+```text
+$RAW_ROOT/experiments/icml2026_routegen/T4_wp_ar_astar_combo_seed0/T1_dump_waypoints/waypoints_graph.npz
+```
+
+典型字段：
+- `wp_seq: (N, K+2)`（包含 `[start, w1..wK, dest]`，元素为 node id）
+- `start_t/traj_idx/start_node/dest_node/route_city`
+
 ### 2.2 仓库内 data/（只放小文件/legacy/软链）
 
 ```text

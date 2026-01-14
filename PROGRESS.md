@@ -1,127 +1,65 @@
 Implementation Plan, Task List and Thought in Chinese
 
-# 开发进度追踪（当前主线：WorldTrace × Detroit）
+# 开发进度追踪（当前优先级：ICML 2026 Route Generation）
 
 > [!IMPORTANT]
-> **任务口径/评估口径**以 `docs/TASK_DEFINITION.md` 为唯一准则；本文件只记录“主线推进到哪一步、下一步需要产出什么”。  
-> legacy（深圳 dt30）已归档：`legacy/shenzhen/README.md`。
+> **协议真相源**：`docs/TASK_DEFINITION.md` + `docs/DATA_CONTRACT.md`。  
+> **新 PI 快速对齐**：先读 `docs/PI_BRIEF_ROUTEGEN_ICML2026.md`。  
+> 本仓库同时保留两条写作线：  
+> - ICML 2026 routegen：`essay_icml_cascadetraj/main.tex`（当前主线）  
+> - Paper-2 rupture/avoidance：`essay/main.tex`（非当前 ICML 交付物）
 
 ---
 
 ## 0) 主线叙事（1 句话）
 
-用 **Behavioral Reference Frame**（从 functional 城市学到的“正常 route choice”）去预测 Detroit 的“正常该怎么走”，把预测与真实的差做空间化，得到 **Behavioral Avoidance Field** 并与外部断裂指标对齐（H1/H2/H3）。
+route generation 的 corridor-level 多模态在连续坐标空间里会诱发均值塌缩/漂移；我们转向 **road-graph 上的结构化决策**：用少步数的 **waypoint AR** 产生走廊承诺，再用 **A\*** 连接保证路径合法性（后续再接 continuous execution）。
 
 ---
 
-## 1) 代码能力就绪情况（不是“结果”）
+## 1) 数据就绪情况（RouteGen）
 
-| 模块 | 目标产物 | 入口 |
+> 工作站默认外置根目录：`$RAW_ROOT=/home/jinlin/data/geoexplicit_data`（见 `docs/DATA_STRUCTURE.md`）。
+
+| 项目 | 当前状态 | 备注 |
 |---|---|---|
-| WorldTrace manifest | `meta_manifest.parquet` | `python -m src.data.worldtrace.build_manifest` |
-| WorldTrace Detroit segments | `segments.parquet` | `python -m src.data.worldtrace.build_detroit_segments` |
-| OSM soft prior | `osm_road_mask.npy / osm_dist_to_road_m.npy / osm_road_prob.npy` | `python -m src.data.osm.build_osm_road_prob` |
-| SafeGraph POI rasters | `poi_density_*.npy / landuse_dom.npy / landuse_entropy.npy` | `python -m src.data.safegraph.build_poi_rasters` |
-| Wayback imagery | `wayback tiles (jpg)` | `python -m src.data.wayback.download_wayback_tiles` |
-| Census/ACS external indicators | `acs_tract.csv + tiger tracts` | `python -m src.data.census.download_acs_tract` / `python -m src.data.census.download_tiger_tract` |
+| WorldTrace city 子集 | Detroit + Columbus | `scan_worldtrace_root` 显示仅这两城有 `segments.parquet` |
+| Detroit segments | 2295 | `worldtrace/detroit_core_v1/segments.parquet` |
+| Columbus segments | 5228 | `worldtrace/columbus_core_v1/segments.parquet` |
+| Tier-road 准备 | Detroit ✅ / Columbus ❌ | Columbus 需要补 tier-road 预处理后才能做 time+tier gate |
+| Segment-level routes NPZ | ✅ | 固定长度 `F=256`，`start_t` 为 epoch 秒 |
+| Road graph（combo） | ✅ | `T3_combo_detroit_columbus_seed0/road_graph_combo.npz` |
+| GT graph paths（combo） | ✅ | `T3_combo_detroit_columbus_seed0/paths_graph_combo.npz` |
+| Waypoints graph NPZ | ✅ | `T4_wp_ar_astar_combo_seed0/T1_dump_waypoints/waypoints_graph.npz` |
 
 ---
 
-## 2) Phase D（Detroit）最小可跑流程（只写“下一步需要产出什么”）
+## 2) 实验路线（RouteGen，当前有效）
 
-> 路径与版本约束见 `docs/DATA_CONTRACT.md`；Wayback 的代理/SSL 口径见 `docs/WAYBACK.md`。
+### 2.1 诊断：continuous end-to-end 的失败模式（segment-level）
 
-### Step D1：构建 WorldTrace manifest（全量索引，解耦海量小文件 IO）
+- 目标：证明 corridor-level 多模态下，L2 会平均化、diffusion 会 drift/off-road（segment-level 下更明显）。
+- 产物：`E4s_*` 的可视化对比图（GT vs L2 vs E2E-Diff vs cascade 原型）。
 
-```bash
-python -m src.data.worldtrace.build_manifest \
-  --meta_zip "$RAW_ROOT/worldtrace/OpenTrace_WorldTrace/Meta.zip" \
-  --out_manifest "$RAW_ROOT/worldtrace/meta_manifest.parquet"
-```
+### 2.2 Map-aware 诊断：K-shortest 候选覆盖不足（不作为最终解法）
 
-### Step D2：筛 Detroit core segments（bbox 内最长连续段）
+- 目标：量化 `K-shortest` 作为候选集时对 GT 走廊的覆盖不足（best Jaccard 低）。
+- 产物：`G2_candidates_*` + `G2_diagnose_*`（包含 GT-to-road 距离 p90 与候选 bestJ 分位数）。
 
-```bash
-python -m src.data.worldtrace.build_detroit_segments \
-  --trajectory_zip "$RAW_ROOT/worldtrace/OpenTrace_WorldTrace/Trajectory.zip" \
-  --out_parquet "$RAW_ROOT/worldtrace/detroit_core_v1/segments.parquet" \
-  --dt_gap_s 5 --min_segment_points 120 \
-  --matched_distance_max_m 30 --max_unmatched_ratio 0.2 \
-  --num_workers 48 --chunk_size 5000
-```
+### 2.3 Go/No-Go：语义/时间在 corridor 层是否 informative（Gate）
 
-### Step D3：生成 OSM road_prob（soft prior）
+- 目标：验证 `(time + tier)` 对走廊簇标签的 AUC 是否显著高于 0.5（支持 “context-conditioned diversity” 的叙事）。
+- 产物：`G3*_cluster_gate*/report.json`（重点看 used_groups 与 AUC 分布）。
 
-```bash
-python -m src.data.osm.build_osm_road_prob \
-  --osm_pbf "$RAW_ROOT/osm/michigan-latest.osm.pbf" \
-  --out_dir "$RAW_ROOT/worldtrace/detroit_core_v1" \
-  --road_types B --buffer_m 15 --road_prob_sigma_m 50
-```
+### 2.4 当前原型：Waypoint AR + A*（T4）
 
-### Step D4：生成 POI/功能区栅格（SafeGraph）
+- 训练：`train_graph_ar_waypoint_bins.py`（val acc≈0.34，说明不是随机猜 bin）
+- 评估：`sample_graph_ar_waypoints_astar.py`（当前瓶颈：bin→node 实例化缺少可达性约束，导致 success_rate 偏低）
 
-```bash
-python -m src.data.safegraph.build_poi_rasters \
-  --base_dir "$RAW_ROOT/safegraph/safegraph_unzip" \
-  --base_glob "*.csv" \
-  --vintage 2024-01 \
-  --out_dir "$RAW_ROOT/worldtrace/detroit_core_v1"
-```
+---
 
-### Step D5：下载 Wayback 影像（多 release；注意 proxy）
+## 3) 下一步（给 PI 的决策点）
 
-```bash
-PYTHONUNBUFFERED=1 \
-HTTP_PROXY="http://127.0.0.1:7890" HTTPS_PROXY="http://127.0.0.1:7890" \
-python -m src.data.wayback.download_wayback_tiles \
-  --out_dir "$RAW_ROOT/wayback/detroit_core_z16_fixed_multi_r6" \
-  --bbox -83.25 42.25 -82.95 42.50 \
-  --zoom 16 --max_threads 16 \
-  --mode fixed_releases \
-  --release_ids 10 4756 9175 16245 27946 64776 \
-  > >(tee "$RAW_ROOT/wayback/detroit_core_z16_fixed_multi_r6/cli_stdout.json") \
-  2> >(tee "$RAW_ROOT/wayback/detroit_core_z16_fixed_multi_r6/cli_stderr.log" >&2)
-```
-
-### Step D6：下载 tract-level 外部指标（ACS + TIGER）
-
-```bash
-python -m src.data.census.download_acs_tract \
-  --year 2023 --state_fips 26 \
-  --out_csv "$RAW_ROOT/census/acs_tract_2023_state26.csv"
-
-python -m src.data.census.download_tiger_tract \
-  --year 2023 --state_fips 26 \
-  --out_dir "$RAW_ROOT/census/tiger_tract_2023_state26" \
-  --convert_geoparquet
-```
-
-### Step D7：生成“空间具体性”的最小证据图（detour 分布 + top OD 走廊热力）
-
-> 目的：为论文的“null scalar → 必须看空间结构”提供第一张可视化证据（不依赖训练）。
-
-```bash
-python -m src.evaluation.city_story_analysis \
-  --segments_parquet "$RAW_ROOT/worldtrace/detroit_core_v1/segments.parquet" \
-  --out_dir "$RAW_ROOT/worldtrace/detroit_core_v1/story" \
-  --city_name "Detroit" \
-  --bbox -83.25 42.25 -82.95 42.50 \
-  --grid_h 1024 --grid_w 1024 \
-  --timezone "America/Detroit" \
-  --od_bins 8 --top_od 6 --min_od_n 30
-```
-
-### Step D8：构造 Behavioral Avoidance Field（expected vs observed）
-
-> 目的：主线产物。输入必须是同一批 trip context 的“期望路线足迹 vs 实际路线足迹”（按 `traj_csv` 对齐）。
-
-```bash
-python -m src.evaluation.build_avoidance_field \
-  --expected_segments_parquet "$RAW_ROOT/worldtrace/detroit_core_v1/expected_segments.parquet" \
-  --observed_segments_parquet "$RAW_ROOT/worldtrace/detroit_core_v1/segments.parquet" \
-  --out_dir "$RAW_ROOT/worldtrace/detroit_core_v1/avoidance_field" \
-  --grid_h 1024 --grid_w 1024 \
-  --weighting segment \
-  --normalize
-```
+1) Columbus 补齐 tier-road（解锁多城 time+tier gate 与 AR 训练一致口径）。
+2) 改善 waypoint 采样的“可达性”（bin→node 需要连通性/可达性约束），优先把 `success_rate` 从 ~0.1 拉到可用区间。
+3) 补齐对照：在同一评估脚本里输出 `K-shortest` baseline 的 bestJ（避免只看单模型）。

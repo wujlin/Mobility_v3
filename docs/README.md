@@ -7,6 +7,7 @@
 
 ## 1) 看哪份？（按需求）
 
+- **我是新 PI / 新同学，要 15 分钟对齐 route generation 主线**：`docs/PI_BRIEF_ROUTEGEN_ICML2026.md`
 - **我要确认任务定义/无泄漏/评估协议**：`docs/TASK_DEFINITION.md`
 - **我要确认多源数据版本/坐标系/时间一致性（数据契约）**：`docs/DATA_CONTRACT.md`
 - **我要跟踪关键决策与口径变化（实时记录）**：`docs/RESEARCH_LOG.md`
@@ -18,6 +19,12 @@
 - **我要准备外部验证指标（ACS/TIGER tract-level vacancy/income/pop）**：`docs/DATA_CONTRACT.md`
 - **我要确认工作站/本地运行口径（RAW_ROOT / 代理 / tmux / 多进程）**：`docs/WORKSTATION_GUIDE.md`
 - **（Legacy｜封存）深圳 dt30 复现材料入口（不参与当前 Detroit story）**：`legacy/shenzhen/README.md`
+
+### 写作入口（避免拿错 paper）
+
+- **ICML 2026｜Route generation（当前主线）**：`essay_icml_cascadetraj/main.tex`
+- **（备份/对照）routegen 同步稿**：`essay_population/main.tex`
+- **Paper-2｜Rupture/Avoidance field（非 ICML routegen 主线）**：`essay/main.tex`
 
 ### （归档）Phase B / 窗口级材料（保留但不作为当前主线入口）
 

@@ -29,7 +29,7 @@
 
 \usepackage[round,authoryear]{natbib}
 
-\title{CascadeTraj: Behaviorally Realistic Route Generation via Temporal-Spatial Semantic Guidance}
+\title{CascadeTraj: Hierarchical Route Generation via Corridor Commitment}
 \author{TODO (PI review draft)}
 \date{\today}
 
@@ -41,7 +41,13 @@
 \maketitle
 
 \begin{abstract}
-``Realistic'' route generation requires more than geometric validity---it requires \emph{behavioral plausibility under temporal--spatial context}. Existing methods satisfy at most one: map-free generators drift off-road or collapse to straight lines; shortest-path routing is structurally valid but behaviorally implausible and context-insensitive. We propose \textbf{CascadeTraj}, a hierarchical framework that uses road topology as a structural mechanism and treats temporal--spatial semantics (time, road hierarchy, POI context) as the core signal that modulates corridor choice. The decision stage selects a corridor on the road graph conditioned on semantics and time; the execution stage generates a continuous trajectory within the corridor via residual diffusion. Our diagnostic finding is that map-free continuous generation fails at corridor-level convergence: waypoints remain far from ground-truth corridors even with soft road priors (median error 24.7 grid units with tier-road; 49.5 without). We define behavioral realism as \emph{context-conditioned diversity}: the same OD under different contexts should induce different corridor distributions. The contribution is not the architecture per se, but the framing: temporal--spatial semantics must enter at the decision level to produce meaningful behavioral diversity rather than indiscriminate randomness.
+Long-horizon mobility modeling is increasingly important for simulation and generative urban agents, yet most learning methods target short-horizon trajectory forecasting.
+We study \emph{route generation}: sampling an entire trip-level path conditioned on an origin, a destination, and time/context.
+Route generation is fundamentally multi-modal at the corridor level: distinct topological alternatives can be far apart while remaining intent-equivalent.
+End-to-end coordinate generators struggle under this multi-modality, exhibiting destructive averaging or long-horizon drift.
+We propose \textbf{CascadeTraj}, a hierarchical decision--execution route generator that makes corridor choice explicit on a road graph.
+The decision stage samples a sparse waypoint commitment with a short-horizon autoregressive model conditioned on time and road hierarchy; the execution stage connects waypoints with A* to guarantee valid graph paths (and admits optional continuous refinement).
+We provide diagnostic gates showing (i) heuristic candidate sets (e.g., $K$-shortest paths) can have low corridor coverage, motivating learned structured decisions, and (ii) temporal and road-tier context carries measurable signal for corridor-level variability in multi-modal OD groups.
 \end{abstract}
 
 \section{Introduction}
@@ -50,17 +56,27 @@
 \section{Related Work}
 \input{sections/02_related_work.tex}
 
+\section{Problem Setup}
+\input{sections/03_problem_setup.tex}
+
 \section{Method}
-\input{sections/03_method.tex}
+\input{sections/04_method.tex}
 
 \section{Experiments}
-\input{sections/04_experiments.tex}
+\input{sections/05_experiments.tex}
 
 \section{Results}
-\input{sections/05_results.tex}
+\input{sections/06_results.tex}
+
+\section{Discussion}
+\input{sections/07_discussion.tex}
 
 \section{Conclusion}
-\input{sections/06_conclusion.tex}
+\input{sections/08_conclusion.tex}
+
+\appendix
+\section{Appendix}
+\input{sections/A_appendix.tex}
 
 \bibliographystyle{plainnat}
 \bibliography{references}

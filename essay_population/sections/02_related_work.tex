@@ -1,26 +1,27 @@
-\paragraph{Short-horizon trajectory prediction.}
+\paragraph{Short-horizon trajectory prediction vs.\ route generation.}
 Most trajectory prediction work targets short horizons: given a brief observation window, predict near-future displacements.
 Modern architectures (e.g., Transformers \citep{vaswani2017attention}) and generative variants have pushed accuracy forward, but these settings typically do not require committing to a full-trip route under origin--destination intent.
-In contrast, our focus is full-trip route generation, where corridor-level alternatives and feasibility constraints dominate the difficulty.
+In contrast, full-trip route generation must represent corridor-level alternatives and ensure feasibility on a transportation network.
 
-\paragraph{End-to-end generative models for long-horizon routes.}
-A natural extension is to train an end-to-end generator to output an entire coordinate sequence, using latent-variable models \citep{kingma2014auto} or diffusion models \citep{ho2020ddpm}.
-However, in route generation the output distribution is strongly multi-modal in a \emph{topological} sense: distinct corridor-level modes can be geometrically far apart yet semantically equivalent.
-This makes end-to-end coordinate generation prone to destructive averaging and mode interference, which we highlight via diagnostic experiments.
+\paragraph{End-to-end continuous generators.}
+A natural extension is to train an end-to-end generator that outputs an entire coordinate sequence, using latent-variable models \citep{kingma2014auto} or diffusion models \citep{ho2020ddpm}.
+However, corridor-level multi-modality is topological and can be geometrically far apart, making continuous output spaces prone to destructive averaging or long-horizon drift.
+We treat such models as diagnostic baselines rather than as a foundation for corridor modeling.
 
-\paragraph{Hierarchical and latent-structure approaches.}
-Hierarchical approaches address long-horizon uncertainty by separating coarse decisions from fine execution, e.g., sampling sparse waypoints/anchors and then refining a continuous path.
-Our formulation instantiates this idea as an explicit decision--execution cascade: a discrete topological commitment (waypoint skeleton) precedes continuous route generation, so corridor-level multi-modality is represented explicitly rather than being forced into a single continuous output space.
-Beyond introducing the hierarchy, we emphasize a composition issue that is often glossed over in practice: a powerful continuous refiner can overwrite the coarse commitment, collapsing corridor diversity even when the decision stage is multi-modal.
+\paragraph{Candidate-set routing and path ranking.}
+Classical route choice and path-ranking pipelines often enumerate a finite candidate set (e.g., $K$-shortest paths) and then select or weight candidates.
+This strategy is attractive because it guarantees feasibility, but it implicitly assumes that the candidate set covers the relevant corridors.
+Our candidate-coverage gate shows that this assumption can fail in practice even when GT trajectories are well aligned to the road graph, motivating decision mechanisms that do not depend on a fixed candidate set.
 
-\paragraph{Feasibility: hard constraints vs soft priors.}
-Feasibility is often enforced by hard conditioning on a road graph or by masking the output space to a ``feasible set''.
-Hard constraints can ensure on-road outputs but may also truncate the learned distribution and bind performance to map quality.
-We instead use map information as soft priors (e.g., road proximity fields) to encourage plausibility without hard support cutting.
+\paragraph{Learning to plan on graphs.}
+Graph-based decision models (e.g., autoregressive next-hop prediction or pointer-style decoding over nodes) avoid infeasible continuous averages by constraining outputs to graph neighbors.
+Their main challenge is long-horizon compounding error when generating long paths.
+Our method addresses this by moving the decision horizon from node-level sequences (hundreds of steps) to waypoint commitments (3--5 steps), while delegating feasibility and connectivity to A* execution.
 
-\paragraph{Macro priors and population synthesis (related but distinct).}
-Macro-level statistics (e.g., census attributes) are central in population synthesis and controllable urban simulation.
-Our work touches this direction only lightly: census-derived spatial covariates are explored as an optional guidance signal to demonstrate extensibility, while the core contribution remains the generative architecture for route generation.
+\paragraph{Hierarchical planning with waypoints/subgoals.}
+Hierarchical formulations separate coarse decisions from fine execution by introducing subgoals or waypoints.
+We instantiate this idea on road graphs: the decision stage samples sparse waypoint commitments conditioned on time and road hierarchy, and the executor deterministically converts commitments into valid graph paths.
+Optional continuous refinement (diffusion/flow) can be layered on top to model within-corridor variability.
 
 \paragraph{Note on citations (draft).}
-This draft focuses on clarifying the core claims and diagnostic evidence; we will expand citations to domain-specific route choice, trajectory generation, and hierarchical planning work in the final version.
+This draft prioritizes aligning claims with the current graph-based pipeline; we will expand citations to route choice, learning-to-route, and hierarchical planning work in the final version.

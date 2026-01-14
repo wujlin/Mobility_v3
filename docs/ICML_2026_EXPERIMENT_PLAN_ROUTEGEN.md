@@ -4,6 +4,13 @@ Implementation Plan, Task List and Thought in Chinese
 
 > 目标：用**可诊断的证据链**支撑论文主张——长程路线生成的核心瓶颈是“拓扑多模态导致的 mode interference/averaging”，而**决策-执行级联（先离散承诺，再连续执行）**能系统性缓解该失败模式；soft prior 提升可行性但不做 hard truncation；census 仅作为可选引导（extensibility），不把论文变成 population synthesis。
 
+> [!IMPORTANT]
+> **2026-01-14 重大更新（请新 PI 优先读这一段）**：  
+> 我们已确认 window-level（F=256 滑窗）会把 route generation 降级为短距离轨迹延续，导致“走廊选择/语义条件化”相关证据链失真。当前 ICML routegen 主线已转为：  
+> **segment-level route → road graph path → waypoint-level AR（3–5 步）→ A\* 连接（可选 continuous execution）**。  
+> 因此，本文件中 **E0–E13（windows/cascade/diffusion）** 作为历史记录保留，但不再作为当前主线的可复现入口。  
+> 当前主线入口请看：`docs/PI_BRIEF_ROUTEGEN_ICML2026.md` 与 `docs/WORKSTATION_GUIDE.md` 的 `T3/T4` 目录约定。
+
 ---
 
 ## 0) 范围与三条核心 Claim（写作/实验必须对齐）
@@ -22,6 +29,49 @@ Implementation Plan, Task List and Thought in Chinese
 
 **Claim C（鲁棒性与可行性）**：地图信息更适合作为 **soft prior**（road proximity / dist-to-road / road_prob），而非训练期 hard mask/裁剪；hard truncation 能“看起来更可行”但会把分布上限绑定到 proxy 质量并削掉真实模态。
 - 证据：soft prior vs hard mask 的 ablation：可行性提升同时多样性不被截断；并做 dilation/buffer sensitivity audit 避免被 mask 孔洞污染（见 `docs/README.md` 的踩坑提醒）。
+
+---
+
+## 0.3 当前主线（GraphCascade｜segment-level + graph + waypoint AR + A*）
+
+> 这一节是 **当前可执行** 的实验路线；其余章节（E0–E13）为旧口径历史记录。
+
+### 数据与产物（统一以 `$RAW_ROOT/experiments/icml2026_routegen/` 为根）
+
+- segment-level routes（固定长度、epoch 时间）：`gt_segments/*_segments_route_F256_epoch_seed0.npz`
+- road graph：`G1_roadgraph_*/road_graph.npz` 与多城合并的 `T3_combo_*/road_graph_combo.npz`
+- GT graph paths：`T3_combo_*/paths_graph_combo.npz`
+- GT waypoints（从 GT path 提取固定 K）：`T4_wp_ar_astar_combo_seed0/T1_dump_waypoints/waypoints_graph.npz`
+
+### Gate-1：候选覆盖诊断（为什么不用 K-shortest+classify）
+
+目的：量化 “候选集覆盖不足” 是否是系统性问题。  
+脚本：`src/data/road_graph/gate_candidate_paths_from_routes_npz.py` + `src/data/road_graph/diagnose_candidate_coverage.py`
+
+通过标准（建议）：
+- `gt_point_dist_to_road_p90` 较小（GT 与路网对齐没问题）
+- 但 `best_jaccard_p50` 仍显著偏低（说明 K-shortest 覆盖不到 GT 走廊）→ 进入 AR/waypoint 路线
+
+### Gate-2：语义信息量（time+tier 是否能区分走廊簇）
+
+目的：验证 “context-conditioned diversity” 是否有可观测信号支撑（AUC > 0.6）。  
+脚本：`src/data/road_graph/gate_semantic_informativeness_cluster.py`
+
+### T3（已验证失败）：node-level AR（600 步）累积误差过大
+
+结论：即使 teacher-forcing accuracy 看似不低，生成时长程累积误差会导致覆盖崩溃；不作为最终方案。
+
+### T4（当前方案）：Waypoint AR（3–5 步） + A\*
+
+目的：把 AR 步数从 600 降到 3–5，消除长程累积误差；把可行性交给 A\*。  
+脚本：
+- dump waypoint：`src/data/road_graph/dump_waypoints_from_paths_graph_npz.py`
+- 训练 waypoint AR：`src/training/train_graph_ar_waypoint_bins.py`
+- 评估 waypoint AR + A\*：`src/training/sample_graph_ar_waypoints_astar.py`
+
+关键指标：
+- `success_rate`（K 次采样中能否连到 D）
+- `best-of-K Jaccard (edge set)`（合法路径前提下的走廊覆盖）
 
 ---
 

@@ -235,8 +235,8 @@ def _to_markdown(manifest: dict) -> str:
 
 
 def main() -> None:
-    p = argparse.ArgumentParser(description="Generate a manifest for _sync/wsA/icml2026_routegen results.")
-    p.add_argument("--root", type=str, default="_sync/wsA/icml2026_routegen")
+    p = argparse.ArgumentParser(description="Generate a manifest for _sync/wsa/icml2026_routegen results.")
+    p.add_argument("--root", type=str, default="_sync/wsa/icml2026_routegen")
     p.add_argument("--out_json", type=str, default="docs/ICML_2026_ROUTEGEN_SYNC_MANIFEST.json")
     p.add_argument("--out_md", type=str, default="docs/ICML_2026_ROUTEGEN_SYNC_MANIFEST.md")
     args = p.parse_args()

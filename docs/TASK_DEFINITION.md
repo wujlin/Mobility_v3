@@ -3,15 +3,24 @@
 > **适用范围**：本仓库所有训练/评估/数据产物必须遵循本规范。  
 > **更新**：2026-01-01  
 > **核心目标**：消除“文档—代码—数据产物”不一致，保证 **KnownDestination + 无泄漏 + 可复现**。  
-> **重要说明**：本仓库目前同时保留两条口径：
-> - **Phase D（当前主线）**：WorldTrace × Detroit（1Hz、WGS84、matched 坐标、OSM 软先验）
-> - **Phase C / Legacy**：深圳出租车 dt30（用于复现历史结论，不再作为主线）
+> **重要说明**：本仓库当前同时保留三条“可运行但目标不同”的口径（避免新 PI 混用）：
+> - **RouteGen（ICML 2026｜当前优先级最高）**：WorldTrace ×（Detroit + Columbus），**segment-level route generation + road-graph 上的结构化决策**（waypoint AR）+ A\* 连接（可选 continuous execution）。
+> - **Rupture/Avoidance（Paper-2｜非 ICML routegen 交付物）**：WorldTrace × Detroit（行为参照系 → 回避场）。
+> - **Phase C / Legacy**：深圳出租车 dt30（仅用于复现历史结论，不再作为主线）
 
 ---
 
 ## 0. 任务口径总览（避免“口径漂移导致无法归因”）
 
-### Phase D（当前主线）：WorldTrace × Detroit（端到端 + 软先验）
+### RouteGen（ICML 2026｜当前主线）：WorldTrace × 多城（graph-aware route generation）
+
+- **主目标**：给定 `(o,d,t0,context)` 生成整段路线（route generation），显式建模 corridor-level 多模态。
+- **任务定义**：KnownDestination（推理时 `d` 是合法输入，不属于泄漏）。
+- **关键口径**：**segment-level（完整行程段）**，不使用 window 滑窗作为 route generation 证据链（window 会把任务降级为短距离轨迹延续）。
+- **输出语义（v1）**：road graph 上的 corridor（node sequence）；执行层用 A\* 连接保证合法性（后续可接连续执行/细化）。
+- **城市语义（最小集）**：`time (hour/dow)` + `tier-road`（先跑通 gate，再扩展 POI/landuse）。
+
+### Rupture/Avoidance（Paper-2）：WorldTrace × Detroit（行为参照系 → 回避场）
 
 - **主目标**：学习“trip-level 决策 + 执行”的统一生成框架，但不把外部地图当真值。  
 - **任务定义**：KnownDestination（推理时 `d` 是合法输入，不属于泄漏）。
@@ -76,6 +85,23 @@ $$P(\\mathrm{vel}_{t+1:t+F} \\mid \\mathrm{obs}_{t-H+1:t}, o, d, t_0, env)$$
   - `pos_pred[k] = pos_last + sum_{i=1..k} vel_pred[i]`
 
 > **注意**：Phase D 主线的目标是 trip-level 决策（waypoints/走廊/绕路动机）。如果你用 legacy 的“未来段生成”做 Phase D 主线，会很容易回到“Destination Gravity/平均梯度场”的老问题；因此 Phase D 的主要输出应优先用 `z` 表达宏观决策。
+
+### 1.2 RouteGen（ICML 2026）补充：graph 口径的“决策—执行”
+
+为避免连续坐标空间的均值塌缩/漂移，我们在 routegen 主线里把走廊选择建模为 road graph 上的结构化决策：
+
+- **Decision（走廊承诺）**：输出稀疏 waypoint 序列（node ids），通常 `K=3–5` 步即可覆盖主要走廊差异。
+- **Execution（合法连接）**：用 A\* 连接相邻 waypoint，得到完整 corridor node sequence（保证输出永远是合法图路径）。
+- **可选 continuous execution**：在 corridor 上再生成连续轨迹细节（diffusion/flow），不作为当前 gate 的前置条件。
+
+对应数据合同（字段/路径细节见 `docs/DATA_STRUCTURE.md`）：
+- `road_graph_*.npz`：OSM → graph
+- `paths_graph_*.npz`：GT route → node sequence
+- `waypoints_graph.npz`：GT path → 固定 K waypoint 序列
+
+RouteGen 的核心指标（v1）建议先用“能回答问题”的两类：
+- **success rate**：best-of-K 中有多少样本能成功 A\* 连到 `D`（衡量可达性/连通性）。
+- **best-of-K Jaccard（edge set）**：在合法 corridor 前提下，衡量与 GT corridor 的覆盖程度（比纯长度/欧氏误差更贴近“走廊一致性”）。
 
 ---
 

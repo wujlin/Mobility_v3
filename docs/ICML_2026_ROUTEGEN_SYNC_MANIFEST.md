@@ -1,12 +1,16 @@
 # ICML 2026 RouteGen: 本地同步结果索引（_sync）
 
-- root: `_sync/wsA/icml2026_routegen`
-- num_entries: `29`
+- root: `_sync/wsa/icml2026_routegen`
+- num_entries: `61`
+- issues: `1`
 
 ## Experiments
 
 - `E0_gt_baseline_detroit_F256_n200k_seed0` — `report` — `E0_gt_baseline_detroit_F256_n200k_seed0`
 - `E0_gt_baseline_detroit_F256_n200k_seed0_od128_n10_sep2` — `report` — `E0_gt_baseline_detroit_F256_n200k_seed0_od128_n10_sep2`
+- `E0s_gt_baseline_detroit_segF256_epoch_seed0_od128_min10_sep2_uni2` — `other` — `E0s_gt_baseline_detroit_segF256_epoch_seed0_od128_min10_sep2_uni2`
+- `E0s_gt_baseline_detroit_segF256_seed0_od128_min10_sep2` — `report` — `E0s_gt_baseline_detroit_segF256_seed0_od128_min10_sep2`
+- `E0s_gt_baseline_detroit_segF256_seed0_od128_min10_sep2_uni2_png` — `report` — `E0s_gt_baseline_detroit_segF256_seed0_od128_min10_sep2_uni2_png`
 - `E10_rand4_control_detroit_F256_od128_seed0` (E10 (rand4 control)) — `report` — `E10_rand4_control_detroit_F256_od128_seed0`
 - `E11_gridcnn_road_detroit_F256_od128_seed0` (E11 (gridcnn + road_prob)) — `report` — `E11_gridcnn_road_detroit_F256_od128_seed0`
 - `E12_exec_road_prior_detroit_F256_K20_seed0` (E12 (Execution-stage road prior)) — `exec_prior` — `E12_exec_road_prior_detroit_F256_K20_seed0`
@@ -27,6 +31,14 @@
 - `E19c_attn_viz_gridattn_case04_idx0_seed0` — `report` — `E19c_attn_viz_gridattn_case04_idx0_seed0`
 - `E1_end2end_diffusion_npz_detroit_F256_case01_seed0` — `other` — `E1_end2end_diffusion_npz_detroit_F256_case01_seed0`
 - `E1b_end2end_l2_npz_detroit_F256_case01_seed0` — `other` — `E1b_end2end_l2_npz_detroit_F256_case01_seed0`
+- `E1seg_e2e_diffusion_detroit_segF256_epoch_seed0` — `train` — `E1seg_e2e_diffusion_detroit_segF256_epoch_seed0`
+  - checkpoint: `/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E1seg_e2e_diffusion_detroit_segF256_epoch_seed0/last.pt`
+- `E1seg_e2e_diffusion_detroit_segF256_seed0` — `train` — `E1seg_e2e_diffusion_detroit_segF256_seed0`
+  - checkpoint: `/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E1seg_e2e_diffusion_detroit_segF256_seed0/last.pt`
+- `E1seg_e2e_l2_detroit_segF256_epoch_seed0` — `train` — `E1seg_e2e_l2_detroit_segF256_epoch_seed0`
+  - checkpoint: `/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E1seg_e2e_l2_detroit_segF256_epoch_seed0/last.pt`
+- `E1seg_e2e_l2_detroit_segF256_seed0` — `train` — `E1seg_e2e_l2_detroit_segF256_seed0`
+  - checkpoint: `/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E1seg_e2e_l2_detroit_segF256_seed0/last.pt`
 - `E20a_audit_gridpos_sc_case04_seed0` — `audit` — `E20a_audit_gridpos_sc_case04_seed0`
   - checkpoint: `/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E22_gridpos_sc_tierroad_detroit_F256_od128_seed0/last.pt`
   - best(mixture_jsd): none jsd=0.028173435458265984 l1=0.4329411764705978 cov=1.0
@@ -37,13 +49,48 @@
   - checkpoint: `/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E22_gridpos_sc_tierroad_detroit_F256_od128_seed0/last.pt`
   - best(mixture_jsd): none jsd=0.028173435458265984 l1=0.4329411764705978 cov=1.0
 - `E23_fullscale_detroit_E22tierroad_K20_res0p1_seed0` — `other` — `E23_fullscale_detroit_E22tierroad_K20_res0p1_seed0`
+- `E24_fullscale_detroit_E24tierroad_K20_res0p1_seed0` — `other` — `E24_fullscale_detroit_E24tierroad_K20_res0p1_seed0`
+- `E25_fullscale_detroit_decTierRoad_execPriorDist_K20_res0p1_seed0` (E25_fullscale_exec_prior_refine) — `report` — `E25_fullscale_detroit_decTierRoad_execPriorDist_K20_res0p1_seed0`
+- `E26_fullscale_detroit_decOD_execPriorDist_K20_res0p1_seed0` (E26_fullscale_decOD_execPriorDist) — `report` — `E26_fullscale_detroit_decOD_execPriorDist_K20_res0p1_seed0`
+- `E27_viz_e25_vs_e26_detroit_seed0` (E27_viz_e25_vs_e26_metric_conflict) — `report` — `E27_viz_e25_vs_e26_detroit_seed0`
 - `E2_exec_diffusion_wp_residual_npz_detroit_F256_case01_seed0` — `other` — `E2_exec_diffusion_wp_residual_npz_detroit_F256_case01_seed0`
 - `E2s_skeleton_only_detroit_F256_case01_seed0` — `other` — `E2s_skeleton_only_detroit_F256_case01_seed0`
+- `E2seg_exec_diffusion_wp_detroit_segF256_seed0` — `train` — `E2seg_exec_diffusion_wp_detroit_segF256_seed0`
+  - checkpoint: `/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E2seg_exec_diffusion_wp_detroit_segF256_seed0/last.pt`
+- `E2seg_exec_residual_detroit_segF256_epoch_seed0_wpK2` — `train` — `E2seg_exec_residual_detroit_segF256_epoch_seed0_wpK2`
+  - checkpoint: `/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E2seg_exec_residual_detroit_segF256_epoch_seed0_wpK2/last.pt`
 - `E3_wp_diffusion_rel_detroit_F256_od128_seed0` — `train` — `E3_wp_diffusion_rel_detroit_F256_od128_seed0`
   - checkpoint: `/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E3_wp_diffusion_rel_detroit_F256_od128_seed0/last.pt`
+- `E3seg_tierroad_case00_sample_K20_res0p1_seed0` — `other` — `E3seg_tierroad_case00_sample_K20_res0p1_seed0`
+- `E3seg_wp_diffusion_rel_detroit_segF256_epoch_seed0_od128_wpK2` — `train` — `E3seg_wp_diffusion_rel_detroit_segF256_epoch_seed0_od128_wpK2`
+  - checkpoint: `/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E3seg_wp_diffusion_rel_detroit_segF256_epoch_seed0_od128_wpK2/last.pt`
+- `E3seg_wp_diffusion_rel_detroit_segF256_od128_seed0` — `train` — `E3seg_wp_diffusion_rel_detroit_segF256_od128_seed0`
+  - checkpoint: `/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E3seg_wp_diffusion_rel_detroit_segF256_od128_seed0/last.pt`
 - `E4_cascade_wpdec_exec_npz_detroit_F256_case01_seed0` — `other` — `E4_cascade_wpdec_exec_npz_detroit_F256_case01_seed0`
+- `E4s_seg_viz_detroit_segF256_epoch_K20_res0p1_seed0` — `other` — `E4s_seg_viz_detroit_segF256_epoch_K20_res0p1_seed0`
 - `E5_cascade_wpdec_exec_res0p1_detroit_F256_case01_seed0` — `other` — `E5_cascade_wpdec_exec_res0p1_detroit_F256_case01_seed0`
+- `E5seg_case00_sample_K20_res0p1_seed0` — `other` — `E5seg_case00_sample_K20_res0p1_seed0`
+- `E5seg_exec_residual_detroit_segF256_epoch_seed0_wpK2` — `train` — `E5seg_exec_residual_detroit_segF256_epoch_seed0_wpK2`
+  - checkpoint: `/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E5seg_exec_residual_detroit_segF256_epoch_seed0_wpK2/last.pt`
+- `E5seg_wp_diffusion_rel_detroit_segF256_epoch_seed0_od128_wpK2_gridpos_tierroad` — `other` — `E5seg_wp_diffusion_rel_detroit_segF256_epoch_seed0_od128_wpK2_gridpos_tierroad`
 - `E6_semantic_decision_ablation_detroit_F256_od128_seed0` — `other` — `E6_semantic_decision_ablation_detroit_F256_od128_seed0`
 - `E7_corridor_semantic_audit_detroit_seed0` (E7 (corridor semantic audit, GT)) — `report` — `E7_corridor_semantic_audit_detroit_seed0`
 - `E8_semantic_strength_mixture_detroit_F256_od128_seed0` (E8 (Semantic Mixture Match)) — `report` — `E8_semantic_strength_mixture_detroit_F256_od128_seed0`
 - `E9_gridsem_poolquad_detroit_F256_od128_seed0` (E9 (grid semantics pooling)) — `report` — `E9_gridsem_poolquad_detroit_F256_od128_seed0`
+- `E_D0_segment_stats_detroit_seed0` — `report` — `E_D0_segment_stats_detroit_seed0`
+- `E_S1_segments_fixedlen_detroit_F256_p300_c40_t60_d1p2_seed0` — `other` — `E_S1_segments_fixedlen_detroit_F256_p300_c40_t60_d1p2_seed0`
+- `E_T0_temporal_audit_detroit_windows_seed0` — `other` — `E_T0_temporal_audit_detroit_windows_seed0`
+  - issues: `empty_dir`
+- `E_W0_window_stats_detroit_seed0` — `report` — `E_W0_window_stats_detroit_seed0`
+- `G2_candidates_detroit_seed0_quick` (candidate_paths_graph_gate) — `report` — `G2_candidates_detroit_seed0_quick`
+- `G2_candidates_detroit_seed0_quick_r1K20` (candidate_paths_graph_gate) — `report` — `G2_candidates_detroit_seed0_quick_r1K20`
+- `G2_diagnose_detroit_seed0` — `other` — `G2_diagnose_detroit_seed0`
+- `G3_argraph_columbus_seed0` — `other` — `G3_argraph_columbus_seed0`
+- `G3_argraph_combo_detroit_columbus_seed0` — `other` — `G3_argraph_combo_detroit_columbus_seed0`
+- `G3_argraph_detroit_seed0` — `other` — `G3_argraph_detroit_seed0`
+- `T3_combo_detroit_columbus_seed0` — `other` — `T3_combo_detroit_columbus_seed0`
+- `T4_wp_ar_astar_combo_seed0` — `other` — `T4_wp_ar_astar_combo_seed0`
+
+## Issues
+
+- `E_T0_temporal_audit_detroit_windows_seed0`: `empty_dir`

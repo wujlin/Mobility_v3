@@ -10,9 +10,49 @@
 
 ---
 
-## 0. 当前主线（Phase D：WorldTrace × 多城迁移 × 城市语义）
+## 0. 当前两条工作线（避免新 PI 误解）
 
-Phase D 的目标不是“刷一个更低 ADE”，而是构造 **Behavioral Reference Frame** 并在 Detroit 上产出 **Behavioral Avoidance Field**。因此代码的主线闭环是：
+本仓库目前同时保留两条“可运行但目的不同”的代码主线：
+
+1) **ICML 2026 Route Generation（当前优先级最高）**  
+   - 写作入口：`essay_icml_cascadetraj/main.tex`（当前主线；`essay_population/main.tex` 为备份/对照稿）  
+   - 技术主线：segment-level route generation + road-graph 上的结构化决策（waypoint AR）+ A\* 连接（可选再接 continuous execution）。
+
+2) **Paper-2：Rupture/Avoidance field（非当前 ICML 交付物）**  
+   - 写作入口：`essay/main.tex`  
+   - 这部分文档与脚本仍保留，但不应与 routegen 的实验口径/指标混用。
+
+下面先给 routegen 这条线一个“能直接跑”的代码地图；原先 Phase D（avoidance）内容后移保留。
+
+---
+
+## 0.1 RouteGen（ICML 2026）代码地图（最常用入口）
+
+### 数据与图结构（road graph / GT graph paths）
+
+- 生成/加载 road graph：`src/data/road_graph/*road_graph*.py`
+- GT route（segment-level）→ graph node sequence：`src/data/road_graph/dump_graph_paths_from_routes_npz.py`
+- 候选覆盖诊断（说明为什么不用 K-shortest+classify）：`src/data/road_graph/gate_candidate_paths_from_routes_npz.py`、`src/data/road_graph/diagnose_candidate_coverage.py`
+- 语义信息量 Gate（time+tier 是否 informative）：`src/data/road_graph/gate_semantic_informativeness_cluster.py`
+
+### 决策层（Waypoint AR：少步数、避免 600-step 累积误差）
+
+- GT graph path → 固定 K waypoint：`src/data/road_graph/dump_waypoints_from_paths_graph_npz.py`
+- 模型：`src/models/road_graph/ar_waypoint_bins.py`
+- 训练：`src/training/train_graph_ar_waypoint_bins.py`
+
+### 执行层（A* 连接 + 可视化/指标）
+
+- 采样 waypoint → A* 连接成 corridor path，并输出 `best-of-K Jaccard + success_rate`：  
+  `src/training/sample_graph_ar_waypoints_astar.py`
+
+> 说明：A* 目前是“最小可行执行层”，确保图路径合法；continuous execution（diffusion/flow）属于后续增强，不是当前 gate 的前置条件。
+
+---
+
+## 0.2 Rupture/Avoidance（Paper-2）原主线（保留）
+
+Phase D（avoidance）的目标不是“刷一个更低 ADE”，而是构造 **Behavioral Reference Frame** 并在 Detroit 上产出 **Behavioral Avoidance Field**。因此代码的主线闭环是：
 
 1) **WorldTrace 子集与连续段**（多进程 / IO 为主瓶颈）  
    - `src/data/worldtrace/build_manifest.py`：从 `Meta.zip` 建 manifest（全局索引）

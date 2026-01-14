@@ -1,6 +1,13 @@
 \documentclass{article}
 
 % ============================================================
+% NOTE (2026-01-14)
+% This directory is kept as a backup/contrast draft.
+% The ICML routegen mainline lives in `essay_icml_cascadetraj/`.
+% Please edit `essay_icml_cascadetraj/main.tex` and its sections going forward.
+% ============================================================
+%
+% ============================================================
 % ICML 2026 paper scaffold
 % - If icml2026.sty exists, compile in ICML two-column mode.
 % - Otherwise, fall back to a single-column draft layout.
@@ -31,6 +38,10 @@
 \usepackage{hyperref}
 \hypersetup{hidelinks}
 
+\newcommand{\maybeincludegraphics}[2][]{%
+  \IfFileExists{#2}{\includegraphics[#1]{#2}}{\fbox{Missing file: #2}}%
+}
+
 \title{CascadeTraj: Hierarchical Route Generation via Corridor Commitment}
 \author{Anonymous Author(s)}
 \date{}
@@ -46,7 +57,7 @@
 \end{icmlauthorlist}
 
 \icmlaffiliation{anon}{Anonymous Institution}
-\icmlkeywords{route generation, route choice, diffusion models, hierarchical generative modeling}
+\icmlkeywords{route generation, route choice, road graphs, hierarchical generative modeling}
 \vskip 0.3in
 ]
 \printAffiliationsAndNotice{} % Leave blank to omit the notice
@@ -56,13 +67,12 @@
 
 \begin{abstract}
 Long-horizon mobility modeling is increasingly important for simulation and generative urban agents, yet most learning methods target short-horizon trajectory forecasting.
-We study \emph{route generation}: sampling an entire path for a trip conditioned on an origin, a destination, and time/context.
-Route generation is fundamentally multi-modal at the corridor level: distinct topological alternatives can be geometrically far apart while remaining intent-equivalent.
-Through diagnostic experiments on large-scale mobility traces, we identify two characteristic failures of end-to-end coordinate generators under this multi-modality: deterministic regression collapses to destructive averages, while stochastic generation can avoid hard collapse yet blurs corridor alternatives through mode interference.
-We propose \textbf{CascadeTraj}, a hierarchical decision--execution generator that first samples a sparse waypoint skeleton as an explicit corridor commitment, then refines it with a continuous execution model.
-We further find that naive composition can overwrite corridor commitments; treating execution as a weak residual refinement preserves corridor coverage while still capturing local geometry.
-We also report a design principle: data utility is stage-specific.
-Corridor commitment is topological and does not benefit from semantic or map features beyond a matched-dimension random conditioning control, while execution-stage feasibility improves significantly with soft road priors (+5.7\% on-road rate without accuracy loss).
+We study \emph{route generation}: sampling an entire trip-level path conditioned on an origin, a destination, and time/context.
+Route generation is fundamentally multi-modal at the corridor level: distinct topological alternatives can be far apart while remaining intent-equivalent.
+End-to-end coordinate generators struggle under this multi-modality, exhibiting destructive averaging or long-horizon drift.
+We propose \textbf{CascadeTraj}, a hierarchical decision--execution route generator that makes corridor choice explicit on a road graph.
+The decision stage samples a sparse waypoint commitment with a short-horizon autoregressive model conditioned on time and road hierarchy; the execution stage connects waypoints with A* to guarantee valid graph paths (and admits optional continuous refinement).
+We provide diagnostic gates showing (i) heuristic candidate sets (e.g., $K$-shortest paths) can have low corridor coverage, motivating learned structured decisions, and (ii) temporal and road-tier context carries measurable signal for corridor-level variability in multi-modal OD groups.
 \end{abstract}
 
 \section{Introduction}

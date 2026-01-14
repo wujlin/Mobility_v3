@@ -1,86 +1,87 @@
-Implementation Plan, Task List and Thought in Chinese：本文档服务于 Phase D（WorldTrace×Detroit）的 essay 写作，强调“科学叙事”而不是“技术报告”。
+Implementation Plan, Task List and Thought in Chinese
 
-# Essay 写作指南（Phase D：Behavioral Reference Frame → Behavioral Avoidance Field）
+# Essay 写作指南（统一入口：避免拿错 paper）
 
-> 目标：把项目从“做了什么”写成“发现了什么、为什么重要、证据是什么”。  
-> 单一真相源：数据口径以 `docs/DATA_CONTRACT.md` 为准；任务/评估口径以 `docs/TASK_DEFINITION.md` 为准；关键概念命名以 `docs/RESEARCH_LOG.md` 为准。  
-> LaTeX 主稿：`essay/main.tex`（已按该叙事框架组织）。
+> 目标：把项目从“做了什么”写成“发现了什么、为什么重要、证据是什么”，并确保 **文档—代码—数据**一致。  
+> 单一真相源：数据口径以 `docs/DATA_CONTRACT.md` 为准；任务/评估口径以 `docs/TASK_DEFINITION.md` 为准；关键决策以 `docs/RESEARCH_LOG.md` 为准。  
 
----
+本仓库当前有三份 LaTeX 稿件（不要混用叙事与实验口径）：
+- **ICML 2026｜Route generation（当前主线）**：`essay_icml_cascadetraj/main.tex`
+- **（备份/对照）routegen 同步稿**：`essay_population/main.tex`
+- **Paper-2｜Rupture/Avoidance field（非 ICML routegen 主线）**：`essay/main.tex`
 
-## 0) 一句话主线（写在 Abstract 末尾、Introduction 末尾都成立）
-
-我们用跨城市迁移构造一个 **Behavioral Reference Frame（行为参照系）**，并把“参照系预测的正常路线 footprint”与 Detroit 的真实路线 footprint 做差，得到一个具有**空间具体性**的 **Behavioral Avoidance Field（行为回避场）**，用来描述“断裂长什么样”（走廊替代、边界效应、断裂带形态），而不仅是“断裂强不强”（一个相关系数）。
-
----
-
-## 1) 两个概念怎么用（避免叙事混乱）
-
-- **Behavioral Reference Frame**：方法论概念（你构造 baseline 的方式）。标题/摘要/引言重点讲它。
-- **Behavioral Avoidance Field**：实证发现/结果概念（你在 Detroit 上得到的空间残差场）。结果/讨论重点讲它。
-
-叙事约束：不要把“destination gravity”等技术细节当主线；它只解释“为什么要用决策-执行分解/AR，否则参照系会退化成最短路近似”。
+下文先给 ICML routegen 的写作主线；Paper-2 的写作规范放在文末“附录”。
 
 ---
 
-## 2) 写作结构（每节只回答一个问题）
+## A) ICML 2026｜Route generation（`essay_icml_cascadetraj/`）
 
-### Abstract（回答：我们发现了什么？为什么可信？）
-- 现象：功能断裂是空间异质的，标量指标难以描述其结构。
-- 方法：行为参照系（从 functional 城市学到“正常 route choice”）。
-- 产物：回避场（空间残差），可以揭示走廊替代与行为边界。
-- 可信度：多源对齐（WorldTrace + OSM soft prior + POI + 遥感 + census）与可审计的数据契约。
+### A0) 一句话主线（写在 Abstract/Intro 末尾都成立）
 
-### Introduction（回答：为什么 route choice 是“独特信号”？）
-建议写成 5 段：
-1) 城市功能断裂的重要性（Detroit 的空间异质性是动机，不是背景噪音）。
-2) 传统指标是 outcome，不是 process（它们很重要，但缺少“人如何适应”的过程信号）。
-3) 移动行为是“行为投票”，但 detour 很常见；最短路不是好的行为基线。
-4) 行为参照系：用 functional 城市学习正常权衡；避免把“正常绕行”误判为“问题回避”。
-5) 空间具体性：标量比较（detour ratio/相关系数）解释力有限；我们要回答“断裂结构是什么样”。
-
-### Materials \& Data（回答：我们依赖哪些信息？各自提供什么“语义”？）
-按“功能”写，不要按“下载步骤”写：
-- WorldTrace：提供 OD+时间语境下的 route choice 事实样本（并明确 1Hz、matched 坐标与质量闸门）。
-- OSM（soft prior）：提供“更像路”的连续概率场（road\_prob），作为特征与软正则，而非硬裁剪。
-- SafeGraph POI：提供功能语义（区域“是什么/有什么”），解释非几何原因的绕行。
-- Wayback 遥感：提供建成环境外观（POI 覆盖不到的结构：水体/绿地/大型设施）。
-- Census/ACS：提供独立外部指标（vacancy/income/pop），用于验证回避场是否与断裂 proxy 对齐。
-
-### Methodology（回答：如何把“参照→残差→空间场”做成可证伪的科学测量？）
-按研究设计写成四步（与 `essay/sections/03_methodology.tex` 对齐）：
-1) 在 functional 城市学习“正常 route choice”（构造参照系）。
-2) 不在 Detroit 上重训（否则参照系不再是 counterfactual）。
-3) 用一致的 OD+时间语境生成“正常 footprint”。
-4) 与 Detroit 真实 footprint 做差并空间化：得到回避场 + 替代场（substitution）。
-
-同时明确三条假设（H1/H2/H3），并说明每条假设对应的可证伪证据。
+route generation 的 corridor-level 多模态在连续坐标空间里会诱发均值塌缩/漂移；我们转向 **road-graph 上的结构化决策**：用少步数的 **waypoint AR** 产生走廊承诺，再用 **A\*** 连接保证路径合法性（可选再接 continuous execution/refinement）。
 
 ---
 
-## 3) 图表怎么选（以“空间结构”说服读者）
+### A1) 叙事边界（新 PI/审稿人最容易误解的点）
 
-建议把图表资源集中在“空间具体性”上：
-- Fig 1（概念图）：Behavioral Reference Frame → Behavioral Avoidance Field（流程示意）。
-- Fig 2（标量不足的证据）：Detroit vs Columbus 的 detour 标量相近（或弱相关），引出“需要空间场”。
-- Fig 3（核心结果）：Detroit 的 avoidance field 地图（under-traversal）+ substitution field（over-traversal）。
-- Fig 4（外部验证）：回避场聚合到 tract 后与 vacancy/income 的关系；同时给出一张对齐地图（不只给相关系数）。
-
-> 注意：如果最终回避场只是 vacancy map 的低分辨率版本，必须展示“额外信息量”（走廊替代、边界更尖锐、时变结构等）来回答“为什么值得”。
+- **不使用 window-level（F=256 滑窗）作为 route generation 证据链**：window 会把任务降级为短距离轨迹延续，走廊选择不存在（已用 `E_D0/E_W0` 统计审计证实）。
+- **不把 rupture/avoidance field 写进 ICML routegen**：那是 Paper-2（`essay/`），只会造成 scope creep。
+- **语义/POI/census 不是主线前提**：ICML routegen 的核心是“结构化走廊决策机制”；语义只作为“context 是否 informative”的 gate/扩展点。
 
 ---
 
-## 4) 结果还没跑完时怎么写（不造假也不失分）
+### A2) 写作结构（每节回答一个问题）
 
-- Results 部分可以先写成“分析计划 + 预注册式口径”（用 will/report/define），并把“将报告的指标与可视化”写清楚。
-- 任何数值型结论（相关系数、显著性、热点位置）必须来自仓库内的真实产物；否则只写“我们将用 X 验证 Y”。
+建议把论文结构固定为“问题→诊断→机制→验证→局限”：
+
+**Abstract**
+- Problem：corridor-level multi-modality 使端到端连续生成失败（平均化/漂移）。
+- Finding：走廊选择必须结构化（graph/waypoint commitment），否则无法稳定覆盖。
+- Method：Decision（waypoint AR）+ Execution（A* 合法连接；可选 continuous）。
+- Evidence：候选覆盖 gate（K-shortest 覆盖不足）+ 语义信息量 gate（time+tier AUC）+ waypoint AR 原型（success/bestJ）。
+
+**Introduction**
+- 把“route generation”明确为 segment-level（整段行程），不是短窗预测。
+- 解释为什么“候选集分类（K-shortest）”在覆盖率上会失败（需要 gate 证据）。
+- 亮出核心机制：用 waypoint-level 的少步 AR 承载 corridor commitment。
+
+**Data**
+- WorldTrace 的 city 子集（Detroit/Columbus），segment-level 过滤标准（chord/detour/min_points）。
+- OSM → road graph（节点/边/tier），GT route → graph path（node sequence）。
+
+**Method**
+- Decision：waypoint AR（bin-classification）+ 可解释的 time+tier conditioning。
+- Execution：A* 连接（合法性保证）；可选 continuous executor（扩展点）。
+
+**Experiments/Results**
+- Gate-1（候选覆盖）：说明为什么候选集不够。
+- Gate-2（语义信息量）：`AUC(time+tier)` 是否 >0.6（支持 context-conditioned diversity 的前提）。
+- T4 原型：waypoint AR 的 val acc、A* success_rate、best-of-K Jaccard；用可视化解释失败来自“bin→node 可达性”而非“AR 步数太多”。
 
 ---
 
-## 5) 写作自检（避免写成工程日志）
+### A3) 图表优先级（避免“只堆指标”）
 
-每写完一节，问自己三个问题：
-1) 这节回答的科学问题是什么？（一句话能说出来）
-2) 读者读完会记住一个“发现/洞见”吗？还是只记住“我们做了很多步骤”？  
-3) 如果删掉所有“我们接下来/首先/然后”，逻辑还能自洽吗？
+routegen 主线的图表建议：
+- **Fig 1（Hero）**：GT vs L2（平均化）vs E2E（漂移/不可达）vs 我们（graph commitment）。
+- **Fig 2（Gate）**：K-shortest 覆盖不足（bestJ 分布）+ 诊断可视化（GT 在路上但候选走别处）。
+- **Fig 3（Go/No-Go）**：语义信息量 gate（AUC by feature：time / tier / time+tier）。
+- **Fig 4（T4 结果）**：waypoint AR + A* 的 success/bestJ 分位数 + 典型失败可视化（解释“可达性约束”的必要性）。
 
+---
+
+### A4) 结果未收敛时怎么写（不造假也不误导 PI）
+
+- 论文里所有数字都必须能点到仓库产物路径（`_sync/wsa/.../report.json` 或 `$RAW_ROOT/.../report.json`）。
+- 如果某一阶段仍是 prototype（例如 T4 的 success_rate 偏低），要把它写成“发现/诊断”而不是“性能结果”。
+
+---
+
+## B) 附录：Paper-2 rupture/avoidance（`essay/`）
+
+> 这条线与 ICML routegen 不应混用证据链；仅保留旧写作主线供需要时参考。
+
+一句话主线（paper-2）：
+- Behavioral Reference Frame → Behavioral Avoidance Field（空间残差场），用于描述 rupture 的“结构”而不仅是“强度”。
+
+写作入口：`essay/main.tex`；原指南内容已迁移到该稿件结构中，避免继续扩散到 routegen 叙事。

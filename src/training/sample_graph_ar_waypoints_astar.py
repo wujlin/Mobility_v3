@@ -3,7 +3,10 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import multiprocessing as mp
 import random
+import sys
+import time
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -27,13 +30,16 @@ from src.plot_style import OKABE_ITO, paper_style, save_figure
 
 
 TZ_SHANGHAI = timezone(timedelta(hours=8))
+_ASTAR_G = None
 
 
-def _set_seed(seed: int) -> None:
+def _set_seed(seed: int, *, seed_cuda: bool) -> None:
     random.seed(int(seed))
     np.random.seed(int(seed))
     torch.manual_seed(int(seed))
-    if torch.cuda.is_available():
+    # IMPORTANT: if using multiprocessing with "fork", do NOT touch torch.cuda.* before the pool starts.
+    # (Calling torch.cuda.manual_seed_all() may initialize CUDA and make fork unsafe.)
+    if seed_cuda and torch.cuda.is_available():
         torch.cuda.manual_seed_all(int(seed))
 
 
@@ -139,6 +145,15 @@ class SampleCfg:
     max_steps: int
 
 
+def _astar_worker(pair: Tuple[int, int]) -> List[int]:
+    global _ASTAR_G
+    if _ASTAR_G is None:
+        raise RuntimeError("A* worker graph is not initialized.")
+    s, d = pair
+    _, path = _astar(_ASTAR_G, start=int(s), goal=int(d))
+    return [int(x) for x in path]
+
+
 def _plot_case(
     *,
     out_png: Path,
@@ -192,9 +207,13 @@ def run(
     temperature: float,
     num_routes: int,
     baseline_k: int,
+    oracle: bool,
+    astar_workers: int,
     tz_offset_hours: float,
     seed: int,
     viz_cases: int,
+    progress: str,
+    log_every: int,
 ) -> Dict[str, object]:
     out_dir.mkdir(parents=True, exist_ok=True)
     report_json = out_dir / "report.json"
@@ -203,6 +222,18 @@ def run(
     g = _load_graph_npz(road_graph_npz)
     H = int(g.grid.H)
     W = int(g.grid.W)
+
+    pool = None
+    astar_workers_i = int(astar_workers)
+    if astar_workers_i < 0:
+        astar_workers_i = max(1, int(mp.cpu_count()) - 2)
+    if astar_workers_i > 0:
+        # IMPORTANT: use fork and start the pool BEFORE any CUDA initialization.
+        # Workers only run A* (pure Python CPU), so fork is safe and avoids pickling the graph.
+        ctx = mp.get_context("fork")
+        global _ASTAR_G
+        _ASTAR_G = g
+        pool = ctx.Pool(processes=int(astar_workers_i))
 
     raw = np.load(str(road_graph_npz), allow_pickle=True)
     node_y = np.asarray(raw["node_y"], dtype=np.float32).reshape(-1)
@@ -228,168 +259,257 @@ def run(
         if "wp_seq" in w.files:
             gt_wp_seq = np.asarray(w["wp_seq"], dtype=np.int32)
 
-    # Model
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    ckpt = torch.load(str(checkpoint), map_location="cpu")
-    model_cfg = ckpt.get("model_cfg") or {}
-    num_steps = int(model_cfg.get("num_steps", 4))
-    n_classes = int(model_cfg.get("n_classes", 1024))
-    wp_bin = int(model_cfg.get("wp_bin", 32))
-    num_cities = int(model_cfg.get("num_cities", 2))
+    progress_mode = str(progress)
+    if progress_mode == "auto":
+        progress_mode = "tqdm" if bool(sys.stderr.isatty()) else "json"
+    if progress_mode not in {"tqdm", "json", "none"}:
+        raise ValueError(f"--progress must be one of auto|tqdm|json|none, got {progress!r}")
 
-    model = ARGraphWaypointBin(cfg=WaypointBinARConfig(hidden_dim=int(model_cfg.get("hidden_dim", 256)), num_cities=int(num_cities)), n_classes=n_classes, num_steps=num_steps).to(device)
-    model.load_state_dict(ckpt["model"], strict=True)
-    model.eval()
+    try:
+        # Model
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        ckpt = torch.load(str(checkpoint), map_location="cpu")
+        model_cfg = ckpt.get("model_cfg") or {}
+        num_steps = int(model_cfg.get("num_steps", 4))
+        n_classes = int(model_cfg.get("n_classes", 1024))
+        wp_bin = int(model_cfg.get("wp_bin", 32))
+        num_cities = int(model_cfg.get("num_cities", 2))
 
-    node_yx = torch.from_numpy(np.stack([node_y, node_x], axis=1).astype(np.float32, copy=False)).to(device=device, dtype=torch.float32)
-    node_tier_min_t = torch.from_numpy(node_tier_min.astype(np.int64, copy=False)).to(device=device, dtype=torch.long)
-    tf = _time_features(start_t, tz_offset_hours=float(tz_offset_hours))
+        model = ARGraphWaypointBin(cfg=WaypointBinARConfig(hidden_dim=int(model_cfg.get("hidden_dim", 256)), num_cities=int(num_cities)), n_classes=n_classes, num_steps=num_steps).to(device)
+        model.load_state_dict(ckpt["model"], strict=True)
+        model.eval()
 
-    # Bin index (for sampling bins -> nodes)
-    bin_to_nodes, n_by, n_bx = _build_bin_to_nodes(node_y=node_y, node_x=node_x, wp_bin=wp_bin, H=H, W=W)
-    if int(n_by * n_bx) != int(n_classes):
-        # Keep going but report mismatch.
-        pass
+        node_yx = torch.from_numpy(np.stack([node_y, node_x], axis=1).astype(np.float32, copy=False)).to(device=device, dtype=torch.float32)
+        node_tier_min_t = torch.from_numpy(node_tier_min.astype(np.int64, copy=False)).to(device=device, dtype=torch.long)
+        tf = _time_features(start_t, tz_offset_hours=float(tz_offset_hours))
 
-    rng = np.random.default_rng(int(seed))
-    pick = rng.choice(n_routes_total, size=int(min(int(num_routes), n_routes_total)), replace=False)
-    pick = np.sort(pick.astype(np.int64))
+        # Bin index (for sampling bins -> nodes)
+        bin_to_nodes, n_by, n_bx = _build_bin_to_nodes(node_y=node_y, node_x=node_x, wp_bin=wp_bin, H=H, W=W)
+        if int(n_by * n_bx) != int(n_classes):
+            # Keep going but report mismatch.
+            pass
 
-    od_cache: Dict[Tuple[int, int, int], List[List[int]]] = {}
+        rng = np.random.default_rng(int(seed))
+        pick = rng.choice(n_routes_total, size=int(min(int(num_routes), n_routes_total)), replace=False)
+        pick = np.sort(pick.astype(np.int64))
+        pick_list = pick.tolist()
+        total = int(len(pick_list))
+        t0 = time.time()
 
-    rows = []
-    best_j_list = []
-    succ_rate_list = []
-    base_best_list = []
+        od_cache: Dict[Tuple[int, int, int], List[List[int]]] = {}
 
-    cfg_s = SampleCfg(K=int(K), temperature=float(temperature), max_steps=4096)
+        rows = []
+        best_j_list = []
+        succ_rate_list = []
+        base_best_list = []
 
-    viz = 0
-    for rid in tqdm(pick.tolist(), desc="sample_wp_astar", dynamic_ncols=True):
-        gt_seq = _seq_from_pad(node_seq_pad, node_seq_len, int(rid))
-        if len(gt_seq) < 2:
-            continue
-        gt_es = _edge_set(gt_seq)
-        s = int(start_node[int(rid)])
-        d = int(dest_node[int(rid)])
-        city = int(route_city[int(rid)])
-        time_feat = torch.from_numpy(tf[int(rid) : int(rid) + 1].astype(np.float32, copy=False)).to(device=device, dtype=torch.float32)
+        cfg_s = SampleCfg(K=int(K), temperature=float(temperature), max_steps=4096)
 
-        pred_paths: List[List[int]] = []
-        pred_wps: List[List[int]] = []
-        succ = 0
-        best_j = 0.0
-
-        for k in range(int(cfg_s.K)):
-            cur = int(s)
-            wps: List[int] = []
-            ok = True
-            # sample waypoint bins
-            for step in range(int(num_steps)):
-                with torch.no_grad():
-                    logits, _ = model(
-                        node_yx=node_yx,
-                        node_tier_min=node_tier_min_t,
-                        cur=torch.tensor([cur], device=device, dtype=torch.long),
-                        dest=torch.tensor([d], device=device, dtype=torch.long),
-                        time_feat=time_feat,
-                        route_city=torch.tensor([city], device=device, dtype=torch.long),
-                        step_idx=torch.tensor([step], device=device, dtype=torch.long),
-                    )
-                    logits_np = logits.detach().cpu().numpy().reshape(-1)
-
-                temp = float(cfg_s.temperature)
-                if temp <= 0:
-                    cls = int(np.argmax(logits_np))
-                else:
-                    prob = _softmax_np(logits_np / max(1e-6, temp))
-                    cls = int(rng.choice(int(prob.size), p=prob))
-
-                by = int(cls // int(n_bx))
-                bx = int(cls % int(n_bx))
-                cand_nodes = bin_to_nodes[int(cls)]
-                nxt = _pick_node_in_bin(bin_nodes=cand_nodes, node_y=node_y, node_x=node_x, by=by, bx=bx, wp_bin=wp_bin, rng=rng)
-                if nxt is None:
-                    ok = False
-                    break
-                wps.append(int(nxt))
-                cur = int(nxt)
-
-            pred_wps.append(wps)
-
-            if not ok:
-                pred_paths.append([s])
+        viz = 0
+        it = pick_list
+        if progress_mode == "tqdm":
+            it = tqdm(it, desc="sample_wp_astar", dynamic_ncols=True)  # type: ignore[assignment]
+        for i_idx, rid in enumerate(it):
+            gt_seq = _seq_from_pad(node_seq_pad, node_seq_len, int(rid))
+            if len(gt_seq) < 2:
                 continue
+            gt_es = _edge_set(gt_seq)
+            s = int(start_node[int(rid)])
+            d = int(dest_node[int(rid)])
+            city = int(route_city[int(rid)])
+            time_feat = torch.from_numpy(tf[int(rid) : int(rid) + 1].astype(np.float32, copy=False)).to(device=device, dtype=torch.float32)
 
-            # Connect with A*
-            full: List[int] = [int(s)]
-            prev = int(s)
-            for nxt in wps + [int(d)]:
-                _, seg = _astar(g, start=int(prev), goal=int(nxt))
-                if not seg:
-                    ok = False
-                    break
-                # avoid duplicating prev
-                full.extend([int(x) for x in seg[1:]])
-                prev = int(nxt)
-            if ok and full and full[-1] == int(d):
-                succ += 1
-            pred_paths.append(full)
-            j = _jaccard_edges(_edge_set(full), gt_es)
-            best_j = float(max(best_j, j))
+            gt_wp_bins: Optional[List[int]] = None
+            if bool(oracle):
+                gt_wp_full: Optional[List[int]] = None
+                if gt_wp_seq is not None and int(rid) < int(gt_wp_seq.shape[0]):
+                    gt_wp_full = [int(x) for x in gt_wp_seq[int(rid)].astype(np.int64, copy=False).tolist() if int(x) >= 0]
 
-        succ_rate = float(succ) / float(max(1, int(cfg_s.K)))
+                if gt_wp_full is None or len(gt_wp_full) < int(num_steps) + 2:
+                    pts = np.stack([node_y[np.asarray(gt_seq, dtype=np.int64)], node_x[np.asarray(gt_seq, dtype=np.int64)]], axis=1).astype(np.float32, copy=False)
+                    idx = pick_waypoint_indices_rdp_turn_fixed_k(pts, k=int(num_steps), turn_alpha=1.0)
+                    gt_wp_full = [int(gt_seq[0])] + [int(gt_seq[int(j)]) for j in idx.tolist()] + [int(gt_seq[-1])]
 
-        base_best = None
-        if int(baseline_k) > 0:
-            key = (s, d, int(baseline_k))
-            if key not in od_cache:
-                od_cache[key] = k_shortest_paths_yen(g, start=s, goal=d, K=int(baseline_k))
-            bj = 0.0
-            for path in od_cache[key]:
-                bj = max(bj, _jaccard_edges(_edge_set(path), gt_es))
-            base_best = float(bj)
+                # Expect: [O, w1, ..., wK, D]
+                internal = gt_wp_full[1:-1]
+                if len(internal) != int(num_steps):
+                    # If a mismatch still happens, fall back to "no oracle bins" for this route.
+                    gt_wp_bins = None
+                else:
+                    gt_wp_bins = []
+                    for nid in internal:
+                        cls, _, _ = _bin_id_from_yx(float(node_y[int(nid)]), float(node_x[int(nid)]), wp_bin=wp_bin, H=H, W=W)
+                        gt_wp_bins.append(int(cls))
 
-        rows.append(
-            {
-                "route_id": int(rid),
-                "city": int(city),
-                "start": int(s),
-                "dest": int(d),
-                "gt_len": int(len(gt_seq)),
-                "best_jaccard": float(best_j),
-                "success_rate": float(succ_rate),
-                "baseline_best_jaccard_kshortest": (float(base_best) if base_best is not None else None),
-            }
-        )
-        best_j_list.append(float(best_j))
-        succ_rate_list.append(float(succ_rate))
-        if base_best is not None:
-            base_best_list.append(float(base_best))
+            # 1) sample K waypoint sequences (cheap; GPU/CPU)
+            wps_list: List[List[int]] = []
+            ok_mask: List[bool] = []
+            for _ in range(int(cfg_s.K)):
+                cur = int(s)
+                wps: List[int] = []
+                ok = True
+                for step in range(int(num_steps)):
+                    if bool(oracle):
+                        if gt_wp_bins is None:
+                            ok = False
+                            break
+                        cls = int(gt_wp_bins[int(step)])
+                    else:
+                        with torch.no_grad():
+                            logits, _ = model(
+                                node_yx=node_yx,
+                                node_tier_min=node_tier_min_t,
+                                cur=torch.tensor([cur], device=device, dtype=torch.long),
+                                dest=torch.tensor([d], device=device, dtype=torch.long),
+                                time_feat=time_feat,
+                                route_city=torch.tensor([city], device=device, dtype=torch.long),
+                                step_idx=torch.tensor([step], device=device, dtype=torch.long),
+                            )
+                            logits_np = logits.detach().cpu().numpy().reshape(-1)
 
-        if int(viz_cases) > 0 and viz < int(viz_cases):
-            name = f"case_{int(viz):02d}_rid{int(rid)}"
-            gt_wp = None
-            if gt_wp_seq is not None and int(rid) < int(gt_wp_seq.shape[0]):
-                gt_wp = [int(x) for x in gt_wp_seq[int(rid)].astype(np.int64, copy=False).tolist() if int(x) >= 0]
-            else:
-                # fallback: compute GT waypoints for reference (same K as model)
-                pts = np.stack([node_y[np.asarray(gt_seq, dtype=np.int64)], node_x[np.asarray(gt_seq, dtype=np.int64)]], axis=1).astype(np.float32, copy=False)
-                idx = pick_waypoint_indices_rdp_turn_fixed_k(pts, k=int(num_steps), turn_alpha=1.0)
-                gt_wp = [int(gt_seq[0])] + [int(gt_seq[int(j)]) for j in idx.tolist()] + [int(gt_seq[-1])]
+                        temp = float(cfg_s.temperature)
+                        if temp <= 0:
+                            cls = int(np.argmax(logits_np))
+                        else:
+                            prob = _softmax_np(logits_np / max(1e-6, temp))
+                            cls = int(rng.choice(int(prob.size), p=prob))
 
-            _plot_case(
-                out_png=out_dir / f"{name}.png",
-                out_pdf=out_dir / f"{name}.pdf",
-                node_y=node_y,
-                node_x=node_x,
-                gt_seq=gt_seq,
-                pred_paths=pred_paths,
-                gt_wp=gt_wp,
-                pred_wps=pred_wps,
-                title=f"rid={int(rid)} bestJ={best_j:.3f} succ={succ_rate:.2f}",
+                    by = int(cls // int(n_bx))
+                    bx = int(cls % int(n_bx))
+                    cand_nodes = bin_to_nodes[int(cls)]
+                    nxt = _pick_node_in_bin(bin_nodes=cand_nodes, node_y=node_y, node_x=node_x, by=by, bx=bx, wp_bin=wp_bin, rng=rng)
+                    if nxt is None:
+                        ok = False
+                        break
+                    wps.append(int(nxt))
+                    cur = int(nxt)
+                wps_list.append(wps)
+                ok_mask.append(bool(ok))
+
+            # 2) Connect with A* (CPU-heavy). Deduplicate segment pairs per route.
+            pair_to_idx: Dict[Tuple[int, int], int] = {}
+            pairs: List[Tuple[int, int]] = []
+            seg_pairs_by_sample: List[List[Tuple[int, int]]] = []
+            for wps, ok in zip(wps_list, ok_mask):
+                if not ok:
+                    seg_pairs_by_sample.append([])
+                    continue
+                segs = []
+                prev = int(s)
+                for nxt in wps + [int(d)]:
+                    pair = (int(prev), int(nxt))
+                    segs.append(pair)
+                    if pair not in pair_to_idx:
+                        pair_to_idx[pair] = len(pairs)
+                        pairs.append(pair)
+                    prev = int(nxt)
+                seg_pairs_by_sample.append(segs)
+
+            seg_paths: List[List[int]] = [[] for _ in range(len(pairs))]
+            if pairs:
+                if pool is not None:
+                    seg_paths = pool.map(_astar_worker, pairs)
+                else:
+                    for j, (uu, vv) in enumerate(pairs):
+                        _, path = _astar(g, start=int(uu), goal=int(vv))
+                        seg_paths[j] = [int(x) for x in path]
+
+            # 3) assemble K full paths and compute metrics
+            pred_paths: List[List[int]] = []
+            pred_wps = wps_list
+            succ = 0
+            best_j = 0.0
+            for wps, ok, segs in zip(wps_list, ok_mask, seg_pairs_by_sample):
+                if not ok or not segs:
+                    pred_paths.append([int(s)])
+                    continue
+                full: List[int] = [int(s)]
+                ok2 = True
+                for uu, vv in segs:
+                    idx_seg = pair_to_idx[(int(uu), int(vv))]
+                    seg = seg_paths[int(idx_seg)]
+                    if not seg:
+                        ok2 = False
+                        break
+                    full.extend([int(x) for x in seg[1:]])
+                if ok2 and full and full[-1] == int(d):
+                    succ += 1
+                pred_paths.append(full)
+                j = _jaccard_edges(_edge_set(full), gt_es)
+                best_j = float(max(best_j, j))
+
+            succ_rate = float(succ) / float(max(1, int(cfg_s.K)))
+
+            base_best = None
+            if int(baseline_k) > 0:
+                key = (s, d, int(baseline_k))
+                if key not in od_cache:
+                    od_cache[key] = k_shortest_paths_yen(g, start=s, goal=d, K=int(baseline_k))
+                bj = 0.0
+                for path in od_cache[key]:
+                    bj = max(bj, _jaccard_edges(_edge_set(path), gt_es))
+                base_best = float(bj)
+
+            rows.append(
+                {
+                    "route_id": int(rid),
+                    "city": int(city),
+                    "start": int(s),
+                    "dest": int(d),
+                    "gt_len": int(len(gt_seq)),
+                    "best_jaccard": float(best_j),
+                    "success_rate": float(succ_rate),
+                    "baseline_best_jaccard_kshortest": (float(base_best) if base_best is not None else None),
+                }
             )
-            viz += 1
+            best_j_list.append(float(best_j))
+            succ_rate_list.append(float(succ_rate))
+            if base_best is not None:
+                base_best_list.append(float(base_best))
+
+            if int(viz_cases) > 0 and viz < int(viz_cases):
+                name = f"case_{int(viz):02d}_rid{int(rid)}"
+                gt_wp = None
+                if gt_wp_seq is not None and int(rid) < int(gt_wp_seq.shape[0]):
+                    gt_wp = [int(x) for x in gt_wp_seq[int(rid)].astype(np.int64, copy=False).tolist() if int(x) >= 0]
+                else:
+                    pts = np.stack([node_y[np.asarray(gt_seq, dtype=np.int64)], node_x[np.asarray(gt_seq, dtype=np.int64)]], axis=1).astype(np.float32, copy=False)
+                    idx = pick_waypoint_indices_rdp_turn_fixed_k(pts, k=int(num_steps), turn_alpha=1.0)
+                    gt_wp = [int(gt_seq[0])] + [int(gt_seq[int(j)]) for j in idx.tolist()] + [int(gt_seq[-1])]
+
+                _plot_case(
+                    out_png=out_dir / f"{name}.png",
+                    out_pdf=out_dir / f"{name}.pdf",
+                    node_y=node_y,
+                    node_x=node_x,
+                    gt_seq=gt_seq,
+                    pred_paths=pred_paths,
+                    gt_wp=gt_wp,
+                    pred_wps=pred_wps,
+                    title=f"rid={int(rid)} bestJ={best_j:.3f} succ={succ_rate:.2f}",
+                )
+                viz += 1
+
+            if progress_mode == "json" and (int(i_idx) % int(max(1, log_every)) == 0 or int(i_idx) == int(total) - 1):
+                print(
+                    json.dumps(
+                        {
+                            "task": "sample_graph_ar_waypoints_astar",
+                            "done": int(i_idx) + 1,
+                            "total": int(total),
+                            "pct": float(int(i_idx) + 1) / float(max(1, int(total))),
+                            "elapsed_s": float(time.time() - t0),
+                            "best_j_mean_sofar": float(np.mean(np.asarray(best_j_list, dtype=np.float64))) if best_j_list else None,
+                            "succ_rate_mean_sofar": float(np.mean(np.asarray(succ_rate_list, dtype=np.float64))) if succ_rate_list else None,
+                        },
+                        ensure_ascii=False,
+                    ),
+                    flush=True,
+                )
+    finally:
+        if pool is not None:
+            pool.close()
+            pool.join()
 
     def _q(a: List[float], p: float) -> Optional[float]:
         if not a:
@@ -412,8 +532,12 @@ def run(
             "num_waypoints": int(num_steps),
             "num_routes": int(num_routes),
             "baseline_k": int(baseline_k),
+            "oracle": bool(oracle),
+            "astar_workers": int(astar_workers_i),
             "seed": int(seed),
             "tz_offset_hours": float(tz_offset_hours),
+            "progress": str(progress_mode),
+            "log_every": int(log_every),
         },
         "stats": {
             "num_routes_sampled": int(len(rows)),
@@ -445,15 +569,29 @@ def build_argparser() -> argparse.ArgumentParser:
     p.add_argument("--temperature", type=float, default=0.8)
     p.add_argument("--num_routes", type=int, default=200)
     p.add_argument("--baseline_k", type=int, default=0)
+    p.add_argument(
+        "--oracle",
+        action="store_true",
+        help="Oracle upper bound: use GT-derived waypoint bins instead of model predictions (still samples a node within each bin).",
+    )
+    p.add_argument(
+        "--astar_workers",
+        type=int,
+        default=0,
+        help="Parallelize A* connections with multiprocessing (fork). 0=disable, -1=auto(cpu_count-2).",
+    )
     p.add_argument("--tz_offset_hours", type=float, default=-5.0)
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--viz_cases", type=int, default=10)
+    p.add_argument("--progress", type=str, default="auto", choices=["auto", "tqdm", "json", "none"])
+    p.add_argument("--log_every", type=int, default=20, help="Only used when --progress=json.")
     return p
 
 
 def main() -> None:
     args = build_argparser().parse_args()
-    _set_seed(int(args.seed))
+    # IMPORTANT: keep CUDA untouched before the optional "fork" pool starts (A* workers).
+    _set_seed(int(args.seed), seed_cuda=False)
     report = run(
         checkpoint=Path(args.checkpoint),
         road_graph_npz=Path(args.road_graph_npz),
@@ -464,9 +602,13 @@ def main() -> None:
         temperature=float(args.temperature),
         num_routes=int(args.num_routes),
         baseline_k=int(args.baseline_k),
+        oracle=bool(args.oracle),
+        astar_workers=int(args.astar_workers),
         tz_offset_hours=float(args.tz_offset_hours),
         seed=int(args.seed),
         viz_cases=int(args.viz_cases),
+        progress=str(args.progress),
+        log_every=int(args.log_every),
     )
     compact = {
         "ok": True,

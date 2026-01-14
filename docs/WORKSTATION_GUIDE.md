@@ -201,16 +201,77 @@ rsync -avP wsA:"$RAW_ROOT/worldtrace/detroit_core_v1/story/" \
 
 > 目的：让“跑完→rsync→写论文引用”这一链路可持续，不因目录命名漂移而丢证据或找不到文件。
 
-- **统一落点**：本地一律同步到 `/_sync/wsA/icml2026_routegen/<EXP_DIR>/`。
+- **统一落点**：本地一律同步到 `_sync/wsa/icml2026_routegen/<EXP_DIR>/`。
 - **不移动原始同步目录**：避免下一次 rsync 把目录“同步回去”导致冲突；若发现命名不一致，优先用**软链接别名**解决。
   - 例：`E22a_audit_... -> E20a_audit_...`（保证旧路径仍可增量同步，同时论文引用用新名字）。
 - **同步结果索引**：每次同步后可生成一份可检索清单（便于 PI review / 写作引用）：
 
 ```bash
 python tools/gen_routegen_sync_manifest.py \
-  --root _sync/wsA/icml2026_routegen \
+  --root _sync/wsa/icml2026_routegen \
   --out_json docs/ICML_2026_ROUTEGEN_SYNC_MANIFEST.json \
   --out_md docs/ICML_2026_ROUTEGEN_SYNC_MANIFEST.md
+
+### 6.2 ICML 2026 RouteGen（Graph）最短复现命令（T3/T4）
+
+> 口径：所有 `--out_dir` 都落到工作站 `$RAW_ROOT/experiments/icml2026_routegen/...`，本地用 `rsync` 拉到 `_sync/wsa/...`。
+
+**(1) 构建 road graph（每城一次）**：
+
+```bash
+python -m src.data.road_graph.build_road_graph_from_osm \
+  --osm_pbf "$RAW_ROOT/osm/michigan-latest.osm.pbf" \
+  --semantic_dir "$RAW_ROOT/worldtrace/detroit_core_v1" \
+  --out_dir "$RAW_ROOT/experiments/icml2026_routegen/G1_roadgraph_detroit" \
+  --city detroit
+```
+
+**(2) segments→graph paths（map-match，T1）**：
+
+```bash
+python -m src.data.road_graph.dump_graph_paths_from_routes_npz \
+  --routes_npz "$RAW_ROOT/experiments/icml2026_routegen/gt_segments/detroit_segments_route_F256_epoch_seed0.npz" \
+  --road_graph_npz "$RAW_ROOT/experiments/icml2026_routegen/G1_roadgraph_detroit/road_graph.npz" \
+  --out_dir "$RAW_ROOT/experiments/icml2026_routegen/G3_argraph_detroit_seed0/T1_dump_paths" \
+  --seed 0
+```
+
+**(3) dump waypoints（T4 Step-1）**：
+
+```bash
+python -m src.data.road_graph.dump_waypoints_from_paths_graph_npz \
+  --paths_graph_npz "$RAW_ROOT/experiments/icml2026_routegen/T3_combo_detroit_columbus_seed0/paths_graph_combo.npz" \
+  --road_graph_npz "$RAW_ROOT/experiments/icml2026_routegen/T3_combo_detroit_columbus_seed0/road_graph_combo.npz" \
+  --out_dir "$RAW_ROOT/experiments/icml2026_routegen/T4_wp_ar_astar_combo_seed0/T1_dump_waypoints" \
+  --num_waypoints 4 --mode rdp_turn --turn_alpha 1.0 \
+  --progress json --log_every 200 --seed 0 \
+  |& tee "$RAW_ROOT/experiments/icml2026_routegen/T4_wp_ar_astar_combo_seed0/T1_dump_waypoints/run.log"
+```
+
+**(4) 训练 waypoint AR（T4 Step-2）**：
+
+```bash
+python -m src.training.train_graph_ar_waypoint_bins \
+  --waypoints_npz "$RAW_ROOT/experiments/icml2026_routegen/T4_wp_ar_astar_combo_seed0/T1_dump_waypoints/waypoints_graph.npz" \
+  --road_graph_npz "$RAW_ROOT/experiments/icml2026_routegen/T3_combo_detroit_columbus_seed0/road_graph_combo.npz" \
+  --out_dir "$RAW_ROOT/experiments/icml2026_routegen/T4_wp_ar_astar_combo_seed0/T2_train_wp_ar_bin_seed0" \
+  --wp_bin 32 --hidden_dim 256 --batch_size 512 --epochs 200 --seed 0 \
+  |& tee "$RAW_ROOT/experiments/icml2026_routegen/T4_wp_ar_astar_combo_seed0/T2_train_wp_ar_bin_seed0/run.log"
+```
+
+**(5) 采样 + A* 连接（T4 Step-3，可并行 A*）**：
+
+```bash
+python -m src.training.sample_graph_ar_waypoints_astar \
+  --checkpoint "$RAW_ROOT/experiments/icml2026_routegen/T4_wp_ar_astar_combo_seed0/T2_train_wp_ar_bin_seed0/last.pt" \
+  --road_graph_npz "$RAW_ROOT/experiments/icml2026_routegen/T3_combo_detroit_columbus_seed0/road_graph_combo.npz" \
+  --paths_graph_npz "$RAW_ROOT/experiments/icml2026_routegen/T3_combo_detroit_columbus_seed0/paths_graph_combo.npz" \
+  --waypoints_npz "$RAW_ROOT/experiments/icml2026_routegen/T4_wp_ar_astar_combo_seed0/T1_dump_waypoints/waypoints_graph.npz" \
+  --out_dir "$RAW_ROOT/experiments/icml2026_routegen/T4_wp_ar_astar_combo_seed0/T3_eval_wp_ar_astar_K20_seed0" \
+  --K 20 --temperature 0.8 --num_routes 200 --viz_cases 10 \
+  --astar_workers -1 --progress json --log_every 10 --seed 0 \
+  |& tee "$RAW_ROOT/experiments/icml2026_routegen/T4_wp_ar_astar_combo_seed0/T3_eval_wp_ar_astar_K20_seed0/run.log"
+```
 ```
 
 ---

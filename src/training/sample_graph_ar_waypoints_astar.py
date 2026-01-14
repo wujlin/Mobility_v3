@@ -169,7 +169,7 @@ def _plot_case(
             if not wps:
                 continue
             w = np.asarray(wps, dtype=np.int64)
-            ax.scatter(node_x[w], node_y[w], s=8, c=OKABE_ITO["skyblue"], alpha=0.25, linewidths=0.0)
+            ax.scatter(node_x[w], node_y[w], s=8, c=OKABE_ITO["sky_blue"], alpha=0.25, linewidths=0.0)
 
         ax.scatter([node_x[gt[0]]], [node_y[gt[0]]], s=60, c="black", edgecolors="white", linewidths=1.0, zorder=10)
         ax.scatter([node_x[gt[-1]]], [node_y[gt[-1]]], s=60, c="black", marker="s", edgecolors="white", linewidths=1.0, zorder=10)
@@ -481,4 +481,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

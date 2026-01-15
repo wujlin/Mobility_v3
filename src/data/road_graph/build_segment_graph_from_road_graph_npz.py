@@ -19,6 +19,7 @@ TZ_SHANGHAI = timezone(timedelta(hours=8))
 class BuildCfg:
     max_edges: Optional[int]
     paths_graph_npz: Optional[Path]
+    mode: str = "collapse"
 
 
 def _percentile(x: np.ndarray, q: float) -> float:
@@ -68,105 +69,131 @@ def build_segment_graph(*, road_graph_npz: Path, out_dir: Path, cfg: BuildCfg) -
         terminal_mask[terminal_nodes.astype(np.int64, copy=False)] = True
         n_terminal_nodes = int(terminal_nodes.size)
 
-    # Out-degree and adjacency (CSR over directed edges).
+    # Out-degree (CSR over directed edges).
     out_deg = np.bincount(edge_u.astype(np.int64), minlength=n_nodes).astype(np.int32, copy=False)
-    order = np.argsort(edge_u, kind="mergesort")
-    counts = out_deg.astype(np.int64, copy=False)
-    ptr = np.zeros(n_nodes + 1, dtype=np.int64)
-    np.cumsum(counts, out=ptr[1:])
-    edge_v_sorted = edge_v[order]
 
-    edge_to_seg = np.full((n_edges,), -1, dtype=np.int32)
-    seg_u_list: list[int] = []
-    seg_v_list: list[int] = []
-    seg_len_list: list[float] = []
-    seg_tier_list: list[int] = []
-    seg_city_list: list[int] = []
+    seg_mode = str(cfg.mode).strip().lower()
+    if seg_mode not in {"collapse", "edge"}:
+        raise ValueError(f"Unknown --mode: {cfg.mode} (expected 'collapse' or 'edge').")
 
-    seg_ptr_list: list[int] = [0]
-    seg_edges = np.empty((n_edges,), dtype=np.int32)
-    write_pos = 0
-
-    it = range(n_edges)
-    for e0 in tqdm(it, desc="build_seg_graph", total=n_edges):
-        if int(edge_to_seg[int(e0)]) != -1:
-            continue
-
-        u0 = int(edge_u[int(e0)])
-        v0 = int(edge_v[int(e0)])
-        seg_id = int(len(seg_u_list))
-
-        seg_u_list.append(u0)
-        tier_min = int(edge_tier[int(e0)])
-        len_sum = float(edge_w_m[int(e0)])
+    if seg_mode == "edge":
+        # Each directed edge is a segment: seg_id == edge_id.
+        seg_u = edge_u.astype(np.int32, copy=False)
+        seg_v = edge_v.astype(np.int32, copy=False)
+        seg_len_m = edge_w_m.astype(np.float32, copy=False)
+        seg_tier = edge_tier.astype(np.uint8, copy=False)
         if edge_city is not None:
-            seg_city_list.append(int(edge_city[int(e0)]))
+            seg_city = edge_city.astype(np.int8, copy=False)
         elif node_city is not None:
-            seg_city_list.append(int(node_city[u0]))
+            seg_city = node_city[seg_u.astype(np.int64, copy=False)].astype(np.int8, copy=False)
         else:
-            seg_city_list.append(0)
+            seg_city = np.zeros((n_edges,), dtype=np.int8)
 
-        edge_to_seg[int(e0)] = seg_id
-        seg_edges[write_pos] = int(e0)
-        write_pos += 1
+        edge_to_seg = np.arange(n_edges, dtype=np.int32)
+        seg_edges = np.arange(n_edges, dtype=np.int32)
+        seg_ptr = np.arange(n_edges + 1, dtype=np.int64)
 
-        prev = int(u0)
-        cur = int(v0)
+        n_segs = int(seg_u.size)
+        if n_segs <= 0:
+            raise RuntimeError("No segments built (edge mode, n_segs=0).")
+    else:
+        order = np.argsort(edge_u, kind="mergesort")
+        counts = out_deg.astype(np.int64, copy=False)
+        ptr = np.zeros(n_nodes + 1, dtype=np.int64)
+        np.cumsum(counts, out=ptr[1:])
+        edge_v_sorted = edge_v[order]
 
-        # Follow through degree-2 chain (grid-road raster graph).
-        while True:
-            if cur == u0:
-                break  # loop closed
-            if terminal_mask is not None and bool(terminal_mask[cur]):
-                break  # force boundary at route terminal nodes (start/dest)
-            if int(out_deg[cur]) != 2:
-                break  # hit junction / dead-end
-            s = int(ptr[cur])
-            e = int(ptr[cur + 1])
-            if e - s != 2:
-                break
+        edge_to_seg = np.full((n_edges,), -1, dtype=np.int32)
+        seg_u_list: list[int] = []
+        seg_v_list: list[int] = []
+        seg_len_list: list[float] = []
+        seg_tier_list: list[int] = []
+        seg_city_list: list[int] = []
 
-            eidx_a = int(order[s + 0])
-            eidx_b = int(order[s + 1])
-            va = int(edge_v_sorted[s + 0])
-            vb = int(edge_v_sorted[s + 1])
+        seg_ptr_list: list[int] = [0]
+        seg_edges = np.empty((n_edges,), dtype=np.int32)
+        write_pos = 0
 
-            if va == prev:
-                nxt = eidx_b
-            elif vb == prev:
-                nxt = eidx_a
+        it = range(n_edges)
+        for e0 in tqdm(it, desc="build_seg_graph", total=n_edges):
+            if int(edge_to_seg[int(e0)]) != -1:
+                continue
+
+            u0 = int(edge_u[int(e0)])
+            v0 = int(edge_v[int(e0)])
+            seg_id = int(len(seg_u_list))
+
+            seg_u_list.append(u0)
+            tier_min = int(edge_tier[int(e0)])
+            len_sum = float(edge_w_m[int(e0)])
+            if edge_city is not None:
+                seg_city_list.append(int(edge_city[int(e0)]))
+            elif node_city is not None:
+                seg_city_list.append(int(node_city[u0]))
             else:
-                # Unexpected: degree==2 but neither edge goes back to prev.
-                break
+                seg_city_list.append(0)
 
-            if int(edge_to_seg[nxt]) != -1:
-                break  # already assigned (should be rare); terminate here
-
-            edge_to_seg[nxt] = seg_id
-            seg_edges[write_pos] = int(nxt)
+            edge_to_seg[int(e0)] = seg_id
+            seg_edges[write_pos] = int(e0)
             write_pos += 1
 
-            tier_min = min(tier_min, int(edge_tier[nxt]))
-            len_sum += float(edge_w_m[nxt])
+            prev = int(u0)
+            cur = int(v0)
 
-            prev, cur = cur, int(edge_v[nxt])
+            # Follow through degree-2 chain (grid-road raster graph).
+            while True:
+                if cur == u0:
+                    break  # loop closed
+                if terminal_mask is not None and bool(terminal_mask[cur]):
+                    break  # force boundary at route terminal nodes (start/dest)
+                if int(out_deg[cur]) != 2:
+                    break  # hit junction / dead-end
+                s = int(ptr[cur])
+                e = int(ptr[cur + 1])
+                if e - s != 2:
+                    break
 
-        seg_v_list.append(int(cur))
-        seg_len_list.append(float(len_sum))
-        seg_tier_list.append(int(tier_min))
-        seg_ptr_list.append(int(write_pos))
+                eidx_a = int(order[s + 0])
+                eidx_b = int(order[s + 1])
+                va = int(edge_v_sorted[s + 0])
+                vb = int(edge_v_sorted[s + 1])
 
-    seg_edges = seg_edges[:write_pos]
-    seg_u = np.asarray(seg_u_list, dtype=np.int32)
-    seg_v = np.asarray(seg_v_list, dtype=np.int32)
-    seg_len_m = np.asarray(seg_len_list, dtype=np.float32)
-    seg_tier = np.asarray(seg_tier_list, dtype=np.uint8)
-    seg_city = np.asarray(seg_city_list, dtype=np.int8)
-    seg_ptr = np.asarray(seg_ptr_list, dtype=np.int64)
+                if va == prev:
+                    nxt = eidx_b
+                elif vb == prev:
+                    nxt = eidx_a
+                else:
+                    # Unexpected: degree==2 but neither edge goes back to prev.
+                    break
 
-    n_segs = int(seg_u.size)
-    if n_segs <= 0:
-        raise RuntimeError("No segments built (n_segs=0).")
+                if int(edge_to_seg[nxt]) != -1:
+                    break  # already assigned (should be rare); terminate here
+
+                edge_to_seg[nxt] = seg_id
+                seg_edges[write_pos] = int(nxt)
+                write_pos += 1
+
+                tier_min = min(tier_min, int(edge_tier[nxt]))
+                len_sum += float(edge_w_m[nxt])
+
+                prev, cur = cur, int(edge_v[nxt])
+
+            seg_v_list.append(int(cur))
+            seg_len_list.append(float(len_sum))
+            seg_tier_list.append(int(tier_min))
+            seg_ptr_list.append(int(write_pos))
+
+        seg_edges = seg_edges[:write_pos]
+        seg_u = np.asarray(seg_u_list, dtype=np.int32)
+        seg_v = np.asarray(seg_v_list, dtype=np.int32)
+        seg_len_m = np.asarray(seg_len_list, dtype=np.float32)
+        seg_tier = np.asarray(seg_tier_list, dtype=np.uint8)
+        seg_city = np.asarray(seg_city_list, dtype=np.int8)
+        seg_ptr = np.asarray(seg_ptr_list, dtype=np.int64)
+
+        n_segs = int(seg_u.size)
+        if n_segs <= 0:
+            raise RuntimeError("No segments built (n_segs=0).")
 
     # Segment geometric features (KISS): endpoint-based center + direction.
     uy = node_y[seg_u]
@@ -211,7 +238,7 @@ def build_segment_graph(*, road_graph_npz: Path, out_dir: Path, cfg: BuildCfg) -
         "created_at": datetime.now(tz=TZ_SHANGHAI).isoformat(),
         "task": "build_segment_graph_from_road_graph_npz",
         "inputs": {"road_graph_npz": str(road_graph_npz), "paths_graph_npz": (str(cfg.paths_graph_npz) if cfg.paths_graph_npz is not None else None)},
-        "config": {"max_edges": (int(cfg.max_edges) if cfg.max_edges is not None else None)},
+        "config": {"max_edges": (int(cfg.max_edges) if cfg.max_edges is not None else None), "mode": str(seg_mode)},
         "stats": {
             "n_nodes": int(n_nodes),
             "n_edges_directed": int(n_edges),
@@ -267,11 +294,12 @@ def build_segment_graph(*, road_graph_npz: Path, out_dir: Path, cfg: BuildCfg) -
 
 
 def build_argparser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(description="Build a compact segment-graph from a raster road_graph.npz by collapsing degree-2 chains.")
+    p = argparse.ArgumentParser(description="Build a segment graph from road_graph.npz (collapse degree-2 chains, or edge-as-segment).")
     p.add_argument("--road_graph_npz", type=Path, required=True)
-    p.add_argument("--paths_graph_npz", type=Path, default=None, help="Optional: force segment boundaries at all route start/dest nodes from paths_graph.npz.")
+    p.add_argument("--paths_graph_npz", type=Path, default=None, help="Optional: in collapse mode, force segment boundaries at all route start/dest nodes from paths_graph.npz.")
     p.add_argument("--out_dir", type=Path, required=True)
     p.add_argument("--max_edges", type=int, default=None, help="Debug: only use the first N directed edges.")
+    p.add_argument("--mode", choices=["collapse", "edge"], default="collapse", help="Segment definition: collapse degree-2 chains, or treat each directed edge as a segment.")
     return p
 
 
@@ -283,6 +311,7 @@ def main() -> None:
         cfg=BuildCfg(
             max_edges=(int(args.max_edges) if args.max_edges else None),
             paths_graph_npz=(Path(args.paths_graph_npz) if args.paths_graph_npz else None),
+            mode=str(args.mode),
         ),
     )
     compact = {

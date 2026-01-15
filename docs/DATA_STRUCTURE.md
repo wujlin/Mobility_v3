@@ -134,6 +134,10 @@ $RAW_ROOT/experiments/icml2026_routegen/G1_roadgraph_*/road_graph.npz
 $RAW_ROOT/experiments/icml2026_routegen/T3_combo_detroit_columbus_seed0/road_graph_combo.npz
 ```
 
+> 说明：`road_graph.npz` 目前有两类来源，字段保持兼容：
+> - raster 图（Bresenham 像素化）：`meta.task == build_road_graph_from_osm`
+> - native 图（OSM node/edge）：`meta.task == build_road_graph_native_from_osm`
+
 典型字段：
 - `node_y/node_x: (N_nodes,)`（grid）
 - `edge_u/edge_v/edge_w_m: (N_edges,)`
@@ -164,8 +168,10 @@ $RAW_ROOT/experiments/icml2026_routegen/T4_wp_ar_astar_combo_seed0/T1_dump_waypo
 
 **(E) Segment graph（CASD：road graph → segments）**
 
-> 目的：把 raster road graph 压缩成 “segment token”，并提供解码期 adjacency mask。  
-> 关键口径：必须在所有 route 的 `start_node/dest_node` 处切分，使得 GT segment 序列满足 `seg_v == dest_node`（CASD 的停止条件）。
+> 目的：把 road graph 转成 “segment token”，并提供解码期 adjacency mask。  
+> 口径：由 `build_segment_graph_from_road_graph_npz.py` 的 `--mode` 决定：
+> - `edge`：每条 directed edge 作为一个 segment（推荐给 native OSM 图）
+> - `collapse`：degree-2 chain collapse（legacy raster 图；可选强制在 `start_node/dest_node` 处切分以保证 `seg_v == dest_node`）
 
 ```text
 $RAW_ROOT/experiments/icml2026_routegen/CASD0_segdata_combo_seed0_term/S1_segment_graph/segment_graph.npz

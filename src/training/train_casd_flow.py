@@ -30,6 +30,7 @@ log = logging.getLogger(__name__)
 @dataclass(frozen=True)
 class TrainCfg:
     batch_size: int
+    num_workers: int
     n_epochs: int
     lr: float
     weight_decay: float
@@ -125,6 +126,7 @@ def build_argparser() -> argparse.ArgumentParser:
     p.add_argument("--out_dir", type=Path, required=True)
 
     p.add_argument("--batch_size", type=int, default=8)
+    p.add_argument("--num_workers", type=int, default=0)
     p.add_argument("--n_epochs", type=int, default=10)
     p.add_argument("--lr", type=float, default=2e-4)
     p.add_argument("--weight_decay", type=float, default=1e-4)
@@ -154,6 +156,7 @@ def main() -> None:
 
     cfg = TrainCfg(
         batch_size=int(args.batch_size),
+        num_workers=int(args.num_workers),
         n_epochs=int(args.n_epochs),
         lr=float(args.lr),
         weight_decay=float(args.weight_decay),
@@ -206,8 +209,28 @@ def main() -> None:
     )
 
     pin = bool(device.type == "cuda")
-    train_loader = DataLoader(train_set, batch_size=int(cfg.batch_size), shuffle=True, num_workers=0, pin_memory=pin, collate_fn=collate_fn)
-    val_loader = DataLoader(val_set, batch_size=int(cfg.batch_size), shuffle=False, num_workers=0, pin_memory=pin, collate_fn=collate_fn)
+    num_workers = max(0, int(cfg.num_workers))
+    prefetch_factor = 2 if num_workers > 0 else None
+    train_loader = DataLoader(
+        train_set,
+        batch_size=int(cfg.batch_size),
+        shuffle=True,
+        num_workers=num_workers,
+        pin_memory=pin,
+        persistent_workers=(num_workers > 0),
+        prefetch_factor=prefetch_factor,
+        collate_fn=collate_fn,
+    )
+    val_loader = DataLoader(
+        val_set,
+        batch_size=int(cfg.batch_size),
+        shuffle=False,
+        num_workers=num_workers,
+        pin_memory=pin,
+        persistent_workers=(num_workers > 0),
+        prefetch_factor=prefetch_factor,
+        collate_fn=collate_fn,
+    )
 
     ae = CASDAutoEncoder(
         cfg=CASDAECfg(

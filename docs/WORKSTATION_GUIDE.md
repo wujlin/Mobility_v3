@@ -232,21 +232,89 @@ python -m src.data.road_graph.od_group_stats_paths_graph_npz \
 **(1) 构建 road graph（每城一次）**：
 
 ```bash
+# Raster（legacy）：Bresenham 像素化到 grid cell，粒度会非常细（edge_len p50≈grid 分辨率）
 python -m src.data.road_graph.build_road_graph_from_osm \
   --osm_pbf "$RAW_ROOT/osm/michigan-latest.osm.pbf" \
   --semantic_dir "$RAW_ROOT/worldtrace/detroit_core_v1" \
-  --out_dir "$RAW_ROOT/experiments/icml2026_routegen/G1_roadgraph_detroit" \
-  --city detroit
+  --out_dir "$RAW_ROOT/experiments/icml2026_routegen/G1r_roadgraph_detroit_raster" \
+  --city detroit --road_types B
+
+# Native（推荐）：OSM node/edge 原生图，更接近文献的 150-200m segment 粒度
+python -m src.data.road_graph.build_road_graph_native_from_osm \
+  --osm_pbf "$RAW_ROOT/osm/michigan-latest.osm.pbf" \
+  --semantic_dir "$RAW_ROOT/worldtrace/detroit_core_v1" \
+  --out_dir "$RAW_ROOT/experiments/icml2026_routegen/G1n_roadgraph_detroit_native" \
+  --city detroit --road_types B
+
+# 快速审计（看 edge_len_p50/p90 是否落在 ~150-200m）
+python -m src.data.road_graph.audit_road_graph_npz \
+  --road_graph_npz "$RAW_ROOT/experiments/icml2026_routegen/G1n_roadgraph_detroit_native/road_graph.npz"
 ```
+
+### 6.3 CASD（Corridor-Aware Segment Diffusion）最短复现命令（S1-S4）
+
+> 口径：先用 combo（Detroit+Columbus）保证 corridor diversity；segment token 有两种口径：
+> - `SEG_MODE=edge`：每条 directed edge 作为一个 segment（推荐给 native OSM 图）
+> - `SEG_MODE=collapse`：degree-2 chain collapse（legacy raster 图；可选用 paths_graph 强制在 start/dest node 处切分以保证 `seg_v == dest_node`）
+
+```bash
+# 1) 拉取最新代码
+cd ~/projects/Mobility_v3 && git pull
+
+# 2) 设置环境变量
+export RAW_ROOT=/home/jinlin/data/geoexplicit_data
+export IN_DATA="$RAW_ROOT/experiments/icml2026_routegen/T3_combo_detroit_columbus_seed0"
+export PATHS_NPZ="$IN_DATA/paths_graph_combo.npz"
+export ROAD_NPZ="$IN_DATA/road_graph_combo.npz"
+export OUT_BASE="$RAW_ROOT/experiments/icml2026_routegen/CASD0_segdata_combo_seed0_term"
+# export SEG_MODE=edge   # native OSM 图建议用 edge；默认 collapse
+
+# 3) 数据准备（Step 0）
+bash run_casd_prep.sh
+
+# 4) 训练 AE（Step A）
+python -m src.training.train_casd_autoencoder \
+  --segment_graph_npz "$OUT_BASE/S1_segment_graph/segment_graph.npz" \
+  --routes_npz "$OUT_BASE/S2_segment_routes/segments_graph_routes.npz" \
+  --out_dir "$OUT_BASE/S3_train_ae" \
+  --batch_size 8 \
+  --num_workers 8 \
+  --n_epochs 20 \
+  --d_model 256 \
+  --n_latent 64 \
+  --device cuda
+
+# 5) 训练 Flow（Step B）
+python -m src.training.train_casd_flow \
+  --segment_graph_npz "$OUT_BASE/S1_segment_graph/segment_graph.npz" \
+  --routes_npz "$OUT_BASE/S2_segment_routes/segments_graph_routes.npz" \
+  --ae_ckpt "$OUT_BASE/S3_train_ae/ckpt_best.pt" \
+  --out_dir "$OUT_BASE/S4_train_flow" \
+  --batch_size 8 \
+  --num_workers 8 \
+  --n_epochs 20 \
+  --d_model 256 \
+  --n_latent 64 \
+  --cfg_drop_prob 0.1 \
+  --device cuda
+```
+
+调参建议（KISS）：
+- `batch_size`：按 `nvidia-smi` 逐步翻倍（8→16→32）；若 dataloader 跟不上再加 `--num_workers`（建议 8-16）。
+- `n_latent`：当前 combo 的 `seg_len_p90≈442`；若 AE 重建精度不够，优先把 `n_latent` 提到 96/128，再考虑其他改动。
 
 **(2) segments→graph paths（map-match，T1）**：
 
 ```bash
 python -m src.data.road_graph.dump_graph_paths_from_routes_npz \
   --routes_npz "$RAW_ROOT/experiments/icml2026_routegen/gt_segments/detroit_segments_route_F256_epoch_seed0.npz" \
-  --road_graph_npz "$RAW_ROOT/experiments/icml2026_routegen/G1_roadgraph_detroit/road_graph.npz" \
+  --road_graph_npz "$RAW_ROOT/experiments/icml2026_routegen/G1n_roadgraph_detroit_native/road_graph.npz" \
   --out_dir "$RAW_ROOT/experiments/icml2026_routegen/G3_argraph_detroit_seed0/T1_dump_paths" \
   --seed 0
+
+# 快速审计：node/edge 序列长度分布
+python -m src.data.road_graph.audit_paths_graph_npz \
+  --paths_graph_npz "$RAW_ROOT/experiments/icml2026_routegen/G3_argraph_detroit_seed0/T1_dump_paths/paths_graph.npz"
 ```
 
 **(3) dump waypoints（T4 Step-1）**：

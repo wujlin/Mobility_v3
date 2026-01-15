@@ -31,6 +31,7 @@
 ### 数据与图结构（road graph / GT graph paths）
 
 - 生成/加载 road graph：`src/data/road_graph/*road_graph*.py`
+- 快速审计（边长/序列长度/label 分布）：`src/data/road_graph/audit_road_graph_npz.py`、`src/data/road_graph/audit_paths_graph_npz.py`、`src/data/road_graph/audit_segments_graph_routes_npz.py`
 - GT route（segment-level）→ graph node sequence：`src/data/road_graph/dump_graph_paths_from_routes_npz.py`
 - 候选覆盖诊断（说明为什么不用 K-shortest+classify）：`src/data/road_graph/gate_candidate_paths_from_routes_npz.py`、`src/data/road_graph/diagnose_candidate_coverage.py`
 - 语义信息量 Gate（time+tier 是否 informative）：`src/data/road_graph/gate_semantic_informativeness_cluster.py`
@@ -39,11 +40,15 @@
 
 > CASD 的关键是把 GT 的 node 序列映射成 **segment 序列**，并且保证终止条件可用：`seg_v == dest_node`。
 
-- 由 road graph 构建 segment graph（degree-2 chain collapse，且 **强制在所有 route 的 start/dest node 处切分**）：  
+- 由 road graph 构建 segment graph（`--mode edge|collapse`；collapse 可选 `--paths_graph_npz` 强制在 start/dest node 处切分）：  
   `src/data/road_graph/build_segment_graph_from_road_graph_npz.py`
 - 将 GT node 序列映射为 per-route segment 序列（并计算 `corridor_type`）：  
   `src/data/road_graph/dump_segment_sequences_from_paths_graph_npz.py`
 - 工作站一键脚本（推荐）：`run_casd_prep.sh`
+
+> 补充：`build_segment_graph_from_road_graph_npz.py` 支持两种口径（向后兼容）：
+> - `--mode edge`：每条 directed edge 作为一个 segment（推荐给 native OSM 图）
+> - `--mode collapse`：degree-2 chain collapse（legacy raster 图；可选 `--paths_graph_npz` 强制在 start/dest node 处切分）
 
 ### 决策层（Waypoint AR：少步数、避免 600-step 累积误差）
 

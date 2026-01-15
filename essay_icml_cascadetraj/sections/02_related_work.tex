@@ -1,27 +1,22 @@
-\paragraph{Short-horizon trajectory prediction vs.\ route generation.}
-Most trajectory prediction work targets short horizons: given a brief observation window, predict near-future displacements.
-Modern architectures (e.g., Transformers \citep{vaswani2017attention}) and generative variants have pushed accuracy forward, but these settings typically do not require committing to a full-trip route under origin--destination intent.
-In contrast, full-trip route generation must represent corridor-level alternatives and ensure feasibility on a transportation network.
+\paragraph{Short-horizon prediction vs.\ trip-level route generation.}
+Most trajectory prediction work targets short horizons and evaluates point-wise accuracy, where committing to distinct trip-scale corridors is not required.
+In contrast, route generation must represent corridor-level alternatives under the same OD intent, while remaining feasible on a transportation network.
 
-\paragraph{End-to-end continuous generators.}
-A natural extension is to train an end-to-end generator that outputs an entire coordinate sequence, using latent-variable models \citep{kingma2014auto} or diffusion models \citep{ho2020ddpm}.
-However, corridor-level multi-modality is topological and can be geometrically far apart, making continuous output spaces prone to destructive averaging or long-horizon drift.
-We treat such models as diagnostic baselines rather than as a foundation for corridor modeling.
+\paragraph{Foundation models and transfer for mobility.}
+Recent trajectory foundation models \citep{unitraj2025,lin2024trajfm} aim to learn reusable representations from large-scale traces.
+These approaches are complementary: we do not treat \emph{route choice} as a reconstruction problem, but as a context-conditioned decision whose distribution should shift with time and urban semantics even for the same OD pair.
+Our work therefore focuses on decision mechanisms and distributional evaluation at the corridor level.
 
-\paragraph{Candidate-set routing and path ranking.}
-Classical route choice and path-ranking pipelines often enumerate a finite candidate set (e.g., $K$-shortest paths) and then select or weight candidates.
-This strategy is attractive because it guarantees feasibility, but it implicitly assumes that the candidate set covers the relevant corridors.
-Our candidate-coverage gate shows that this assumption can fail in practice even when GT trajectories are well aligned to the road graph, motivating decision mechanisms that do not depend on a fixed candidate set.
+\paragraph{Map-conditioned and road-network constrained generation.}
+Multiple lines of work incorporate road structure to improve physical fidelity, either by conditioning on street maps \citep{ijcai2025p1041} or by constraining diffusion models on road networks \citep{wei2024diffrntraj,zhu2024controltraj,yang2025geo}.
+Our diagnostic evidence aligns with this direction: map-free continuous generators can exhibit off-road artifacts at trip scale.
+We go one step further by making corridor choice explicit as a discrete decision and by treating temporal--spatial semantics as first-class conditioning signals for \emph{behavioral} realism.
 
-\paragraph{Learning to plan on graphs.}
-Graph-based decision models (e.g., autoregressive next-hop prediction or pointer-style decoding over nodes) avoid infeasible continuous averages by constraining outputs to graph neighbors.
-Their main challenge is long-horizon compounding error when generating long paths.
-Our method addresses this by moving the decision horizon from node-level sequences (hundreds of steps) to waypoint commitments (3--5 steps), while delegating feasibility and connectivity to A* execution.
+\paragraph{Coarse-to-fine and path-generation diffusion.}
+Coarse-to-fine generation has emerged as a practical strategy for long-horizon mobility modeling \citep{guo2025cardiff}, and latent diffusion has also been explored for road-network paths \citep{fan2024diffpath}.
+CascadeTraj follows this engineering intuition but targets a different unit of decision: rather than denoising coordinates toward a measure-zero road manifold, we commit to sparse graph-level decisions and let constrained execution guarantee connectivity.
 
-\paragraph{Hierarchical planning with waypoints/subgoals.}
-Hierarchical formulations separate coarse decisions from fine execution by introducing subgoals or waypoints.
-We instantiate this idea on road graphs: the decision stage samples sparse waypoint commitments conditioned on time and road hierarchy, and the executor deterministically converts commitments into valid graph paths.
-Optional continuous refinement (diffusion/flow) can be layered on top to model within-corridor variability.
-
-\paragraph{Note on citations (draft).}
-This draft prioritizes aligning claims with the current graph-based pipeline; we will expand citations to route choice, learning-to-route, and hierarchical planning work in the final version.
+\paragraph{Cross-city generalization.}
+GTG \citep{wang2025gtg} demonstrates that trajectory generation can generalize across cities.
+We leverage the same multi-city setting but ask a more specific question: what modulates corridor preference under a shared road topology?
+This motivates our emphasis on explicit context (time, road hierarchy, and urban semantics) and corridor-distribution evaluation beyond shortest-path biases.

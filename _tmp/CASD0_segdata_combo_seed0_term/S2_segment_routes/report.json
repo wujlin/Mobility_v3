@@ -1,0 +1,23 @@
+{
+  "ok": true,
+  "out_npz": "_tmp/CASD0_segdata_combo_seed0_term/S2_segment_routes/segments_graph_routes.npz",
+  "report_json": "_tmp/CASD0_segdata_combo_seed0_term/S2_segment_routes/report.json",
+  "stats": {
+    "n_routes": 3385,
+    "total_steps": 1856812,
+    "missing_edges": 0,
+    "missing_edge_frac": 0.0,
+    "seg_len_p50": 269.0,
+    "seg_len_p90": 441.5999999999999,
+    "mean_seg_len": 282.42688330871493,
+    "corridor_type_counts": [
+      3177,
+      123,
+      15,
+      70
+    ]
+  },
+  "timing": {
+    "elapsed_s": 1.056471824645996
+  }
+}

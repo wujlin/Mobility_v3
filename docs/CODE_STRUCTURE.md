@@ -35,6 +35,16 @@
 - 候选覆盖诊断（说明为什么不用 K-shortest+classify）：`src/data/road_graph/gate_candidate_paths_from_routes_npz.py`、`src/data/road_graph/diagnose_candidate_coverage.py`
 - 语义信息量 Gate（time+tier 是否 informative）：`src/data/road_graph/gate_semantic_informativeness_cluster.py`
 
+### CASD 数据准备（Segment graph / Segment sequences）
+
+> CASD 的关键是把 GT 的 node 序列映射成 **segment 序列**，并且保证终止条件可用：`seg_v == dest_node`。
+
+- 由 road graph 构建 segment graph（degree-2 chain collapse，且 **强制在所有 route 的 start/dest node 处切分**）：  
+  `src/data/road_graph/build_segment_graph_from_road_graph_npz.py`
+- 将 GT node 序列映射为 per-route segment 序列（并计算 `corridor_type`）：  
+  `src/data/road_graph/dump_segment_sequences_from_paths_graph_npz.py`
+- 工作站一键脚本（推荐）：`run_casd_prep.sh`
+
 ### 决策层（Waypoint AR：少步数、避免 600-step 累积误差）
 
 - GT graph path → 固定 K waypoint：`src/data/road_graph/dump_waypoints_from_paths_graph_npz.py`
@@ -47,6 +57,30 @@
   `src/training/sample_graph_ar_waypoints_astar.py`
 
 > 说明：A* 目前是“最小可行执行层”，确保图路径合法；continuous execution（diffusion/flow）属于后续增强，不是当前 gate 的前置条件。
+
+---
+
+## 0.3 CASD（Corridor-Aware Segment Diffusion）代码地图（新架构，P0 已闭环）
+
+CASD 采用 Cardiff 风格的工程化两步训练：
+
+- **Step A（AE）**：先验证 encoder-decoder 能重建 segment 序列，保证 latent 空间可用。
+- **Step B（Flow）**：在 latent token 空间做 rectified flow + CFG（对 `corridor_type`）。
+
+对应代码入口：
+
+- 模型实现（Stage1-4）：`src/models/casd/`
+  - Stage 1：`src/models/casd/segment_encoder.py`（feature-based，NO segment ID embedding）
+  - Stage 2：`src/models/casd/perceiver.py`（Perceiver-style compression）
+  - Stage 3：`src/models/casd/latent_flow.py`（latent rectified flow + CFG）
+  - Stage 4：`src/models/casd/segment_decoder.py`（候选集打分 + adjacency mask + beam search）
+  - 整合（AE）：`src/models/casd/casd.py`
+- 数据集与 collate：`src/data/road_graph/segment_sequence_dataset.py`
+- 训练脚本：
+  - Step A：`src/training/train_casd_autoencoder.py`
+  - Step B：`src/training/train_casd_flow.py`
+
+> P0 口径：先不接 Urban semantics（POI/satellite），Validity loss 作为 P1 再加。
 
 ---
 

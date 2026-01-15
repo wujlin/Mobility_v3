@@ -162,6 +162,37 @@ $RAW_ROOT/experiments/icml2026_routegen/T4_wp_ar_astar_combo_seed0/T1_dump_waypo
 - `wp_seq: (N, K+2)`（包含 `[start, w1..wK, dest]`，元素为 node id）
 - `start_t/traj_idx/start_node/dest_node/route_city`
 
+**(E) Segment graph（CASD：road graph → segments）**
+
+> 目的：把 raster road graph 压缩成 “segment token”，并提供解码期 adjacency mask。  
+> 关键口径：必须在所有 route 的 `start_node/dest_node` 处切分，使得 GT segment 序列满足 `seg_v == dest_node`（CASD 的停止条件）。
+
+```text
+$RAW_ROOT/experiments/icml2026_routegen/CASD0_segdata_combo_seed0_term/S1_segment_graph/segment_graph.npz
+```
+
+典型字段（以实际 npz 为准）：
+- segment 拓扑：`seg_u/seg_v/seg_len_m/seg_tier/seg_city`
+- segment 几何：`seg_center_y/seg_center_x/seg_dir_y/seg_dir_x`
+- adjacency（CSR）：`seg_succ_ptr/seg_succ_idx`（给 Stage4 的 adjacency mask/beam search 用）
+- node→segment（CSR）：`node_seg_ptr/node_seg_idx`（给 step0 起步候选集用）
+- debug 映射：`edge_to_seg/seg_ptr/seg_edges`
+- `meta.stats.n_terminal_nodes`：用于确认“终点切分”是否启用
+
+**(F) Segment routes（CASD：GT node seq → per-route segment seq）**
+
+```text
+$RAW_ROOT/experiments/icml2026_routegen/CASD0_segdata_combo_seed0_term/S2_segment_routes/segments_graph_routes.npz
+```
+
+典型字段：
+- `seg_seq_ptr/seg_seq_idx/seg_seq_len`：CSR 形式的变长 segment 序列
+- `corridor_type: (N,)`：KISS 版 corridor label（dominant tier > 50% → {major/minor/service} else mixed）
+- 条件输入：`start_node/dest_node/start_pos/dest_pos/start_t/route_city`
+- `traj_idx`：用于追溯到原 GT
+
+推荐同步策略：只同步 `report.json/run.log/*.json`（排除大文件），并把路径写入实验 `report.json` 的 gate 字段。
+
 ### 2.2 仓库内 data/（只放小文件/legacy/软链）
 
 ```text

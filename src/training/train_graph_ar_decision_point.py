@@ -45,6 +45,7 @@ class TrainCfg:
     val_ratio: float
     seed: int
     device: str
+    tz_offset_hours: float
 
 
 class DPARDataset(Dataset):
@@ -65,6 +66,7 @@ class DPARDataset(Dataset):
         dp_succ_ptr: np.ndarray,   # (D+1,) CSR pointer
         dp_succ_idx: np.ndarray,   # (E,) successor indices
         max_candidates: int,
+        tz_offset_hours: float,
     ):
         self.dp_seq_pad = dp_seq_pad
         self.dp_seq_len = dp_seq_len
@@ -74,6 +76,7 @@ class DPARDataset(Dataset):
         self.dp_succ_ptr = dp_succ_ptr
         self.dp_succ_idx = dp_succ_idx
         self.max_candidates = max_candidates
+        self._tz_offset_sec = int(round(float(tz_offset_hours) * 3600.0))
         
         # Build transition samples: (route_id, step_idx)
         self.samples: List[Tuple[int, int]] = []
@@ -107,10 +110,10 @@ class DPARDataset(Dataset):
         next_dp = int(seq[step + 1])
         dest_dp = int(seq[seq_len - 1])  # Last dp in sequence is destination
         
-        # Hour from timestamp
+        # Hour from unix timestamp (city-local time via tz offset).
         ts = int(self.start_t[rid])
-        dt = datetime.fromtimestamp(ts, tz=TZ_SHANGHAI)
-        hour = dt.hour
+        sec = int((ts + int(self._tz_offset_sec)) % 86400)
+        hour = int(sec // 3600)
         
         # Build candidate set: successors of current_dp
         successors = self._get_successors(current_dp)
@@ -322,6 +325,7 @@ def run(
         dp_succ_ptr=dp_succ_ptr,
         dp_succ_idx=dp_succ_idx,
         max_candidates=cfg.max_candidates,
+        tz_offset_hours=float(cfg.tz_offset_hours),
     )
     
     # Split train/val
@@ -412,6 +416,7 @@ def run(
             "val_ratio": cfg.val_ratio,
             "seed": cfg.seed,
             "device": cfg.device,
+            "tz_offset_hours": float(cfg.tz_offset_hours),
         },
         "stats": {
             "n_decision_points": n_dp,
@@ -447,6 +452,7 @@ def main() -> None:
     p.add_argument("--val_ratio", type=float, default=0.1)
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--device", type=str, default="cuda")
+    p.add_argument("--tz_offset_hours", type=float, default=-5.0)
     args = p.parse_args()
     
     cfg = TrainCfg(
@@ -458,6 +464,7 @@ def main() -> None:
         val_ratio=args.val_ratio,
         seed=args.seed,
         device=args.device,
+        tz_offset_hours=float(args.tz_offset_hours),
     )
     
     run(

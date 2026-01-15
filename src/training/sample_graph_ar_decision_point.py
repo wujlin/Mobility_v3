@@ -43,6 +43,7 @@ class EvalCfg:
     temperature: float
     seed: int
     device: str
+    tz_offset_hours: float
 
 
 def _load_graph_npz(path: Path) -> Dict[str, np.ndarray]:
@@ -398,7 +399,9 @@ def run(
         s = int(start_node[rid])
         d = int(dest_node[rid])
         ts = int(start_t[rid])
-        hour = datetime.fromtimestamp(ts, tz=TZ_SHANGHAI).hour
+        offset_sec = int(round(float(cfg.tz_offset_hours) * 3600.0))
+        sec = int((ts + offset_sec) % 86400)
+        hour = int(sec // 3600)
         
         dp_seq, pred_path = generate_route(
             model=model,
@@ -492,6 +495,7 @@ def main() -> None:
     p.add_argument("--temperature", type=float, default=1.0)
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--device", type=str, default="cuda")
+    p.add_argument("--tz_offset_hours", type=float, default=-5.0)
     args = p.parse_args()
     
     cfg = EvalCfg(
@@ -500,6 +504,7 @@ def main() -> None:
         temperature=args.temperature,
         seed=args.seed,
         device=args.device,
+        tz_offset_hours=float(args.tz_offset_hours),
     )
     
     run(

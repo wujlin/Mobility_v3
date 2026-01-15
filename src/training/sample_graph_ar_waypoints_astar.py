@@ -322,10 +322,11 @@ def _plot_case(
                 ).astype(np.float32, copy=False)
                 if edge_tier is not None and int(np.asarray(edge_tier).size) == int(eu.size):
                     tt = np.asarray(edge_tier, dtype=np.int64).reshape(-1)[m]
+                    # Slightly thicker strokes (still low-alpha) to give a more "filled" street texture.
                     groups = [
-                        (tt <= 0, "#9a9a9a", 0.90, 0.35),  # major
-                        (tt == 1, "#b2b2b2", 0.55, 0.22),  # minor
-                        (tt >= 2, "#d0d0d0", 0.40, 0.14),  # service/other
+                        (tt <= 0, "#8f8f8f", 1.20, 0.26),  # major
+                        (tt == 1, "#b0b0b0", 0.85, 0.20),  # minor
+                        (tt >= 2, "#d0d0d0", 0.55, 0.12),  # service/other
                     ]
                     for mask_t, color, lw, alpha in groups:
                         if not bool(np.any(mask_t)):
@@ -343,7 +344,7 @@ def _plot_case(
                 ss = np.asarray(list(s), dtype=np.int64)
                 if ss.size < 2:
                     continue
-                ax.plot(node_x[ss], node_y[ss], color="#8f8f8f", lw=1.0, alpha=0.10, linestyle="--", zorder=1)
+                ax.plot(node_x[ss], node_y[ss], color="#9c9c9c", lw=0.9, alpha=0.07, linestyle="--", zorder=1)
 
         # Predictions: alpha reflects per-sample Jaccard to GT; highlight best-of-K.
         gt_es = _edge_set(gt_seq)

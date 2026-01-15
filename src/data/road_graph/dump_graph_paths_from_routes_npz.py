@@ -496,8 +496,38 @@ def build_argparser() -> argparse.ArgumentParser:
     return p
 
 
+def _die_missing_file(*, label: str, path: Path) -> None:
+    print(f"[error] missing {label}: {path}", file=sys.stderr, flush=True)
+    # Best-effort hints: search basename under nearest existing parent.
+    root = path.parent
+    while root != root.parent and not root.exists():
+        root = root.parent
+    if root.exists():
+        hits = []
+        try:
+            for cand in root.rglob(path.name):
+                hits.append(cand)
+                if len(hits) >= 5:
+                    break
+        except Exception:
+            hits = []
+        if hits:
+            print("[hint] found candidates (pick one as --routes_npz):", file=sys.stderr, flush=True)
+            for h in hits:
+                print(f"  - {h}", file=sys.stderr, flush=True)
+    print("[hint] 建议先建立工作站别名目录（软链接）以稳定路径：", file=sys.stderr, flush=True)
+    print("       python tools/routegen_make_ws_aliases.py --raw_root \"$RAW_ROOT\"", file=sys.stderr, flush=True)
+    raise SystemExit(2)
+
+
 def main() -> None:
     args = build_argparser().parse_args()
+    routes_npz = Path(args.routes_npz)
+    road_graph_npz = Path(args.road_graph_npz)
+    if not routes_npz.exists():
+        _die_missing_file(label="routes_npz", path=routes_npz)
+    if not road_graph_npz.exists():
+        _die_missing_file(label="road_graph_npz", path=road_graph_npz)
     cfg = DumpCfg(
         subsample_step=int(args.subsample_step),
         debounce=not bool(args.no_debounce),
@@ -512,7 +542,7 @@ def main() -> None:
         chunk_size=int(args.chunk_size),
         snap_sample_k=int(args.snap_sample_k),
     )
-    report = run_dump(routes_npz=Path(args.routes_npz), road_graph_npz=Path(args.road_graph_npz), out_dir=Path(args.out_dir), cfg=cfg)
+    report = run_dump(routes_npz=routes_npz, road_graph_npz=road_graph_npz, out_dir=Path(args.out_dir), cfg=cfg)
     meta = report["meta"]
     compact = {
         "ok": True,

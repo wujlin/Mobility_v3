@@ -47,8 +47,8 @@
 - 工作站一键脚本（推荐）：`run_casd_prep.sh`
 
 > 补充：`build_segment_graph_from_road_graph_npz.py` 支持两种口径（向后兼容）：
-> - `--mode edge`：每条 directed edge 作为一个 segment（推荐给 native OSM 图）
-> - `--mode collapse`：degree-2 chain collapse（legacy raster 图；可选 `--paths_graph_npz` 强制在 start/dest node 处切分）
+> - `--mode collapse`：degree-2 chain collapse（推荐；native OSM 的 edge 仍然偏细，需要先 collapse 才接近文献里的 road segment 粒度）
+> - `--mode edge`：每条 directed edge 作为一个 segment（仅建议 debug 或你确认 edge_len 已足够粗时使用）
 
 ### 决策层（Waypoint AR：少步数、避免 600-step 累积误差）
 

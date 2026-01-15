@@ -22,12 +22,16 @@ ROAD_NPZ="${ROAD_NPZ:-${IN_DATA%/}/road_graph_combo.npz}"
 OUT_BASE="${OUT_BASE:-${RAW_ROOT%/}/experiments/icml2026_routegen/CASD0_segdata_combo_seed0_term}"
 SEED="${SEED:-0}"
 SEG_MODE="${SEG_MODE:-collapse}"  # collapse | edge
+SEG_COLLAPSE_TIER_MAX="${SEG_COLLAPSE_TIER_MAX:-3}"   # native 推荐 1（忽略 service/unclassified 分支）
+SEG_COLLAPSE_DEGREE_MODE="${SEG_COLLAPSE_DEGREE_MODE:-out}"  # native 推荐 undir
 
 echo "Resolved Paths:"
 echo "  PATHS_NPZ=${PATHS_NPZ}"
 echo "  ROAD_NPZ=${ROAD_NPZ}"
 echo "  OUT_BASE=${OUT_BASE}"
 echo "  SEG_MODE=${SEG_MODE}"
+echo "  SEG_COLLAPSE_TIER_MAX=${SEG_COLLAPSE_TIER_MAX}"
+echo "  SEG_COLLAPSE_DEGREE_MODE=${SEG_COLLAPSE_DEGREE_MODE}"
 for f in "${PATHS_NPZ}" "${ROAD_NPZ}"; do
   if [[ ! -f "${f}" ]]; then
     echo "ERROR: missing file: ${f}" >&2
@@ -46,6 +50,8 @@ PYTHONUNBUFFERED=1 python -u -m src.data.road_graph.build_segment_graph_from_roa
   --paths_graph_npz "${PATHS_NPZ}" \
   --out_dir "${OUT_BASE}/S1_segment_graph" \
   --mode "${SEG_MODE}" \
+  --collapse_tier_max "${SEG_COLLAPSE_TIER_MAX}" \
+  --collapse_degree_mode "${SEG_COLLAPSE_DEGREE_MODE}" \
   |& tee "${OUT_BASE}/S1_segment_graph/run.log"
 
 SEG_GRAPH="${OUT_BASE}/S1_segment_graph/segment_graph.npz"

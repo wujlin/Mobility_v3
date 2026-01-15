@@ -239,14 +239,14 @@ python -m src.data.road_graph.build_road_graph_from_osm \
   --out_dir "$RAW_ROOT/experiments/icml2026_routegen/G1r_roadgraph_detroit_raster" \
   --city detroit --road_types B
 
-# Native（推荐）：OSM node/edge 原生图，更接近文献的 150-200m segment 粒度
+# Native（推荐）：OSM node/edge 原生图（仍可能很细，常见 edge_len p50≈10–20m；需要后续 degree-2 collapse 才接近“intersection-to-intersection segment”）
 python -m src.data.road_graph.build_road_graph_native_from_osm \
   --osm_pbf "$RAW_ROOT/osm/michigan-latest.osm.pbf" \
   --semantic_dir "$RAW_ROOT/worldtrace/detroit_core_v1" \
   --out_dir "$RAW_ROOT/experiments/icml2026_routegen/G1n_roadgraph_detroit_native" \
   --city detroit --road_types B
 
-# 快速审计（看 edge_len_p50/p90 是否落在 ~150-200m）
+# 快速审计（node-to-node 的 edge_len 仅做 sanity check；真正关心的是后续 segment_graph 的 seg_len）
 python -m src.data.road_graph.audit_road_graph_npz \
   --road_graph_npz "$RAW_ROOT/experiments/icml2026_routegen/G1n_roadgraph_detroit_native/road_graph.npz"
 ```
@@ -254,8 +254,12 @@ python -m src.data.road_graph.audit_road_graph_npz \
 ### 6.3 CASD（Corridor-Aware Segment Diffusion）最短复现命令（S1-S4）
 
 > 口径：先用 combo（Detroit+Columbus）保证 corridor diversity；segment token 有两种口径：
-> - `SEG_MODE=edge`：每条 directed edge 作为一个 segment（推荐给 native OSM 图）
-> - `SEG_MODE=collapse`：degree-2 chain collapse（legacy raster 图；可选用 paths_graph 强制在 start/dest node 处切分以保证 `seg_v == dest_node`）
+> - `SEG_MODE=collapse`：degree-2 chain collapse（推荐；native OSM 的 edge 仍然是 OSM node-to-node，长度常见 10–20m，需要先 collapse 才接近“intersection-to-intersection segment”）
+> - `SEG_MODE=edge`：每条 directed edge 作为一个 segment（仅建议 debug 或你确认 edge_len 已足够粗时使用）
+>
+> Native 图的经验值（KISS）：service/unclassified 分支会让“degree==2”判断失效，导致 segment 仍很短。推荐在 `SEG_MODE=collapse` 时加：
+> - `SEG_COLLAPSE_DEGREE_MODE=undir`（用 undirected degree 定义 junction）
+> - `SEG_COLLAPSE_TIER_MAX=1`（collapse 时忽略 tier>=2 的分支；service 仍保留为单边 segment，不会混入主干 collapse）
 
 ```bash
 # 1) 拉取最新代码
@@ -267,7 +271,9 @@ export IN_DATA="$RAW_ROOT/experiments/icml2026_routegen/T3_combo_detroit_columbu
 export PATHS_NPZ="$IN_DATA/paths_graph_combo.npz"
 export ROAD_NPZ="$IN_DATA/road_graph_combo.npz"
 export OUT_BASE="$RAW_ROOT/experiments/icml2026_routegen/CASD0_segdata_combo_seed0_term"
-# export SEG_MODE=edge   # native OSM 图建议用 edge；默认 collapse
+# export SEG_MODE=collapse   # 默认就是 collapse；edge 仅用于 debug
+export SEG_COLLAPSE_DEGREE_MODE=undir
+export SEG_COLLAPSE_TIER_MAX=1
 
 # 3) 数据准备（Step 0）
 bash run_casd_prep.sh
@@ -306,6 +312,9 @@ python -m src.training.train_casd_flow \
 **(2) segments→graph paths（map-match，T1）**：
 
 ```bash
+# 推荐：先建立工作站别名目录（软链接），避免写长路径/文件名漂移
+python tools/routegen_make_ws_aliases.py --raw_root "$RAW_ROOT"
+
 python -m src.data.road_graph.dump_graph_paths_from_routes_npz \
   --routes_npz "$RAW_ROOT/experiments/icml2026_routegen/gt_segments/detroit_segments_route_F256_epoch_seed0.npz" \
   --road_graph_npz "$RAW_ROOT/experiments/icml2026_routegen/G1n_roadgraph_detroit_native/road_graph.npz" \

@@ -38,7 +38,7 @@ Implementation Plan, Task List and Thought in Chinese
 
 ### 数据与产物（统一以 `$RAW_ROOT/experiments/icml2026_routegen/` 为根）
 
-- segment-level routes（固定长度、epoch 时间）：`gt_segments/*_segments_route_F256_epoch_seed0.npz`
+- segment-level routes（固定长度、epoch 时间）：`gt_segments/*_segments_route_F256_epoch_seed0.npz`（推荐用软链接别名；由 `python tools/routegen_make_ws_aliases.py --raw_root "$RAW_ROOT"` 生成）
 - road graph：`G1_roadgraph_*/road_graph.npz` 与多城合并的 `T3_combo_*/road_graph_combo.npz`
 - GT graph paths：`T3_combo_*/paths_graph_combo.npz`
 - GT waypoints（从 GT path 提取固定 K）：`T4_wp_ar_astar_combo_seed0/T1_dump_waypoints/waypoints_graph.npz`

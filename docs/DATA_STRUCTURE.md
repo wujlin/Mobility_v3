@@ -118,14 +118,22 @@ $RAW_ROOT/
 **(A) Segment-level 路线（固定长度，F=256）**
 
 ```text
-$RAW_ROOT/experiments/icml2026_routegen/gt_segments/
-  detroit_segments_route_F256_epoch_seed0.npz
-  columbus_segments_route_F256_epoch_seed0.npz
+$RAW_ROOT/experiments/icml2026_routegen/gt_segments/    # 推荐：稳定别名（软链接）
+  detroit_segments_route_F256_epoch_seed0.npz -> ../E_S1_segments_fixedlen_.../detroit_segments_route_F256_epoch_seed0.npz
+  columbus_segments_route_F256_epoch_seed0.npz -> ../E_S1_segments_fixedlen_.../columbus_segments_route_F256_epoch_seed0.npz
 ```
 
 典型字段（以实际 npz 为准）：
 - `start_pos: (N,2)`、`dest_pos: (N,2)`、`targets: (N,F,2)`（grid `[y,x]`）
 - `traj_idx: (N,)`、`start_t: (N,)`（Unix epoch 秒）
+
+> 说明：真实产物可能分散在多个实验目录（例如 `E_S1_segments_fixedlen_*`）。为了避免命令里反复手写长路径，建议在工作站上运行一次：
+>
+> ```bash
+> python tools/routegen_make_ws_aliases.py --raw_root "$RAW_ROOT"
+> ```
+>
+> 该脚本只会创建/更新 `gt_segments/` 下的软链接与 `aliases.json`，不会移动/删除任何原始目录。
 
 **(B) Road graph（OSM → graph）**
 
@@ -170,8 +178,8 @@ $RAW_ROOT/experiments/icml2026_routegen/T4_wp_ar_astar_combo_seed0/T1_dump_waypo
 
 > 目的：把 road graph 转成 “segment token”，并提供解码期 adjacency mask。  
 > 口径：由 `build_segment_graph_from_road_graph_npz.py` 的 `--mode` 决定：
-> - `edge`：每条 directed edge 作为一个 segment（推荐给 native OSM 图）
-> - `collapse`：degree-2 chain collapse（legacy raster 图；可选强制在 `start_node/dest_node` 处切分以保证 `seg_v == dest_node`）
+> - `collapse`：degree-2 chain collapse（推荐；native OSM 的 edge 仍然偏细，需要先 collapse 才能显著降低 route 的 segment 序列长度）
+> - `edge`：每条 directed edge 作为一个 segment（仅建议 debug 或你确认 edge_len 已足够粗时使用）
 
 ```text
 $RAW_ROOT/experiments/icml2026_routegen/CASD0_segdata_combo_seed0_term/S1_segment_graph/segment_graph.npz

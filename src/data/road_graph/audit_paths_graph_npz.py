@@ -49,6 +49,14 @@ def audit(*, paths_graph_npz: Path) -> Dict[str, Any]:
     task = meta.get("task") if isinstance(meta, dict) else None
     stats_meta = meta.get("stats") if isinstance(meta, dict) else None
 
+    snap = None
+    bridge = None
+    failures = None
+    if isinstance(stats_meta, dict):
+        snap = stats_meta.get("snap_dist_grid")
+        bridge = stats_meta.get("bridged_jumps_per_route")
+        failures = stats_meta.get("failures")
+
     report: Dict[str, Any] = {
         "inputs": {"paths_graph_npz": str(paths_graph_npz)},
         "meta": {"task": task, "stats": stats_meta},
@@ -56,6 +64,9 @@ def audit(*, paths_graph_npz: Path) -> Dict[str, Any]:
             "n_routes": int(n),
             "node_seq_len": {"p50": _p(node_seq_len, 50), "p90": _p(node_seq_len, 90), "max": int(node_seq_len.max()) if n else 0},
             "edge_steps": {"p50": _p(edge_steps, 50), "p90": _p(edge_steps, 90), "max": int(edge_steps.max()) if n else 0},
+            "snap_dist_grid": snap,
+            "bridged_jumps_per_route": bridge,
+            "failures": failures,
             "route_city_counts": city_counts,
         },
     }
@@ -81,6 +92,15 @@ def main() -> None:
     es = stats["edge_steps"]
     print(f"[node_seq_len] p50={ns['p50']:.1f} p90={ns['p90']:.1f} max={int(ns['max'])}")
     print(f"[edge_steps] p50={es['p50']:.1f} p90={es['p90']:.1f} max={int(es['max'])}")
+    if stats.get("snap_dist_grid"):
+        sd = stats["snap_dist_grid"] or {}
+        print(f"[snap_dist_grid] p50={sd.get('p50')} p90={sd.get('p90')} sample_n={sd.get('sample_n')}")
+    if stats.get("bridged_jumps_per_route"):
+        bj = stats["bridged_jumps_per_route"] or {}
+        print(f"[bridged_jumps] mean={bj.get('mean')} p50={bj.get('p50')} p90={bj.get('p90')}")
+    if stats.get("failures"):
+        f = stats["failures"] or {}
+        print(f"[failures] empty_seq={f.get('empty_seq')} bridge_fail={f.get('bridge_fail')}")
     if stats.get("route_city_counts") is not None:
         print(f"[route_city] {_format_counts(np.asarray(stats['route_city_counts'], dtype=np.int64))}")
 
@@ -93,4 +113,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

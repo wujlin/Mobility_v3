@@ -20,12 +20,62 @@ class BuildCfg:
     max_edges: Optional[int]
     paths_graph_npz: Optional[Path]
     mode: str = "collapse"
+    collapse_tier_max: int = 3
+    collapse_degree_mode: str = "out"  # out (legacy) | undir (recommended for native OSM)
 
 
 def _percentile(x: np.ndarray, q: float) -> float:
     if x.size == 0:
         return float("nan")
     return float(np.percentile(x.astype(np.float64), q))
+
+
+def _undir_degree_unique(*, edge_u: np.ndarray, edge_v: np.ndarray, edge_tier: np.ndarray, n_nodes: int, tier_max: int) -> np.ndarray:
+    tier_max = int(tier_max)
+    keep = edge_tier.astype(np.int64, copy=False) <= np.int64(tier_max)
+    if not bool(np.any(keep)):
+        return np.zeros((int(n_nodes),), dtype=np.int32)
+    u = edge_u[keep].astype(np.uint64, copy=False)
+    v = edge_v[keep].astype(np.uint64, copy=False)
+    a = np.minimum(u, v)
+    b = np.maximum(u, v)
+    key = (a << np.uint64(32)) | b
+    key = np.unique(key)
+    uu = (key >> np.uint64(32)).astype(np.int64, copy=False)
+    vv = (key & np.uint64(0xFFFFFFFF)).astype(np.int64, copy=False)
+    deg = np.zeros((int(n_nodes),), dtype=np.int32)
+    np.add.at(deg, uu, 1)
+    np.add.at(deg, vv, 1)
+    return deg
+
+
+def _pick_next_edge(
+    *,
+    cur: int,
+    prev: int,
+    order: np.ndarray,
+    ptr: np.ndarray,
+    edge_v: np.ndarray,
+    edge_w_m: np.ndarray,
+    edge_tier: np.ndarray,
+    tier_max: int,
+) -> Optional[int]:
+    cur = int(cur)
+    prev = int(prev)
+    s = int(ptr[cur])
+    e = int(ptr[cur + 1])
+    if e <= s:
+        return None
+    out_edges = order[s:e].astype(np.int64, copy=False)
+    m = (edge_v[out_edges] != np.int32(prev)) & (edge_tier[out_edges].astype(np.int64, copy=False) <= np.int64(int(tier_max)))
+    cand = out_edges[m]
+    if int(cand.size) == 0:
+        return None
+    dest = edge_v[cand]
+    if int(np.unique(dest).size) != 1:
+        return None
+    w = edge_w_m[cand]
+    return int(cand[int(np.argmin(w))])
 
 
 def build_segment_graph(*, road_graph_npz: Path, out_dir: Path, cfg: BuildCfg) -> Dict[str, object]:
@@ -97,11 +147,22 @@ def build_segment_graph(*, road_graph_npz: Path, out_dir: Path, cfg: BuildCfg) -
         if n_segs <= 0:
             raise RuntimeError("No segments built (edge mode, n_segs=0).")
     else:
+        tier_max = int(cfg.collapse_tier_max)
+        deg_mode = str(cfg.collapse_degree_mode).strip().lower()
+        if deg_mode not in {"out", "undir"}:
+            raise ValueError(f"Unknown collapse_degree_mode={cfg.collapse_degree_mode!r} (expected out|undir).")
+        use_legacy = deg_mode == "out" and tier_max >= 3
+
         order = np.argsort(edge_u, kind="mergesort")
         counts = out_deg.astype(np.int64, copy=False)
         ptr = np.zeros(n_nodes + 1, dtype=np.int64)
         np.cumsum(counts, out=ptr[1:])
-        edge_v_sorted = edge_v[order]
+        edge_v_sorted = edge_v[order] if use_legacy else None
+
+        junction_mask = None
+        if not use_legacy:
+            deg_undir = _undir_degree_unique(edge_u=edge_u, edge_v=edge_v, edge_tier=edge_tier, n_nodes=n_nodes, tier_max=tier_max)
+            junction_mask = deg_undir != 2
 
         edge_to_seg = np.full((n_edges,), -1, dtype=np.int32)
         seg_u_list: list[int] = []
@@ -122,6 +183,7 @@ def build_segment_graph(*, road_graph_npz: Path, out_dir: Path, cfg: BuildCfg) -
             u0 = int(edge_u[int(e0)])
             v0 = int(edge_v[int(e0)])
             seg_id = int(len(seg_u_list))
+            collapsible = (int(edge_tier[int(e0)]) <= int(tier_max)) if not use_legacy else True
 
             seg_u_list.append(u0)
             tier_min = int(edge_tier[int(e0)])
@@ -140,31 +202,52 @@ def build_segment_graph(*, road_graph_npz: Path, out_dir: Path, cfg: BuildCfg) -
             prev = int(u0)
             cur = int(v0)
 
-            # Follow through degree-2 chain (grid-road raster graph).
             while True:
                 if cur == u0:
                     break  # loop closed
                 if terminal_mask is not None and bool(terminal_mask[cur]):
                     break  # force boundary at route terminal nodes (start/dest)
-                if int(out_deg[cur]) != 2:
-                    break  # hit junction / dead-end
-                s = int(ptr[cur])
-                e = int(ptr[cur + 1])
-                if e - s != 2:
+                if not collapsible:
                     break
 
-                eidx_a = int(order[s + 0])
-                eidx_b = int(order[s + 1])
-                va = int(edge_v_sorted[s + 0])
-                vb = int(edge_v_sorted[s + 1])
+                if use_legacy:
+                    # Legacy collapse: follow through strict out-degree==2 chain (best for raster graphs).
+                    if int(out_deg[cur]) != 2:
+                        break  # hit junction / dead-end
+                    s = int(ptr[cur])
+                    e = int(ptr[cur + 1])
+                    if e - s != 2:
+                        break
+                    assert edge_v_sorted is not None
+                    eidx_a = int(order[s + 0])
+                    eidx_b = int(order[s + 1])
+                    va = int(edge_v_sorted[s + 0])
+                    vb = int(edge_v_sorted[s + 1])
 
-                if va == prev:
-                    nxt = eidx_b
-                elif vb == prev:
-                    nxt = eidx_a
+                    if va == prev:
+                        nxt = eidx_b
+                    elif vb == prev:
+                        nxt = eidx_a
+                    else:
+                        break
                 else:
-                    # Unexpected: degree==2 but neither edge goes back to prev.
-                    break
+                    # Native-friendly collapse: use undirected degree (ignoring tiers > tier_max) to define junctions.
+                    assert junction_mask is not None
+                    if bool(junction_mask[cur]):
+                        break
+                    nxt_opt = _pick_next_edge(
+                        cur=cur,
+                        prev=prev,
+                        order=order,
+                        ptr=ptr,
+                        edge_v=edge_v,
+                        edge_w_m=edge_w_m,
+                        edge_tier=edge_tier,
+                        tier_max=tier_max,
+                    )
+                    if nxt_opt is None:
+                        break
+                    nxt = int(nxt_opt)
 
                 if int(edge_to_seg[nxt]) != -1:
                     break  # already assigned (should be rare); terminate here
@@ -238,7 +321,12 @@ def build_segment_graph(*, road_graph_npz: Path, out_dir: Path, cfg: BuildCfg) -
         "created_at": datetime.now(tz=TZ_SHANGHAI).isoformat(),
         "task": "build_segment_graph_from_road_graph_npz",
         "inputs": {"road_graph_npz": str(road_graph_npz), "paths_graph_npz": (str(cfg.paths_graph_npz) if cfg.paths_graph_npz is not None else None)},
-        "config": {"max_edges": (int(cfg.max_edges) if cfg.max_edges is not None else None), "mode": str(seg_mode)},
+        "config": {
+            "max_edges": (int(cfg.max_edges) if cfg.max_edges is not None else None),
+            "mode": str(seg_mode),
+            "collapse_tier_max": int(cfg.collapse_tier_max),
+            "collapse_degree_mode": str(cfg.collapse_degree_mode),
+        },
         "stats": {
             "n_nodes": int(n_nodes),
             "n_edges_directed": int(n_edges),
@@ -300,6 +388,8 @@ def build_argparser() -> argparse.ArgumentParser:
     p.add_argument("--out_dir", type=Path, required=True)
     p.add_argument("--max_edges", type=int, default=None, help="Debug: only use the first N directed edges.")
     p.add_argument("--mode", choices=["collapse", "edge"], default="collapse", help="Segment definition: collapse degree-2 chains, or treat each directed edge as a segment.")
+    p.add_argument("--collapse_tier_max", type=int, default=3, help="In collapse mode, only collapse edges with tier<=T, and define junction degree on tiers<=T.")
+    p.add_argument("--collapse_degree_mode", choices=["out", "undir"], default="out", help="Collapse strategy: legacy(out-degree==2) or undirected-degree (recommended for native OSM).")
     return p
 
 
@@ -312,6 +402,8 @@ def main() -> None:
             max_edges=(int(args.max_edges) if args.max_edges else None),
             paths_graph_npz=(Path(args.paths_graph_npz) if args.paths_graph_npz else None),
             mode=str(args.mode),
+            collapse_tier_max=int(args.collapse_tier_max),
+            collapse_degree_mode=str(args.collapse_degree_mode),
         ),
     )
     compact = {

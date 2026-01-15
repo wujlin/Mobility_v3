@@ -40,7 +40,9 @@
 - `(O,D)` 来自 segment-level 起终点，而不是窗口前缀
 
 典型产物（路径以工作站为准）：
-- `$RAW_ROOT/experiments/icml2026_routegen/gt_segments/*_segments_route_F256_epoch_seed0.npz`
+- 推荐用稳定别名（软链接，避免“路径名工程量”）：  
+  `$RAW_ROOT/experiments/icml2026_routegen/gt_segments/*_segments_route_F256_epoch_seed0.npz`  
+  由 `python tools/routegen_make_ws_aliases.py --raw_root "$RAW_ROOT"` 自动生成，指向真实产物（通常在 `E_S1_segments_fixedlen_*` 目录下）。
 
 ### 2.3 Road Graph 与 Graph Path 产物（map-aware track）
 

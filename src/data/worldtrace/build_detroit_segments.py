@@ -266,6 +266,55 @@ def _default_detroit_core_grid() -> GridSpec:
     return GridSpec(H=1024, W=1024, bbox=bbox)
 
 
+def _bbox_from_any(obj: object) -> Optional[BBox]:
+    if isinstance(obj, dict):
+        # Direct dict bbox.
+        if all(k in obj for k in ("min_lon", "min_lat", "max_lon", "max_lat")):
+            try:
+                return BBox(
+                    min_lon=float(obj["min_lon"]),
+                    min_lat=float(obj["min_lat"]),
+                    max_lon=float(obj["max_lon"]),
+                    max_lat=float(obj["max_lat"]),
+                )
+            except Exception:
+                return None
+
+        # Common keys.
+        for k in ("bbox", "bounds"):
+            if k not in obj:
+                continue
+            b = obj.get(k)
+            if isinstance(b, (list, tuple)) and len(b) == 4:
+                try:
+                    min_lon, min_lat, max_lon, max_lat = map(float, b)
+                except Exception:
+                    continue
+                return BBox(min_lon=min_lon, min_lat=min_lat, max_lon=max_lon, max_lat=max_lat)
+            if isinstance(b, dict):
+                bb = _bbox_from_any(b)
+                if bb is not None:
+                    return bb
+
+        # Nested grid.
+        if "grid" in obj and isinstance(obj.get("grid"), dict):
+            bb = _bbox_from_any(obj.get("grid"))
+            if bb is not None:
+                return bb
+    return None
+
+
+def _load_bbox_from_meta_json(meta_json: Path) -> BBox:
+    meta_path = Path(meta_json)
+    if not meta_path.exists():
+        raise FileNotFoundError(f"bbox meta json not found: {meta_path}")
+    meta = json.loads(meta_path.read_text(encoding="utf-8"))
+    bb = _bbox_from_any(meta)
+    if bb is None:
+        raise SystemExit(f"无法从 {meta_path} 解析 bbox；期望字段 bbox/bounds 或 grid.bbox。")
+    return bb
+
+
 def _open_parquet_writer(path: Path, schema: pa.Schema) -> pq.ParquetWriter:
     path.parent.mkdir(parents=True, exist_ok=True)
     return pq.ParquetWriter(str(path), schema=schema, compression="zstd")
@@ -326,13 +375,20 @@ def main() -> None:
     ap = argparse.ArgumentParser(description="Extract bbox segments from WorldTrace Trajectory.zip (one row per segment).")
     ap.add_argument("--trajectory_zip", type=Path, required=True, help="Path to Trajectory.zip")
     ap.add_argument("--out_parquet", type=Path, required=True, help="Output parquet (one row per segment)")
-    ap.add_argument(
+    bbox_g = ap.add_mutually_exclusive_group()
+    bbox_g.add_argument(
         "--bbox",
         type=float,
         nargs=4,
         default=None,
         metavar=("MIN_LON", "MIN_LAT", "MAX_LON", "MAX_LAT"),
         help="Override bbox in EPSG:4326. Default: Detroit core bbox.",
+    )
+    bbox_g.add_argument(
+        "--bbox_from_meta",
+        type=Path,
+        default=None,
+        help="Load bbox from a meta json (supports bbox/bounds or grid.bbox), e.g. osm_road_prob_meta.json.",
     )
     ap.add_argument("--grid_h", type=int, default=1024, help="Grid height H (default: 1024)")
     ap.add_argument("--grid_w", type=int, default=1024, help="Grid width  W (default: 1024)")
@@ -359,13 +415,20 @@ def main() -> None:
     ap.add_argument("--min_segment_points", type=int, default=120)
     ap.add_argument("--matched_distance_max_m", type=float, default=30.0)
     ap.add_argument("--max_unmatched_ratio", type=float, default=0.20)
-    ap.add_argument("--require_way_id", action="store_true", help="Drop segments with too many missing osm_way_id (>=50%).")
+    ap.add_argument(
+        "--require_way_id",
+        action="store_true",
+        help="Drop segments with too many missing osm_way_id (>=50%%).",
+    )
     args = ap.parse_args()
 
     if pa is None or pq is None:
         raise SystemExit("pyarrow is required for --out_parquet. Install: pip/conda install pyarrow")
 
-    if args.bbox is None:
+    if args.bbox_from_meta is not None:
+        bbox = _load_bbox_from_meta_json(Path(args.bbox_from_meta))
+        grid = GridSpec(H=int(args.grid_h), W=int(args.grid_w), bbox=bbox)
+    elif args.bbox is None:
         grid = _default_detroit_core_grid()
         if int(args.grid_h) != int(grid.H) or int(args.grid_w) != int(grid.W):
             grid = GridSpec(H=int(args.grid_h), W=int(args.grid_w), bbox=grid.bbox)

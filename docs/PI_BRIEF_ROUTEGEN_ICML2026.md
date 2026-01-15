@@ -109,6 +109,31 @@
 
 ---
 
+## 5) 重要澄清：什么是（以及什么不是）“corridor diversity”
+
+在很多调试图里，我们画的是「\textbf{单条 GT（黑）} + \textbf{多次采样（蓝）}」。
+这类图\textbf{只能}回答：
+
+- 采样是否能完成到达终点（success/failure mode）
+- best-of-$K$ 是否能覆盖 \textbf{这 1 条} GT corridor（single-trajectory match / coverage）
+
+它\textbf{不能}直接支撑“corridor-level 多模态建模”，因为多样性可能只是模型的随机性，而不一定对应真实人类走廊分布。
+
+我们在 window-level 阶段已经踩过这个坑：窗口截断会把任务降级为短距离延续，导致“多模态/语义有效性”等结论失真（见 Sec.~1 的转向原因）。
+
+**corridor diversity 的可信证据必须来自“同 OD（或同 OD-bin）多实例 GT”**：
+
+- 先在数据层面确认：同 OD / 同 OD-bin 是否有足够多条 GT（见 `src/data/road_graph/od_group_stats_paths_graph_npz.py`）
+- 再在这些 OD 组内，用 edge-Jaccard 聚类得到走廊簇，并做 AUC gate（G3），验证 `time+tier` 是否在 corridor 层可观测（context-conditioned diversity）
+- 可视化时，应叠加同一 OD 组的多条 GT（灰）再看模型样本（蓝），避免“单 GT 误读”
+
+实际复现入口（命令口径见 `docs/WORKSTATION_GUIDE.md`）：
+
+- **多实例审计**：`python -m src.data.road_graph.od_group_stats_paths_graph_npz ...`
+- **T4 可视化叠加多 GT**：在 `sample_graph_ar_waypoints_astar` 加 `--viz_gt_od_bin 128`
+
+---
+
 ## 5) 论文叙事路线（ICML routegen，和代码/数据一致）
 
 ### 5.1 这篇论文讲什么

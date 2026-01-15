@@ -30,3 +30,5 @@ Our primary corridor-level metrics are:
   \item \textbf{Best-of-$K$ corridor match:} $J_{\mathrm{best}}$ (Sec.~\ref{sec:problem-setup}) computed on directed edge sets.
 \end{itemize}
 All reported numbers use $K=20$ samples per route and include qualitative visualizations of success/failure modes (e.g., unreachable waypoint segments).
+We emphasize that $J_{\mathrm{best}}$ above is a \emph{single-trajectory} match metric (one GT route vs $K$ generated routes) and should not be misread as evidence of corridor diversity by itself.
+Where we reason about corridor-level multi-modality (e.g., in the semantic gate), we explicitly use OD buckets with multiple ground-truth instances and cluster routes within each bucket.

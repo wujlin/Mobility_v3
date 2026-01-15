@@ -239,6 +239,7 @@ def _plot_case(
     out_pdf: Path,
     node_y: np.ndarray,
     node_x: np.ndarray,
+    gt_bucket_seqs: Optional[Sequence[Sequence[int]]],
     gt_seq: Sequence[int],
     pred_paths: Sequence[Sequence[int]],
     gt_wp: Optional[Sequence[int]],
@@ -250,6 +251,14 @@ def _plot_case(
         import matplotlib.pyplot as plt
 
         fig, ax = plt.subplots(1, 1, figsize=(4.2, 4.2))
+        # Optional: overlay other GT routes from the same OD-bin bucket.
+        # This avoids misreading "single GT vs many samples" as corridor-diversity evidence.
+        if gt_bucket_seqs is not None:
+            for s in gt_bucket_seqs:
+                ss = np.asarray(list(s), dtype=np.int64)
+                if ss.size < 2:
+                    continue
+                ax.plot(node_x[ss], node_y[ss], color=OKABE_ITO["gray"], lw=1.0, alpha=0.12)
         ax.plot(node_x[gt], node_y[gt], color="black", lw=2.0, alpha=0.9, label="GT")
         for p in pred_paths:
             pp = np.asarray(p, dtype=np.int64)
@@ -292,6 +301,8 @@ def run(
     tz_offset_hours: float,
     seed: int,
     viz_cases: int,
+    viz_gt_od_bin: int,
+    viz_gt_max: int,
     progress: str,
     log_every: int,
 ) -> Dict[str, object]:
@@ -329,6 +340,8 @@ def run(
     node_seq_pad = np.asarray(p["node_seq_pad"], dtype=np.int32)
     node_seq_len = np.asarray(p["node_seq_len"], dtype=np.int32).reshape(-1)
     start_t = np.asarray(p["start_t"], dtype=np.int64).reshape(-1)
+    start_pos = np.asarray(p["start_pos"], dtype=np.float32).reshape(-1, 2) if "start_pos" in p.files else None
+    dest_pos = np.asarray(p["dest_pos"], dtype=np.float32).reshape(-1, 2) if "dest_pos" in p.files else None
     start_node = np.asarray(p["start_node"], dtype=np.int32).reshape(-1)
     dest_node = np.asarray(p["dest_node"], dtype=np.int32).reshape(-1)
     route_city = np.asarray(p["route_city"], dtype=np.int8).reshape(-1) if "route_city" in p.files else np.zeros_like(start_node, dtype=np.int8)
@@ -377,6 +390,31 @@ def run(
             pass
 
         rng = np.random.default_rng(int(seed))
+
+        # For visualization only: multi-GT overlay within the same OD-bin bucket.
+        gt_bucket_keys = None
+        gt_bucket_map = None
+        od_bin_i = int(viz_gt_od_bin)
+        if od_bin_i > 0:
+            if start_pos is None or dest_pos is None:
+                raise ValueError("--viz_gt_od_bin requires start_pos/dest_pos in paths_graph_npz")
+            b = float(max(1, od_bin_i))
+            s_bin = np.floor(start_pos.astype(np.float64) / b).astype(np.int32)
+            d_bin = np.floor(dest_pos.astype(np.float64) / b).astype(np.int32)
+            gt_bucket_keys = np.concatenate([route_city[:, None].astype(np.int32), s_bin, d_bin], axis=1)  # (N,5)
+            view = gt_bucket_keys.view([("", gt_bucket_keys.dtype)] * gt_bucket_keys.shape[1]).reshape(-1)
+            order = np.argsort(view, kind="mergesort")
+            keys_s = gt_bucket_keys[order]
+            idx_s = order.astype(np.int64, copy=False)
+            gt_bucket_map = {}
+            i = 0
+            n0 = int(keys_s.shape[0])
+            while i < n0:
+                j = i + 1
+                while j < n0 and np.array_equal(keys_s[j], keys_s[i]):
+                    j += 1
+                gt_bucket_map[tuple(int(x) for x in keys_s[i].tolist())] = idx_s[i:j].copy()
+                i = j
         pick = rng.choice(n_routes_total, size=int(min(int(num_routes), n_routes_total)), replace=False)
         pick = np.sort(pick.astype(np.int64))
         pick_list = pick.tolist()
@@ -592,11 +630,25 @@ def run(
                     idx = pick_waypoint_indices_rdp_turn_fixed_k(pts, k=int(num_steps), turn_alpha=1.0)
                     gt_wp = [int(gt_seq[0])] + [int(gt_seq[int(j)]) for j in idx.tolist()] + [int(gt_seq[-1])]
 
+                gt_bucket_seqs = None
+                if gt_bucket_map is not None and gt_bucket_keys is not None:
+                    key = tuple(int(x) for x in gt_bucket_keys[int(rid)].tolist())
+                    idx2 = gt_bucket_map.get(key)
+                    if idx2 is not None and int(idx2.size) > 1:
+                        other = idx2[idx2 != int(rid)]
+                        if other.size > 0:
+                            max_k = int(max(0, viz_gt_max))
+                            if max_k > 0 and int(other.size) > max_k:
+                                pick2 = rng.choice(other, size=max_k, replace=False)
+                                other = np.sort(pick2)
+                            gt_bucket_seqs = [_seq_from_pad(node_seq_pad, node_seq_len, int(ii)) for ii in other.tolist()]
+
                 _plot_case(
                     out_png=out_dir / f"{name}.png",
                     out_pdf=out_dir / f"{name}.pdf",
                     node_y=node_y,
                     node_x=node_x,
+                    gt_bucket_seqs=gt_bucket_seqs,
                     gt_seq=gt_seq,
                     pred_paths=pred_paths,
                     gt_wp=gt_wp,
@@ -654,6 +706,8 @@ def run(
             "astar_workers": int(astar_workers_i),
             "seed": int(seed),
             "tz_offset_hours": float(tz_offset_hours),
+            "viz_gt_od_bin": int(viz_gt_od_bin),
+            "viz_gt_max": int(viz_gt_max),
             "progress": str(progress_mode),
             "log_every": int(log_every),
         },
@@ -709,6 +763,8 @@ def build_argparser() -> argparse.ArgumentParser:
     p.add_argument("--tz_offset_hours", type=float, default=-5.0)
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--viz_cases", type=int, default=10)
+    p.add_argument("--viz_gt_od_bin", type=int, default=0, help="If >0, overlay GT routes from the same OD-bin bucket (viz only).")
+    p.add_argument("--viz_gt_max", type=int, default=50, help="Max number of extra GT routes to overlay when --viz_gt_od_bin>0.")
     p.add_argument("--progress", type=str, default="auto", choices=["auto", "tqdm", "json", "none"])
     p.add_argument("--log_every", type=int, default=20, help="Only used when --progress=json.")
     return p
@@ -734,6 +790,8 @@ def main() -> None:
         tz_offset_hours=float(args.tz_offset_hours),
         seed=int(args.seed),
         viz_cases=int(args.viz_cases),
+        viz_gt_od_bin=int(args.viz_gt_od_bin),
+        viz_gt_max=int(args.viz_gt_max),
         progress=str(args.progress),
         log_every=int(args.log_every),
     )

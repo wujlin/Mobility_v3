@@ -103,6 +103,10 @@ RouteGen 的核心指标（v1）建议先用“能回答问题”的两类：
 - **success rate**：best-of-K 中有多少样本能成功 A\* 连到 `D`（衡量可达性/连通性）。
 - **best-of-K Jaccard（edge set）**：在合法 corridor 前提下，衡量与 GT corridor 的覆盖程度（比纯长度/欧氏误差更贴近“走廊一致性”）。
 
+> 重要澄清：上面的 best-of-K Jaccard 默认是“\textbf{单条 GT} vs \textbf{K 次采样}”的 \emph{single-trajectory match}，
+> 只能说明“是否能覆盖/重建这 1 条 GT corridor”，\textbf{不能}直接当作 corridor diversity 的证据。
+> corridor-level 多模态必须建立在“同 OD（或同 OD-bin）多实例 GT”的数据支持上（可用 `src/data/road_graph/od_group_stats_paths_graph_npz.py` 先审计）。
+
 ---
 
 ## 2. 时间与 `dt/vel` 语义

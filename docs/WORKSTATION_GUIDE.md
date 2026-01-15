@@ -216,6 +216,19 @@ python tools/gen_routegen_sync_manifest.py \
 
 > 口径：所有 `--out_dir` 都落到工作站 `$RAW_ROOT/experiments/icml2026_routegen/...`，本地用 `rsync` 拉到 `_sync/wsa/...`。
 
+**(0) 先做一次“同 OD / 同 OD-bin 多实例”审计（避免 corridor 定义踩坑）**：
+
+> 说明：很多可视化是“单条 GT（黑）vs 多次采样（蓝）”，这只能说明 \emph{single-trajectory match}（覆盖/重建），不能直接支撑 \emph{corridor-level multi-modality}。  
+> 这一步的输出会告诉你：数据里到底有没有足够的“同 OD（或同 OD-bin）多条 GT”可以用来定义/评估 corridor diversity。
+
+```bash
+python -m src.data.road_graph.od_group_stats_paths_graph_npz \
+  --paths_graph_npz "$RAW_ROOT/experiments/icml2026_routegen/T3_combo_detroit_columbus_seed0/paths_graph_combo.npz" \
+  --out_json "$RAW_ROOT/experiments/icml2026_routegen/T3_combo_detroit_columbus_seed0/od_group_stats_od128_mt5_seed0.json" \
+  --od_bin 128 --min_traj_per_od 5 --multimodal_dist_thr 0.3 \
+  --max_groups 200 --max_pairs 200 --seed 0
+```
+
 **(1) 构建 road graph（每城一次）**：
 
 ```bash
@@ -248,6 +261,18 @@ python -m src.data.road_graph.dump_waypoints_from_paths_graph_npz \
   |& tee "$RAW_ROOT/experiments/icml2026_routegen/T4_wp_ar_astar_combo_seed0/T1_dump_waypoints/run.log"
 ```
 
+如果要把 waypoint 从“几何转折点（RDP）”切换为“图上分叉点（degree$\ge$3）”，可用：
+
+```bash
+python -m src.data.road_graph.dump_waypoints_from_paths_graph_npz \
+  --paths_graph_npz "$RAW_ROOT/experiments/icml2026_routegen/T3_combo_detroit_columbus_seed0/paths_graph_combo.npz" \
+  --road_graph_npz "$RAW_ROOT/experiments/icml2026_routegen/T3_combo_detroit_columbus_seed0/road_graph_combo.npz" \
+  --out_dir "$RAW_ROOT/experiments/icml2026_routegen/T4_wp_ar_astar_combo_seed0/T1_dump_waypoints_branch_thr3" \
+  --num_waypoints 4 --mode branch --branch_degree_thr 3 \
+  --progress json --log_every 200 --seed 0 \
+  |& tee "$RAW_ROOT/experiments/icml2026_routegen/T4_wp_ar_astar_combo_seed0/T1_dump_waypoints_branch_thr3/run.log"
+```
+
 **(4) 训练 waypoint AR（T4 Step-2）**：
 
 ```bash
@@ -269,6 +294,8 @@ python -m src.training.sample_graph_ar_waypoints_astar \
   --waypoints_npz "$RAW_ROOT/experiments/icml2026_routegen/T4_wp_ar_astar_combo_seed0/T1_dump_waypoints/waypoints_graph.npz" \
   --out_dir "$RAW_ROOT/experiments/icml2026_routegen/T4_wp_ar_astar_combo_seed0/T3_eval_wp_ar_astar_K20_seed0" \
   --K 20 --temperature 0.8 --num_routes 200 --viz_cases 10 \
+  --viz_gt_od_bin 128 --viz_gt_max 50 \
+  --pick_strategy tier_dir \
   --astar_workers -1 --progress json --log_every 10 --seed 0 \
   |& tee "$RAW_ROOT/experiments/icml2026_routegen/T4_wp_ar_astar_combo_seed0/T3_eval_wp_ar_astar_K20_seed0/run.log"
 ```
@@ -285,6 +312,8 @@ python -m src.training.sample_graph_ar_waypoints_astar \
   --waypoints_npz "$RAW_ROOT/experiments/icml2026_routegen/T4_wp_ar_astar_combo_seed0/T1_dump_waypoints/waypoints_graph.npz" \
   --out_dir "$RAW_ROOT/experiments/icml2026_routegen/T4_wp_ar_astar_combo_seed0/T3_eval_wp_ar_astar_K20_seed0_oracle" \
   --oracle --K 20 --temperature 0.8 --num_routes 200 --viz_cases 10 \
+  --viz_gt_od_bin 128 --viz_gt_max 50 \
+  --pick_strategy tier_dir \
   --astar_workers -1 --progress json --log_every 10 --seed 0 \
   |& tee "$RAW_ROOT/experiments/icml2026_routegen/T4_wp_ar_astar_combo_seed0/T3_eval_wp_ar_astar_K20_seed0_oracle/run.log"
 ```

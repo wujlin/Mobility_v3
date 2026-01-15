@@ -55,6 +55,7 @@ route generation 的 corridor-level 多模态在连续坐标空间里会诱发�
 
 - 训练：`train_graph_ar_waypoint_bins.py`（val acc≈0.34，说明不是随机猜 bin）
 - 评估：`sample_graph_ar_waypoints_astar.py`（已修复跨城混选导致的不可达：`success_rate≈1.0`；当前瓶颈转移为 **bin 粒度过粗导致走廊混淆**，oracle 上界仅 `bestJ≈0.276`）
+  - 重要口径：这里的 `bestJ` 默认是“单条 GT vs K 次采样”的 single-trajectory match；corridor diversity 需要基于同 OD/同 OD-bin 的多实例 GT（见 `src/data/road_graph/od_group_stats_paths_graph_npz.py` 与 `docs/PI_BRIEF_ROUTEGEN_ICML2026.md`）。
 
 ---
 

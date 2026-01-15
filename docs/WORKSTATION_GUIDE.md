@@ -309,6 +309,73 @@ python -m src.training.train_casd_flow \
 - `batch_size`：按 `nvidia-smi` 逐步翻倍（8→16→32）；若 dataloader 跟不上再加 `--num_workers`（建议 8-16）。
 - `n_latent`：当前 combo 的 `seg_len_p90≈442`；若 AE 重建精度不够，优先把 `n_latent` 提到 96/128，再考虑其他改动。
 
+### 6.4 Way-CASD（Way-token CASD）主线复现命令（W1-W4）
+
+> 关键动机：直接使用 WorldTrace 的 `osm_way_id` 作为离散 token，避免 “GPS→node snap→bridging” 导致的千级序列长度爆炸。
+> Detroit core 的审计结果：连续去重后的 `uniq_way_seq_len` 为 `p50≈35 / p90≈61`（已经对齐 GTG/Cardiff 的粒度）。
+
+**(0) 产出含 `osm_way_id` 的 segments parquet（只需每城一次）**
+
+```bash
+export RAW_ROOT=/home/jinlin/data/geoexplicit_data
+export EXP_ROOT="$RAW_ROOT/experiments/icml2026_routegen"
+export INPUT_ZIP="$RAW_ROOT/worldtrace/OpenTrace_WorldTrace/Trajectory.zip"
+export OUT_SEG="$RAW_ROOT/worldtrace/detroit_core_v1/segments_with_wayid.parquet"
+
+python -m src.data.worldtrace.build_detroit_segments \
+  --trajectory_zip "$INPUT_ZIP" \
+  --out_parquet "$OUT_SEG" \
+  --require_way_id \
+  --num_workers 24 --chunk_size 5000 --mp_start fork \
+  |& tee "$EXP_ROOT/A_build_segments_wayid_detroit/run.log"
+
+# Go/No-Go：way 序列长度分布（p50 是否 ~10–40）
+python -m src.data.worldtrace.way_seq_stats_from_segments \
+  --segments_parquet "$OUT_SEG" \
+  --out_json "$EXP_ROOT/A_wayseq_detroit_seed0/report.json" \
+  |& tee "$EXP_ROOT/A_wayseq_detroit_seed0/run.log"
+```
+
+**(W1-W4) Way-CASD 数据准备（routes / graph / features / corridor label）**
+
+```bash
+export RAW_ROOT=/home/jinlin/data/geoexplicit_data
+export EXP_ROOT="$RAW_ROOT/experiments/icml2026_routegen"
+export SEGMENTS_PARQUET="$RAW_ROOT/worldtrace/detroit_core_v1/segments_with_wayid.parquet"
+export SEMANTIC_DIR="$RAW_ROOT/worldtrace/detroit_core_v1"         # 提供 bbox/H/W（osm_road_prob_meta.json）
+export OSM_PBF="$RAW_ROOT/osm/michigan-latest.osm.pbf"
+export OUT_BASE="$EXP_ROOT/WAYCASD0_waydata_detroit_seed0"
+
+bash run_way_casd_prep.sh
+```
+
+**(Step A) 训练 AE（48GB GPU 起步建议：`batch_size=256`, `num_workers=24`）**
+
+```bash
+python -m src.training.train_way_casd_autoencoder \
+  --way_routes_npz "$OUT_BASE/W4_way_routes_labeled/way_routes_labeled.npz" \
+  --way_graph_npz "$OUT_BASE/W2_way_graph/way_graph.npz" \
+  --way_features_npz "$OUT_BASE/W3_way_features/way_features.npz" \
+  --out_dir "$OUT_BASE/W5_train_ae" \
+  --batch_size 256 --num_workers 24 --n_epochs 30 \
+  --d_model 256 --n_latent 32 --max_candidates 64 --max_way_len 128 \
+  --device cuda
+```
+
+**(Step B) 训练 Flow（同上资源配置；若显存仍空闲可继续翻倍 batch）**
+
+```bash
+python -m src.training.train_way_casd_flow \
+  --way_routes_npz "$OUT_BASE/W4_way_routes_labeled/way_routes_labeled.npz" \
+  --way_graph_npz "$OUT_BASE/W2_way_graph/way_graph.npz" \
+  --way_features_npz "$OUT_BASE/W3_way_features/way_features.npz" \
+  --ae_ckpt "$OUT_BASE/W5_train_ae/ckpt_best.pt" \
+  --out_dir "$OUT_BASE/W6_train_flow" \
+  --batch_size 256 --num_workers 24 --n_epochs 30 \
+  --d_model 256 --n_latent 32 --solver_steps 20 --cfg_drop_prob 0.1 \
+  --device cuda
+```
+
 **(2) segments→graph paths（map-match，T1）**：
 
 ```bash

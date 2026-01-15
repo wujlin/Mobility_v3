@@ -95,6 +95,7 @@ $RAW_ROOT/
 │   ├── detroit_core_v1/
 │   │   ├── manifest.parquet
 │   │   ├── segments.parquet
+│   │   ├── segments_with_wayid.parquet     # 新主线：包含 osm_way_id（Way-CASD token）
 │   │   ├── osm_road_mask.npy
 │   │   ├── osm_dist_to_road_m.npy
 │   │   ├── osm_road_prob.npy
@@ -206,6 +207,31 @@ $RAW_ROOT/experiments/icml2026_routegen/CASD0_segdata_combo_seed0_term/S2_segmen
 - `traj_idx`：用于追溯到原 GT
 
 推荐同步策略：只同步 `report.json/run.log/*.json`（排除大文件），并把路径写入实验 `report.json` 的 gate 字段。
+
+**(G) Way routes / Way graph（Way-CASD：osm_way_id → way token seq）**
+
+> 口径：直接用 WorldTrace 的 `osm_way_id` 做离散 token（连续去重），目标把序列长度压到 ~20–60。
+
+```text
+$RAW_ROOT/experiments/icml2026_routegen/WAYCASD0_waydata_detroit_seed0/
+  W1_way_routes/way_routes.npz
+  W2_way_graph/way_graph.npz
+  W3_way_features/way_features.npz
+  W4_way_routes_labeled/way_routes_labeled.npz
+```
+
+`way_routes.npz` 典型字段：
+- `way_osm_id: (M,)`：way id 词表（OSM 全局 way id）
+- `way_seq_ptr/way_seq_idx/way_seq_len`：CSR 形式的变长 way 序列（元素是 way vocab index）
+- 条件输入：`start_way/dest_way/start_pos/dest_pos/start_t/route_city`
+- `corridor_type: (N,)`：由 `label_corridor_type_from_way_features.py` 写入（dominant tier > 50% → {major/minor/service} else mixed）
+
+`way_graph.npz` 典型字段：
+- `way_adj_ptr/way_adj_idx`：way-level adjacency（CSR；默认由 GT transition 构建，KISS）
+
+`way_features.npz` 典型字段：
+- `way_len_m/way_center_y/x/way_dir_y/x/way_tier/way_highway_code`
+- `meta.vocab.highway`：highway tag → code 的词表（用于解释 `way_highway_code`）
 
 ### 2.2 仓库内 data/（只放小文件/legacy/软链）
 

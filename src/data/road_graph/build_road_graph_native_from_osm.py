@@ -30,6 +30,13 @@ TIER_MAJOR = {"motorway", "trunk", "primary", "secondary"}
 TIER_MINOR = {"tertiary", "residential"}
 TIER_SERVICE = {"service", "unclassified"}
 
+UV_COL_CANDIDATES = [
+    ("u", "v"),
+    ("source", "target"),
+    ("from", "to"),
+    ("from_id", "to_id"),
+]
+
 
 def _normalize_highway_tag(tag: object) -> str:
     if isinstance(tag, (list, tuple, set)):
@@ -86,6 +93,40 @@ def _haversine_m(*, lat1: np.ndarray, lon1: np.ndarray, lat2: np.ndarray, lon2: 
     a = np.sin(dphi * 0.5) ** 2 + np.cos(phi1) * np.cos(phi2) * (np.sin(dl * 0.5) ** 2)
     c = 2.0 * np.arctan2(np.sqrt(a), np.sqrt(np.maximum(0.0, 1.0 - a)))
     return (r * c).astype(np.float64, copy=False)
+
+
+def _pick_uv_cols(df) -> Tuple[str, str]:
+    cols = set(getattr(df, "columns", []))
+    for a, b in UV_COL_CANDIDATES:
+        if a in cols and b in cols:
+            return str(a), str(b)
+    raise KeyError(f"Missing endpoint columns in pyrosm network table. Need one of: {UV_COL_CANDIDATES}. Got: {sorted(list(cols))}")
+
+
+def _split_pyrosm_network(net) -> Tuple[object, Optional[object]]:
+    """
+    pyrosm.get_network() may return:
+      - edges GeoDataFrame
+      - (nodes, edges) or (edges, nodes)
+    We detect edges by presence of geometry + some tag columns.
+    """
+    if isinstance(net, tuple) and len(net) == 2:
+        a, b = net
+        a_cols = set(getattr(a, "columns", []))
+        b_cols = set(getattr(b, "columns", []))
+        a_is_edges = ("geometry" in a_cols) and (("highway" in a_cols) or ("_highway_norm" in a_cols))
+        b_is_edges = ("geometry" in b_cols) and (("highway" in b_cols) or ("_highway_norm" in b_cols))
+        if a_is_edges and not b_is_edges:
+            return a, b
+        if b_is_edges and not a_is_edges:
+            return b, a
+        # Fallback: prefer the one that has endpoints columns.
+        if any((u in a_cols and v in a_cols) for (u, v) in UV_COL_CANDIDATES):
+            return a, b
+        if any((u in b_cols and v in b_cols) for (u, v) in UV_COL_CANDIDATES):
+            return b, a
+        return a, b
+    return net, None
 
 
 def _load_grid_from_semantic_dir(semantic_dir: Path) -> GridSpec:
@@ -148,13 +189,29 @@ def build_graph(
     roads_allow = ROAD_TYPES_A if str(cfg.road_types) == "A" else ROAD_TYPES_B
 
     osm = OSM(str(osm_pbf), bounding_box=[bbox.min_lon, bbox.min_lat, bbox.max_lon, bbox.max_lat])
-    roads = osm.get_network(network_type="driving")
+    print("[stage] extract driving network via pyrosm...", flush=True)
+    t_extract = time.time()
+    net = None
+    try:
+        # Some pyrosm versions expose endpoints only when nodes=True.
+        net = osm.get_network(network_type="driving", nodes=True)
+    except TypeError:
+        net = osm.get_network(network_type="driving")
+    roads, nodes_from_net = _split_pyrosm_network(net)
     if roads is None or len(roads) == 0:
         raise SystemExit("No roads extracted from OSM within bbox. Check osm_pbf/bbox.")
+    print(f"[stage] extracted rows={len(roads)} elapsed_s={time.time() - t_extract:.2f}", flush=True)
 
-    for col in ("u", "v", "highway"):
+    if "highway" not in roads.columns:
+        raise SystemExit(f"Unexpected pyrosm output: missing 'highway' column. Got: {sorted(list(roads.columns))}")
+    try:
+        u_col, v_col = _pick_uv_cols(roads)
+    except KeyError as e:
+        raise SystemExit(str(e)) from e
+
+    for col in (u_col, v_col, "highway"):
         if col not in roads.columns:
-            raise SystemExit(f"Unexpected pyrosm output: missing '{col}' column.")
+            raise SystemExit(f"Unexpected pyrosm output: missing '{col}' column. Got: {sorted(list(roads.columns))}")
     length_col = None
     for cand in ("length", "length_m", "length_meters", "length_metres"):
         if cand in roads.columns:
@@ -171,15 +228,20 @@ def build_graph(
         raise SystemExit("No roads after filtering by road_types. Try --road_types B or --keep_tier3.")
 
     # Map u/v osm node ids -> dense indices by looking up node lat/lon.
-    u_osm = np.asarray(roads["u"].values, dtype=np.int64).reshape(-1)
-    v_osm = np.asarray(roads["v"].values, dtype=np.int64).reshape(-1)
+    u_osm = np.asarray(roads[u_col].values, dtype=np.int64).reshape(-1)
+    v_osm = np.asarray(roads[v_col].values, dtype=np.int64).reshape(-1)
     osm_ids = np.unique(np.concatenate([u_osm, v_osm], axis=0).astype(np.int64, copy=False))
     if osm_ids.size == 0:
         raise SystemExit("No node ids found in pyrosm roads table.")
 
-    nodes = osm.get_node_data()
+    print("[stage] load node table...", flush=True)
+    t_nodes = time.time()
+    nodes = nodes_from_net
+    if nodes is None or len(nodes) == 0:
+        nodes = osm.get_node_data()
     if nodes is None or len(nodes) == 0:
         raise SystemExit("pyrosm.get_node_data() returned empty; cannot build native road graph.")
+    print(f"[stage] nodes rows={len(nodes)} elapsed_s={time.time() - t_nodes:.2f}", flush=True)
     for col in ("id", "lat", "lon"):
         if col not in nodes.columns:
             raise SystemExit(f"Unexpected pyrosm node table: missing '{col}' column.")

@@ -33,6 +33,19 @@ class SegmentConfig:
     min_segment_points: int = 120
     matched_distance_max_m: float = 30.0
     max_unmatched_ratio: float = 0.20
+    require_way_id: bool = False
+
+
+WAY_ID_KEYS = ("osm_way_id", "osm_wayid", "way_id")
+
+
+def _pick_osm_way_id(row: Dict[str, str]) -> Optional[int]:
+    for k in WAY_ID_KEYS:
+        v = row.get(k, "")
+        wi = _safe_int(v)
+        if wi is not None and int(wi) > 0:
+            return int(wi)
+    return None
 
 
 def _matched_type_available(v: str) -> bool:
@@ -166,8 +179,10 @@ def _split_bbox_segments(
             "x": [],
             "is_matched": [],
             "matched_distance": [],
+            "osm_way_id": [],
             "n": 0,
             "unmatched_n": 0,
+            "way_id_missing_n": 0,
         }
 
     def _flush():
@@ -214,9 +229,13 @@ def _split_bbox_segments(
         cur["x"].append(x0)
         cur["is_matched"].append(int(is_matched))
         cur["matched_distance"].append(float(md) if md is not None else float("nan"))
+        way_id = _pick_osm_way_id(row)
+        cur["osm_way_id"].append(int(way_id) if way_id is not None else -1)
         cur["n"] += 1
         if not is_matched:
             cur["unmatched_n"] += 1
+        if way_id is None:
+            cur["way_id_missing_n"] += 1
 
     _flush()
     return segments
@@ -233,7 +252,13 @@ def _segment_ok(seg: Dict[str, List], cfg: SegmentConfig) -> bool:
     if n < cfg.min_segment_points:
         return False
     unr = float(seg.get("unmatched_n", 0)) / float(n)
-    return unr <= cfg.max_unmatched_ratio
+    if unr > cfg.max_unmatched_ratio:
+        return False
+    if bool(getattr(cfg, "require_way_id", False)):
+        miss = float(seg.get("way_id_missing_n", 0)) / float(n)
+        if miss >= 0.50:
+            return False
+    return True
 
 
 def _default_detroit_core_grid() -> GridSpec:
@@ -278,6 +303,7 @@ def _process_member_chunk(
         min_segment_points=int(cfg_dict["min_segment_points"]),
         matched_distance_max_m=float(cfg_dict["matched_distance_max_m"]),
         max_unmatched_ratio=float(cfg_dict["max_unmatched_ratio"]),
+        require_way_id=bool(cfg_dict.get("require_way_id", False)),
     )
 
     zf = _get_worker_zip(zip_path)
@@ -333,6 +359,7 @@ def main() -> None:
     ap.add_argument("--min_segment_points", type=int, default=120)
     ap.add_argument("--matched_distance_max_m", type=float, default=30.0)
     ap.add_argument("--max_unmatched_ratio", type=float, default=0.20)
+    ap.add_argument("--require_way_id", action="store_true", help="Drop segments with too many missing osm_way_id (>=50%).")
     args = ap.parse_args()
 
     if pa is None or pq is None:
@@ -351,6 +378,7 @@ def main() -> None:
         min_segment_points=int(args.min_segment_points),
         matched_distance_max_m=float(args.matched_distance_max_m),
         max_unmatched_ratio=float(args.max_unmatched_ratio),
+        require_way_id=bool(args.require_way_id),
     )
 
     schema = pa.schema(
@@ -358,6 +386,7 @@ def main() -> None:
             ("traj_csv", pa.string()),
             ("n_points", pa.int32()),
             ("unmatched_ratio", pa.float32()),
+            ("way_id_missing_ratio", pa.float32()),
             ("t", pa.list_(pa.int64())),
             ("lat", pa.list_(pa.float32())),
             ("lon", pa.list_(pa.float32())),
@@ -365,6 +394,7 @@ def main() -> None:
             ("x", pa.list_(pa.int32())),
             ("is_matched", pa.list_(pa.int8())),
             ("matched_distance", pa.list_(pa.float32())),
+            ("osm_way_id", pa.list_(pa.int64())),
         ]
     )
 
@@ -386,11 +416,13 @@ def main() -> None:
             nonlocal wrote
             n = int(seg["n"])
             unr = float(seg["unmatched_n"]) / float(max(n, 1))
+            wmr = float(seg.get("way_id_missing_n", 0)) / float(max(n, 1))
             batch = pa.Table.from_pydict(
                 {
                     "traj_csv": [member],
                     "n_points": [n],
                     "unmatched_ratio": [np.float32(unr)],
+                    "way_id_missing_ratio": [np.float32(wmr)],
                     "t": [seg["t"]],
                     "lat": [np.asarray(seg["lat"], np.float32).tolist()],
                     "lon": [np.asarray(seg["lon"], np.float32).tolist()],
@@ -398,6 +430,7 @@ def main() -> None:
                     "x": [np.asarray(seg["x"], np.int32).tolist()],
                     "is_matched": [np.asarray(seg["is_matched"], np.int8).tolist()],
                     "matched_distance": [np.asarray(seg["matched_distance"], np.float32).tolist()],
+                    "osm_way_id": [np.asarray(seg["osm_way_id"], np.int64).tolist()],
                 },
                 schema=schema,
             )

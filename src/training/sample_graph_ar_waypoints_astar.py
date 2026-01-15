@@ -248,6 +248,11 @@ def _plot_case(
     out_pdf: Path,
     node_y: np.ndarray,
     node_x: np.ndarray,
+    edge_u: np.ndarray,
+    edge_v: np.ndarray,
+    edge_tier: Optional[np.ndarray],
+    node_city: Optional[np.ndarray],
+    route_city: Optional[int],
     gt_bucket_seqs: Optional[Sequence[Sequence[int]]],
     gt_seq: Sequence[int],
     pred_paths: Sequence[Sequence[int]],
@@ -258,8 +263,79 @@ def _plot_case(
     gt = np.asarray(gt_seq, dtype=np.int64)
     with paper_style():
         import matplotlib.pyplot as plt
+        from matplotlib.collections import LineCollection
 
         fig, ax = plt.subplots(1, 1, figsize=(4.2, 4.2))
+
+        def _collect_xy(seqs: Sequence[Sequence[int]]) -> Tuple[np.ndarray, np.ndarray]:
+            xs: List[float] = []
+            ys: List[float] = []
+            for s in seqs:
+                ss = np.asarray(list(s), dtype=np.int64)
+                if ss.size == 0:
+                    continue
+                xs.extend(node_x[ss].astype(np.float64, copy=False).tolist())
+                ys.extend(node_y[ss].astype(np.float64, copy=False).tolist())
+            if not xs:
+                return np.zeros((0,), dtype=np.float64), np.zeros((0,), dtype=np.float64)
+            return np.asarray(xs, dtype=np.float64), np.asarray(ys, dtype=np.float64)
+
+        # Tight view box for publication-ready crops (no bbox_inches='tight').
+        seqs_for_bbox: List[Sequence[int]] = [gt_seq]
+        seqs_for_bbox.extend([p for p in pred_paths if p])
+        if gt_bucket_seqs is not None:
+            seqs_for_bbox.extend([s for s in gt_bucket_seqs if s])
+        xs_all, ys_all = _collect_xy(seqs_for_bbox)
+        if xs_all.size > 0:
+            xmin = float(np.min(xs_all))
+            xmax = float(np.max(xs_all))
+            ymin = float(np.min(ys_all))
+            ymax = float(np.max(ys_all))
+        else:
+            xmin = float(np.min(node_x))
+            xmax = float(np.max(node_x))
+            ymin = float(np.min(node_y))
+            ymax = float(np.max(node_y))
+        pad = 0.06 * float(max(1e-3, max(xmax - xmin, ymax - ymin)))
+        x0, x1 = xmin - pad, xmax + pad
+        y0, y1 = ymin - pad, ymax + pad
+
+        # Background: street network (local crop). This is for realism and spatial context.
+        eu = np.asarray(edge_u, dtype=np.int64).reshape(-1)
+        ev = np.asarray(edge_v, dtype=np.int64).reshape(-1)
+        if eu.size == ev.size and eu.size > 0:
+            m = (node_x[eu] >= x0) & (node_x[eu] <= x1) & (node_y[eu] >= y0) & (node_y[eu] <= y1)
+            m |= (node_x[ev] >= x0) & (node_x[ev] <= x1) & (node_y[ev] >= y0) & (node_y[ev] <= y1)
+            if node_city is not None and route_city is not None and int(node_city.size) == int(node_x.size):
+                cc = np.asarray(node_city, dtype=np.int64).reshape(-1)
+                rc = int(route_city)
+                m &= (cc[eu] == rc) & (cc[ev] == rc)
+            uu = eu[m]
+            vv = ev[m]
+            if uu.size > 0:
+                seg = np.stack(
+                    [
+                        np.stack([node_x[uu], node_y[uu]], axis=1),
+                        np.stack([node_x[vv], node_y[vv]], axis=1),
+                    ],
+                    axis=1,
+                ).astype(np.float32, copy=False)
+                if edge_tier is not None and int(np.asarray(edge_tier).size) == int(eu.size):
+                    tt = np.asarray(edge_tier, dtype=np.int64).reshape(-1)[m]
+                    groups = [
+                        (tt <= 0, "#9a9a9a", 0.90, 0.35),  # major
+                        (tt == 1, "#b2b2b2", 0.55, 0.22),  # minor
+                        (tt >= 2, "#d0d0d0", 0.40, 0.14),  # service/other
+                    ]
+                    for mask_t, color, lw, alpha in groups:
+                        if not bool(np.any(mask_t)):
+                            continue
+                        lc = LineCollection(seg[mask_t], colors=[color], linewidths=float(lw), alpha=float(alpha), zorder=0)
+                        ax.add_collection(lc)
+                else:
+                    lc = LineCollection(seg, colors=["#bcbcbc"], linewidths=0.5, alpha=0.18, zorder=0)
+                    ax.add_collection(lc)
+
         # Optional: overlay other GT routes from the same OD-bin bucket.
         # This avoids misreading "single GT vs many samples" as corridor-diversity evidence.
         if gt_bucket_seqs is not None:
@@ -267,26 +343,47 @@ def _plot_case(
                 ss = np.asarray(list(s), dtype=np.int64)
                 if ss.size < 2:
                     continue
-                ax.plot(node_x[ss], node_y[ss], color=OKABE_ITO["gray"], lw=1.0, alpha=0.12)
-        ax.plot(node_x[gt], node_y[gt], color="black", lw=2.0, alpha=0.9, label="GT")
+                ax.plot(node_x[ss], node_y[ss], color="#8f8f8f", lw=1.0, alpha=0.10, linestyle="--", zorder=1)
+
+        # Predictions: alpha reflects per-sample Jaccard to GT; highlight best-of-K.
+        gt_es = _edge_set(gt_seq)
+        best_j = -1.0
+        best_pp: Optional[List[int]] = None
         for p in pred_paths:
+            if not p:
+                continue
+            j = _jaccard_edges(_edge_set(p), gt_es)
+            if float(j) > float(best_j):
+                best_j = float(j)
+                best_pp = [int(x) for x in p]
+            alpha = float(np.clip(0.06 + 0.34 * float(j), 0.06, 0.40))
             pp = np.asarray(p, dtype=np.int64)
-            ax.plot(node_x[pp], node_y[pp], color=OKABE_ITO["blue"], lw=1.0, alpha=0.22)
+            ax.plot(node_x[pp], node_y[pp], color=OKABE_ITO["blue"], lw=1.0, alpha=alpha, zorder=2)
+        if best_pp is not None and len(best_pp) >= 2:
+            pp = np.asarray(best_pp, dtype=np.int64)
+            ax.plot(node_x[pp], node_y[pp], color=OKABE_ITO["vermillion"], lw=2.0, alpha=0.90, zorder=3)
+
+        # GT: draw with a white halo for contrast against overlapping gray/blue lines.
+        ax.plot(node_x[gt], node_y[gt], color="white", lw=3.6, alpha=1.0, zorder=4)
+        ax.plot(node_x[gt], node_y[gt], color="black", lw=2.2, alpha=0.95, zorder=5, label="GT")
+
         # GT waypoints (optional)
         if gt_wp is not None and len(gt_wp) >= 2:
             w = np.asarray(gt_wp, dtype=np.int64)
-            ax.scatter(node_x[w], node_y[w], s=20, c="black", edgecolors="white", linewidths=0.5, zorder=10, label="GT-WP")
+            ax.scatter(node_x[w], node_y[w], s=28, c="black", edgecolors="white", linewidths=0.6, zorder=10, label="GT-WP")
         # Pred waypoint clouds
         for wps in pred_wps:
             if not wps:
                 continue
             w = np.asarray(wps, dtype=np.int64)
-            ax.scatter(node_x[w], node_y[w], s=8, c=OKABE_ITO["sky_blue"], alpha=0.25, linewidths=0.0)
+            ax.scatter(node_x[w], node_y[w], s=10, c=OKABE_ITO["sky_blue"], alpha=0.18, linewidths=0.0, zorder=6)
 
         ax.scatter([node_x[gt[0]]], [node_y[gt[0]]], s=60, c="black", edgecolors="white", linewidths=1.0, zorder=10)
         ax.scatter([node_x[gt[-1]]], [node_y[gt[-1]]], s=60, c="black", marker="s", edgecolors="white", linewidths=1.0, zorder=10)
         ax.set_title(title)
         ax.set_aspect("equal")
+        ax.set_xlim(float(x0), float(x1))
+        ax.set_ylim(float(y0), float(y1))
         ax.axis("off")
         save_figure(fig, out_png, dpi=250)
         save_figure(fig, out_pdf)
@@ -339,6 +436,7 @@ def run(
     node_y = np.asarray(raw["node_y"], dtype=np.float32).reshape(-1)
     node_x = np.asarray(raw["node_x"], dtype=np.float32).reshape(-1)
     edge_u = np.asarray(raw["edge_u"], dtype=np.int32).reshape(-1)
+    edge_v = np.asarray(raw["edge_v"], dtype=np.int32).reshape(-1)
     edge_tier = np.asarray(raw["edge_tier"], dtype=np.uint8).reshape(-1)
     node_city = np.asarray(raw["node_city"], dtype=np.int8).reshape(-1) if "node_city" in raw.files else None
     n_nodes = int(node_y.size)
@@ -456,6 +554,9 @@ def run(
         best_j_succ_list = []
         succ_rate_list = []
         base_best_list = []
+        # Waypoint spatial diagnostics
+        wp_dist_err_list: List[float] = []  # avg dist from pred wp to nearest GT wp (in grid cells)
+        wp_outside_od_rate_list: List[float] = []  # fraction of pred wps outside O-D bounding box
 
         cfg_s = SampleCfg(K=int(K), temperature=float(temperature), max_steps=4096)
 
@@ -629,6 +730,46 @@ def run(
                     bj = max(bj, _jaccard_edges(_edge_set(path), gt_es))
                 base_best = float(bj)
 
+            # --- Waypoint spatial diagnostics ---
+            # Compute GT waypoint positions for reference
+            gt_wp_for_diag: Optional[List[int]] = None
+            if gt_wp_seq is not None and int(rid) < int(gt_wp_seq.shape[0]):
+                gt_wp_for_diag = [int(x) for x in gt_wp_seq[int(rid)].astype(np.int64, copy=False).tolist() if int(x) >= 0]
+            if gt_wp_for_diag is None or len(gt_wp_for_diag) < 2:
+                pts = np.stack([node_y[np.asarray(gt_seq, dtype=np.int64)], node_x[np.asarray(gt_seq, dtype=np.int64)]], axis=1).astype(np.float32, copy=False)
+                idx = pick_waypoint_indices_rdp_turn_fixed_k(pts, k=int(num_steps), turn_alpha=1.0)
+                gt_wp_for_diag = [int(gt_seq[0])] + [int(gt_seq[int(j)]) for j in idx.tolist()] + [int(gt_seq[-1])]
+            # Internal GT wps (exclude O/D)
+            gt_wp_internal = gt_wp_for_diag[1:-1] if len(gt_wp_for_diag) >= 2 else []
+            gt_wp_yx = np.array([[float(node_y[int(n)]), float(node_x[int(n)])] for n in gt_wp_internal], dtype=np.float64) if gt_wp_internal else np.zeros((0, 2), dtype=np.float64)
+
+            # O-D bounding box (with 20% margin)
+            oy, ox = float(node_y[int(s)]), float(node_x[int(s)])
+            dy, dx = float(node_y[int(d)]), float(node_x[int(d)])
+            od_dist = float(np.sqrt((oy - dy) ** 2 + (ox - dx) ** 2))
+            margin = 0.2 * max(od_dist, 1.0)
+            bbox_ymin, bbox_ymax = min(oy, dy) - margin, max(oy, dy) + margin
+            bbox_xmin, bbox_xmax = min(ox, dx) - margin, max(ox, dx) + margin
+
+            # Compute diagnostics across all K samples
+            all_dist_errs: List[float] = []
+            all_outside: List[bool] = []
+            for wps in wps_list:
+                for nid in wps:
+                    py, px = float(node_y[int(nid)]), float(node_x[int(nid)])
+                    # Min dist to any GT wp
+                    if gt_wp_yx.shape[0] > 0:
+                        dists = np.sqrt(np.sum((gt_wp_yx - np.array([[py, px]])) ** 2, axis=1))
+                        all_dist_errs.append(float(np.min(dists)))
+                    # Outside O-D bbox?
+                    outside = not (bbox_ymin <= py <= bbox_ymax and bbox_xmin <= px <= bbox_xmax)
+                    all_outside.append(outside)
+
+            wp_dist_err = float(np.mean(all_dist_errs)) if all_dist_errs else 0.0
+            wp_outside_rate = float(np.mean(all_outside)) if all_outside else 0.0
+            wp_dist_err_list.append(wp_dist_err)
+            wp_outside_od_rate_list.append(wp_outside_rate)
+
             rows.append(
                 {
                     "route_id": int(rid),
@@ -640,6 +781,8 @@ def run(
                     "best_jaccard_success": float(best_j_succ),
                     "success_rate": float(succ_rate),
                     "baseline_best_jaccard_kshortest": (float(base_best) if base_best is not None else None),
+                    "wp_dist_err": float(wp_dist_err),
+                    "wp_outside_od_rate": float(wp_outside_rate),
                 }
             )
             best_j_list.append(float(best_j))
@@ -676,6 +819,11 @@ def run(
                     out_pdf=out_dir / f"{name}.pdf",
                     node_y=node_y,
                     node_x=node_x,
+                    edge_u=edge_u,
+                    edge_v=edge_v,
+                    edge_tier=edge_tier,
+                    node_city=(node_city.astype(np.int64, copy=False) if node_city is not None else None),
+                    route_city=int(city),
                     gt_bucket_seqs=gt_bucket_seqs,
                     gt_seq=gt_seq,
                     pred_paths=pred_paths,
@@ -749,6 +897,16 @@ def run(
                 "p50": _q(base_best_list, 50) if base_best_list else None,
                 "p90": _q(base_best_list, 90) if base_best_list else None,
                 "n": int(len(base_best_list)),
+            },
+            "wp_dist_err": {
+                "mean": float(np.mean(np.asarray(wp_dist_err_list, dtype=np.float64))) if wp_dist_err_list else None,
+                "p50": _q(wp_dist_err_list, 50),
+                "p90": _q(wp_dist_err_list, 90),
+            },
+            "wp_outside_od_rate": {
+                "mean": float(np.mean(np.asarray(wp_outside_od_rate_list, dtype=np.float64))) if wp_outside_od_rate_list else None,
+                "p50": _q(wp_outside_od_rate_list, 50),
+                "p90": _q(wp_outside_od_rate_list, 90),
             },
         },
         "rows": rows[:200],

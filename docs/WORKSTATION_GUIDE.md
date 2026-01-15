@@ -310,7 +310,10 @@ python -m src.data.road_graph.dump_graph_paths_from_routes_npz \
   --routes_npz "$RAW_ROOT/experiments/icml2026_routegen/gt_segments/detroit_segments_route_F256_epoch_seed0.npz" \
   --road_graph_npz "$RAW_ROOT/experiments/icml2026_routegen/G1n_roadgraph_detroit_native/road_graph.npz" \
   --out_dir "$RAW_ROOT/experiments/icml2026_routegen/G3_argraph_detroit_seed0/T1_dump_paths" \
-  --seed 0
+  --num_workers 24 --chunk_size 256 --mp_start fork \
+  --progress auto --log_every 2000 \
+  --seed 0 \
+  |& tee "$RAW_ROOT/experiments/icml2026_routegen/G3_argraph_detroit_seed0/T1_dump_paths/run.log"
 
 # 快速审计：node/edge 序列长度分布
 python -m src.data.road_graph.audit_paths_graph_npz \

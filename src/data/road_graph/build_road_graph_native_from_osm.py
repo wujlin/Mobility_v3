@@ -54,6 +54,40 @@ def _tier_id(highway: str) -> int:
     return 3
 
 
+def _parse_oneway_flag(x: object) -> bool:
+    if x is None:
+        return False
+    if isinstance(x, (bool, np.bool_)):
+        return bool(x)
+    if isinstance(x, (int, np.integer)):
+        return int(x) != 0
+    if isinstance(x, (float, np.floating)):
+        if np.isnan(float(x)):
+            return False
+        return float(x) != 0.0
+    s = str(x).strip().lower()
+    if s in {"", "no", "false", "0", "n", "f"}:
+        return False
+    if s in {"yes", "true", "1", "y", "t", "-1"}:
+        return True
+    return False
+
+
+def _haversine_m(*, lat1: np.ndarray, lon1: np.ndarray, lat2: np.ndarray, lon2: np.ndarray) -> np.ndarray:
+    lat1 = np.asarray(lat1, dtype=np.float64)
+    lon1 = np.asarray(lon1, dtype=np.float64)
+    lat2 = np.asarray(lat2, dtype=np.float64)
+    lon2 = np.asarray(lon2, dtype=np.float64)
+    r = 6_371_000.0
+    phi1 = np.deg2rad(lat1)
+    phi2 = np.deg2rad(lat2)
+    dphi = phi2 - phi1
+    dl = np.deg2rad(lon2 - lon1)
+    a = np.sin(dphi * 0.5) ** 2 + np.cos(phi1) * np.cos(phi2) * (np.sin(dl * 0.5) ** 2)
+    c = 2.0 * np.arctan2(np.sqrt(a), np.sqrt(np.maximum(0.0, 1.0 - a)))
+    return (r * c).astype(np.float64, copy=False)
+
+
 def _load_grid_from_semantic_dir(semantic_dir: Path) -> GridSpec:
     meta_path = semantic_dir / "osm_road_prob_meta.json"
     if not meta_path.exists():
@@ -121,13 +155,18 @@ def build_graph(
     for col in ("u", "v", "highway"):
         if col not in roads.columns:
             raise SystemExit(f"Unexpected pyrosm output: missing '{col}' column.")
-    if "length" not in roads.columns:
-        raise SystemExit("Unexpected pyrosm output: missing 'length' column (meters).")
+    length_col = None
+    for cand in ("length", "length_m", "length_meters", "length_metres"):
+        if cand in roads.columns:
+            length_col = str(cand)
+            break
 
-    hw = roads["highway"].apply(_normalize_highway_tag)
-    roads = roads[hw.isin(roads_allow)]
+    # Normalize and keep aligned with filtered rows.
+    roads = roads.copy()
+    roads["_highway_norm"] = roads["highway"].apply(_normalize_highway_tag)
+    roads = roads[roads["_highway_norm"].isin(roads_allow)]
     if not bool(cfg.keep_tier3):
-        roads = roads[hw.apply(_tier_id).astype(int) <= 2]
+        roads = roads[roads["_highway_norm"].apply(_tier_id).astype(int) <= 2]
     if len(roads) == 0:
         raise SystemExit("No roads after filtering by road_types. Try --road_types B or --keep_tier3.")
 
@@ -168,11 +207,19 @@ def build_graph(
     u_idx = pos_u[valid].astype(np.int32, copy=False)
     v_idx = pos_v[valid].astype(np.int32, copy=False)
 
-    length_m = np.asarray(roads["length"].values, dtype=np.float64).reshape(-1)[valid]
+    if length_col is not None:
+        length_m = np.asarray(roads[length_col].values, dtype=np.float64).reshape(-1)[valid]
+    else:
+        # Fallback: approximate length by haversine of u/v endpoints.
+        lat_u = node_lat[u_idx.astype(np.int64, copy=False)]
+        lon_u = node_lon[u_idx.astype(np.int64, copy=False)]
+        lat_v = node_lat[v_idx.astype(np.int64, copy=False)]
+        lon_v = node_lon[v_idx.astype(np.int64, copy=False)]
+        length_m = _haversine_m(lat1=lat_u, lon1=lon_u, lat2=lat_v, lon2=lon_v)
     length_m = np.asarray(length_m, dtype=np.float32)
     length_m = np.clip(length_m, 1e-3, np.finfo(np.float32).max)
 
-    hw_valid = np.asarray(hw.values, dtype=object).reshape(-1)[valid]
+    hw_valid = np.asarray(roads["_highway_norm"].values, dtype=object).reshape(-1)[valid]
     tier = np.asarray([_tier_id(str(s)) for s in hw_valid.tolist()], dtype=np.uint8)
 
     oneway = None
@@ -215,7 +262,7 @@ def build_graph(
         ew = np.concatenate([length_m, length_m], axis=0)
         et = np.concatenate([tier, tier], axis=0)
     else:
-        one = np.asarray([(bool(x) if not (x is None or (isinstance(x, float) and np.isnan(x))) else False) for x in oneway.tolist()], dtype=bool)
+        one = np.asarray([_parse_oneway_flag(x) for x in oneway.tolist()], dtype=bool)
         eu_f = u_idx
         ev_f = v_idx
         ew_f = length_m
@@ -302,4 +349,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

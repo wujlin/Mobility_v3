@@ -233,6 +233,15 @@ def _astar_worker(pair: Tuple[int, int]) -> List[int]:
     return [int(x) for x in path]
 
 
+def _kshortest_worker(args: Tuple[int, int, int]) -> List[List[int]]:
+    """Worker for parallel K-shortest paths computation."""
+    global _ASTAR_G
+    if _ASTAR_G is None:
+        raise RuntimeError("A* worker graph is not initialized.")
+    s, d, K = args
+    return k_shortest_paths_yen(_ASTAR_G, start=int(s), goal=int(d), K=int(K))
+
+
 def _plot_case(
     *,
     out_png: Path,
@@ -422,6 +431,25 @@ def run(
         t0 = time.time()
 
         od_cache: Dict[Tuple[int, int, int], List[List[int]]] = {}
+
+        # Pre-compute K-shortest paths in parallel if baseline_k > 0
+        if int(baseline_k) > 0 and pool is not None:
+            # Collect unique OD pairs for K-shortest computation
+            kshortest_args = []
+            kshortest_keys = []
+            for rid in pick_list:
+                s = int(start_node[int(rid)])
+                d = int(dest_node[int(rid)])
+                key = (s, d, int(baseline_k))
+                if key not in od_cache and key not in kshortest_keys:
+                    kshortest_keys.append(key)
+                    kshortest_args.append((s, d, int(baseline_k)))
+            if kshortest_args:
+                print(json.dumps({"event": "precompute_kshortest", "n_od_pairs": len(kshortest_args), "K": int(baseline_k)}, ensure_ascii=False), flush=True)
+                kshortest_results = pool.map(_kshortest_worker, kshortest_args)
+                for key, paths in zip(kshortest_keys, kshortest_results):
+                    od_cache[key] = paths
+                print(json.dumps({"event": "precompute_kshortest_done", "n_od_pairs": len(kshortest_args)}, ensure_ascii=False), flush=True)
 
         rows = []
         best_j_list = []

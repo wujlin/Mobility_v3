@@ -88,8 +88,8 @@ def _infer_decoder_use_dest_dist_from_state(state: Dict[str, torch.Tensor]) -> b
 def _to_device(batch: Dict[str, object], device: torch.device) -> Dict[str, object]:
     way_seq_pad = batch["way_seq_pad"].to(device)
     route_cond = {k: v.to(device) for k, v in batch["route_cond"].items()}
-    trans = {k: v.to(device) for k, v in batch["trans"].items()}
-    return {"way_seq_pad": way_seq_pad, "route_cond": route_cond, "trans": trans}
+    # Flow training only needs encoder latents + route_cond; moving transitions to GPU is wasted.
+    return {"way_seq_pad": way_seq_pad, "route_cond": route_cond}
 
 
 def train_epoch(

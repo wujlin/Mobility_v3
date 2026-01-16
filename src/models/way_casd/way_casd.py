@@ -24,6 +24,9 @@ class WayCASDAECfg:
     coord_scale: float = 1024.0
     # See WayDecoderCfg.use_dest_dist (for loading older checkpoints).
     decoder_use_dest_dist: bool = True
+    # Cross-attention decoder (key improvement for latent utilization)
+    decoder_use_cross_attn: bool = True
+    decoder_n_cross_heads: int = 4
 
 
 class WayCASDAutoEncoder(nn.Module):
@@ -72,6 +75,8 @@ class WayCASDAutoEncoder(nn.Module):
                 dropout=float(cfg.dropout),
                 max_len=int(cfg.max_len),
                 use_dest_dist=bool(cfg.decoder_use_dest_dist),
+                use_cross_attn=bool(cfg.decoder_use_cross_attn),
+                n_cross_heads=int(cfg.decoder_n_cross_heads),
             ),
             cond_cfg=ConditionEncoderCfg(
                 d_model=int(cfg.d_model),

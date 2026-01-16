@@ -17,14 +17,20 @@ class WayDecoderCfg:
     max_candidates: int = 32
     dropout: float = 0.1
     max_len: int = 128
+    # Cross-attention for querying latent tokens
+    use_cross_attn: bool = True
+    n_cross_heads: int = 4
     # Backward compatibility:
-    # Older checkpoints were trained without the (dest - candidate_center) distance feature.
     use_dest_dist: bool = True
 
 
 class WayDecoder(nn.Module):
     """
     Constrained AR decoder over way IDs using candidate-set scoring.
+    
+    Key improvement: Uses cross-attention to query latent_tokens at each step,
+    instead of just using mean(latent_tokens). This allows the decoder to
+    dynamically extract relevant information based on current position.
 
     Stop criterion: current_way == dest_way (no EOS token).
     """
@@ -47,12 +53,33 @@ class WayDecoder(nn.Module):
 
         d_model = int(cfg.d_model)
         hidden = int(cfg.hidden_dim)
-        self.ctx_mlp = nn.Sequential(
-            nn.Linear(d_model * 2, hidden),
-            nn.SiLU(),
-            nn.Dropout(float(cfg.dropout)),
-            nn.Linear(hidden, hidden),
-        )
+        
+        # Cross-attention: query=cur_way, key/value=latent_tokens
+        self.use_cross_attn = bool(cfg.use_cross_attn)
+        if self.use_cross_attn:
+            self.cross_attn = nn.MultiheadAttention(
+                embed_dim=d_model,
+                num_heads=int(cfg.n_cross_heads),
+                dropout=float(cfg.dropout),
+                batch_first=True,
+            )
+            self.cross_ln = nn.LayerNorm(d_model)
+            # Context MLP: cond_emb + cross_attn_output
+            self.ctx_mlp = nn.Sequential(
+                nn.Linear(d_model * 2, hidden),
+                nn.SiLU(),
+                nn.Dropout(float(cfg.dropout)),
+                nn.Linear(hidden, hidden),
+            )
+        else:
+            # Fallback: original mean-pooling approach
+            self.ctx_mlp = nn.Sequential(
+                nn.Linear(d_model * 2, hidden),
+                nn.SiLU(),
+                nn.Dropout(float(cfg.dropout)),
+                nn.Linear(hidden, hidden),
+            )
+        
         self.cur_proj = nn.Linear(d_model, hidden)
         self.cand_proj = nn.Linear(d_model, hidden)
         in_dim = int(hidden * 3) + (1 if bool(cfg.use_dest_dist) else 0)
@@ -76,6 +103,57 @@ class WayDecoder(nn.Module):
     def is_dest_reached(self, way_id: int, dest_way: int) -> bool:
         return int(way_id) == int(dest_way)
 
+    def _compute_context(
+        self,
+        *,
+        way_embedder: nn.Module,
+        latent_tokens: torch.Tensor,  # (B, L, d_model)
+        cond_emb: torch.Tensor,  # (B, d_model)
+        cur_way: torch.Tensor,  # (T,)
+        route_idx: torch.Tensor,  # (T,)
+    ) -> torch.Tensor:
+        """
+        Compute context vector for each transition.
+        
+        If use_cross_attn: query latent_tokens with cur_way embedding.
+        Otherwise: use mean-pooled latent.
+        
+        Returns: ctx (T, hidden_dim)
+        """
+        B = int(latent_tokens.shape[0])
+        T = int(cur_way.shape[0])
+        device = latent_tokens.device
+        
+        # Get current way embeddings
+        cur_emb, _ = way_embedder(cur_way[:, None])  # (T, 1, d_model)
+        cur_emb = cur_emb[:, 0, :]  # (T, d_model)
+        
+        if self.use_cross_attn:
+            # Cross-attention: each cur_way queries its route's latent_tokens
+            # We need to gather latent_tokens by route_idx
+            # latent_tokens: (B, L, d_model) -> expand to (T, L, d_model) by route_idx
+            L = int(latent_tokens.shape[1])
+            d = int(latent_tokens.shape[2])
+            
+            # Gather latent tokens for each transition
+            lat_gathered = latent_tokens[route_idx]  # (T, L, d_model)
+            
+            # Cross-attention: query=cur_emb (T,1,d), key/value=lat_gathered (T,L,d)
+            query = cur_emb.unsqueeze(1)  # (T, 1, d_model)
+            attn_out, _ = self.cross_attn(query, lat_gathered, lat_gathered)  # (T, 1, d_model)
+            attn_out = self.cross_ln(attn_out[:, 0, :] + cur_emb)  # (T, d_model), residual
+            
+            # Combine with condition embedding
+            cond_t = cond_emb[route_idx]  # (T, d_model)
+            ctx = self.ctx_mlp(torch.cat([cond_t, attn_out], dim=-1))  # (T, hidden)
+        else:
+            # Fallback: mean-pooled latent
+            lat_vec = latent_tokens.mean(dim=1)  # (B, d_model)
+            ctx_b = self.ctx_mlp(torch.cat([cond_emb, lat_vec], dim=-1))  # (B, hidden)
+            ctx = ctx_b[route_idx]  # (T, hidden)
+        
+        return ctx
+
     def score_candidates(
         self,
         *,
@@ -93,6 +171,7 @@ class WayDecoder(nn.Module):
         if int(route_idx.max().item()) >= B:
             raise ValueError(f"route_idx out of range: max={int(route_idx.max().item())} but B={B}")
 
+        # Condition embedding
         cond_emb = self.cond_enc(
             start_pos=route_cond["start_pos"],
             dest_pos=route_cond["dest_pos"],
@@ -101,36 +180,45 @@ class WayDecoder(nn.Module):
             route_city=route_cond["route_city"],
             corridor_type=route_cond.get("corridor_type", None),
         )
-        lat_vec = latent_tokens.mean(dim=1)
-        ctx = self.ctx_mlp(torch.cat([cond_emb, lat_vec], dim=-1))
-        ctx_t = ctx[route_idx]
+        
+        # Compute context with cross-attention
+        ctx_t = self._compute_context(
+            way_embedder=way_embedder,
+            latent_tokens=latent_tokens,
+            cond_emb=cond_emb,
+            cur_way=cur_way,
+            route_idx=route_idx,
+        )
 
+        # Current way projection
         cur_emb, _ = way_embedder(cur_way[:, None])
         cur_emb = cur_emb[:, 0, :]
         cur_h = self.cur_proj(cur_emb)
 
+        # Candidate way embeddings
         cand_emb, _ = way_embedder(cand_way)
         cand_h = self.cand_proj(cand_emb)
 
         T, C = cand_way.shape
         ctx_h = ctx_t[:, None, :].expand(T, C, -1)
         cur_h2 = cur_h[:, None, :].expand(T, C, -1)
+        
         if bool(self.cfg.use_dest_dist):
-            # Candidate-to-destination distance (directional prior; KISS).
-            # Both dest_pos and way centers are normalized by coord_scale for consistent magnitude.
+            # Candidate-to-destination distance
             coord_scale = float(getattr(way_embedder, "coord_scale", self.coord_scale))
             dest = route_cond["dest_pos"][route_idx].to(dtype=torch.float32)
             if coord_scale > 0:
                 dest = dest / coord_scale
             try:
-                cand_geom, _tier, _hw = way_embedder._lookup(cand_way)  # (T,C,5) -> (y,x,dy,dx,ln)
+                cand_geom, _tier, _hw = way_embedder._lookup(cand_way)
                 cand_center = cand_geom[..., :2].to(dtype=torch.float32)
             except Exception:
                 cand_center = torch.zeros((T, C, 2), dtype=torch.float32, device=dest.device)
-            dist = torch.norm(dest[:, None, :] - cand_center, dim=-1, keepdim=True)  # (T,C,1)
+            dist = torch.norm(dest[:, None, :] - cand_center, dim=-1, keepdim=True)
             x = torch.cat([ctx_h, cur_h2, cand_h, dist], dim=-1)
         else:
             x = torch.cat([ctx_h, cur_h2, cand_h], dim=-1)
+        
         logits = self.scorer(x).squeeze(-1)
         logits = logits.masked_fill(~cand_mask, float("-inf"))
         return logits
@@ -175,8 +263,6 @@ class WayDecoder(nn.Module):
                     cand_way = cand.view(1, C)
                     cand_mask = torch.ones((1, C), dtype=torch.bool, device=device)
                     trans = {
-                        # NOTE: score_candidates expects route_idx in [0, B_slice),
-                        # but here we slice latent_tokens/route_cond to a single route (B_slice=1).
                         "route_idx": torch.tensor([0], dtype=torch.long, device=device),
                         "cur_way": torch.tensor([int(path[-1])], dtype=torch.long, device=device),
                         "cand_way": cand_way,

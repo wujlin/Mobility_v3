@@ -68,6 +68,22 @@ def _load_ckpt_state_and_cfg(path: Path) -> Tuple[Dict[str, torch.Tensor], Dict[
     raise TypeError(f"Unexpected checkpoint format: {type(ckpt)}")
 
 
+def _infer_decoder_use_dest_dist_from_state(state: Dict[str, torch.Tensor]) -> bool:
+    w = state.get("decoder.scorer.0.weight", None)
+    if w is None:
+        return True
+    if not isinstance(w, torch.Tensor) or w.ndim != 2:
+        return True
+    hidden = int(w.shape[0])
+    in_dim = int(w.shape[1])
+    delta = int(in_dim - hidden * 3)
+    if delta == 0:
+        return False
+    if delta == 1:
+        return True
+    return True
+
+
 def _jaccard(a: List[int], b: List[int]) -> float:
     sa = set(int(x) for x in a)
     sb = set(int(x) for x in b)
@@ -422,6 +438,7 @@ def main() -> None:
 
     # ===== Load AE =====
     ae_state, ae_cfg_dict = _load_ckpt_state_and_cfg(Path(args.ae_ckpt))
+    use_dest_dist = _infer_decoder_use_dest_dist_from_state(ae_state)
     ae_cfg = WayCASDAECfg(
         d_model=int(ae_cfg_dict.get("d_model", 256)),
         n_latent=int(ae_cfg_dict.get("n_latent", 32)),
@@ -430,6 +447,7 @@ def main() -> None:
         max_candidates=int(ae_cfg_dict.get("max_candidates", 32)),
         max_len=int(ae_cfg_dict.get("max_len", 160)),
         coord_scale=1024.0,
+        decoder_use_dest_dist=bool(use_dest_dist),
     )
     ae = WayCASDAutoEncoder(
         cfg=ae_cfg,

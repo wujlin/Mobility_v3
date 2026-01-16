@@ -66,6 +66,23 @@ def _load_ckpt_state_and_cfg(path: Path) -> Tuple[Dict[str, torch.Tensor], Dict[
     raise TypeError(f"Unexpected checkpoint format: {type(ckpt)}")
 
 
+def _infer_decoder_use_dest_dist_from_state(state: Dict[str, torch.Tensor]) -> bool:
+    w = state.get("decoder.scorer.0.weight", None)
+    if w is None:
+        # Default to current behavior.
+        return True
+    if not isinstance(w, torch.Tensor) or w.ndim != 2:
+        return True
+    hidden = int(w.shape[0])
+    in_dim = int(w.shape[1])
+    delta = int(in_dim - hidden * 3)
+    if delta == 0:
+        return False
+    if delta == 1:
+        return True
+    raise SystemExit(f"Unexpected decoder.scorer.0.weight shape: {tuple(w.shape)} (cannot infer use_dest_dist).")
+
+
 def _slice_csr(ptr: np.ndarray, idx: np.ndarray, i: int) -> np.ndarray:
     s = int(ptr[i])
     e = int(ptr[i + 1])
@@ -222,6 +239,7 @@ def main() -> None:
     )
 
     ae_state, ae_cfg_dict = _load_ckpt_state_and_cfg(Path(args.ae_ckpt))
+    use_dest_dist = _infer_decoder_use_dest_dist_from_state(ae_state)
     d_model = int(ae_cfg_dict.get("d_model", 256))
     n_latent = int(ae_cfg_dict.get("n_latent", 32))
     n_heads = int(ae_cfg_dict.get("n_heads", 8))
@@ -239,6 +257,7 @@ def main() -> None:
             max_candidates=int(max_candidates),
             max_len=int(max_len),
             coord_scale=float(coord_scale),
+            decoder_use_dest_dist=bool(use_dest_dist),
         ),
         way_features=way_features,
         way_adj_ptr=way_adj_ptr,
@@ -399,4 +418,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

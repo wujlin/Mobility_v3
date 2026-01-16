@@ -22,6 +22,8 @@ class WayCASDAECfg:
     max_candidates: int = 32
     max_len: int = 128
     coord_scale: float = 1024.0
+    # See WayDecoderCfg.use_dest_dist (for loading older checkpoints).
+    decoder_use_dest_dist: bool = True
 
 
 class WayCASDAutoEncoder(nn.Module):
@@ -69,6 +71,7 @@ class WayCASDAutoEncoder(nn.Module):
                 max_candidates=int(cfg.max_candidates),
                 dropout=float(cfg.dropout),
                 max_len=int(cfg.max_len),
+                use_dest_dist=bool(cfg.decoder_use_dest_dist),
             ),
             cond_cfg=ConditionEncoderCfg(
                 d_model=int(cfg.d_model),
@@ -100,4 +103,3 @@ class WayCASDAutoEncoder(nn.Module):
             acc = (pred == target_idx).float().mean() if target_idx.numel() else torch.tensor(0.0, device=loss.device)
             stats = {"loss": float(loss.item()), "acc": float(acc.item()), "n_trans": float(int(target_idx.numel()))}
         return loss, stats
-

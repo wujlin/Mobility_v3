@@ -155,7 +155,9 @@ class WayDecoder(nn.Module):
                     cand_way = cand.view(1, C)
                     cand_mask = torch.ones((1, C), dtype=torch.bool, device=device)
                     trans = {
-                        "route_idx": torch.tensor([b], dtype=torch.long, device=device),
+                        # NOTE: score_candidates expects route_idx in [0, B_slice),
+                        # but here we slice latent_tokens/route_cond to a single route (B_slice=1).
+                        "route_idx": torch.tensor([0], dtype=torch.long, device=device),
                         "cur_way": torch.tensor([int(path[-1])], dtype=torch.long, device=device),
                         "cand_way": cand_way,
                         "cand_mask": cand_mask,
@@ -180,4 +182,3 @@ class WayDecoder(nn.Module):
             out.append(beams[0][0] if beams else [sw])
 
         return out
-

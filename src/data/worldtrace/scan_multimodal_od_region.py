@@ -29,7 +29,7 @@ class ScanConfig:
     bbox: BBox
     od_bin_deg: float = 0.01
     # route_bin_deg: DEPRECATED, now using way_id sequence
-    max_way_seq_len: int = 512  # max way_ids in signature
+    max_way_seq_len: int = 128  # max way_ids in signature (keep LCS cheap)
     min_points_in_bbox_ratio: float = 0.80
     min_od_dist_km: float = 1.0
     min_routes_per_od: int = 5
@@ -102,6 +102,9 @@ def _route_signature_from_stream(
     tot_n = 0
     first: Optional[Tuple[float, float]] = None
     last: Optional[Tuple[float, float]] = None
+    # Use the first/last point that has a valid way_id for OD binning (consistent with signature).
+    first_way_coord: Optional[Tuple[float, float]] = None
+    last_way_coord: Optional[Tuple[float, float]] = None
 
     # Use way_id sequence as signature
     way_seq: List[int] = []
@@ -122,13 +125,20 @@ def _route_signature_from_stream(
         last = (lat, lon)
 
         # Extract way_id (prefer osm_way_id, fallback to way_id)
-        way_str = row.get("osm_way_id") or row.get("way_id") or ""
+        way_str = row.get("osm_way_id") or row.get("osm_wayid") or row.get("way_id") or ""
         if not way_str or way_str in ("", "nan", "None", "null"):
             continue
         try:
             way_id = int(float(way_str))  # handle "123.0" format
         except (ValueError, TypeError):
             continue
+        if int(way_id) <= 0:
+            continue
+
+        # Record coords for OD binning based on way_id points (fix: avoid GPS-only endpoints).
+        if first_way_coord is None:
+            first_way_coord = (lat, lon)
+        last_way_coord = (lat, lon)
         
         # Consecutive dedup: only add if different from last
         if last_way is None or way_id != last_way:
@@ -150,8 +160,10 @@ def _route_signature_from_stream(
     if len(way_seq) < 2:
         return has_any_in_bbox, False, None, None, {"points_total": float(tot_n), "points_in_bbox_ratio": float(ratio), "way_seq_len": len(way_seq)}
 
-    o_lat, o_lon = first
-    d_lat, d_lon = last
+    if first_way_coord is None or last_way_coord is None:
+        return has_any_in_bbox, False, None, None, {"points_total": float(tot_n), "points_in_bbox_ratio": float(ratio), "way_seq_len": len(way_seq)}
+    o_lat, o_lon = first_way_coord
+    d_lat, d_lon = last_way_coord
     od_km = float(haversine_m(o_lat, o_lon, d_lat, d_lon)) / 1000.0
     if od_km < float(cfg.min_od_dist_km):
         return has_any_in_bbox, False, None, None, {"od_km": float(od_km), "points_total": float(tot_n), "points_in_bbox_ratio": float(ratio)}
@@ -515,7 +527,7 @@ def build_argparser() -> argparse.ArgumentParser:
 
     p.add_argument("--bbox", type=float, nargs=4, default=[-90.4, 38.4, -80.5, 48.3], metavar=("MIN_LON", "MIN_LAT", "MAX_LON", "MAX_LAT"))
     p.add_argument("--od_bin_deg", type=float, default=0.02, help="OD bin size in degrees (~2km at 0.02).")
-    p.add_argument("--max_way_seq_len", type=int, default=512, help="Max way_ids in route signature.")
+    p.add_argument("--max_way_seq_len", type=int, default=128, help="Max way_ids in route signature (keeps LCS cheap).")
     p.add_argument("--min_points_in_bbox_ratio", type=float, default=0.8)
     p.add_argument("--min_od_dist_km", type=float, default=1.0)
 

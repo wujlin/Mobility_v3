@@ -36,6 +36,7 @@
 - Go/No-Go：way 序列长度分布审计：`src/data/worldtrace/way_seq_stats_from_segments.py`
 - corridor-level 多模态 OD 扫描（GT 证据）：`src/data/worldtrace/scan_multimodal_od_region.py`
 - multimodal OD 可视化 sanity：`src/evaluation/plot_worldtrace_multimodal_od_bins.py`
+- multimodal OD 可视化缓存导出（避免反复读 Trajectory.zip）：`src/data/worldtrace/dump_multimodal_viz_cache.py`
 - 从 multimodal scan 抽取训练 routes：`src/data/way_graph/build_way_routes_from_multimodal_scan.py`
 - way token 数据准备（routes / graph / features / corridor label）：`src/data/way_graph/*` + `run_way_casd_prep.sh` / `run_way_casd_prep_rustbelt.sh`
 - 训练入口：

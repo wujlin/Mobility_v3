@@ -5,6 +5,7 @@ import csv
 import io
 import json
 import math
+import random
 import sys
 import zipfile
 from dataclasses import dataclass
@@ -121,8 +122,42 @@ def _iter_line_coords(g) -> Iterable[np.ndarray]:
     yield coords
 
 
-def _load_roads_cache(osm_pbf: Path) -> Optional[Dict[str, np.ndarray]]:
-    key = str(osm_pbf)
+def _quantize_bbox(bbox: Tuple[float, float, float, float], *, q: float = 0.10) -> List[float]:
+    import math as _math
+
+    min_lon, min_lat, max_lon, max_lat = map(float, bbox)
+    q = float(q)
+    if q <= 0:
+        return [min_lon, min_lat, max_lon, max_lat]
+    min_lon_q = _math.floor(min_lon / q) * q
+    min_lat_q = _math.floor(min_lat / q) * q
+    max_lon_q = _math.ceil(max_lon / q) * q
+    max_lat_q = _math.ceil(max_lat / q) * q
+    return [float(min_lon_q), float(min_lat_q), float(max_lon_q), float(max_lat_q)]
+
+
+def _pick_roads_df(net) -> Optional[object]:
+    if net is None:
+        return None
+    if isinstance(net, tuple):
+        parts = [x for x in net if x is not None and hasattr(x, "columns")]
+        if not parts:
+            return None
+        for x in parts:
+            cols = list(getattr(x, "columns", []))
+            if ("u" in cols) and ("v" in cols) and ("geometry" in cols):
+                return x
+        # Fallback: pick the largest table with geometry.
+        parts_geo = [x for x in parts if "geometry" in list(getattr(x, "columns", []))]
+        if parts_geo:
+            return max(parts_geo, key=lambda x: int(getattr(x, "shape", (0,))[0] or 0))
+        return max(parts, key=lambda x: int(getattr(x, "shape", (0,))[0] or 0))
+    return net
+
+
+def _load_roads_cache(osm_pbf: Path, *, bbox: Tuple[float, float, float, float]) -> Optional[Dict[str, np.ndarray]]:
+    bb = _quantize_bbox(bbox, q=0.10)
+    key = f"{osm_pbf}|{bb[0]:.2f},{bb[1]:.2f},{bb[2]:.2f},{bb[3]:.2f}"
     if key in _ROADS_CACHE:
         return _ROADS_CACHE[key]
     try:
@@ -133,18 +168,18 @@ def _load_roads_cache(osm_pbf: Path) -> Optional[Dict[str, np.ndarray]]:
         return None
 
     try:
-        osm = OSM(str(osm_pbf))
+        osm = OSM(str(osm_pbf), bounding_box=bb)
         try:
             net = osm.get_network(network_type="driving", nodes=False)
         except TypeError:
             net = osm.get_network(network_type="driving")
     except Exception as e:
-        print(f"[WARN] pyrosm load failed ({osm_pbf}): {e}", file=sys.stderr)
+        print(f"[WARN] pyrosm load failed ({osm_pbf} bbox={bb}): {e}", file=sys.stderr)
         _ROADS_CACHE[key] = None
         return None
 
-    roads = net[0] if isinstance(net, tuple) else net
-    if roads is None or not hasattr(roads, "geometry"):
+    roads = _pick_roads_df(net)
+    if roads is None or (not hasattr(roads, "geometry")):
         _ROADS_CACHE[key] = None
         return None
 
@@ -181,7 +216,7 @@ def _plot_roads(ax, *, osm_pbf: Path, bbox: Tuple[float, float, float, float]) -
         return
 
     min_lon, min_lat, max_lon, max_lat = map(float, bbox)
-    cache = _load_roads_cache(osm_pbf)
+    cache = _load_roads_cache(osm_pbf, bbox=bbox)
     if cache is None:
         return
 
@@ -199,6 +234,20 @@ def _plot_roads(ax, *, osm_pbf: Path, bbox: Tuple[float, float, float, float]) -
     lines = np.stack([seg[:, [0, 1]], seg[:, [2, 3]]], axis=1).astype(np.float32, copy=False)  # (N,2,2)
     lc = LineCollection(lines, colors="#cfcfcf", linewidths=0.5, alpha=0.55, zorder=0)
     ax.add_collection(lc)
+
+
+def _load_viz_cache(viz_cache_npz: Path) -> Dict[str, object]:
+    if not viz_cache_npz.exists():
+        raise SystemExit(f"Missing viz_cache_npz: {viz_cache_npz}")
+    data = np.load(str(viz_cache_npz), allow_pickle=True)
+    ptr = np.asarray(data["traj_ptr"], dtype=np.int64)
+    latlon = np.asarray(data["traj_latlon"], dtype=np.float32)
+    od_idx = np.asarray(data["traj_od_index"], dtype=np.int32)
+    cluster = np.asarray(data["traj_cluster"], dtype=np.int8)
+    member = np.asarray(data["traj_member"], dtype=object)
+    meta_obj = data["meta"] if "meta" in getattr(data, "files", []) else None
+    meta = meta_obj.item() if hasattr(meta_obj, "item") else None
+    return {"ptr": ptr, "latlon": latlon, "od_idx": od_idx, "cluster": cluster, "member": member, "meta": meta}
 
 
 def _bbox_intersects(a: Tuple[float, float, float, float], b: Tuple[float, float, float, float]) -> bool:
@@ -328,10 +377,13 @@ def _plot_one_od(
 def build_argparser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description="Visualize multimodal OD bins from scan_multimodal_od_region.py report.json.")
     p.add_argument("--scan_report_json", type=Path, required=True)
-    p.add_argument("--trajectory_zip", type=Path, required=True)
+    p.add_argument("--trajectory_zip", type=Path, default=None, help="Optional: Trajectory.zip. Needed if no --viz_cache_npz, or as fallback.")
+    p.add_argument("--viz_cache_npz", type=Path, default=None, help="Optional: dumped cache to avoid re-reading Trajectory.zip.")
     p.add_argument("--out_dir", type=Path, required=True)
 
     p.add_argument("--top_k", type=int, default=30, help="Plot top-K multimodal OD bins (sorted by n_routes, then separation).")
+    p.add_argument("--random_k", type=int, default=0, help="If >0 and no --od_indices: randomly sample K OD bins to plot (from cache if provided).")
+    p.add_argument("--seed", type=int, default=0)
     p.add_argument("--od_indices", type=int, nargs="*", default=None, help="Optional: explicit indices into multimodal_od_bins list.")
     p.add_argument("--max_files_per_cluster", type=int, default=3, help="Max representative files to plot per cluster.")
     p.add_argument("--prefer_matched", action="store_true", help="Prefer matched_latitude/longitude if present.")
@@ -349,12 +401,25 @@ def main() -> None:
     if not isinstance(mm, list) or not mm:
         raise SystemExit(f"No multimodal_od_bins found in: {args.scan_report_json}")
 
+    if args.trajectory_zip is None and args.viz_cache_npz is None:
+        raise SystemExit("Need --trajectory_zip or --viz_cache_npz (prefer cache for speed).")
+
     cfg = rep.get("scan_config", {}) or {}
     od_bin_deg = float(cfg.get("od_bin_deg", 0.01))
     route_bin_deg = float(cfg.get("route_bin_deg", 0.05))
 
     if args.od_indices:
         pick = [int(i) for i in args.od_indices if 0 <= int(i) < len(mm)]
+    elif int(args.random_k) > 0:
+        # Prefer sampling from cached OD indices if cache is provided.
+        rng = random.Random(int(args.seed))
+        if args.viz_cache_npz is not None and Path(args.viz_cache_npz).exists():
+            c = _load_viz_cache(Path(args.viz_cache_npz))
+            universe = sorted({int(x) for x in np.asarray(c["od_idx"]).tolist()})
+        else:
+            universe = list(range(len(mm)))
+        k = min(int(args.random_k), len(universe))
+        pick = rng.sample(universe, k)
     else:
         pick = list(range(min(int(args.top_k), len(mm))))
 
@@ -364,12 +429,15 @@ def main() -> None:
     osm_mi = Path(args.osm_pbf_michigan) if args.osm_pbf_michigan is not None else None
     osm_oh = Path(args.osm_pbf_ohio) if args.osm_pbf_ohio is not None else None
 
+    viz_cache = _load_viz_cache(Path(args.viz_cache_npz)) if args.viz_cache_npz is not None else None
+
     summary = {
         "ok": True,
         "created_at": datetime.now(tz=TZ_SHANGHAI).isoformat(),
         "inputs": {
             "scan_report_json": str(args.scan_report_json),
-            "trajectory_zip": str(args.trajectory_zip),
+            "trajectory_zip": (str(args.trajectory_zip) if args.trajectory_zip is not None else None),
+            "viz_cache_npz": (str(args.viz_cache_npz) if args.viz_cache_npz is not None else None),
             "osm_pbf_michigan": (str(osm_mi) if osm_mi is not None else None),
             "osm_pbf_ohio": (str(osm_oh) if osm_oh is not None else None),
         },
@@ -377,6 +445,8 @@ def main() -> None:
             "od_bin_deg": float(od_bin_deg),
             "route_bin_deg": float(route_bin_deg),
             "top_k": int(args.top_k),
+            "random_k": int(args.random_k),
+            "seed": int(args.seed),
             "max_files_per_cluster": int(args.max_files_per_cluster),
             "prefer_matched": bool(args.prefer_matched),
             "downsample_step": int(args.downsample_step),
@@ -384,7 +454,8 @@ def main() -> None:
         "plotted": [],
     }
 
-    with zipfile.ZipFile(str(args.trajectory_zip), "r") as zf:
+    zf = zipfile.ZipFile(str(args.trajectory_zip), "r") if args.trajectory_zip is not None else None
+    try:
         for rank, mi in enumerate(pick):
             ent = mm[int(mi)]
             od_bin = ent.get("od_bin", None)
@@ -398,34 +469,59 @@ def main() -> None:
             else:
                 top2 = float(ent.get("top2_jaccard_dist", float("nan")))
                 dist_name = "jaccard"
-            rep_files = ent.get("cluster_rep_files", [])
-            if not isinstance(rep_files, list) or len(rep_files) < 2:
-                continue
 
-            clusters_trajs: List[List[List[Tuple[float, float]]]] = []
-            used_files: List[List[str]] = []
-            for ci, files in enumerate(rep_files[:2]):  # only top-2 for quick check
-                f_list = []
-                trajs = []
-                if isinstance(files, list):
-                    for member in files[: int(args.max_files_per_cluster)]:
-                        if not isinstance(member, str):
+            clusters_trajs: List[List[List[Tuple[float, float]]]] = [[], []]
+            used_files: List[List[str]] = [[], []]
+
+            # Fast path: load from viz_cache if available.
+            if viz_cache is not None:
+                od_idx = np.asarray(viz_cache["od_idx"], dtype=np.int32)
+                cl = np.asarray(viz_cache["cluster"], dtype=np.int8)
+                mask = (od_idx == int(mi)) & (cl < 2)
+                hits = np.nonzero(mask)[0].tolist()
+                if hits:
+                    ptr = np.asarray(viz_cache["ptr"], dtype=np.int64)
+                    latlon = np.asarray(viz_cache["latlon"], dtype=np.float32)
+                    members = np.asarray(viz_cache["member"], dtype=object)
+                    for ti in hits:
+                        ci = int(cl[int(ti)])
+                        s = int(ptr[int(ti)])
+                        e = int(ptr[int(ti) + 1])
+                        pts = latlon[s:e]
+                        if pts.shape[0] < 2:
                             continue
-                        try:
-                            zf.getinfo(member)
-                        except KeyError:
-                            continue
-                        pts = _read_traj_from_zip(
-                            zf,
-                            member,
-                            prefer_matched=bool(args.prefer_matched),
-                            downsample_step=int(args.downsample_step),
-                        )
-                        if len(pts) >= 2:
-                            trajs.append(pts)
-                            f_list.append(member)
-                clusters_trajs.append(trajs)
-                used_files.append(f_list)
+                        clusters_trajs[ci].append([(float(p[0]), float(p[1])) for p in pts])
+                        used_files[ci].append(str(members[int(ti)]))
+
+            # Fallback: read from Trajectory.zip using rep files.
+            if zf is not None and all(len(t) == 0 for t in clusters_trajs):
+                rep_files = ent.get("cluster_rep_files", [])
+                if not isinstance(rep_files, list) or len(rep_files) < 2:
+                    continue
+                clusters_trajs = []
+                used_files = []
+                for ci, files in enumerate(rep_files[:2]):  # only top-2 for quick check
+                    f_list = []
+                    trajs = []
+                    if isinstance(files, list):
+                        for member in files[: int(args.max_files_per_cluster)]:
+                            if not isinstance(member, str):
+                                continue
+                            try:
+                                zf.getinfo(member)
+                            except KeyError:
+                                continue
+                            pts = _read_traj_from_zip(
+                                zf,
+                                member,
+                                prefer_matched=bool(args.prefer_matched),
+                                downsample_step=int(args.downsample_step),
+                            )
+                            if len(pts) >= 2:
+                                trajs.append(pts)
+                                f_list.append(member)
+                    clusters_trajs.append(trajs)
+                    used_files.append(f_list)
 
             # Ensure we have something to plot.
             if not clusters_trajs or all(len(t) == 0 for t in clusters_trajs):
@@ -457,6 +553,9 @@ def main() -> None:
                     "out_png": str(out_png),
                 }
             )
+    finally:
+        if zf is not None:
+            zf.close()
 
     (out_dir / "summary.json").write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
     print(json.dumps({"ok": True, "out_dir": str(out_dir), "n_plotted": int(len(summary["plotted"]))}, ensure_ascii=False, indent=2))

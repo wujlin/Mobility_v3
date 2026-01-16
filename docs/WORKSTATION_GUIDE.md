@@ -345,14 +345,14 @@ python -m src.data.worldtrace.way_seq_stats_from_segments \
 export RAW_ROOT=/home/jinlin/data/geoexplicit_data
 export EXP_ROOT="$RAW_ROOT/experiments/icml2026_routegen"
 export INPUT_ZIP="$RAW_ROOT/worldtrace/OpenTrace_WorldTrace/Trajectory.zip"
-export OUT_MM="$EXP_ROOT/A_mm_od_mioh_v1"
+export OUT_MM="$EXP_ROOT/A_mm_od_mioh_v2_bin02_sep50"
 
 python -m src.data.worldtrace.scan_multimodal_od_region \
   --trajectory_zip "$INPUT_ZIP" \
   --out_json "$OUT_MM/report.json" \
   --bbox -90.4 38.4 -80.5 48.3 \
   --od_bin_deg 0.02 \
-  --max_way_seq_len 512 \
+  --max_way_seq_len 128 \
   --min_routes_per_od 5 \
   --min_cluster_frac 0.2 \
   --cluster_sep_thr 0.50 \
@@ -360,17 +360,27 @@ python -m src.data.worldtrace.scan_multimodal_od_region \
   --num_workers 48 --chunk_size 2000 --mp_start fork \
   |& tee "$OUT_MM/run.log"
 
-# 可视化 top-K multimodal OD（输出两 panel：轨迹对比 + corridor footprint）
+# （推荐）先把代表轨迹抽出来做 viz cache，避免可视化时反复读 Trajectory.zip
+python -m src.data.worldtrace.dump_multimodal_viz_cache \
+  --scan_report_json "$OUT_MM/report.json" \
+  --trajectory_zip "$INPUT_ZIP" \
+  --out_npz "$OUT_MM/viz_cache_top200.npz" \
+  --top_k 200 --clusters_keep 2 --max_files_per_cluster 2 \
+  --prefer_matched --downsample_step 10 \
+  --num_workers 48 --chunk_size 256 --mp_start fork \
+  |& tee "$OUT_MM/viz_cache_top200.run.log"
+
+# 可视化 top-K / random-K multimodal OD（输出两 panel：轨迹对比 + corridor footprint）
 export OSM_MI="$RAW_ROOT/osm/michigan-latest.osm.pbf"
 export OSM_OH="$RAW_ROOT/osm/ohio-latest.osm.pbf"
 python -m src.evaluation.plot_worldtrace_multimodal_od_bins \
   --scan_report_json "$OUT_MM/report.json" \
-  --trajectory_zip "$INPUT_ZIP" \
-  --out_dir "$OUT_MM/viz_top20" \
-  --top_k 20 --max_files_per_cluster 3 \
-  --prefer_matched --downsample_step 5 \
+  --viz_cache_npz "$OUT_MM/viz_cache_top200.npz" \
+  --out_dir "$OUT_MM/viz_rand5_seed0" \
+  --random_k 5 --seed 0 --max_files_per_cluster 2 \
+  --prefer_matched --downsample_step 10 \
   --osm_pbf_michigan "$OSM_MI" --osm_pbf_ohio "$OSM_OH" \
-  |& tee "$OUT_MM/viz_top20/run.log"
+  |& tee "$OUT_MM/viz_rand5_seed0/run.log"
 ```
 
 **(0c) 从 multimodal scan 抽取 Way-CASD 训练 routes（可选：只训练“多走廊 OD”）**
@@ -382,7 +392,7 @@ python -m src.evaluation.plot_worldtrace_multimodal_od_bins \
 export RAW_ROOT=/home/jinlin/data/geoexplicit_data
 export EXP_ROOT="$RAW_ROOT/experiments/icml2026_routegen"
 export INPUT_ZIP="$RAW_ROOT/worldtrace/OpenTrace_WorldTrace/Trajectory.zip"
-export IN_MM="$EXP_ROOT/A_mm_od_mioh_v1/report.json"
+export IN_MM="$EXP_ROOT/A_mm_od_mioh_v2_bin02_sep50/report.json"
 export OUT_BASE="$EXP_ROOT/WAYMM1_waydata_mioh_od0p02_seed0"
 
 python -m src.data.way_graph.build_way_routes_from_multimodal_scan \

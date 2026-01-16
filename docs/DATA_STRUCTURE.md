@@ -251,10 +251,11 @@ $RAW_ROOT/experiments/icml2026_routegen/WAYCASD1_waydata_rustbelt_seed0/
 > 术语区分（corridor vs corridor_type）见：`docs/WAY_CASD_METHOD.md`。
 
 ```text
-$RAW_ROOT/experiments/icml2026_routegen/A_mm_od_mioh_v1/
+$RAW_ROOT/experiments/icml2026_routegen/A_mm_od_mioh_v2_*/          # 推荐：v2（way_id + LCS）
   report.json
   run.log
-  viz_top20/          # 可选：`plot_worldtrace_multimodal_od_bins.py` 输出
+  viz_cache_top*.npz  # 可选：代表轨迹缓存（用于加速可视化）
+  viz_*/              # 可选：`plot_worldtrace_multimodal_od_bins.py` 输出
 ```
 
 `report.json` 关键字段：
@@ -266,6 +267,11 @@ $RAW_ROOT/experiments/icml2026_routegen/A_mm_od_mioh_v1/
   - `cluster_sizes`：走廊簇大小（按 signature 合并后的计数）
   - `cluster_rep_files`：每簇代表轨迹文件（用于 PI sanity 可视化）
   - `top2_lcs_dist`：top-2 簇的分离度（越大越不同）
+
+`viz_cache_top*.npz`（可视化加速缓存）典型字段：
+- `traj_ptr/traj_latlon`：flatten 后的轨迹点（lat,lon）与 CSR 指针
+- `traj_od_index/traj_cluster/traj_member`：每条缓存轨迹对应的 OD index / cluster id / zip member
+- `meta`：写入 cache 的参数与统计（用于复现）
 
 **(I) 从 multimodal scan 抽取的 Way-CASD 训练数据（可选：只训练“多走廊 OD”）**
 

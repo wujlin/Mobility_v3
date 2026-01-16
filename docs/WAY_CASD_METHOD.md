@@ -109,6 +109,7 @@ Way-CASD 的最小训练数据是：
 4) route signature（用于聚类）：
    - 直接取 `osm_way_id`（连续去重）作为 signature：`sig = (w1,w2,...,wL)`  
    - 截断：`L <= max_way_seq_len`（避免极端长序列拖垮聚类）
+   - OD 的起讫点用 **第一个/最后一个出现有效 way_id 的点坐标**（而不是首末 GPS 点），保证 `od_bin` 与 `signature` 对齐。
 
 对每个 `od_bin`：
 
@@ -134,3 +135,37 @@ Way-CASD 的最小训练数据是：
 
 注意：这里的 footprint 只是为了“肉眼可解释”；multimodal 的判定口径以 scan 脚本为准。
 
+#### 4.3.1 可视化加速：先导出 viz cache（推荐）
+
+问题：`Trajectory.zip` 里有百万级 CSV，直接在可视化脚本里逐个随机读取会很慢（而且容易因为 IO 抖动导致耗时不稳定）。
+
+解决：扫描完成后，把每个 multimodal OD 的代表轨迹（每簇 1–3 条）先抽出来存为一个小的 `viz_cache.npz`，后续画图不再读 zip。
+
+- 导出缓存：`src/data/worldtrace/dump_multimodal_viz_cache.py`
+- 可视化读取缓存：`src/evaluation/plot_worldtrace_multimodal_od_bins.py --viz_cache_npz ...`
+
+典型工作站命令（48 workers）：
+
+```bash
+export RAW_ROOT=/home/jinlin/data/geoexplicit_data
+export EXP_ROOT="$RAW_ROOT/experiments/icml2026_routegen/A_mm_od_mioh_v2_bin02_sep50"
+
+# 1) dump cache（top200 OD，每簇最多2条代表轨迹）
+python -m src.data.worldtrace.dump_multimodal_viz_cache \
+  --scan_report_json "$EXP_ROOT/report.json" \
+  --trajectory_zip "$RAW_ROOT/worldtrace/OpenTrace_WorldTrace/Trajectory.zip" \
+  --out_npz "$EXP_ROOT/viz_cache_top200.npz" \
+  --top_k 200 --clusters_keep 2 --max_files_per_cluster 2 \
+  --prefer_matched --downsample_step 10 \
+  --num_workers 48 --chunk_size 256 --mp_start fork
+
+# 2) 随机画 5 个 OD（不再读 zip）
+python -m src.evaluation.plot_worldtrace_multimodal_od_bins \
+  --scan_report_json "$EXP_ROOT/report.json" \
+  --viz_cache_npz "$EXP_ROOT/viz_cache_top200.npz" \
+  --out_dir "$EXP_ROOT/viz_rand5_seed0" \
+  --random_k 5 --seed 0 \
+  --prefer_matched --downsample_step 10 \
+  --osm_pbf_michigan "$RAW_ROOT/osm/michigan-latest.osm.pbf" \
+  --osm_pbf_ohio "$RAW_ROOT/osm/ohio-latest.osm.pbf"
+```

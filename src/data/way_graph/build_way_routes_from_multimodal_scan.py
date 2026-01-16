@@ -192,6 +192,9 @@ def _process_member_chunk(
             first: Optional[Tuple[float, float]] = None
             last: Optional[Tuple[float, float]] = None
             first_t: Optional[int] = None
+            # OD computed from first/last point with valid way_id (consistent with scan + signature).
+            first_way_coord: Optional[Tuple[float, float]] = None
+            last_way_coord: Optional[Tuple[float, float]] = None
 
             # Build way sequence in one pass (consecutive dedup).
             way_seq: List[int] = []
@@ -207,12 +210,18 @@ def _process_member_chunk(
                     in_n += 1
                 if first is None:
                     first = (lat, lon)
+                if first_t is None:
                     first_t = _parse_time_s(row.get("time", ""))
                 last = (lat, lon)
 
                 wid = _pick_osm_way_id(row)
                 if wid is None:
                     continue
+                if int(wid) <= 0:
+                    continue
+                if first_way_coord is None:
+                    first_way_coord = (lat, lon)
+                last_way_coord = (lat, lon)
                 if last_way is None or int(wid) != int(last_way):
                     way_seq.append(int(wid))
                     last_way = int(wid)
@@ -228,8 +237,11 @@ def _process_member_chunk(
             else:
                 continue
 
-            o_lat, o_lon = first
-            d_lat, d_lon = last
+            if first_way_coord is None or last_way_coord is None:
+                dropped_short_seq += 1
+                continue
+            o_lat, o_lon = first_way_coord
+            d_lat, d_lon = last_way_coord
 
             # Optional: keep only MI/OH OD pairs (avoid needing extra-state OSM pbfs).
             if str(cfg.od_filter) == "mi_oh":
@@ -598,4 +610,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

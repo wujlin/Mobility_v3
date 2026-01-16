@@ -368,7 +368,7 @@ bash run_way_casd_prep_rustbelt.sh
 > 训练命令里把 `W5_way_routes_labeled/W3_way_graph/W4_way_features` 分别替换为
 > `W4_way_routes_labeled/W2_way_graph/W3_way_features`，并将 `W6_train_ae/W7_train_flow` 相应替换为 `W5_train_ae/W6_train_flow`。
 
-**(Step A) 训练 AE（48GB GPU 起步建议：`batch_size=512`；若 OOM 再降到 256；`num_workers=24`）**
+**(Step A) 训练 AE（48GB GPU 起步建议：`batch_size=512`；若 OOM 再降到 256；`num_workers=24`；建议 `n_epochs=60`）**
 
 ```bash
 python -m src.training.train_way_casd_autoencoder \
@@ -376,12 +376,12 @@ python -m src.training.train_way_casd_autoencoder \
   --way_graph_npz "$OUT_BASE/W3_way_graph/way_graph.npz" \
   --way_features_npz "$OUT_BASE/W4_way_features/way_features.npz" \
   --out_dir "$OUT_BASE/W6_train_ae" \
-  --batch_size 512 --num_workers 24 --n_epochs 30 \
+  --batch_size 512 --num_workers 24 --n_epochs 60 \
   --d_model 256 --n_latent 32 --max_candidates 64 --max_way_len 128 \
   --device cuda
 ```
 
-**(Step B) 训练 Flow（同上资源配置；若显存仍空闲可继续翻倍 batch）**
+**(Step B) 训练 Flow（同上资源配置；若显存仍空闲可继续翻倍 batch；建议 `n_epochs=60`）**
 
 ```bash
 python -m src.training.train_way_casd_flow \
@@ -390,10 +390,30 @@ python -m src.training.train_way_casd_flow \
   --way_features_npz "$OUT_BASE/W4_way_features/way_features.npz" \
   --ae_ckpt "$OUT_BASE/W6_train_ae/ckpt_best.pt" \
   --out_dir "$OUT_BASE/W7_train_flow" \
-  --batch_size 512 --num_workers 24 --n_epochs 30 \
+  --batch_size 512 --num_workers 24 --n_epochs 60 \
   --d_model 256 --n_latent 32 --solver_steps 20 --cfg_drop_prob 0.1 \
   --device cuda
 ```
+
+**(采样 + 可视化) Flow→latent→Way 序列（Beam Search）**
+
+```bash
+python -m src.evaluation.way_casd_sample_viz \
+  --way_routes_npz "$OUT_BASE/W5_way_routes_labeled/way_routes_labeled.npz" \
+  --way_graph_npz "$OUT_BASE/W3_way_graph/way_graph.npz" \
+  --way_features_npz "$OUT_BASE/W4_way_features/way_features.npz" \
+  --ae_ckpt "$OUT_BASE/W6_train_ae/ckpt_best.pt" \
+  --flow_ckpt "$OUT_BASE/W7_train_flow/ckpt_best.pt" \
+  --out_dir "$OUT_BASE/W8_sample_viz" \
+  --n_routes 12 --n_samples_per_route 4 \
+  --beam_size 5 --max_decode_len 160 \
+  --cfg_scale 1.5 --plot_all_ways \
+  --device cuda
+```
+
+输出：
+- `W8_sample_viz/report.json`：每条 route 的 success/valid/jaccard/corridor_type
+- `W8_sample_viz/case_route*.png`：GT（黑）+ 多个 sample（彩色）叠图
 
 **(2) segments→graph paths（map-match，T1）**：
 

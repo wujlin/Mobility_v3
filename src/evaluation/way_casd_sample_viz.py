@@ -1,0 +1,428 @@
+from __future__ import annotations
+
+import argparse
+import json
+from dataclasses import asdict, dataclass
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+from typing import Dict, List, Optional, Tuple
+
+import numpy as np
+import torch
+
+from src.data.way_graph.way_sequence_dataset import load_way_routes_npz
+from src.models.way_casd.conditions import ConditionEncoderCfg
+from src.models.way_casd.latent_flow import LatentFlowCfg, LatentFlowMatching
+from src.models.way_casd.way_casd import WayCASDAECfg, WayCASDAutoEncoder
+from src.models.way_casd.way_encoder import make_way_feature_tensors
+
+TZ_SHANGHAI = timezone(timedelta(hours=8))
+
+
+@dataclass(frozen=True)
+class Cfg:
+    seed: int
+    device: str
+    tz_offset_hours: float
+    n_routes: int
+    n_samples_per_route: int
+    max_way_len: int
+    beam_size: int
+    max_decode_len: int
+    cfg_scale: float
+    solver_steps: Optional[int]
+    corridor_type_override: Optional[int]
+    plot_all_ways: bool
+
+
+def _set_seed(seed: int) -> None:
+    np.random.seed(int(seed))
+    torch.manual_seed(int(seed))
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(int(seed))
+
+
+def _hour_from_unix(start_t: np.ndarray, tz_offset_hours: float) -> np.ndarray:
+    start_t = np.asarray(start_t, dtype=np.int64).reshape(-1)
+    tz_sec = int(round(float(tz_offset_hours) * 3600.0))
+    sec = ((start_t + tz_sec) % 86400).astype(np.int64, copy=False)
+    return (sec // 3600).astype(np.int64, copy=False)
+
+
+def _dow_from_unix(start_t: np.ndarray, tz_offset_hours: float) -> np.ndarray:
+    start_t = np.asarray(start_t, dtype=np.int64).reshape(-1)
+    tz_sec = int(round(float(tz_offset_hours) * 3600.0))
+    days = ((start_t + tz_sec) // 86400).astype(np.int64, copy=False)
+    return ((days + 3) % 7).astype(np.int64, copy=False)
+
+
+def _load_ckpt_state_and_cfg(path: Path) -> Tuple[Dict[str, torch.Tensor], Dict[str, object]]:
+    ckpt = torch.load(str(path), map_location="cpu")
+    if isinstance(ckpt, dict) and "model_state_dict" in ckpt:
+        state = ckpt["model_state_dict"]
+        cfg = ckpt.get("config", {}) if isinstance(ckpt.get("config", {}), dict) else {}
+        return state, cfg
+    if isinstance(ckpt, dict):
+        return ckpt, {}
+    raise TypeError(f"Unexpected checkpoint format: {type(ckpt)}")
+
+
+def _jaccard(a: List[int], b: List[int]) -> float:
+    sa = set(int(x) for x in a)
+    sb = set(int(x) for x in b)
+    if not sa and not sb:
+        return 1.0
+    return float(len(sa & sb)) / float(len(sa | sb))
+
+
+def _is_valid_path(seq: List[int], ptr: np.ndarray, idx: np.ndarray) -> bool:
+    ptr = np.asarray(ptr, dtype=np.int64).reshape(-1)
+    idx = np.asarray(idx, dtype=np.int64).reshape(-1)
+    for u, v in zip(seq[:-1], seq[1:]):
+        u = int(u)
+        v = int(v)
+        if u < 0 or u + 1 >= int(ptr.size):
+            return False
+        s = int(ptr[u])
+        e = int(ptr[u + 1])
+        if e <= s:
+            return False
+        if v not in idx[s:e]:
+            return False
+    return True
+
+
+def _corridor_type_from_tier(seq: List[int], way_tier: np.ndarray, dominant_thr: float = 0.5) -> int:
+    way_tier = np.asarray(way_tier, dtype=np.int64).reshape(-1)
+    if not seq:
+        return 3
+    tiers = way_tier[np.clip(np.asarray(seq, dtype=np.int64), 0, way_tier.shape[0] - 1)]
+    tot = max(1, int(tiers.size))
+    c0 = int(np.sum(tiers == 0))
+    c1 = int(np.sum(tiers == 1))
+    c2 = int(np.sum(tiers == 2))
+    if (c0 / tot) >= dominant_thr:
+        return 0
+    if (c1 / tot) >= dominant_thr:
+        return 1
+    if (c2 / tot) >= dominant_thr:
+        return 2
+    return 3
+
+
+def _seq_to_xy(seq: List[int], *, way_center_x: np.ndarray, way_center_y: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+    cx = np.asarray(way_center_x, dtype=np.float64).reshape(-1)
+    cy = np.asarray(way_center_y, dtype=np.float64).reshape(-1)
+    s = np.asarray(seq, dtype=np.int64)
+    s = np.clip(s, 0, cx.shape[0] - 1)
+    x = cx[s]
+    y = cy[s]
+    return x, y
+
+
+def _plot_one(
+    *,
+    out_png: Path,
+    route_id: int,
+    city: int,
+    hour: int,
+    dow: int,
+    gt_seq: List[int],
+    pred_seqs: List[List[int]],
+    gt_corr: int,
+    cond_corr: int,
+    pred_corrs: List[int],
+    pred_success: List[bool],
+    pred_jaccard: List[float],
+    way_center_x: np.ndarray,
+    way_center_y: np.ndarray,
+    all_way_x: Optional[np.ndarray],
+    all_way_y: Optional[np.ndarray],
+) -> None:
+    try:
+        import matplotlib.pyplot as plt  # type: ignore
+    except ModuleNotFoundError as e:  # pragma: no cover
+        raise SystemExit("Missing dependency: matplotlib (needed for plotting).") from e
+
+    fig = plt.figure(figsize=(7.0, 7.0))
+    ax = fig.add_subplot(1, 1, 1)
+
+    if all_way_x is not None and all_way_y is not None:
+        ax.scatter(all_way_x, all_way_y, s=1, c="#d0d0d0", alpha=0.15, linewidths=0)
+
+    gx, gy = _seq_to_xy(gt_seq, way_center_x=way_center_x, way_center_y=way_center_y)
+    ax.plot(gx, gy, color="black", linewidth=2.0, alpha=0.9, label="GT")
+
+    colors = ["#4c72b0", "#dd8452", "#55a868", "#c44e52", "#8172b2", "#937860", "#64b5cd", "#da8bc3"]
+    for i, seq in enumerate(pred_seqs):
+        x, y = _seq_to_xy(seq, way_center_x=way_center_x, way_center_y=way_center_y)
+        c = colors[i % len(colors)]
+        ax.plot(x, y, color=c, linewidth=1.6, alpha=0.85)
+
+    # Start/dest markers
+    if gt_seq:
+        sx, sy = gx[0], gy[0]
+        dx, dy = gx[-1], gy[-1]
+        ax.scatter([sx], [sy], s=80, c="white", edgecolors="black", linewidths=2.0, zorder=5)
+        ax.scatter([dx], [dy], s=80, c="black", marker="s", edgecolors="white", linewidths=1.5, zorder=5)
+
+    succ_n = int(np.sum(np.asarray(pred_success, dtype=bool)))
+    jac_mean = float(np.mean(pred_jaccard)) if pred_jaccard else 0.0
+    title = (
+        f"route={route_id} city={city} hour={hour} dow={dow} "
+        f"gt_corr={gt_corr} cond_corr={cond_corr} "
+        f"succ={succ_n}/{len(pred_seqs)} jaccard_mean={jac_mean:.3f}"
+    )
+    ax.set_title(title)
+    ax.set_aspect("equal", adjustable="box")
+    ax.invert_yaxis()
+    ax.set_xticks([])
+    ax.set_yticks([])
+
+    # Lightweight legend
+    ax.legend(loc="lower left", frameon=False)
+
+    out_png.parent.mkdir(parents=True, exist_ok=True)
+    fig.tight_layout()
+    fig.savefig(out_png, dpi=140)
+    plt.close(fig)
+
+
+def build_argparser() -> argparse.ArgumentParser:
+    p = argparse.ArgumentParser(description="Sample Way-CASD (Flow→latent→AR decode) and visualize.")
+    p.add_argument("--way_routes_npz", type=Path, required=True, help="W5_way_routes_labeled/way_routes_labeled.npz")
+    p.add_argument("--way_graph_npz", type=Path, required=True, help="W3_way_graph/way_graph.npz")
+    p.add_argument("--way_features_npz", type=Path, required=True, help="W4_way_features/way_features.npz")
+    p.add_argument("--ae_ckpt", type=Path, required=True, help="W6_train_ae/ckpt_best.pt")
+    p.add_argument("--flow_ckpt", type=Path, required=True, help="W7_train_flow/ckpt_best.pt")
+    p.add_argument("--out_dir", type=Path, required=True)
+
+    p.add_argument("--n_routes", type=int, default=8, help="Number of GT routes to visualize.")
+    p.add_argument("--n_samples_per_route", type=int, default=4, help="Number of samples per route (different noise).")
+    p.add_argument("--route_ids", type=int, nargs="*", default=None, help="Explicit route indices in routes_npz (0-based).")
+
+    p.add_argument("--seed", type=int, default=0)
+    p.add_argument("--device", type=str, default="cuda")
+    p.add_argument("--tz_offset_hours", type=float, default=-5.0)
+    p.add_argument("--max_way_len", type=int, default=160)
+
+    p.add_argument("--beam_size", type=int, default=5)
+    p.add_argument("--max_decode_len", type=int, default=160)
+    p.add_argument("--cfg_scale", type=float, default=1.5)
+    p.add_argument("--solver_steps", type=int, default=0, help="Override solver steps (0=use ckpt/default).")
+    p.add_argument(
+        "--corridor_type_override",
+        type=int,
+        default=-1,
+        help="Force corridor_type in {0,1,2,3}. -1 means use GT corridor_type.",
+    )
+    p.add_argument("--plot_all_ways", action="store_true", help="Scatter all way centers as grey background.")
+    return p
+
+
+def main() -> None:
+    args = build_argparser().parse_args()
+    out_dir = Path(args.out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    cfg = Cfg(
+        seed=int(args.seed),
+        device=str(args.device),
+        tz_offset_hours=float(args.tz_offset_hours),
+        n_routes=int(args.n_routes),
+        n_samples_per_route=int(args.n_samples_per_route),
+        max_way_len=int(args.max_way_len),
+        beam_size=int(args.beam_size),
+        max_decode_len=int(args.max_decode_len),
+        cfg_scale=float(args.cfg_scale),
+        solver_steps=(int(args.solver_steps) if int(args.solver_steps) > 0 else None),
+        corridor_type_override=(None if int(args.corridor_type_override) < 0 else int(args.corridor_type_override)),
+        plot_all_ways=bool(args.plot_all_ways),
+    )
+    _set_seed(cfg.seed)
+
+    device = torch.device(cfg.device if (cfg.device != "cuda" or torch.cuda.is_available()) else "cpu")
+
+    routes = load_way_routes_npz(Path(args.way_routes_npz))
+    N = int(routes.way_seq_len.shape[0])
+    keep = (routes.way_seq_len > 1) & (routes.way_seq_len <= int(cfg.max_way_len))
+    keep_ids = np.nonzero(keep)[0].astype(np.int64, copy=False)
+    if keep_ids.size == 0:
+        raise SystemExit(f"No routes left after filtering max_way_len={cfg.max_way_len}.")
+
+    if args.route_ids:
+        pick = np.asarray([int(x) for x in args.route_ids], dtype=np.int64)
+        pick = pick[(pick >= 0) & (pick < N)]
+        pick = pick[keep[pick]]
+    else:
+        rng = np.random.default_rng(int(cfg.seed))
+        n_pick = min(int(cfg.n_routes), int(keep_ids.size))
+        pick = rng.choice(keep_ids, size=n_pick, replace=False)
+    pick = pick.astype(np.int64, copy=False)
+    pick.sort()
+
+    wg = np.load(str(args.way_graph_npz), allow_pickle=True)
+    wf = np.load(str(args.way_features_npz), allow_pickle=True)
+    ptr = np.asarray(wg["way_adj_ptr"], dtype=np.int64)
+    idx = np.asarray(wg["way_adj_idx"], dtype=np.int64)
+
+    way_features = make_way_feature_tensors(
+        way_center_y=wf["way_center_y"],
+        way_center_x=wf["way_center_x"],
+        way_dir_y=wf["way_dir_y"],
+        way_dir_x=wf["way_dir_x"],
+        way_len_m=wf["way_len_m"],
+        way_tier=wf["way_tier"],
+        way_highway_code=wf["way_highway_code"],
+    )
+    n_highway_types = int(np.max(np.asarray(wf["way_highway_code"], dtype=np.int64))) + 1
+
+    # ===== Load AE =====
+    ae_state, ae_cfg_dict = _load_ckpt_state_and_cfg(Path(args.ae_ckpt))
+    ae_cfg = WayCASDAECfg(
+        d_model=int(ae_cfg_dict.get("d_model", 256)),
+        n_latent=int(ae_cfg_dict.get("n_latent", 32)),
+        n_heads=int(ae_cfg_dict.get("n_heads", 8)),
+        dropout=float(ae_cfg_dict.get("dropout", 0.1)),
+        max_candidates=int(ae_cfg_dict.get("max_candidates", 32)),
+        max_len=int(ae_cfg_dict.get("max_len", 160)),
+        coord_scale=1024.0,
+    )
+    ae = WayCASDAutoEncoder(
+        cfg=ae_cfg,
+        way_features=way_features,
+        way_adj_ptr=ptr,
+        way_adj_idx=idx,
+        n_highway_types=int(max(4, n_highway_types)),
+    ).to(device)
+    ae.load_state_dict(ae_state, strict=True)
+    ae.eval()
+
+    # ===== Load Flow =====
+    flow_state, flow_cfg_dict = _load_ckpt_state_and_cfg(Path(args.flow_ckpt))
+    flow_cfg = LatentFlowCfg(
+        d_model=int(flow_cfg_dict.get("d_model", ae_cfg.d_model)),
+        n_latent=int(flow_cfg_dict.get("n_latent", ae_cfg.n_latent)),
+        n_layers=int(flow_cfg_dict.get("n_layers", 6)),
+        n_heads=int(flow_cfg_dict.get("n_heads", ae_cfg.n_heads)),
+        dropout=float(flow_cfg_dict.get("dropout", ae_cfg.dropout)),
+        noise_sigma=float(flow_cfg_dict.get("noise_sigma", 1.0)),
+        solver_steps=int(flow_cfg_dict.get("solver_steps", 20)),
+        cfg_drop_prob=float(flow_cfg_dict.get("cfg_drop_prob", 0.1)),
+    )
+    flow = LatentFlowMatching(cfg=flow_cfg, cond_cfg=ConditionEncoderCfg(d_model=int(flow_cfg.d_model), coord_scale=1024.0)).to(device)
+    flow.load_state_dict(flow_state, strict=True)
+    flow.eval()
+
+    # ===== Optional background scatter =====
+    all_way_x = None
+    all_way_y = None
+    if cfg.plot_all_ways:
+        all_way_x = np.asarray(wf["way_center_x"], dtype=np.float64).reshape(-1)
+        all_way_y = np.asarray(wf["way_center_y"], dtype=np.float64).reshape(-1)
+
+    # ===== Run sampling per route =====
+    per_route = []
+    for rid in pick.tolist():
+        L = int(routes.way_seq_len[rid])
+        s = int(routes.way_seq_ptr[rid])
+        gt = routes.way_seq_idx[s : s + L].astype(np.int64, copy=False).tolist()
+        gt_corr = int(routes.corridor_type[rid])
+        city = int(routes.route_city[rid])
+        start_t = int(routes.start_t[rid])
+        hour = int(_hour_from_unix(np.asarray([start_t], dtype=np.int64), cfg.tz_offset_hours)[0])
+        dow = int(_dow_from_unix(np.asarray([start_t], dtype=np.int64), cfg.tz_offset_hours)[0])
+
+        corr = int(cfg.corridor_type_override) if cfg.corridor_type_override is not None else int(gt_corr)
+        K = int(cfg.n_samples_per_route)
+        route_cond = {
+            "start_pos": torch.as_tensor(np.repeat(routes.start_pos[rid][None, :], K, axis=0), dtype=torch.float32, device=device),
+            "dest_pos": torch.as_tensor(np.repeat(routes.dest_pos[rid][None, :], K, axis=0), dtype=torch.float32, device=device),
+            "hour": torch.as_tensor(np.full((K,), hour, dtype=np.int64), dtype=torch.long, device=device),
+            "dow": torch.as_tensor(np.full((K,), dow, dtype=np.int64), dtype=torch.long, device=device),
+            "route_city": torch.as_tensor(np.full((K,), city, dtype=np.int64), dtype=torch.long, device=device),
+            "corridor_type": torch.as_tensor(np.full((K,), corr, dtype=np.int64), dtype=torch.long, device=device),
+        }
+        start_way = torch.as_tensor(np.full((K,), int(routes.start_way[rid]), dtype=np.int64), dtype=torch.long, device=device)
+        dest_way = torch.as_tensor(np.full((K,), int(routes.dest_way[rid]), dtype=np.int64), dtype=torch.long, device=device)
+
+        z = flow.sample(route_cond=route_cond, cfg_scale=float(cfg.cfg_scale), solver_steps=cfg.solver_steps)
+        pred = ae.decoder.beam_search(
+            way_embedder=ae.way_enc,
+            latent_tokens=z,
+            route_cond=route_cond,
+            start_way=start_way,
+            dest_way=dest_way,
+            beam_size=int(cfg.beam_size),
+            max_len=int(cfg.max_decode_len),
+        )
+
+        pred_corrs = [_corridor_type_from_tier(p, wf["way_tier"]) for p in pred]
+        pred_success = [bool(p and int(p[-1]) == int(routes.dest_way[rid])) for p in pred]
+        pred_valid = [_is_valid_path(p, ptr, idx) for p in pred]
+        pred_jac = [_jaccard(gt, p) for p in pred]
+
+        out_png = out_dir / f"case_route{rid:05d}.png"
+        _plot_one(
+            out_png=out_png,
+            route_id=int(rid),
+            city=int(city),
+            hour=int(hour),
+            dow=int(dow),
+            gt_seq=gt,
+            pred_seqs=pred,
+            gt_corr=int(gt_corr),
+            cond_corr=int(corr),
+            pred_corrs=pred_corrs,
+            pred_success=pred_success,
+            pred_jaccard=pred_jac,
+            way_center_x=wf["way_center_x"],
+            way_center_y=wf["way_center_y"],
+            all_way_x=all_way_x,
+            all_way_y=all_way_y,
+        )
+
+        per_route.append(
+            {
+                "route_id": int(rid),
+                "route_city": int(city),
+                "hour": int(hour),
+                "dow": int(dow),
+                "gt": {"len": int(len(gt)), "corridor_type": int(gt_corr)},
+                "cond": {"corridor_type": int(corr)},
+                "pred": [
+                    {
+                        "len": int(len(p)),
+                        "success": bool(su),
+                        "valid": bool(vv),
+                        "jaccard": float(jj),
+                        "corridor_type": int(cc),
+                    }
+                    for p, su, vv, jj, cc in zip(pred, pred_success, pred_valid, pred_jac, pred_corrs)
+                ],
+            }
+        )
+
+    report = {
+        "ok": True,
+        "task": "way_casd_sample_viz",
+        "created_at": datetime.now(tz=TZ_SHANGHAI).isoformat(),
+        "cfg": asdict(cfg),
+        "inputs": {
+            "way_routes_npz": str(args.way_routes_npz),
+            "way_graph_npz": str(args.way_graph_npz),
+            "way_features_npz": str(args.way_features_npz),
+            "ae_ckpt": str(args.ae_ckpt),
+            "flow_ckpt": str(args.flow_ckpt),
+        },
+        "picked_routes": pick.astype(np.int64).tolist(),
+        "per_route": per_route,
+    }
+    (out_dir / "report.json").write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+    print(f"[saved] {out_dir/'report.json'}")
+    print(f"[saved] figures: {out_dir}")
+
+
+if __name__ == "__main__":
+    main()
+

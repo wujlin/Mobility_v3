@@ -194,7 +194,7 @@ def build_argparser() -> argparse.ArgumentParser:
     p.add_argument("--way_graph_npz", type=Path, required=True, help="W3_way_graph/way_graph.npz")
     p.add_argument("--way_features_npz", type=Path, required=True, help="W4_way_features/way_features.npz")
     p.add_argument("--ae_ckpt", type=Path, required=True, help="W6_train_ae/ckpt_best.pt")
-    p.add_argument("--flow_ckpt", type=Path, required=True, help="W7_train_flow/ckpt_best.pt")
+    p.add_argument("--flow_ckpt", type=Path, default=None, help="W7_train_flow/ckpt_best.pt (required if latent_source=flow)")
     p.add_argument("--out_dir", type=Path, required=True)
 
     p.add_argument("--n_routes", type=int, default=8, help="Number of GT routes to visualize.")
@@ -210,6 +210,12 @@ def build_argparser() -> argparse.ArgumentParser:
     p.add_argument("--max_decode_len", type=int, default=160)
     p.add_argument("--cfg_scale", type=float, default=1.5)
     p.add_argument("--solver_steps", type=int, default=0, help="Override solver steps (0=use ckpt/default).")
+    p.add_argument(
+        "--latent_source",
+        choices=["flow", "gt"],
+        default="flow",
+        help="Where to get latent tokens: flow (default) or gt (encode GT and decode; used to isolate decoder).",
+    )
     p.add_argument(
         "--corridor_type_override",
         type=int,
@@ -299,20 +305,25 @@ def main() -> None:
     ae.eval()
 
     # ===== Load Flow =====
-    flow_state, flow_cfg_dict = _load_ckpt_state_and_cfg(Path(args.flow_ckpt))
-    flow_cfg = LatentFlowCfg(
-        d_model=int(flow_cfg_dict.get("d_model", ae_cfg.d_model)),
-        n_latent=int(flow_cfg_dict.get("n_latent", ae_cfg.n_latent)),
-        n_layers=int(flow_cfg_dict.get("n_layers", 6)),
-        n_heads=int(flow_cfg_dict.get("n_heads", ae_cfg.n_heads)),
-        dropout=float(flow_cfg_dict.get("dropout", ae_cfg.dropout)),
-        noise_sigma=float(flow_cfg_dict.get("noise_sigma", 1.0)),
-        solver_steps=int(flow_cfg_dict.get("solver_steps", 20)),
-        cfg_drop_prob=float(flow_cfg_dict.get("cfg_drop_prob", 0.1)),
-    )
-    flow = LatentFlowMatching(cfg=flow_cfg, cond_cfg=ConditionEncoderCfg(d_model=int(flow_cfg.d_model), coord_scale=1024.0)).to(device)
-    flow.load_state_dict(flow_state, strict=True)
-    flow.eval()
+    flow = None
+    flow_cfg_dict: Dict[str, object] = {}
+    if str(args.latent_source) == "flow":
+        if args.flow_ckpt is None:
+            raise SystemExit("--flow_ckpt is required when --latent_source=flow")
+        flow_state, flow_cfg_dict = _load_ckpt_state_and_cfg(Path(args.flow_ckpt))
+        flow_cfg = LatentFlowCfg(
+            d_model=int(flow_cfg_dict.get("d_model", ae_cfg.d_model)),
+            n_latent=int(flow_cfg_dict.get("n_latent", ae_cfg.n_latent)),
+            n_layers=int(flow_cfg_dict.get("n_layers", 6)),
+            n_heads=int(flow_cfg_dict.get("n_heads", ae_cfg.n_heads)),
+            dropout=float(flow_cfg_dict.get("dropout", ae_cfg.dropout)),
+            noise_sigma=float(flow_cfg_dict.get("noise_sigma", 1.0)),
+            solver_steps=int(flow_cfg_dict.get("solver_steps", 20)),
+            cfg_drop_prob=float(flow_cfg_dict.get("cfg_drop_prob", 0.1)),
+        )
+        flow = LatentFlowMatching(cfg=flow_cfg, cond_cfg=ConditionEncoderCfg(d_model=int(flow_cfg.d_model), coord_scale=1024.0)).to(device)
+        flow.load_state_dict(flow_state, strict=True)
+        flow.eval()
 
     # ===== Optional background scatter =====
     all_way_x = None
@@ -346,7 +357,16 @@ def main() -> None:
         start_way = torch.as_tensor(np.full((K,), int(routes.start_way[rid]), dtype=np.int64), dtype=torch.long, device=device)
         dest_way = torch.as_tensor(np.full((K,), int(routes.dest_way[rid]), dtype=np.int64), dtype=torch.long, device=device)
 
-        z = flow.sample(route_cond=route_cond, cfg_scale=float(cfg.cfg_scale), solver_steps=cfg.solver_steps)
+        if str(args.latent_source) == "gt":
+            # Encode GT route to latent (replicated K times) to isolate decoder behavior.
+            way_seq_pad = np.full((K, L), -1, dtype=np.int64)
+            gt_arr = np.asarray(gt, dtype=np.int64)
+            way_seq_pad[:, : gt_arr.size] = gt_arr[None, :]
+            way_seq_pad_t = torch.as_tensor(way_seq_pad, dtype=torch.long, device=device)
+            z, _ = ae.encode(way_seq_pad_t)
+        else:
+            assert flow is not None
+            z = flow.sample(route_cond=route_cond, cfg_scale=float(cfg.cfg_scale), solver_steps=cfg.solver_steps)
         pred = ae.decoder.beam_search(
             way_embedder=ae.way_enc,
             latent_tokens=z,
@@ -413,7 +433,8 @@ def main() -> None:
             "way_graph_npz": str(args.way_graph_npz),
             "way_features_npz": str(args.way_features_npz),
             "ae_ckpt": str(args.ae_ckpt),
-            "flow_ckpt": str(args.flow_ckpt),
+            "flow_ckpt": (str(args.flow_ckpt) if args.flow_ckpt is not None else None),
+            "latent_source": str(args.latent_source),
         },
         "picked_routes": pick.astype(np.int64).tolist(),
         "per_route": per_route,
@@ -425,4 +446,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

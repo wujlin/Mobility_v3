@@ -37,6 +37,7 @@ class WayDecoder(nn.Module):
         super().__init__()
         self.cfg = cfg
         self.cond_enc = ConditionEncoder(cond_cfg)
+        self.coord_scale = float(getattr(cond_cfg, "coord_scale", 0.0))
 
         self.register_buffer("way_adj_ptr", torch.as_tensor(way_adj_ptr, dtype=torch.long), persistent=False)
         self.register_buffer("way_adj_idx", torch.as_tensor(way_adj_idx, dtype=torch.long), persistent=False)
@@ -52,7 +53,7 @@ class WayDecoder(nn.Module):
         self.cur_proj = nn.Linear(d_model, hidden)
         self.cand_proj = nn.Linear(d_model, hidden)
         self.scorer = nn.Sequential(
-            nn.Linear(hidden * 3, hidden),
+            nn.Linear(hidden * 3 + 1, hidden),
             nn.SiLU(),
             nn.Dropout(float(cfg.dropout)),
             nn.Linear(hidden, 1),
@@ -110,7 +111,20 @@ class WayDecoder(nn.Module):
         T, C = cand_way.shape
         ctx_h = ctx_t[:, None, :].expand(T, C, -1)
         cur_h2 = cur_h[:, None, :].expand(T, C, -1)
-        x = torch.cat([ctx_h, cur_h2, cand_h], dim=-1)
+        # Candidate-to-destination distance (directional prior; KISS).
+        # Both dest_pos and way centers are normalized by coord_scale for consistent magnitude.
+        coord_scale = float(getattr(way_embedder, "coord_scale", self.coord_scale))
+        dest = route_cond["dest_pos"][route_idx].to(dtype=torch.float32)
+        if coord_scale > 0:
+            dest = dest / coord_scale
+        try:
+            cand_geom, _tier, _hw = way_embedder._lookup(cand_way)  # (T,C,5) -> (y,x,dy,dx,ln)
+            cand_center = cand_geom[..., :2].to(dtype=torch.float32)
+        except Exception:
+            cand_center = torch.zeros((T, C, 2), dtype=torch.float32, device=dest.device)
+        dist = torch.norm(dest[:, None, :] - cand_center, dim=-1, keepdim=True)  # (T,C,1)
+
+        x = torch.cat([ctx_h, cur_h2, cand_h, dist], dim=-1)
         logits = self.scorer(x).squeeze(-1)
         logits = logits.masked_fill(~cand_mask, float("-inf"))
         return logits

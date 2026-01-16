@@ -1,31 +1,53 @@
+% Method - ICML style
+
 \subsection{Overview}
-We model route generation as a decision--execution cascade with an explicit \emph{corridor commitment}.
-Let $y$ denote a graph path (node sequence) and $\tau$ denote a continuous trajectory realization (optional).
+
+We model route generation as a \emph{decision--execution cascade} with explicit corridor commitment.
+Let $y$ denote a graph path (node sequence) and $z$ denote a sparse waypoint commitment.
 Our factorization is:
 \begin{equation}
   p_\theta(y \mid c) = \sum_{z} p_\theta(z \mid c)\, p(y \mid z, c),
 \end{equation}
-where $z$ is a \emph{sparse waypoint commitment} on the road graph.
-The key design choice is to make the decision stage \emph{short-horizon} (few steps) to avoid the compounding error of long node-level autoregressive generation.
+where the \emph{decision stage} models $p_\theta(z \mid c)$ and the \emph{execution stage} implements $p(y \mid z, c)$ via graph search.
+The key design choice is to make the decision stage short-horizon (few steps) to avoid compounding error over long node-level autoregressive generation.
 
-\subsection{Decision: waypoint-level autoregressive commitment}
+\subsection{Decision Stage: Waypoint Autoregressive Commitment}
+
 \paragraph{Ground-truth waypoint extraction.}
-Given a ground-truth graph path $y=(v_0,\dots,v_L)$, we derive a fixed-length waypoint sequence
-$z=(w_0,\dots,w_M)$ with $w_0=v_0$ and $w_M=v_L$.
-We use a fixed-$K$ variant of the Ramer--Douglas--Peucker procedure in graph coordinate space: iteratively select the intermediate nodes with the largest perpendicular deviation from the current polyline until $M$ reaches the desired number of waypoints.\footnote{This is a supervision heuristic to stabilize training under limited data; learning waypoints end-to-end is left to future work.}
+Given a ground-truth graph path $y=(v_0,\dots,v_L)$, we derive a fixed-length waypoint sequence $z=(w_0,\dots,w_M)$ with $w_0=v_0$ and $w_M=v_L$.
+We use a fixed-$K$ variant of the Ramer--Douglas--Peucker procedure in graph coordinate space: iteratively select the intermediate nodes with the largest perpendicular deviation from the current polyline until $M$ reaches the desired number.\footnote{This is a supervision heuristic to stabilize training under limited data; end-to-end waypoint learning is left to future work.}
 
 \paragraph{Waypoint bins as a compact output space.}
-Directly predicting a waypoint as a node ID is a classification problem over hundreds of thousands of nodes.
-We instead discretize the grid into $B\times B$ waypoint bins (e.g., $B=32$) and train an autoregressive classifier over $B^2$ classes.
+Directly predicting a waypoint as a node ID requires classification over hundreds of thousands of nodes.
+Instead, we discretize the grid into $B\times B$ waypoint bins (e.g., $B=32$) and train an autoregressive classifier over $B^2$ classes.
 At step $m$, the model predicts the next waypoint bin conditioned on the previous waypoint, the destination, and context features from $t_0$ and road tier.
 This reduces the autoregressive horizon to $M\!\approx\!3$--$5$ steps, making exposure bias and compounding error much less severe than node-level AR over hundreds of edges.
 
-\subsection{Execution: A* connection on the road graph}
+\paragraph{Model architecture.}
+The waypoint predictor is a lightweight transformer encoder that takes as input:
+(i) positional embeddings for the current step $m$;
+(ii) bin embeddings for previously predicted waypoints;
+(iii) destination bin embedding;
+(iv) time features (hour-of-day, day-of-week) via sinusoidal encoding; and
+(v) aggregated road-tier features.
+The output is a distribution over $B^2$ bins for the next waypoint.
+
+\subsection{Execution Stage: A* Connection on the Road Graph}
+
 Given a sampled waypoint sequence $\hat{z}=(\hat{w}_0,\dots,\hat{w}_M)$, we execute it into a full corridor path by graph search.
 For each consecutive pair $(\hat{w}_{m},\hat{w}_{m+1})$, we run A* on $G$ with edge-length costs and concatenate the resulting segments into a complete path $\hat{y}$.
-If any segment is unreachable, we mark the sample as a failure; this motivates reachability-aware decoding as a key next step.
+
+\paragraph{Bin-to-node instantiation.}
+Each predicted bin must be instantiated to a concrete graph node.
+We use a reachability-aware heuristic: within the bin, prefer nodes on major roads that are directionally aligned toward the destination.
+If no valid node exists, we fall back to the nearest node in the bin.
+
+\paragraph{Failure handling.}
+If any segment is unreachable (A* fails), we mark the sample as a failure.
+This motivates reachability-aware decoding as a key extension.
 Because the executor enforces that the final path passes through $\hat{z}$ and stays on $G$, it is \emph{commitment-preserving} by construction.
 
-\subsection{Optional continuous executor (extension)}
-The graph path $\hat{y}$ can be converted back to a continuous polyline and refined with a continuous generator (diffusion/flow) to model within-corridor variation (lane choice, smoothing, local detours).
-We treat this as an optional extension: the current paper focuses on recovering corridor-level structure with explicit commitments and reliable execution on the road graph.
+\subsection{Optional Continuous Refinement (Extension)}
+
+The graph path $\hat{y}$ can be converted to a continuous polyline and refined with a continuous generator (e.g., diffusion or flow matching) to model within-corridor variation such as lane choice, smoothing, or local detours.
+We treat this as an optional extension: the current work focuses on recovering corridor-level structure with explicit commitments and reliable execution on the road graph.

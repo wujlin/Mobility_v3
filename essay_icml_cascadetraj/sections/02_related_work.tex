@@ -1,22 +1,25 @@
-\paragraph{Short-horizon prediction vs.\ trip-level route generation.}
-Most trajectory prediction work targets short horizons and evaluates point-wise accuracy, where committing to distinct trip-scale corridors is not required.
-In contrast, route generation must represent corridor-level alternatives under the same OD intent, while remaining feasible on a transportation network.
+% Related Work - ICML style
 
-\paragraph{Foundation models and transfer for mobility.}
-Recent trajectory foundation models \citep{unitraj2025,lin2024trajfm} aim to learn reusable representations from large-scale traces.
+\paragraph{Short-horizon prediction vs.\ trip-level route generation.}
+Most trajectory prediction work targets short horizons (seconds to minutes) and evaluates point-wise accuracy, where committing to distinct trip-scale corridors is not required \citep{gupta2018social,salzmann2020trajectronpp}.
+In contrast, route generation must represent corridor-level alternatives under the same OD intent while remaining feasible on a transportation network.
+
+\paragraph{Foundation models for mobility.}
+Recent trajectory foundation models aim to learn reusable representations from large-scale traces \citep{lin2024trajfm}.
+UniTraj \citep{unitraj2025} demonstrates cross-dataset transfer for prediction tasks.
 These approaches are complementary: we do not treat \emph{route choice} as a reconstruction problem, but as a context-conditioned decision whose distribution should shift with time and urban semantics even for the same OD pair.
-Our work therefore focuses on decision mechanisms and distributional evaluation at the corridor level.
 
 \paragraph{Map-conditioned and road-network constrained generation.}
 Multiple lines of work incorporate road structure to improve physical fidelity, either by conditioning on street maps \citep{ijcai2025p1041} or by constraining diffusion models on road networks \citep{wei2024diffrntraj,zhu2024controltraj,yang2025geo}.
 Our diagnostic evidence aligns with this direction: map-free continuous generators can exhibit off-road artifacts at trip scale.
-We go one step further by making corridor choice explicit as a discrete decision and by treating temporal--spatial semantics as first-class conditioning signals for \emph{behavioral} realism.
+We go further by making corridor choice explicit as a discrete decision.
 
 \paragraph{Coarse-to-fine and path-generation diffusion.}
-Coarse-to-fine generation has emerged as a practical strategy for long-horizon mobility modeling \citep{guo2025cardiff}, and latent diffusion has also been explored for road-network paths \citep{fan2024diffpath}.
-CascadeTraj follows this engineering intuition but targets a different unit of decision: rather than denoising coordinates toward a measure-zero road manifold, we commit to sparse graph-level decisions and let constrained execution guarantee connectivity.
+Coarse-to-fine generation has emerged as a practical strategy for long-horizon mobility modeling.
+Cardiff \citep{guo2025cardiff} uses hierarchical denoising, and DiffPath \citep{fan2024diffpath} applies latent diffusion for road-network paths.
+CascadeTraj follows this engineering intuition but targets a different unit of decision: rather than denoising coordinates toward a measure-zero road manifold, we commit to sparse graph-level waypoints and let constrained execution guarantee connectivity.
 
 \paragraph{Cross-city generalization.}
 GTG \citep{wang2025gtg} demonstrates that trajectory generation can generalize across cities.
-We leverage the same multi-city setting but ask a more specific question: what modulates corridor preference under a shared road topology?
-This motivates our emphasis on explicit context (time, road hierarchy, and urban semantics) and corridor-distribution evaluation beyond shortest-path biases.
+We leverage a similar multi-city setting but ask a more specific question: what modulates corridor preference under a shared road topology?
+This motivates our emphasis on explicit context (time, road hierarchy) and corridor-distribution evaluation beyond shortest-path biases.

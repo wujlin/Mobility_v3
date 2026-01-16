@@ -1,73 +1,87 @@
-\subsection{Heuristic candidate sets have low corridor coverage}
-\paragraph{GT is well aligned to the road graph.}
-On Detroit segments, ground-truth points are typically close to the road graph: $94\%$ of GT points are within 1 grid cell of a road edge (p90 distance $<1$).
-This suggests that low corridor match is not driven by GT/map misalignment.
+% Results - ICML style
+
+\subsection{Gate 1: Heuristic Candidates Have Low Corridor Coverage}
+
+\paragraph{Ground truth is well aligned to the road graph.}
+On Detroit segments, ground-truth points are typically close to the road graph: 94\% of GT points are within 1 grid cell of a road edge (p90 distance $<1$).
+This confirms that low corridor match is not driven by GT/map misalignment.
 
 \paragraph{$K$-shortest candidates miss many ground-truth corridors.}
-Despite good GT alignment, heuristic candidate sets can have low corridor coverage.
-With $K=20$ shortest-path variants, the median best-of-$K$ edge Jaccard match to GT is only $\approx 0.21$ on probed routes (Table~\ref{tab:candidate-coverage}), indicating that ``classify among $K$'' can be an unreliable surrogate for learning the corridor distribution.
+Despite good GT alignment, heuristic candidate sets exhibit low corridor coverage.
+With $K=20$ shortest-path variants, the median best-of-$K$ edge Jaccard match to GT is only $\approx 0.21$ (\cref{tab:candidate-coverage}), indicating that ``classify among $K$'' is an unreliable surrogate for learning the corridor distribution.
 This motivates learning structured corridor commitments rather than depending on a fixed candidate set.
 
 \begin{table}[t]
+  \caption{Candidate-set coverage diagnostic (Detroit). Even when GT points are close to the road graph, $K$-shortest candidates have low best-of-$K$ edge Jaccard match to GT corridors.}
+  \label{tab:candidate-coverage}
+  \vskip 0.1in
   \centering
   \small
   \begin{tabular}{lccc}
     \toprule
     Setting & $K$ & $J_{\mathrm{best}}$ (p50) & $J_{\mathrm{best}}$ (p90) \\
     \midrule
-    Detroit, $K$-shortest candidates & 20 & 0.215 & 0.699 \\
+    Detroit, $K$-shortest & 20 & 0.215 & 0.699 \\
     \bottomrule
   \end{tabular}
-  \caption{Candidate-set coverage diagnostic (Detroit). Even when GT points are close to the road graph, $K$-shortest candidates can have low best-of-$K$ edge Jaccard match to GT corridors.}
-  \label{tab:candidate-coverage}
+  \vskip -0.1in
 \end{table}
 
-\subsection{Context carries measurable corridor-level signal (gate)}
+\subsection{Gate 2: Context Carries Measurable Corridor-Level Signal}
+
 \paragraph{AUC on corridor clusters.}
-Using OD buckets and edge-Jaccard clustering within each bucket, we form a corridor-label prediction gate.
+Using OD buckets and edge-Jaccard clustering within each bucket, we form a corridor-label prediction task.
 Across Detroit and Columbus, time+tier features achieve a clear above-chance signal (mean AUC $\approx 0.80$ over 22 usable OD groups).
-Per-city, Columbus exhibits a stronger signal (mean AUC $\approx 0.84$ over 18 groups) while Detroit is weaker but still above chance (mean AUC $\approx 0.61$ over 4 groups), highlighting the role of data volume and OD repetition.
+Per-city, Columbus exhibits a stronger signal (mean AUC $\approx 0.84$ over 18 groups) while Detroit is weaker but still above chance (mean AUC $\approx 0.61$ over 4 groups), highlighting the role of data volume and OD repetition (\cref{tab:semantic-gate}).
 
 \begin{table}[t]
+  \caption{Semantic informativeness gate. AUC for predicting top-2 corridor clusters within multi-modal OD buckets using time and road-tier features.}
+  \label{tab:semantic-gate}
+  \vskip 0.1in
   \centering
   \small
   \begin{tabular}{lccc}
     \toprule
-    City & Usable OD groups & AUC(time+tier) mean & Gate \\
+    City & OD Groups & AUC (mean) & Gate \\
     \midrule
     Detroit & 4 & 0.613 & GO \\
     Columbus & 18 & 0.844 & STRONG\_GO \\
-    Detroit+Columbus & 22 & 0.802 & STRONG\_GO \\
+    Combined & 22 & 0.802 & STRONG\_GO \\
     \bottomrule
   \end{tabular}
-  \caption{Semantic informativeness gate (cluster-based). AUC is computed for predicting the top-2 corridor clusters within multi-modal OD buckets using time and road-tier features.}
-  \label{tab:semantic-gate}
+  \vskip -0.1in
 \end{table}
 
-\subsection{Graph-based corridor generation: node AR vs waypoint AR + A*}
+\subsection{Corridor Generation: Node AR vs.\ Waypoint AR + A*}
+
 \paragraph{Node-level AR is fragile at long horizons.}
-We train a next-node predictor on graph transitions (val accuracy $\approx 0.76$), but long-horizon sampling remains challenging: for $K=20$ samples, best-of-$K$ corridor match is modest ($J_{\mathrm{best}}$ mean $\approx 0.20$) and success depends strongly on route length.
+We train a next-node predictor on graph transitions (validation accuracy $\approx 0.76$), but long-horizon sampling remains challenging: for $K=20$ samples, best-of-$K$ corridor match is modest ($J_{\mathrm{best}}$ mean $\approx 0.20$) and success depends strongly on route length.
 This reflects compounding error over hundreds of steps.
 
-\paragraph{Waypoint AR + A* reduces the decision horizon but needs reachability-aware decoding.}
+\paragraph{Waypoint AR + A* reduces decision horizon.}
 Our waypoint AR model predicts a 4-step waypoint commitment in a coarse $32\times 32$ bin space (best validation accuracy $\approx 0.34$).
 Executing sampled waypoints with A* guarantees graph-validity for successful samples.
-In the multi-city setting, we found that a naive ``bin$\rightarrow$node'' instantiation can fail catastrophically by mixing nodes across disjoint city subgraphs that share a normalized grid coordinate system.
-After enforcing city-consistent decoding and a simple reachability-friendly bin instantiation heuristic (major-road preference + OD-aligned direction), waypoint AR + A* achieves near-perfect completion.
-However, an oracle experiment that replaces predicted bins with GT-derived bins shows only a small gain in corridor match, indicating that the remaining bottleneck is the coarse bin granularity rather than the bin predictor.
+In the multi-city setting, we found that naive bin-to-node instantiation can fail by mixing nodes across disjoint city subgraphs that share a normalized grid coordinate system.
+After enforcing city-consistent decoding and a reachability-friendly bin instantiation heuristic (major-road preference + OD-aligned direction), waypoint AR + A* achieves near-perfect completion (\cref{tab:main-results}).
+
+\paragraph{Ceiling analysis.}
+An oracle experiment that replaces predicted bins with GT-derived bins shows only a small gain in corridor match, indicating that the remaining bottleneck is bin granularity rather than the bin predictor.
+Finer bins or adaptive waypoint counts are promising directions for future work.
 
 \begin{table}[t]
+  \caption{Corridor generation on Detroit+Columbus (200 sampled routes, $K=20$). Success: completion to $d$; $J_{\mathrm{best}}$: best-of-$K$ edge Jaccard to GT.}
+  \label{tab:main-results}
+  \vskip 0.1in
   \centering
   \small
   \begin{tabular}{lccc}
     \toprule
-    Method & Success (mean) & $J_{\mathrm{best}}$ (mean) & Notes \\
+    Method & Success & $J_{\mathrm{best}}$ (mean) & Notes \\
     \midrule
-    Node-level AR (T3) & 0.376 & 0.204 & long-horizon drift \\
-    Waypoint AR + A* (T4) & 1.000 & 0.270 & city-consistent + reachable instantiation \\
-    Waypoint AR + A* (T4, oracle bins) & 1.000 & 0.276 & ceiling limited by bin granularity \\
+    Node-level AR & 0.376 & 0.204 & long-horizon drift \\
+    Waypoint AR + A* & 1.000 & 0.270 & city-consistent \\
+    Waypoint AR + A* (oracle) & 1.000 & 0.276 & bin ceiling \\
     \bottomrule
   \end{tabular}
-  \caption{Graph corridor generation on the combined Detroit+Columbus dataset (200 sampled routes, $K=20$). Success denotes completion to $d$; $J_{\mathrm{best}}$ is best-of-$K$ edge Jaccard to a \emph{single} GT corridor for that route (single-trajectory match).}
-  \label{tab:t3-t4}
+  \vskip -0.1in
 \end{table}

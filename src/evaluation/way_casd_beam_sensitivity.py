@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import time
 from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -32,6 +33,10 @@ class Cfg:
     solver_steps: Optional[int]
     corridor_type_override: Optional[int]
     n_per_bucket: int
+    decode_len_mode: str  # "fixed" or "relative"
+    rel_decode_k: float
+    rel_decode_b: int
+    log_every_routes: int
 
 
 def _set_seed(seed: int) -> None:
@@ -178,6 +183,10 @@ def build_argparser() -> argparse.ArgumentParser:
 
     p.add_argument("--max_way_len", type=int, default=160)
     p.add_argument("--max_decode_len", type=int, default=160)
+    p.add_argument("--decode_len_mode", choices=["fixed", "relative"], default="fixed")
+    p.add_argument("--rel_decode_k", type=float, default=2.0, help="If decode_len_mode=relative: max_len=min(max_decode_len, rel_decode_b + rel_decode_k*gt_len).")
+    p.add_argument("--rel_decode_b", type=int, default=20)
+    p.add_argument("--log_every_routes", type=int, default=10, help="Print progress every N routes per beam (0=disable).")
     p.add_argument("--tz_offset_hours", type=float, default=-5.0)
     p.add_argument("--n_per_bucket", type=int, default=50, help="Routes per length bucket (before de-dup).")
 
@@ -205,6 +214,10 @@ def main() -> None:
         solver_steps=(int(args.solver_steps) if int(args.solver_steps) > 0 else None),
         corridor_type_override=(None if int(args.corridor_type_override) < 0 else int(args.corridor_type_override)),
         n_per_bucket=int(args.n_per_bucket),
+        decode_len_mode=str(args.decode_len_mode),
+        rel_decode_k=float(args.rel_decode_k),
+        rel_decode_b=int(args.rel_decode_b),
+        log_every_routes=int(args.log_every_routes),
     )
     _set_seed(cfg.seed)
 
@@ -303,14 +316,9 @@ def main() -> None:
         gt_valid = _is_valid_path(gt, way_adj_ptr, way_adj_idx)
         gt_meta[int(rid)] = {"len": int(L), "bucket": _bucket_name(int(L)), "gt_valid": bool(gt_valid), "gt": gt}
 
-    def _empty_bucket() -> Dict[str, object]:
-        return {"n_routes": 0, "gt_valid_rate": float("nan"), "success_rate": float("nan")}
-
-    summaries = []
-    for beam in cfg.beam_sizes:
-        beam = max(1, int(beam))
-        per_route = []
-
+    # If latent_source=gt, encode once per route and reuse across beam sizes (big speedup).
+    pre_gt: Dict[int, Dict[str, object]] = {}
+    if cfg.latent_source == "gt":
         for rid in pick.tolist():
             meta = gt_meta[int(rid)]
             L = int(meta["len"])
@@ -320,31 +328,65 @@ def main() -> None:
             city = int(routes.route_city[int(rid)])
             gt_corr = int(routes.corridor_type[int(rid)])
             corr = int(cfg.corridor_type_override) if cfg.corridor_type_override is not None else int(gt_corr)
+            route_cond = {
+                "start_pos": torch.as_tensor(routes.start_pos[int(rid)][None, :], dtype=torch.float32, device=device),
+                "dest_pos": torch.as_tensor(routes.dest_pos[int(rid)][None, :], dtype=torch.float32, device=device),
+                "hour": torch.as_tensor([hour], dtype=torch.long, device=device),
+                "dow": torch.as_tensor([dow], dtype=torch.long, device=device),
+                "route_city": torch.as_tensor([city], dtype=torch.long, device=device),
+                "corridor_type": torch.as_tensor([corr], dtype=torch.long, device=device),
+            }
+            start_way = torch.as_tensor([int(routes.start_way[int(rid)])], dtype=torch.long, device=device)
+            dest_way = torch.as_tensor([int(routes.dest_way[int(rid)])], dtype=torch.long, device=device)
+            way_seq_pad = np.full((1, L), -1, dtype=np.int64)
+            way_seq_pad[0, : len(gt)] = np.asarray(gt, dtype=np.int64)
+            z1, _ = ae.encode(torch.as_tensor(way_seq_pad, dtype=torch.long, device=device))
+            pre_gt[int(rid)] = {"route_cond": route_cond, "start_way": start_way, "dest_way": dest_way, "z": z1}
 
+    def _empty_bucket() -> Dict[str, object]:
+        return {"n_routes": 0, "gt_valid_rate": float("nan"), "success_rate": float("nan")}
+
+    summaries = []
+    for beam in cfg.beam_sizes:
+        beam = max(1, int(beam))
+        per_route = []
+        t_beam0 = time.time()
+
+        for j, rid in enumerate(pick.tolist()):
+            meta = gt_meta[int(rid)]
+            L = int(meta["len"])
+            gt = meta["gt"]
             if cfg.latent_source == "gt":
                 K = 1
-            else:
-                K = int(cfg.n_samples_per_route)
-            route_cond = {
-                "start_pos": torch.as_tensor(np.repeat(routes.start_pos[int(rid)][None, :], K, axis=0), dtype=torch.float32, device=device),
-                "dest_pos": torch.as_tensor(np.repeat(routes.dest_pos[int(rid)][None, :], K, axis=0), dtype=torch.float32, device=device),
-                "hour": torch.as_tensor(np.full((K,), hour, dtype=np.int64), dtype=torch.long, device=device),
-                "dow": torch.as_tensor(np.full((K,), dow, dtype=np.int64), dtype=torch.long, device=device),
-                "route_city": torch.as_tensor(np.full((K,), city, dtype=np.int64), dtype=torch.long, device=device),
-                "corridor_type": torch.as_tensor(np.full((K,), corr, dtype=np.int64), dtype=torch.long, device=device),
-            }
-            start_way = torch.as_tensor(np.full((K,), int(routes.start_way[int(rid)]), dtype=np.int64), dtype=torch.long, device=device)
-            dest_way = torch.as_tensor(np.full((K,), int(routes.dest_way[int(rid)]), dtype=np.int64), dtype=torch.long, device=device)
-
-            if cfg.latent_source == "gt":
-                # Encode GT to latent (single row) to isolate decoder behavior.
-                way_seq_pad = np.full((1, L), -1, dtype=np.int64)
-                way_seq_pad[0, : len(gt)] = np.asarray(gt, dtype=np.int64)
-                z1, _ = ae.encode(torch.as_tensor(way_seq_pad, dtype=torch.long, device=device))
-                z = z1.repeat(K, 1, 1)
+                ent = pre_gt[int(rid)]
+                route_cond = ent["route_cond"]
+                start_way = ent["start_way"]
+                dest_way = ent["dest_way"]
+                z = ent["z"]
             else:
                 assert flow is not None
+                hour = int(_hour_from_unix(np.asarray([routes.start_t[int(rid)]], dtype=np.int64), cfg.tz_offset_hours)[0])
+                dow = int(_dow_from_unix(np.asarray([routes.start_t[int(rid)]], dtype=np.int64), cfg.tz_offset_hours)[0])
+                city = int(routes.route_city[int(rid)])
+                gt_corr = int(routes.corridor_type[int(rid)])
+                corr = int(cfg.corridor_type_override) if cfg.corridor_type_override is not None else int(gt_corr)
+                K = int(cfg.n_samples_per_route)
+                route_cond = {
+                    "start_pos": torch.as_tensor(np.repeat(routes.start_pos[int(rid)][None, :], K, axis=0), dtype=torch.float32, device=device),
+                    "dest_pos": torch.as_tensor(np.repeat(routes.dest_pos[int(rid)][None, :], K, axis=0), dtype=torch.float32, device=device),
+                    "hour": torch.as_tensor(np.full((K,), hour, dtype=np.int64), dtype=torch.long, device=device),
+                    "dow": torch.as_tensor(np.full((K,), dow, dtype=np.int64), dtype=torch.long, device=device),
+                    "route_city": torch.as_tensor(np.full((K,), city, dtype=np.int64), dtype=torch.long, device=device),
+                    "corridor_type": torch.as_tensor(np.full((K,), corr, dtype=np.int64), dtype=torch.long, device=device),
+                }
+                start_way = torch.as_tensor(np.full((K,), int(routes.start_way[int(rid)]), dtype=np.int64), dtype=torch.long, device=device)
+                dest_way = torch.as_tensor(np.full((K,), int(routes.dest_way[int(rid)]), dtype=np.int64), dtype=torch.long, device=device)
                 z = flow.sample(route_cond=route_cond, cfg_scale=float(cfg.cfg_scale), solver_steps=cfg.solver_steps)
+
+            if cfg.decode_len_mode == "relative":
+                max_len = min(int(cfg.max_decode_len), max(16, int(round(float(cfg.rel_decode_b) + float(cfg.rel_decode_k) * float(L)))))
+            else:
+                max_len = int(cfg.max_decode_len)
 
             pred = ae.decoder.beam_search(
                 way_embedder=ae.way_enc,
@@ -353,7 +395,7 @@ def main() -> None:
                 start_way=start_way,
                 dest_way=dest_way,
                 beam_size=int(beam),
-                max_len=int(cfg.max_decode_len),
+                max_len=int(max_len),
             )
             succ = [bool(p and int(p[-1]) == int(routes.dest_way[int(rid)])) for p in pred]
             jac = [float(_jaccard(gt, p)) for p in pred]
@@ -368,6 +410,12 @@ def main() -> None:
                     "jaccard_mean": float(np.mean(jac) if jac else float("nan")),
                 }
             )
+
+            le = int(cfg.log_every_routes)
+            if le > 0 and ((j + 1) % le) == 0:
+                dt = max(1e-6, float(time.time() - t_beam0))
+                rps = float(j + 1) / dt
+                print(f"[beam={beam}] progress {j+1}/{len(pick)} rps={rps:.2f}", flush=True)
 
         # Aggregate.
         by_bucket: Dict[str, Dict[str, object]] = {k: _empty_bucket() for k in ("lt15", "15_30", "31_60", "gt60")}

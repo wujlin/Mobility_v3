@@ -129,14 +129,30 @@ def _plot_roads(ax, *, osm_pbf: Path, bbox: Tuple[float, float, float, float]) -
         return
 
     # Draw light grey road lines.
-    for geom in roads.geometry:
-        if geom is None:
-            continue
-        coords = np.asarray(getattr(geom, "coords", []), dtype=np.float64)
+    def _iter_line_coords(g) -> Iterable[np.ndarray]:
+        if g is None:
+            return
+        # MultiLineString / GeometryCollection: recurse into parts.
+        parts = getattr(g, "geoms", None)
+        if parts is not None:
+            for part in parts:
+                yield from _iter_line_coords(part)
+            return
+        # LineString: has coords. Multi-part geometries raise NotImplementedError for coords.
+        try:
+            coords = np.asarray(getattr(g, "coords"), dtype=np.float64)
+        except NotImplementedError:
+            return
+        except Exception:
+            coords = np.asarray(getattr(g, "coords", []), dtype=np.float64)
         if coords.ndim != 2 or coords.shape[0] < 2:
-            continue
-        # coords: (N,2)=(lon,lat)
-        ax.plot(coords[:, 0], coords[:, 1], color="#cfcfcf", linewidth=0.6, alpha=0.6, zorder=0)
+            return
+        yield coords
+
+    for geom in roads.geometry:
+        for coords in _iter_line_coords(geom):
+            # coords: (N,2)=(lon,lat)
+            ax.plot(coords[:, 0], coords[:, 1], color="#cfcfcf", linewidth=0.6, alpha=0.6, zorder=0)
 
 
 def _bbox_intersects(a: Tuple[float, float, float, float], b: Tuple[float, float, float, float]) -> bool:

@@ -213,6 +213,15 @@ def _process_member_chunk(
     *,
     seed: int,
 ) -> Dict[str, object]:
+    # NOTE: dataclasses.asdict() will turn nested dataclasses into dicts.
+    # We need to restore BBox for worker processes.
+    cfg_dict = dict(cfg_dict)
+    bbox_v = cfg_dict.get("bbox")
+    if isinstance(bbox_v, dict):
+        cfg_dict["bbox"] = BBox(**bbox_v)  # type: ignore[arg-type]
+    elif isinstance(bbox_v, (list, tuple)) and len(bbox_v) == 4:
+        min_lon, min_lat, max_lon, max_lat = map(float, bbox_v)
+        cfg_dict["bbox"] = BBox(min_lon=min_lon, min_lat=min_lat, max_lon=max_lon, max_lat=max_lat)
     cfg = ScanConfig(**cfg_dict)
     rnd = random.Random(int(seed))
     buckets: Dict[Tuple[int, int, int, int], ODEntry] = {}
@@ -483,7 +492,7 @@ def build_argparser() -> argparse.ArgumentParser:
     p.add_argument("--max_rep_files", type=int, default=3)
     p.add_argument("--max_out_bins", type=int, default=1000)
 
-    p.add_argument("--num_workers", type=int, default=24)
+    p.add_argument("--num_workers", type=int, default=48)
     p.add_argument("--mp_start", choices=["fork", "spawn"], default="fork")
     p.add_argument("--chunk_size", type=int, default=2000)
     p.add_argument("--limit_files", type=int, default=0)
@@ -512,10 +521,10 @@ def main() -> None:
     # Clamp distance thresholds to [0,1] for safety.
     if cfg.cluster_sep_thr > 1.0:
         print(f"[WARN] cluster_sep_thr={cfg.cluster_sep_thr} > 1.0; clamped to 1.0 (Jaccard dist).", file=sys.stderr)
-        cfg = ScanConfig(**{**asdict(cfg), "cluster_sep_thr": 1.0})
+        cfg = ScanConfig(bbox=cfg.bbox, **{**{k: v for k, v in asdict(cfg).items() if k != "bbox"}, "cluster_sep_thr": 1.0})
     if cfg.merge_dist_thr > 1.0:
         print(f"[WARN] merge_dist_thr={cfg.merge_dist_thr} > 1.0; clamped to 1.0.", file=sys.stderr)
-        cfg = ScanConfig(**{**asdict(cfg), "merge_dist_thr": 1.0})
+        cfg = ScanConfig(bbox=cfg.bbox, **{**{k: v for k, v in asdict(cfg).items() if k != "bbox"}, "merge_dist_thr": 1.0})
 
     report = scan_multimodal(
         trajectory_zip=Path(args.trajectory_zip),

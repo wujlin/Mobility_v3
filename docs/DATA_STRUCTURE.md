@@ -245,6 +245,40 @@ $RAW_ROOT/experiments/icml2026_routegen/WAYCASD1_waydata_rustbelt_seed0/
 - `way_len_m/way_center_y/x/way_dir_y/x/way_tier/way_highway_code`
 - `meta.vocab.highway`：highway tag → code 的词表（用于解释 `way_highway_code`）
 
+**(H) Multimodal OD scan（GT corridor-level 多模态证据；用于筛选训练/评估数据）**
+
+> 口径：按 OD-bin 聚合同一 OD 的多条 GT，使用 `osm_way_id` 序列做 signature，并用 LCS distance 判定是否存在多个 corridor mode。  
+> 术语区分（corridor vs corridor_type）见：`docs/WAY_CASD_METHOD.md`。
+
+```text
+$RAW_ROOT/experiments/icml2026_routegen/A_mm_od_mioh_v1/
+  report.json
+  run.log
+  viz_top20/          # 可选：`plot_worldtrace_multimodal_od_bins.py` 输出
+```
+
+`report.json` 关键字段：
+- `scan_config.bbox / od_bin_deg / min_routes_per_od / cluster_sep_thr / merge_dist_thr`
+- `summary.od_bins_multimodal`：multimodal OD bins 数
+- `multimodal_od_bins[*]`：
+  - `od_bin`：`(o_lon_bin,o_lat_bin,d_lon_bin,d_lat_bin)`
+  - `n_routes`：该 OD-bin 的路线数
+  - `cluster_sizes`：走廊簇大小（按 signature 合并后的计数）
+  - `cluster_rep_files`：每簇代表轨迹文件（用于 PI sanity 可视化）
+  - `top2_lcs_dist`：top-2 簇的分离度（越大越不同）
+
+**(I) 从 multimodal scan 抽取的 Way-CASD 训练数据（可选：只训练“多走廊 OD”）**
+
+```text
+$RAW_ROOT/experiments/icml2026_routegen/WAYMM1_waydata_mioh_od0p02_seed0/
+  W1_way_routes/
+    way_routes.npz
+    members.jsonl      # 追溯每条 route 的来源 zip member + 原始 way 序列
+    semantic_stub/     # 仅提供 bbox→(y,x) 映射 meta（用于 way_features 构建）
+```
+
+该 `way_routes.npz` 与主线 `WAYCASD*` 的字段完全一致，可直接复用 `W3/W4/W5` 构建与训练脚本。
+
 ### 2.2 仓库内 data/（只放小文件/legacy/软链）
 
 ```text

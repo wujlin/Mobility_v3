@@ -34,12 +34,16 @@
 
 - 产出带 `osm_way_id` 的 segments parquet：`src/data/worldtrace/build_detroit_segments.py`
 - Go/No-Go：way 序列长度分布审计：`src/data/worldtrace/way_seq_stats_from_segments.py`
+- corridor-level 多模态 OD 扫描（GT 证据）：`src/data/worldtrace/scan_multimodal_od_region.py`
+- multimodal OD 可视化 sanity：`src/evaluation/plot_worldtrace_multimodal_od_bins.py`
+- 从 multimodal scan 抽取训练 routes：`src/data/way_graph/build_way_routes_from_multimodal_scan.py`
 - way token 数据准备（routes / graph / features / corridor label）：`src/data/way_graph/*` + `run_way_casd_prep.sh` / `run_way_casd_prep_rustbelt.sh`
 - 训练入口：
   - AE（Step A）：`src/training/train_way_casd_autoencoder.py`
   - Flow（Step B）：`src/training/train_way_casd_flow.py`
 - 模型实现：`src/models/way_casd/*`
 - 采样与可视化：`src/evaluation/way_casd_sample_viz.py`
+- 方法口径（Way-CASD + corridor 定义）：`docs/WAY_CASD_METHOD.md`
 
 > 说明：旧路线 “GPS→node snap→bridging→(segment)” 在 1Hz 轨迹上会产生大量跳跃并被最短路填充，导致序列长度爆炸；这条线目前只用于诊断/legacy，可参考 `src/data/road_graph/audit_paths_graph_npz.py` 与 `src/data/road_graph/audit_segments_graph_routes_npz.py` 的审计输出。
 

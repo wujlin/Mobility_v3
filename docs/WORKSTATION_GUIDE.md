@@ -336,6 +336,66 @@ python -m src.data.worldtrace.way_seq_stats_from_segments \
   |& tee "$EXP_ROOT/A_wayseq_detroit_seed0/run.log"
 ```
 
+**(0b) corridor-level 多模态 OD 扫描（推荐：用于数据筛选/PI sanity）**
+
+> 口径：按 OD-bin 聚合同一 OD 的多条 GT，使用 **way-id 序列**做 signature，并用 **LCS distance** 判定是否存在多个走廊 mode。  
+> 细节与术语区分（corridor vs corridor_type）见：`docs/WAY_CASD_METHOD.md`。
+
+```bash
+export RAW_ROOT=/home/jinlin/data/geoexplicit_data
+export EXP_ROOT="$RAW_ROOT/experiments/icml2026_routegen"
+export INPUT_ZIP="$RAW_ROOT/worldtrace/OpenTrace_WorldTrace/Trajectory.zip"
+export OUT_MM="$EXP_ROOT/A_mm_od_mioh_v1"
+
+python -m src.data.worldtrace.scan_multimodal_od_region \
+  --trajectory_zip "$INPUT_ZIP" \
+  --out_json "$OUT_MM/report.json" \
+  --bbox -90.4 38.4 -80.5 48.3 \
+  --od_bin_deg 0.02 \
+  --max_way_seq_len 512 \
+  --min_routes_per_od 5 \
+  --min_cluster_frac 0.2 \
+  --cluster_sep_thr 0.50 \
+  --merge_dist_thr 0.15 \
+  --num_workers 48 --chunk_size 2000 --mp_start fork \
+  |& tee "$OUT_MM/run.log"
+
+# 可视化 top-K multimodal OD（输出两 panel：轨迹对比 + corridor footprint）
+export OSM_MI="$RAW_ROOT/osm/michigan-latest.osm.pbf"
+export OSM_OH="$RAW_ROOT/osm/ohio-latest.osm.pbf"
+python -m src.evaluation.plot_worldtrace_multimodal_od_bins \
+  --scan_report_json "$OUT_MM/report.json" \
+  --trajectory_zip "$INPUT_ZIP" \
+  --out_dir "$OUT_MM/viz_top20" \
+  --top_k 20 --max_files_per_cluster 3 \
+  --prefer_matched --downsample_step 5 \
+  --osm_pbf_michigan "$OSM_MI" --osm_pbf_ohio "$OSM_OH" \
+  |& tee "$OUT_MM/viz_top20/run.log"
+```
+
+**(0c) 从 multimodal scan 抽取 Way-CASD 训练 routes（可选：只训练“多走廊 OD”）**
+
+> 说明：这是“数据筛选版”Way-CASD；会生成一个新的 `way_routes.npz`（并写出 `members.jsonl` 便于复现/追溯）。  
+> 默认仅保留 `O&D` 都落在 MI/OH 的 OD（避免额外州的 OSM pbf 依赖）。
+
+```bash
+export RAW_ROOT=/home/jinlin/data/geoexplicit_data
+export EXP_ROOT="$RAW_ROOT/experiments/icml2026_routegen"
+export INPUT_ZIP="$RAW_ROOT/worldtrace/OpenTrace_WorldTrace/Trajectory.zip"
+export IN_MM="$EXP_ROOT/A_mm_od_mioh_v1/report.json"
+export OUT_BASE="$EXP_ROOT/WAYMM1_waydata_mioh_od0p02_seed0"
+
+python -m src.data.way_graph.build_way_routes_from_multimodal_scan \
+  --scan_report_json "$IN_MM" \
+  --trajectory_zip "$INPUT_ZIP" \
+  --out_npz "$OUT_BASE/W1_way_routes/way_routes.npz" \
+  --od_filter mi_oh --prefer_matched \
+  --min_seq_len 2 --coord_scale 1024 \
+  --num_workers 48 --chunk_size 2000 --mp_start fork --seed 0
+
+# 后续：用 W1_way_routes 继续构建 W3/W4/W5，再训练 AE/Flow
+```
+
 **(W1-W4) Way-CASD 数据准备（routes / graph / features / corridor label）**
 
 ```bash

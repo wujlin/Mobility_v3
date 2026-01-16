@@ -1,13 +1,16 @@
 #!/usr/bin/env python3
 import json
 
-with open("_sync/wsa/icml2026_routegen/A_mm_od_mioh_v1/report.json") as f:
+# v2 report
+with open("_sync/wsa/icml2026_routegen/A_mm_od_mioh_v2_bin02_sep50/report.json") as f:
     d = json.load(f)
 
 cfg = d["scan_config"]
 s = d["summary"]
 print("=== Config ===")
 print(f"od_bin_deg: {cfg['od_bin_deg']} (~{cfg['od_bin_deg']*111:.1f}km)")
+print(f"signature_type: {cfg.get('signature_type', 'N/A')}")
+print(f"distance_metric: {cfg.get('distance_metric', 'N/A')}")
 
 print("\n=== Summary ===")
 for k, v in s.items():
@@ -20,28 +23,28 @@ n_routes = [x["n_routes"] for x in mm]
 print(f"n_routes: min={min(n_routes)}, max={max(n_routes)}, median={sorted(n_routes)[len(n_routes)//2]}, mean={sum(n_routes)/len(n_routes):.1f}")
 print(f"Total routes in multimodal ODs: {sum(n_routes)}")
 
-jd = [x["top2_jaccard_dist"] for x in mm]
-print(f"jaccard_dist: min={min(jd):.2f}, max={max(jd):.2f}, median={sorted(jd)[len(jd)//2]:.2f}")
+# LCS distance分布
+lcs_dists = [x["top2_lcs_dist"] for x in mm]
+print(f"\n=== LCS Distance Distribution ===")
+print(f"min={min(lcs_dists):.2f}, max={max(lcs_dists):.2f}, median={sorted(lcs_dists)[len(lcs_dists)//2]:.2f}")
 
-# n_routes分布
-print("\n=== n_routes Distribution ===")
-for thr in [5, 10, 15, 20, 30, 50]:
-    cnt = sum(1 for n in n_routes if n >= thr)
-    routes_sum = sum(n for n in n_routes if n >= thr)
-    print(f"  n>={thr:2d}: {cnt:3d} ODs, {routes_sum:4d} routes")
+for thr in [0.5, 0.7, 0.9, 1.0]:
+    cnt = sum(1 for d in lcs_dists if d >= thr)
+    print(f"  LCS dist >= {thr}: {cnt} ODs ({cnt/len(mm)*100:.1f}%)")
 
-print("\n=== Top 15 by n_routes ===")
-od_deg = cfg['od_bin_deg']
+# way_seq_lens分布
+print(f"\n=== Way Sequence Length ===")
+all_lens = []
+for x in mm:
+    all_lens.extend(x.get("way_seq_lens", []))
+if all_lens:
+    print(f"way_seq_len: min={min(all_lens)}, max={max(all_lens)}, median={sorted(all_lens)[len(all_lens)//2]}")
+
+# cluster数量分布
+print(f"\n=== Cluster Count ===")
+n_clusters = [x["n_clusters"] for x in mm]
+print(f"n_clusters: min={min(n_clusters)}, max={max(n_clusters)}, median={sorted(n_clusters)[len(n_clusters)//2]}")
+
+print(f"\n=== Top 15 by n_routes ===")
 for i, x in enumerate(mm[:15]):
-    od = x["od_bin"]
-    lat_o, lon_o = od[1]*od_deg, od[0]*od_deg
-    lat_d, lon_d = od[3]*od_deg, od[2]*od_deg
-    print(f"{i+1:2d}. n={x['n_routes']:3d} clusters={str(x['cluster_sizes']):20s} J={x['top2_jaccard_dist']:.2f} O=({lat_o:.2f},{lon_o:.2f}) D=({lat_d:.2f},{lon_d:.2f})")
-
-print(f"\n=== Rate Analysis ===")
-kept = s["files_kept_after_filter"]
-mm_routes = sum(n_routes)
-print(f"Kept trajectories: {kept}")
-print(f"Multimodal routes: {mm_routes}")
-print(f"Multimodal rate: {mm_routes/kept*100:.2f}%")
-print(f"Multimodal OD bins: {len(mm)} / {s['unique_od_bins']} = {len(mm)/s['unique_od_bins']*100:.2f}%")
+    print(f"{i+1:2d}. n={x['n_routes']:3d} clusters={x['n_clusters']:2d} lcs_dist={x['top2_lcs_dist']:.2f} way_lens={x.get('way_seq_lens', [])[:2]}")

@@ -16,6 +16,8 @@ import numpy as np
 
 TZ_SHANGHAI = timezone(timedelta(hours=8))
 
+_ROADS_CACHE: Dict[str, Optional[Dict[str, np.ndarray]]] = {}
+
 
 @dataclass(frozen=True)
 class StateBBoxes:
@@ -100,59 +102,103 @@ def _odbin_center(od_bin: Sequence[int], *, bin_deg: float) -> Tuple[float, floa
     return o_lat, o_lon, d_lat, d_lon
 
 
-def _plot_roads(ax, *, osm_pbf: Path, bbox: Tuple[float, float, float, float]) -> None:
+def _iter_line_coords(g) -> Iterable[np.ndarray]:
+    if g is None:
+        return
+    parts = getattr(g, "geoms", None)
+    if parts is not None:
+        for part in parts:
+            yield from _iter_line_coords(part)
+        return
+    try:
+        coords = np.asarray(getattr(g, "coords"), dtype=np.float64)
+    except NotImplementedError:
+        return
+    except Exception:
+        coords = np.asarray(getattr(g, "coords", []), dtype=np.float64)
+    if coords.ndim != 2 or coords.shape[0] < 2:
+        return
+    yield coords
+
+
+def _load_roads_cache(osm_pbf: Path) -> Optional[Dict[str, np.ndarray]]:
+    key = str(osm_pbf)
+    if key in _ROADS_CACHE:
+        return _ROADS_CACHE[key]
     try:
         from pyrosm import OSM  # type: ignore
     except ModuleNotFoundError:
         print("[WARN] pyrosm not installed; skip road background.", file=sys.stderr)
-        return
+        _ROADS_CACHE[key] = None
+        return None
 
-    min_lon, min_lat, max_lon, max_lat = map(float, bbox)
     try:
-        osm = OSM(str(osm_pbf), bounding_box=[min_lon, min_lat, max_lon, max_lat])
-    except Exception as e:
-        print(f"[WARN] pyrosm init failed ({osm_pbf}): {e}", file=sys.stderr)
-        return
-
-    # pyrosm can be brittle with very small/empty bounding boxes; be defensive and skip on failure.
-    net = None
-    try:
+        osm = OSM(str(osm_pbf))
         try:
             net = osm.get_network(network_type="driving", nodes=False)
         except TypeError:
             net = osm.get_network(network_type="driving")
     except Exception as e:
-        print(f"[WARN] pyrosm get_network failed ({osm_pbf}): {e}", file=sys.stderr)
-        return
+        print(f"[WARN] pyrosm load failed ({osm_pbf}): {e}", file=sys.stderr)
+        _ROADS_CACHE[key] = None
+        return None
+
     roads = net[0] if isinstance(net, tuple) else net
     if roads is None or not hasattr(roads, "geometry"):
-        return
+        _ROADS_CACHE[key] = None
+        return None
 
-    # Draw light grey road lines.
-    def _iter_line_coords(g) -> Iterable[np.ndarray]:
-        if g is None:
-            return
-        # MultiLineString / GeometryCollection: recurse into parts.
-        parts = getattr(g, "geoms", None)
-        if parts is not None:
-            for part in parts:
-                yield from _iter_line_coords(part)
-            return
-        # LineString: has coords. Multi-part geometries raise NotImplementedError for coords.
-        try:
-            coords = np.asarray(getattr(g, "coords"), dtype=np.float64)
-        except NotImplementedError:
-            return
-        except Exception:
-            coords = np.asarray(getattr(g, "coords", []), dtype=np.float64)
-        if coords.ndim != 2 or coords.shape[0] < 2:
-            return
-        yield coords
-
+    segs: List[List[float]] = []
     for geom in roads.geometry:
         for coords in _iter_line_coords(geom):
-            # coords: (N,2)=(lon,lat)
-            ax.plot(coords[:, 0], coords[:, 1], color="#cfcfcf", linewidth=0.6, alpha=0.6, zorder=0)
+            lon0, lat0 = float(coords[0, 0]), float(coords[0, 1])
+            lon1, lat1 = float(coords[-1, 0]), float(coords[-1, 1])
+            segs.append([lon0, lat0, lon1, lat1])
+
+    if not segs:
+        _ROADS_CACHE[key] = None
+        return None
+
+    seg = np.asarray(segs, dtype=np.float32)
+    bbox_arr = np.stack(
+        [
+            np.minimum(seg[:, 0], seg[:, 2]),
+            np.minimum(seg[:, 1], seg[:, 3]),
+            np.maximum(seg[:, 0], seg[:, 2]),
+            np.maximum(seg[:, 1], seg[:, 3]),
+        ],
+        axis=1,
+    ).astype(np.float32, copy=False)
+    out = {"seg": seg, "bbox": bbox_arr}
+    _ROADS_CACHE[key] = out
+    return out
+
+
+def _plot_roads(ax, *, osm_pbf: Path, bbox: Tuple[float, float, float, float]) -> None:
+    try:
+        from matplotlib.collections import LineCollection  # type: ignore
+    except ModuleNotFoundError:
+        return
+
+    min_lon, min_lat, max_lon, max_lat = map(float, bbox)
+    cache = _load_roads_cache(osm_pbf)
+    if cache is None:
+        return
+
+    b = cache["bbox"]
+    m = (b[:, 2] >= min_lon) & (b[:, 0] <= max_lon) & (b[:, 3] >= min_lat) & (b[:, 1] <= max_lat)
+    if not bool(np.any(m)):
+        return
+    seg = cache["seg"][m]
+    # Cap draw count to keep plotting responsive.
+    max_draw = 150_000
+    if int(seg.shape[0]) > max_draw:
+        step = max(1, int(seg.shape[0]) // max_draw)
+        seg = seg[::step]
+
+    lines = np.stack([seg[:, [0, 1]], seg[:, [2, 3]]], axis=1).astype(np.float32, copy=False)  # (N,2,2)
+    lc = LineCollection(lines, colors="#cfcfcf", linewidths=0.5, alpha=0.55, zorder=0)
+    ax.add_collection(lc)
 
 
 def _bbox_intersects(a: Tuple[float, float, float, float], b: Tuple[float, float, float, float]) -> bool:
@@ -171,7 +217,7 @@ def _plot_one_od(
     od_bin: Sequence[int],
     n_routes: int,
     cluster_sizes: Sequence[int],
-    top2_jaccard_dist: float,
+    top2_dist: float,
     clusters_trajs: List[List[List[Tuple[float, float]]]],
     od_bin_deg: float,
     route_bin_deg: float,
@@ -266,7 +312,7 @@ def _plot_one_od(
         min_lon, min_lat, max_lon, max_lat = view_bbox
         ax_bins.set_xlim(min_lon, max_lon)
         ax_bins.set_ylim(min_lat, max_lat)
-    ax_bins.set_title(f"Corridor footprint (bin={route_bin_deg:.02f}°) top2_dist={top2_jaccard_dist:.2f}")
+    ax_bins.set_title(f"Corridor footprint (bin={route_bin_deg:.02f}°) top2_dist={top2_dist:.2f}")
     ax_bins.set_aspect("equal", adjustable="box")
     ax_bins.set_xticks([])
     ax_bins.set_yticks([])
@@ -346,7 +392,12 @@ def main() -> None:
                 continue
             n_routes = int(ent.get("n_routes", 0))
             cluster_sizes = ent.get("cluster_sizes", [])
-            top2 = float(ent.get("top2_jaccard_dist", float("nan")))
+            if "top2_lcs_dist" in ent:
+                top2 = float(ent.get("top2_lcs_dist", float("nan")))
+                dist_name = "lcs"
+            else:
+                top2 = float(ent.get("top2_jaccard_dist", float("nan")))
+                dist_name = "jaccard"
             rep_files = ent.get("cluster_rep_files", [])
             if not isinstance(rep_files, list) or len(rep_files) < 2:
                 continue
@@ -387,7 +438,7 @@ def main() -> None:
                 od_bin=od_bin,
                 n_routes=int(n_routes),
                 cluster_sizes=[int(x) for x in (cluster_sizes or [])],
-                top2_jaccard_dist=float(top2),
+                top2_dist=float(top2),
                 clusters_trajs=clusters_trajs,
                 od_bin_deg=float(od_bin_deg),
                 route_bin_deg=float(route_bin_deg),
@@ -400,7 +451,8 @@ def main() -> None:
                     "od_bin": [int(x) for x in od_bin],
                     "n_routes": int(n_routes),
                     "cluster_sizes": [int(x) for x in (cluster_sizes or [])],
-                    "top2_jaccard_dist": float(top2),
+                    "top2_dist": float(top2),
+                    "top2_dist_name": str(dist_name),
                     "used_files": used_files,
                     "out_png": str(out_png),
                 }

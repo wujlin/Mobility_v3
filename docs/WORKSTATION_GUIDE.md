@@ -349,15 +349,34 @@ export OUT_BASE="$EXP_ROOT/WAYCASD0_waydata_detroit_seed0"
 bash run_way_casd_prep.sh
 ```
 
-**(Step A) 训练 AE（48GB GPU 起步建议：`batch_size=256`, `num_workers=24`）**
+**(多城市) Rust Belt（Detroit+Columbus）合并数据准备**
+
+> 目标：增大 routes 数量与分支覆盖，缓解 Detroit 单城 `N≈2k` 的欠拟合与 adjacency 过稀问题。
+
+```bash
+export RAW_ROOT=/home/jinlin/data/geoexplicit_data
+export EXP_ROOT="$RAW_ROOT/experiments/icml2026_routegen"
+export OUT_BASE="$EXP_ROOT/WAYCASD1_waydata_rustbelt_seed0"
+# 可选：把 transition adjacency 做成无向（增加候选；KISS debug 用）
+# export WAY_GRAPH_UNDIR=1
+
+bash run_way_casd_prep_rustbelt.sh
+```
+
+> [!NOTE]
+> 如果你跑的是 `bash run_way_casd_prep.sh`（单城市），目录命名是 `W1/W2/W3/W4`；
+> 训练命令里把 `W5_way_routes_labeled/W3_way_graph/W4_way_features` 分别替换为
+> `W4_way_routes_labeled/W2_way_graph/W3_way_features`，并将 `W6_train_ae/W7_train_flow` 相应替换为 `W5_train_ae/W6_train_flow`。
+
+**(Step A) 训练 AE（48GB GPU 起步建议：`batch_size=512`；若 OOM 再降到 256；`num_workers=24`）**
 
 ```bash
 python -m src.training.train_way_casd_autoencoder \
-  --way_routes_npz "$OUT_BASE/W4_way_routes_labeled/way_routes_labeled.npz" \
-  --way_graph_npz "$OUT_BASE/W2_way_graph/way_graph.npz" \
-  --way_features_npz "$OUT_BASE/W3_way_features/way_features.npz" \
-  --out_dir "$OUT_BASE/W5_train_ae" \
-  --batch_size 256 --num_workers 24 --n_epochs 30 \
+  --way_routes_npz "$OUT_BASE/W5_way_routes_labeled/way_routes_labeled.npz" \
+  --way_graph_npz "$OUT_BASE/W3_way_graph/way_graph.npz" \
+  --way_features_npz "$OUT_BASE/W4_way_features/way_features.npz" \
+  --out_dir "$OUT_BASE/W6_train_ae" \
+  --batch_size 512 --num_workers 24 --n_epochs 30 \
   --d_model 256 --n_latent 32 --max_candidates 64 --max_way_len 128 \
   --device cuda
 ```
@@ -366,12 +385,12 @@ python -m src.training.train_way_casd_autoencoder \
 
 ```bash
 python -m src.training.train_way_casd_flow \
-  --way_routes_npz "$OUT_BASE/W4_way_routes_labeled/way_routes_labeled.npz" \
-  --way_graph_npz "$OUT_BASE/W2_way_graph/way_graph.npz" \
-  --way_features_npz "$OUT_BASE/W3_way_features/way_features.npz" \
-  --ae_ckpt "$OUT_BASE/W5_train_ae/ckpt_best.pt" \
-  --out_dir "$OUT_BASE/W6_train_flow" \
-  --batch_size 256 --num_workers 24 --n_epochs 30 \
+  --way_routes_npz "$OUT_BASE/W5_way_routes_labeled/way_routes_labeled.npz" \
+  --way_graph_npz "$OUT_BASE/W3_way_graph/way_graph.npz" \
+  --way_features_npz "$OUT_BASE/W4_way_features/way_features.npz" \
+  --ae_ckpt "$OUT_BASE/W6_train_ae/ckpt_best.pt" \
+  --out_dir "$OUT_BASE/W7_train_flow" \
+  --batch_size 512 --num_workers 24 --n_epochs 30 \
   --d_model 256 --n_latent 32 --solver_steps 20 --cfg_drop_prob 0.1 \
   --device cuda
 ```

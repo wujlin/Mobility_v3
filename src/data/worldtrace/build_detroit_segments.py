@@ -10,6 +10,7 @@ import math
 import os
 import multiprocessing as mp
 import sys
+import time
 import zipfile
 from dataclasses import dataclass
 from pathlib import Path
@@ -464,16 +465,34 @@ def main() -> None:
     out_writer = _open_parquet_writer(args.out_parquet, schema)
     scanned = 0
     wrote = 0
+    t_start = time.time()
     try:
         with zipfile.ZipFile(args.trajectory_zip, "r") as zf:
             members = [m for m in zf.namelist() if m.endswith(".csv")]
         if args.limit_files:
             members = members[: int(args.limit_files)]
+        n_total = int(len(members))
 
         num_workers = int(args.num_workers)
         if num_workers <= 0:
             num_workers = os.cpu_count() or 1
         chunk_size = max(1, int(args.chunk_size))
+        next_report = 50000
+
+        def _maybe_report() -> None:
+            nonlocal next_report
+            if n_total <= 0:
+                return
+            while scanned >= next_report:
+                elapsed = max(1e-6, float(time.time() - t_start))
+                pct = 100.0 * float(scanned) / float(n_total)
+                rps = float(scanned) / elapsed
+                wps = float(wrote) / elapsed
+                print(
+                    f"[INFO] scanned={scanned}/{n_total} ({pct:.1f}%) wrote={wrote} elapsed_s={elapsed:.1f} rps={rps:.1f} wps={wps:.2f}",
+                    file=sys.stderr,
+                )
+                next_report += 50000
 
         def _write_one(member: str, seg: Dict[str, List]) -> None:
             nonlocal wrote
@@ -508,12 +527,10 @@ def main() -> None:
                     segs = _split_bbox_segments(rows, bbox=grid.bbox, grid=grid, cfg=cfg)
                     seg = _select_longest_segment(segs)
                     if seg is None or not _segment_ok(seg, cfg):
-                        if scanned % 50000 == 0:
-                            print(f"[INFO] scanned={scanned} wrote={wrote}", file=sys.stderr)
+                        _maybe_report()
                         continue
                     _write_one(member, seg)
-                    if wrote % 10000 == 0:
-                        print(f"[INFO] scanned={scanned} wrote={wrote}", file=sys.stderr)
+                    _maybe_report()
         else:
             zip_path = str(args.trajectory_zip)
             chunks = [members[i : i + chunk_size] for i in range(0, len(members), chunk_size)]
@@ -538,11 +555,20 @@ def main() -> None:
                     scanned += int(r.get("scanned", 0))
                     for member, seg in (r.get("kept") or []):  # type: ignore[assignment]
                         _write_one(member, seg)
-                    if scanned % 50000 == 0:
-                        print(f"[INFO] scanned={scanned} wrote={wrote}", file=sys.stderr)
+                    _maybe_report()
 
     finally:
         out_writer.close()
+
+    if n_total > 0:
+        elapsed = max(1e-6, float(time.time() - t_start))
+        pct = 100.0 * float(scanned) / float(n_total)
+        rps = float(scanned) / elapsed
+        wps = float(wrote) / elapsed
+        print(
+            f"[INFO] scanned={scanned}/{n_total} ({pct:.1f}%) wrote={wrote} elapsed_s={elapsed:.1f} rps={rps:.1f} wps={wps:.2f}",
+            file=sys.stderr,
+        )
 
     report = {
         "trajectory_zip": str(args.trajectory_zip),

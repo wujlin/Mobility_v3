@@ -220,6 +220,18 @@ $RAW_ROOT/experiments/icml2026_routegen/WAYCASD0_waydata_detroit_seed0/
   W4_way_routes_labeled/way_routes_labeled.npz
 ```
 
+多城市（Detroit+Columbus）合并口径（Rust Belt）：
+
+```text
+$RAW_ROOT/experiments/icml2026_routegen/WAYCASD1_waydata_rustbelt_seed0/
+  W1a_detroit_routes/way_routes.npz
+  W1b_columbus_routes/way_routes.npz
+  W2_merged_routes/way_routes.npz
+  W3_way_graph/way_graph.npz
+  W4_way_features/way_features.npz
+  W5_way_routes_labeled/way_routes_labeled.npz
+```
+
 `way_routes.npz` 典型字段：
 - `way_osm_id: (M,)`：way id 词表（OSM 全局 way id）
 - `way_seq_ptr/way_seq_idx/way_seq_len`：CSR 形式的变长 way 序列（元素是 way vocab index）

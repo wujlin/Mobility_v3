@@ -26,12 +26,14 @@ OSM_PBF="${OSM_PBF:-${RAW_ROOT%/}/osm/michigan-latest.osm.pbf}"
 
 OUT_BASE="${OUT_BASE:-${EXP_ROOT%/}/WAYCASD0_waydata_detroit_seed0}"
 ROUTE_CITY="${ROUTE_CITY:-0}"
+WAY_GRAPH_UNDIR="${WAY_GRAPH_UNDIR:-0}"  # 0=directed (default), 1=add reverse edges from GT transitions
 
 echo "Resolved Paths:"
 echo "  SEGMENTS_PARQUET=${SEGMENTS_PARQUET}"
 echo "  SEMANTIC_DIR=${SEMANTIC_DIR}"
 echo "  OSM_PBF=${OSM_PBF}"
 echo "  OUT_BASE=${OUT_BASE}"
+echo "  WAY_GRAPH_UNDIR=${WAY_GRAPH_UNDIR}"
 for f in "${SEGMENTS_PARQUET}" "${OSM_PBF}"; do
   if [[ ! -f "${f}" ]]; then
     echo "ERROR: missing file: ${f}" >&2
@@ -63,9 +65,14 @@ echo "======================================"
 echo "Step 2: Build way_graph.npz"
 echo "======================================"
 mkdir -p "${OUT_BASE}/W2_way_graph"
+WAY_GRAPH_UNDIR_FLAG=""
+if [[ "${WAY_GRAPH_UNDIR}" == "1" ]]; then
+  WAY_GRAPH_UNDIR_FLAG="--make_undirected"
+fi
 PYTHONUNBUFFERED=1 python -u -m src.data.way_graph.build_way_graph_from_way_routes_npz \
   --way_routes_npz "${OUT_BASE}/W1_way_routes/way_routes.npz" \
   --out_npz "${OUT_BASE}/W2_way_graph/way_graph.npz" \
+  ${WAY_GRAPH_UNDIR_FLAG} \
   |& tee "${OUT_BASE}/W2_way_graph/run.log"
 PYTHONUNBUFFERED=1 python -u -m src.data.way_graph.audit_way_graph_npz \
   --way_graph_npz "${OUT_BASE}/W2_way_graph/way_graph.npz" \
@@ -106,4 +113,3 @@ echo "======================================"
 echo "Way-CASD prep complete!"
 echo "======================================"
 echo "OUT_BASE=${OUT_BASE}"
-

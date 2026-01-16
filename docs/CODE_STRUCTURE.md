@@ -28,6 +28,20 @@
 
 ## 0.1 RouteGen（ICML 2026）代码地图（最常用入口）
 
+### Way-CASD（Way-token CASD）主线（当前推荐）
+
+> 核心动机：WorldTrace 已提供每个点的 `osm_way_id`，用它做离散 token 可以把“路线表示”从千级 node/segment 序列压到几十步（对齐 GTG/Cardiff）。
+
+- 产出带 `osm_way_id` 的 segments parquet：`src/data/worldtrace/build_detroit_segments.py`
+- Go/No-Go：way 序列长度分布审计：`src/data/worldtrace/way_seq_stats_from_segments.py`
+- way token 数据准备（routes / graph / features / corridor label）：`src/data/way_graph/*` + `run_way_casd_prep.sh` / `run_way_casd_prep_rustbelt.sh`
+- 训练入口：
+  - AE（Step A）：`src/training/train_way_casd_autoencoder.py`
+  - Flow（Step B）：`src/training/train_way_casd_flow.py`
+- 模型实现：`src/models/way_casd/*`
+
+> 说明：旧路线 “GPS→node snap→bridging→(segment)” 在 1Hz 轨迹上会产生大量跳跃并被最短路填充，导致序列长度爆炸；这条线目前只用于诊断/legacy，可参考 `src/data/road_graph/audit_paths_graph_npz.py` 与 `src/data/road_graph/audit_segments_graph_routes_npz.py` 的审计输出。
+
 ### 数据与图结构（road graph / GT graph paths）
 
 - 生成/加载 road graph：`src/data/road_graph/*road_graph*.py`
@@ -65,7 +79,7 @@
 
 ---
 
-## 0.3 CASD（Corridor-Aware Segment Diffusion）代码地图（新架构，P0 已闭环）
+## 0.3 CASD（Corridor-Aware Segment Diffusion）代码地图（上一版：segment token；当前受数据粒度阻塞）
 
 CASD 采用 Cardiff 风格的工程化两步训练：
 
@@ -86,6 +100,9 @@ CASD 采用 Cardiff 风格的工程化两步训练：
   - Step B：`src/training/train_casd_flow.py`
 
 > P0 口径：先不接 Urban semantics（POI/satellite），Validity loss 作为 P1 再加。
+>
+> 现状提醒：如果你的 `segment_graph.npz` 审计显示 `seg_edges_per_seg_p50≈1.0`，且 `segments_graph_routes.npz` 的 `seg_seq_len` 仍在千级，
+> 则该路线的序列建模会被长度/累积误差主导；此时应优先走 **Way-CASD**（见 0.1）。
 
 ---
 

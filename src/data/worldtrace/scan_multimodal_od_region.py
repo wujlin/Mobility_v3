@@ -28,15 +28,14 @@ TZ_SHANGHAI = timezone(timedelta(hours=8))
 class ScanConfig:
     bbox: BBox
     od_bin_deg: float = 0.01
-    route_bin_deg: float = 0.05
-    sig_subsample_step: int = 5
-    max_sig_len: int = 256
+    # route_bin_deg: DEPRECATED, now using way_id sequence
+    max_way_seq_len: int = 512  # max way_ids in signature
     min_points_in_bbox_ratio: float = 0.80
     min_od_dist_km: float = 1.0
     min_routes_per_od: int = 5
     min_cluster_frac: float = 0.20
-    cluster_sep_thr: float = 0.35  # Jaccard distance in [0,1]
-    merge_dist_thr: float = 0.20  # merge near-identical signatures
+    cluster_sep_thr: float = 0.50  # LCS distance in [0,1], higher = more different
+    merge_dist_thr: float = 0.15  # merge near-identical way sequences
     max_sigs_per_od: int = 32
     max_rep_files: int = 3
 
@@ -97,15 +96,17 @@ def _route_signature_from_stream(
     cfg: ScanConfig,
     member: str,
 ) -> Tuple[bool, bool, Optional[Tuple[int, int, int, int]], Optional[Tuple[int, ...]], Dict[str, float]]:
+    """Extract way_id sequence as route signature (instead of coordinate grid)."""
     bbox = cfg.bbox
     in_n = 0
     tot_n = 0
     first: Optional[Tuple[float, float]] = None
     last: Optional[Tuple[float, float]] = None
 
-    sig: List[int] = []
-    last_bin: Optional[int] = None
-    step = max(1, int(cfg.sig_subsample_step))
+    # Use way_id sequence as signature
+    way_seq: List[int] = []
+    last_way: Optional[int] = None
+    max_way_len = max(1, int(cfg.max_way_seq_len))
 
     for row in rows:
         lat, lon = _pick_latlon(row)
@@ -120,17 +121,21 @@ def _route_signature_from_stream(
             first = (lat, lon)
         last = (lat, lon)
 
-        # signature (subsample + consecutive dedup)
-        if (tot_n % step) == 1:
-            lon_bin = _bin_int(lon, cfg.route_bin_deg)
-            lat_bin = _bin_int(lat, cfg.route_bin_deg)
-            b = _pack_bin2(lon_bin, lat_bin)
-            if last_bin is None or b != int(last_bin):
-                sig.append(int(b))
-                last_bin = int(b)
-                if int(cfg.max_sig_len) > 0 and len(sig) >= int(cfg.max_sig_len):
-                    # Cap signature length for memory safety.
-                    break
+        # Extract way_id (prefer osm_way_id, fallback to way_id)
+        way_str = row.get("osm_way_id") or row.get("way_id") or ""
+        if not way_str or way_str in ("", "nan", "None", "null"):
+            continue
+        try:
+            way_id = int(float(way_str))  # handle "123.0" format
+        except (ValueError, TypeError):
+            continue
+        
+        # Consecutive dedup: only add if different from last
+        if last_way is None or way_id != last_way:
+            way_seq.append(way_id)
+            last_way = way_id
+            if len(way_seq) >= max_way_len:
+                break
 
     has_any_in_bbox = bool(in_n > 0)
     if tot_n <= 1 or first is None or last is None:
@@ -140,6 +145,10 @@ def _route_signature_from_stream(
     pass_ratio = bool(ratio >= float(cfg.min_points_in_bbox_ratio))
     if not pass_ratio:
         return has_any_in_bbox, False, None, None, {"points_total": float(tot_n), "points_in_bbox_ratio": float(ratio)}
+
+    # Skip if no way_ids found (no map-matching data)
+    if len(way_seq) < 2:
+        return has_any_in_bbox, False, None, None, {"points_total": float(tot_n), "points_in_bbox_ratio": float(ratio), "way_seq_len": len(way_seq)}
 
     o_lat, o_lon = first
     d_lat, d_lon = last
@@ -153,8 +162,8 @@ def _route_signature_from_stream(
     d_lat_bin = _bin_int(d_lat, cfg.od_bin_deg)
     od_key = (o_lon_bin, o_lat_bin, d_lon_bin, d_lat_bin)
 
-    stats = {"od_km": float(od_km), "points_total": float(tot_n), "points_in_bbox_ratio": float(ratio)}
-    return has_any_in_bbox, True, od_key, tuple(sig), stats
+    stats = {"od_km": float(od_km), "points_total": float(tot_n), "points_in_bbox_ratio": float(ratio), "way_seq_len": len(way_seq)}
+    return has_any_in_bbox, True, od_key, tuple(way_seq), stats
 
 
 def _update_sig_table(
@@ -280,14 +289,40 @@ def _process_member_chunk(
     }
 
 
-def _jaccard_dist(a: Tuple[int, ...], b: Tuple[int, ...]) -> float:
-    sa = set(a)
-    sb = set(b)
-    if not sa and not sb:
+def _lcs_length(a: Tuple[int, ...], b: Tuple[int, ...]) -> int:
+    """Compute length of Longest Common Subsequence (LCS)."""
+    if not a or not b:
+        return 0
+    m, n = len(a), len(b)
+    # Optimize: use shorter sequence for columns
+    if m < n:
+        a, b = b, a
+        m, n = n, m
+    # Space-optimized DP: O(min(m,n)) space
+    prev = [0] * (n + 1)
+    curr = [0] * (n + 1)
+    for i in range(1, m + 1):
+        for j in range(1, n + 1):
+            if a[i - 1] == b[j - 1]:
+                curr[j] = prev[j - 1] + 1
+            else:
+                curr[j] = max(prev[j], curr[j - 1])
+        prev, curr = curr, prev
+    return prev[n]
+
+
+def _lcs_dist(a: Tuple[int, ...], b: Tuple[int, ...]) -> float:
+    """LCS-based distance: 1 - LCS_len / max(len(a), len(b)).
+    
+    Returns 0.0 if identical sequences, 1.0 if completely different.
+    """
+    if not a and not b:
         return 0.0
-    inter = len(sa & sb)
-    uni = len(sa | sb)
-    return 1.0 - (float(inter) / float(max(1, uni)))
+    max_len = max(len(a), len(b))
+    if max_len == 0:
+        return 0.0
+    lcs_len = _lcs_length(a, b)
+    return 1.0 - (float(lcs_len) / float(max_len))
 
 
 def _cluster_signatures(
@@ -296,12 +331,13 @@ def _cluster_signatures(
     merge_dist_thr: float,
     max_rep_files: int,
 ) -> List[Dict[str, object]]:
-    # Greedy merge similar signatures to reduce noise.
+    """Greedy merge similar way sequences using LCS distance."""
     clusters: List[Dict[str, object]] = []
     for sig, ent in sig_items:
         placed = False
         for c in clusters:
-            if _jaccard_dist(sig, c["rep_sig"]) < float(merge_dist_thr):
+            # Use LCS distance instead of Jaccard
+            if _lcs_dist(sig, c["rep_sig"]) < float(merge_dist_thr):
                 c["count"] += int(ent.count)
                 for r in ent.reps:
                     if len(c["reps"]) >= int(max_rep_files):
@@ -412,8 +448,8 @@ def scan_multimodal(*, trajectory_zip: Path, out_json: Path, cfg: ScanConfig, nu
         # Minimum minority cluster fraction
         if float(clusters[1]["count"]) < float(cfg.min_cluster_frac) * float(n_routes):
             continue
-        # Separation between top-2 clusters
-        d01 = _jaccard_dist(clusters[0]["rep_sig"], clusters[1]["rep_sig"])
+        # Separation between top-2 clusters using LCS distance
+        d01 = _lcs_dist(clusters[0]["rep_sig"], clusters[1]["rep_sig"])
         if d01 < float(cfg.cluster_sep_thr):
             continue
         multimodal.append(
@@ -423,11 +459,12 @@ def scan_multimodal(*, trajectory_zip: Path, out_json: Path, cfg: ScanConfig, nu
                 "n_clusters": int(len(clusters)),
                 "cluster_sizes": [int(c["count"]) for c in clusters],
                 "cluster_rep_files": [list(c["reps"]) for c in clusters],
-                "top2_jaccard_dist": float(d01),
+                "top2_lcs_dist": float(d01),  # renamed from jaccard
+                "way_seq_lens": [len(c["rep_sig"]) for c in clusters[:2]],  # diagnostic
             }
         )
 
-    multimodal.sort(key=lambda x: (-int(x["n_routes"]), -float(x["top2_jaccard_dist"])))
+    multimodal.sort(key=lambda x: (-int(x["n_routes"]), -float(x["top2_lcs_dist"])))
     total_mm = int(len(multimodal))
     max_out_bins = max(1, int(max_out_bins))
     mm_out = multimodal[:max_out_bins]
@@ -439,9 +476,7 @@ def scan_multimodal(*, trajectory_zip: Path, out_json: Path, cfg: ScanConfig, nu
         "scan_config": {
             "bbox": asdict(cfg.bbox),
             "od_bin_deg": float(cfg.od_bin_deg),
-            "route_bin_deg": float(cfg.route_bin_deg),
-            "sig_subsample_step": int(cfg.sig_subsample_step),
-            "max_sig_len": int(cfg.max_sig_len),
+            "max_way_seq_len": int(cfg.max_way_seq_len),
             "min_points_in_bbox_ratio": float(cfg.min_points_in_bbox_ratio),
             "min_od_dist_km": float(cfg.min_od_dist_km),
             "min_routes_per_od": int(cfg.min_routes_per_od),
@@ -450,6 +485,8 @@ def scan_multimodal(*, trajectory_zip: Path, out_json: Path, cfg: ScanConfig, nu
             "merge_dist_thr": float(cfg.merge_dist_thr),
             "max_sigs_per_od": int(cfg.max_sigs_per_od),
             "max_rep_files": int(cfg.max_rep_files),
+            "signature_type": "way_id_sequence",
+            "distance_metric": "lcs",
         },
         "summary": {
             "total_files_scanned": int(scanned),
@@ -472,22 +509,20 @@ def scan_multimodal(*, trajectory_zip: Path, out_json: Path, cfg: ScanConfig, nu
 
 
 def build_argparser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(description="Scan WorldTrace Trajectory.zip and find multimodal OD bins in a bbox region.")
+    p = argparse.ArgumentParser(description="Scan WorldTrace Trajectory.zip and find multimodal OD bins using way_id sequences.")
     p.add_argument("--trajectory_zip", type=Path, required=True)
     p.add_argument("--out_json", type=Path, required=True)
 
     p.add_argument("--bbox", type=float, nargs=4, default=[-90.4, 38.4, -80.5, 48.3], metavar=("MIN_LON", "MIN_LAT", "MAX_LON", "MAX_LAT"))
-    p.add_argument("--od_bin_deg", type=float, default=0.01)
-    p.add_argument("--route_bin_deg", type=float, default=0.05)
-    p.add_argument("--sig_subsample_step", type=int, default=5)
-    p.add_argument("--max_sig_len", type=int, default=256)
+    p.add_argument("--od_bin_deg", type=float, default=0.02, help="OD bin size in degrees (~2km at 0.02).")
+    p.add_argument("--max_way_seq_len", type=int, default=512, help="Max way_ids in route signature.")
     p.add_argument("--min_points_in_bbox_ratio", type=float, default=0.8)
     p.add_argument("--min_od_dist_km", type=float, default=1.0)
 
     p.add_argument("--min_routes_per_od", type=int, default=5)
     p.add_argument("--min_cluster_frac", type=float, default=0.2)
-    p.add_argument("--cluster_sep_thr", type=float, default=0.35, help="Jaccard distance threshold in [0,1].")
-    p.add_argument("--merge_dist_thr", type=float, default=0.20, help="Merge near-identical signatures if dist < this.")
+    p.add_argument("--cluster_sep_thr", type=float, default=0.50, help="LCS distance threshold in [0,1]. Higher = more different.")
+    p.add_argument("--merge_dist_thr", type=float, default=0.15, help="Merge near-identical way sequences if LCS dist < this.")
     p.add_argument("--max_sigs_per_od", type=int, default=32)
     p.add_argument("--max_rep_files", type=int, default=3)
     p.add_argument("--max_out_bins", type=int, default=1000)
@@ -506,9 +541,7 @@ def main() -> None:
     cfg = ScanConfig(
         bbox=BBox(min_lon=min_lon, min_lat=min_lat, max_lon=max_lon, max_lat=max_lat),
         od_bin_deg=float(args.od_bin_deg),
-        route_bin_deg=float(args.route_bin_deg),
-        sig_subsample_step=int(args.sig_subsample_step),
-        max_sig_len=int(args.max_sig_len),
+        max_way_seq_len=int(args.max_way_seq_len),
         min_points_in_bbox_ratio=float(args.min_points_in_bbox_ratio),
         min_od_dist_km=float(args.min_od_dist_km),
         min_routes_per_od=int(args.min_routes_per_od),
@@ -520,7 +553,7 @@ def main() -> None:
     )
     # Clamp distance thresholds to [0,1] for safety.
     if cfg.cluster_sep_thr > 1.0:
-        print(f"[WARN] cluster_sep_thr={cfg.cluster_sep_thr} > 1.0; clamped to 1.0 (Jaccard dist).", file=sys.stderr)
+        print(f"[WARN] cluster_sep_thr={cfg.cluster_sep_thr} > 1.0; clamped to 1.0 (LCS dist).", file=sys.stderr)
         cfg = ScanConfig(bbox=cfg.bbox, **{**{k: v for k, v in asdict(cfg).items() if k != "bbox"}, "cluster_sep_thr": 1.0})
     if cfg.merge_dist_thr > 1.0:
         print(f"[WARN] merge_dist_thr={cfg.merge_dist_thr} > 1.0; clamped to 1.0.", file=sys.stderr)

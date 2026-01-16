@@ -108,11 +108,22 @@ def _plot_roads(ax, *, osm_pbf: Path, bbox: Tuple[float, float, float, float]) -
         return
 
     min_lon, min_lat, max_lon, max_lat = map(float, bbox)
-    osm = OSM(str(osm_pbf), bounding_box=[min_lon, min_lat, max_lon, max_lat])
     try:
-        net = osm.get_network(network_type="driving")
-    except TypeError:
-        net = osm.get_network(network_type="driving", nodes=False)
+        osm = OSM(str(osm_pbf), bounding_box=[min_lon, min_lat, max_lon, max_lat])
+    except Exception as e:
+        print(f"[WARN] pyrosm init failed ({osm_pbf}): {e}", file=sys.stderr)
+        return
+
+    # pyrosm can be brittle with very small/empty bounding boxes; be defensive and skip on failure.
+    net = None
+    try:
+        try:
+            net = osm.get_network(network_type="driving", nodes=False)
+        except TypeError:
+            net = osm.get_network(network_type="driving")
+    except Exception as e:
+        print(f"[WARN] pyrosm get_network failed ({osm_pbf}): {e}", file=sys.stderr)
+        return
     roads = net[0] if isinstance(net, tuple) else net
     if roads is None or not hasattr(roads, "geometry"):
         return
@@ -126,6 +137,16 @@ def _plot_roads(ax, *, osm_pbf: Path, bbox: Tuple[float, float, float, float]) -
             continue
         # coords: (N,2)=(lon,lat)
         ax.plot(coords[:, 0], coords[:, 1], color="#cfcfcf", linewidth=0.6, alpha=0.6, zorder=0)
+
+
+def _bbox_intersects(a: Tuple[float, float, float, float], b: Tuple[float, float, float, float]) -> bool:
+    a0, a1, a2, a3 = map(float, a)
+    b0, b1, b2, b3 = map(float, b)
+    if a2 < b0 or b2 < a0:
+        return False
+    if a3 < b1 or b3 < a1:
+        return False
+    return True
 
 
 def _plot_one_od(
@@ -166,16 +187,17 @@ def _plot_one_od(
 
     # Road background (optional).
     if view_bbox is not None and (osm_pbf_mi is not None or osm_pbf_oh is not None):
-        # Decide which pbf to use by OD center heuristic.
-        o_lat, o_lon, d_lat, d_lon = _odbin_center(od_bin, bin_deg=float(od_bin_deg))
         sbox = StateBBoxes()
-        s = sbox.which((o_lat + d_lat) * 0.5, (o_lon + d_lon) * 0.5)
-        if s == "OH" and osm_pbf_oh is not None:
+        # Prefer the pbf whose state bbox intersects the local view bbox.
+        mi_bbox = sbox.mi  # (min_lon,min_lat,max_lon,max_lat)
+        oh_bbox = sbox.oh
+        if (osm_pbf_oh is not None) and _bbox_intersects(view_bbox, oh_bbox):
             _plot_roads(ax_map, osm_pbf=osm_pbf_oh, bbox=view_bbox)
-        elif s == "MI" and osm_pbf_mi is not None:
+        elif (osm_pbf_mi is not None) and _bbox_intersects(view_bbox, mi_bbox):
             _plot_roads(ax_map, osm_pbf=osm_pbf_mi, bbox=view_bbox)
-        elif osm_pbf_mi is not None:
-            _plot_roads(ax_map, osm_pbf=osm_pbf_mi, bbox=view_bbox)
+        else:
+            # Outside MI/OH core boxes: skip background to avoid pyrosm empty-bbox crashes.
+            pass
 
     colors = ["#4c72b0", "#dd8452", "#55a868", "#c44e52"]
     labels = [f"C{i} (rep={len(clusters_trajs[i])}, n≈{int(cluster_sizes[i])})" for i in range(min(len(clusters_trajs), len(cluster_sizes)))]

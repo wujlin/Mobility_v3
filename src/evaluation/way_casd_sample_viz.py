@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -120,6 +121,52 @@ def _seq_to_xy(seq: List[int], *, way_center_x: np.ndarray, way_center_y: np.nda
     return x, y
 
 
+def _load_city_road_prob(semantic_dir: Path) -> Optional[np.ndarray]:
+    p = Path(semantic_dir) / "osm_road_prob.npy"
+    if not p.exists():
+        return None
+    a = np.load(str(p))
+    if a.ndim != 2:
+        return None
+    return np.asarray(a, dtype=np.float32)
+
+
+def _load_city_poi_total(semantic_dir: Path) -> Optional[np.ndarray]:
+    meta_path = Path(semantic_dir) / "poi_raster_meta.json"
+    if not meta_path.exists():
+        return None
+    meta = json.loads(meta_path.read_text(encoding="utf-8"))
+    cats = meta.get("categories", None)
+    if not isinstance(cats, list) or not cats:
+        return None
+
+    total = None
+    for cat in cats:
+        p = Path(semantic_dir) / f"poi_density_{cat}.npy"
+        if not p.exists():
+            continue
+        a = np.load(str(p))
+        if a.ndim != 2:
+            continue
+        a = np.asarray(a, dtype=np.float32)
+        total = a if total is None else (total + a)
+    return total
+
+
+def _imshow_background(ax, arr: np.ndarray, *, cmap: str, alpha: float, vmin: Optional[float] = None, vmax: Optional[float] = None) -> None:
+    H, W = map(int, arr.shape)
+    ax.imshow(
+        arr,
+        cmap=cmap,
+        origin="lower",
+        extent=(0, W, 0, H),
+        alpha=float(alpha),
+        vmin=vmin,
+        vmax=vmax,
+        interpolation="nearest",
+    )
+
+
 def _plot_one(
     *,
     out_png: Path,
@@ -138,49 +185,131 @@ def _plot_one(
     way_center_y: np.ndarray,
     all_way_x: Optional[np.ndarray],
     all_way_y: Optional[np.ndarray],
+    road_prob: Optional[np.ndarray],
+    poi_total: Optional[np.ndarray],
 ) -> None:
     try:
         import matplotlib.pyplot as plt  # type: ignore
     except ModuleNotFoundError as e:  # pragma: no cover
         raise SystemExit("Missing dependency: matplotlib (needed for plotting).") from e
 
-    fig = plt.figure(figsize=(7.0, 7.0))
-    ax = fig.add_subplot(1, 1, 1)
+    fig, axes = plt.subplots(1, 3, figsize=(18.0, 6.0))
+    ax_route, ax_corr, ax_poi = axes.tolist()
 
-    if all_way_x is not None and all_way_y is not None:
-        ax.scatter(all_way_x, all_way_y, s=1, c="#d0d0d0", alpha=0.15, linewidths=0)
+    # Background: prefer road_prob (dense road mapping), else fall back to way-center scatter.
+    if road_prob is not None:
+        rp = np.asarray(road_prob, dtype=np.float32)
+        rp = np.clip(rp, 0.0, 1.0)
+        for ax in (ax_route, ax_corr):
+            _imshow_background(ax, rp, cmap="Greys", alpha=0.35, vmin=0.0, vmax=1.0)
+    elif all_way_x is not None and all_way_y is not None:
+        for ax in (ax_route, ax_corr):
+            ax.scatter(all_way_x, all_way_y, s=1, c="#d0d0d0", alpha=0.12, linewidths=0)
 
+    # Common geometry.
     gx, gy = _seq_to_xy(gt_seq, way_center_x=way_center_x, way_center_y=way_center_y)
-    ax.plot(gx, gy, color="black", linewidth=2.0, alpha=0.9, label="GT")
+    gt_set = set(int(x) for x in gt_seq)
 
-    colors = ["#4c72b0", "#dd8452", "#55a868", "#c44e52", "#8172b2", "#937860", "#64b5cd", "#da8bc3"]
-    for i, seq in enumerate(pred_seqs):
+    # Pick "best" sample for route-level comparison.
+    best_i = int(np.argmax(np.asarray(pred_jaccard, dtype=np.float64))) if pred_jaccard else 0
+    best_seq = pred_seqs[best_i] if pred_seqs else []
+    best_set = set(int(x) for x in best_seq)
+    best_overlap = sorted(list(gt_set & best_set))
+
+    # Panel 1: Route comparison (GT vs best pred).
+    ax_route.plot(gx, gy, color="black", linewidth=2.0, alpha=0.90, label="GT")
+    if best_seq:
+        bx, by = _seq_to_xy(best_seq, way_center_x=way_center_x, way_center_y=way_center_y)
+        ax_route.plot(bx, by, color="#4c72b0", linewidth=2.0, alpha=0.85, label="Pred(best)")
+    if best_overlap:
+        ox, oy = _seq_to_xy(best_overlap, way_center_x=way_center_x, way_center_y=way_center_y)
+        ax_route.scatter(ox, oy, s=18, c="#55a868", alpha=0.8, linewidths=0, label="Overlap")
+
+    # Panel 2: Corridor comparison (pred samples as corridor footprint).
+    ax_corr.plot(gx, gy, color="black", linewidth=2.0, alpha=0.65, label="GT")
+    union: set[int] = set()
+    for seq in pred_seqs:
+        union |= set(int(x) for x in seq)
         x, y = _seq_to_xy(seq, way_center_x=way_center_x, way_center_y=way_center_y)
-        c = colors[i % len(colors)]
-        ax.plot(x, y, color=c, linewidth=1.6, alpha=0.85)
+        ax_corr.plot(x, y, color="#4c72b0", linewidth=1.4, alpha=0.25)
+    overlap_union = sorted(list(union & gt_set))
+    if overlap_union:
+        ox, oy = _seq_to_xy(overlap_union, way_center_x=way_center_x, way_center_y=way_center_y)
+        ax_corr.scatter(ox, oy, s=16, c="#55a868", alpha=0.75, linewidths=0, label="Overlap(union)")
 
-    # Start/dest markers
+    # Panel 3: POI heatmap (optional) + route overlay.
+    if poi_total is not None:
+        poi = np.asarray(poi_total, dtype=np.float32)
+        poi = np.log1p(np.clip(poi, 0.0, None))
+        vmax = float(np.percentile(poi[np.isfinite(poi)], 99.0)) if np.any(np.isfinite(poi)) else None
+        _imshow_background(ax_poi, poi, cmap="magma", alpha=0.85, vmin=0.0, vmax=vmax)
+    elif road_prob is not None:
+        rp = np.asarray(road_prob, dtype=np.float32)
+        rp = np.clip(rp, 0.0, 1.0)
+        _imshow_background(ax_poi, rp, cmap="Greys", alpha=0.25, vmin=0.0, vmax=1.0)
+        ax_poi.text(0.02, 0.98, "POI raster missing", transform=ax_poi.transAxes, va="top", ha="left", fontsize=10)
+    else:
+        ax_poi.text(0.5, 0.5, "POI raster missing", transform=ax_poi.transAxes, va="center", ha="center", fontsize=12)
+    ax_poi.plot(gx, gy, color="black", linewidth=2.0, alpha=0.85, label="GT")
+    if best_seq:
+        bx, by = _seq_to_xy(best_seq, way_center_x=way_center_x, way_center_y=way_center_y)
+        ax_poi.plot(bx, by, color="#4c72b0", linewidth=2.0, alpha=0.85, label="Pred(best)")
+    if best_overlap:
+        ox, oy = _seq_to_xy(best_overlap, way_center_x=way_center_x, way_center_y=way_center_y)
+        ax_poi.scatter(ox, oy, s=18, c="#55a868", alpha=0.8, linewidths=0, label="Overlap")
+
+    # Start/dest markers (shared).
     if gt_seq:
         sx, sy = gx[0], gy[0]
         dx, dy = gx[-1], gy[-1]
-        ax.scatter([sx], [sy], s=80, c="white", edgecolors="black", linewidths=2.0, zorder=5)
-        ax.scatter([dx], [dy], s=80, c="black", marker="s", edgecolors="white", linewidths=1.5, zorder=5)
+        for ax in (ax_route, ax_corr, ax_poi):
+            ax.scatter([sx], [sy], s=80, c="white", edgecolors="black", linewidths=2.0, zorder=5)
+            ax.scatter([dx], [dy], s=80, c="black", marker="s", edgecolors="white", linewidths=1.5, zorder=5)
 
     succ_n = int(np.sum(np.asarray(pred_success, dtype=bool)))
     jac_mean = float(np.mean(pred_jaccard)) if pred_jaccard else 0.0
-    title = (
-        f"route={route_id} city={city} hour={hour} dow={dow} "
-        f"gt_corr={gt_corr} cond_corr={cond_corr} "
-        f"succ={succ_n}/{len(pred_seqs)} jaccard_mean={jac_mean:.3f}"
-    )
-    ax.set_title(title)
-    ax.set_aspect("equal", adjustable="box")
-    ax.invert_yaxis()
-    ax.set_xticks([])
-    ax.set_yticks([])
+    jac_best = float(pred_jaccard[best_i]) if pred_jaccard else 0.0
+    corr_jac = float(len(gt_set & union)) / float(len(gt_set | union)) if (gt_set or union) else 1.0
+    max_len = max([len(s) for s in pred_seqs], default=0)
+    hit_wall = int(sum((not su) and (len(s) == max_len) for s, su in zip(pred_seqs, pred_success)))
 
-    # Lightweight legend
-    ax.legend(loc="lower left", frameon=False)
+    ax_route.set_title(f"Route: GT vs best (J={jac_best:.2f})")
+    ax_corr.set_title(f"Corridor: union vs GT (J={corr_jac:.2f})")
+    ax_poi.set_title("POI heatmap (log1p density)")
+    fig.suptitle(
+        f"route={route_id} city={city} hour={hour} dow={dow} succ={succ_n}/{len(pred_seqs)} hit_wall={hit_wall} J(mean)={jac_mean:.2f}",
+        fontsize=12,
+    )
+
+    # Zoom to a robust bbox around GT + predictions (ignore extreme outliers).
+    try:
+        xs = [gx]
+        ys = [gy]
+        for seq in pred_seqs:
+            x, y = _seq_to_xy(seq, way_center_x=way_center_x, way_center_y=way_center_y)
+            xs.append(x)
+            ys.append(y)
+        x_all = np.concatenate(xs) if xs else np.asarray([], dtype=np.float64)
+        y_all = np.concatenate(ys) if ys else np.asarray([], dtype=np.float64)
+        if x_all.size > 0 and y_all.size > 0:
+            qlo, qhi = (0.02, 0.98) if x_all.size >= 50 else (0.0, 1.0)
+            xmin = float(np.quantile(x_all, qlo))
+            xmax = float(np.quantile(x_all, qhi))
+            ymin = float(np.quantile(y_all, qlo))
+            ymax = float(np.quantile(y_all, qhi))
+            pad = max(12.0, 0.08 * max(xmax - xmin, ymax - ymin))
+            for ax in (ax_route, ax_corr, ax_poi):
+                ax.set_xlim(xmin - pad, xmax + pad)
+                ax.set_ylim(ymin - pad, ymax + pad)
+    except Exception:
+        pass
+
+    for ax in (ax_route, ax_corr, ax_poi):
+        ax.set_aspect("equal", adjustable="box")
+        ax.invert_yaxis()
+        ax.set_xticks([])
+        ax.set_yticks([])
+        ax.legend(loc="lower left", frameon=False, fontsize=9)
 
     out_png.parent.mkdir(parents=True, exist_ok=True)
     fig.tight_layout()
@@ -206,6 +335,14 @@ def build_argparser() -> argparse.ArgumentParser:
     p.add_argument("--tz_offset_hours", type=float, default=-5.0)
     p.add_argument("--max_way_len", type=int, default=160)
 
+    p.add_argument(
+        "--semantic_dirs",
+        type=Path,
+        nargs="*",
+        default=None,
+        help="Optional: per-city semantic dirs (contain osm_road_prob.npy and poi_raster_meta.json). "
+        "Index by route_city (e.g., city0_dir city1_dir). If omitted, falls back to scatter background.",
+    )
     p.add_argument("--beam_size", type=int, default=5)
     p.add_argument("--max_decode_len", type=int, default=160)
     p.add_argument("--cfg_scale", type=float, default=1.5)
@@ -332,6 +469,21 @@ def main() -> None:
         all_way_x = np.asarray(wf["way_center_x"], dtype=np.float64).reshape(-1)
         all_way_y = np.asarray(wf["way_center_y"], dtype=np.float64).reshape(-1)
 
+    # ===== Optional semantic rasters (per-city) =====
+    semantic_dirs: List[Optional[Path]] = []
+    if args.semantic_dirs:
+        semantic_dirs = [Path(p) for p in args.semantic_dirs]
+    else:
+        # Convenience: infer from env RAW_ROOT if present.
+        raw_root = os.environ.get("RAW_ROOT", "")
+        if raw_root:
+            d0 = Path(raw_root) / "worldtrace" / "detroit_core_v1"
+            d1 = Path(raw_root) / "worldtrace" / "columbus_core_v1"
+            if d0.exists() or d1.exists():
+                semantic_dirs = [d0 if d0.exists() else None, d1 if d1.exists() else None]
+
+    city_cache: Dict[int, Dict[str, Optional[np.ndarray]]] = {}
+
     # ===== Run sampling per route =====
     per_route = []
     for rid in pick.tolist():
@@ -382,6 +534,13 @@ def main() -> None:
         pred_valid = [_is_valid_path(p, ptr, idx) for p in pred]
         pred_jac = [_jaccard(gt, p) for p in pred]
 
+        sem = semantic_dirs[city] if (semantic_dirs and city < len(semantic_dirs)) else None
+        if city not in city_cache:
+            city_cache[city] = {"road_prob": None, "poi_total": None}
+            if sem is not None:
+                city_cache[city]["road_prob"] = _load_city_road_prob(sem)
+                city_cache[city]["poi_total"] = _load_city_poi_total(sem)
+
         out_png = out_dir / f"case_route{rid:05d}.png"
         _plot_one(
             out_png=out_png,
@@ -400,6 +559,8 @@ def main() -> None:
             way_center_y=wf["way_center_y"],
             all_way_x=all_way_x,
             all_way_y=all_way_y,
+            road_prob=city_cache[city].get("road_prob"),
+            poi_total=city_cache[city].get("poi_total"),
         )
 
         per_route.append(

@@ -169,3 +169,21 @@ python -m src.evaluation.plot_worldtrace_multimodal_od_bins \
   --osm_pbf_michigan "$RAW_ROOT/osm/michigan-latest.osm.pbf" \
   --osm_pbf_ohio "$RAW_ROOT/osm/ohio-latest.osm.pbf"
 ```
+
+### 4.4 within-owner corridor（诊断口径：decision points + road tier 过滤）
+
+当数据呈现“强 owner 集中”时（例如 Detroit top-1 owner 占绝大多数 trips），更合理的诊断是：
+
+- 固定 `owner + OD-bin`，问：**同一 owner 的同一 OD 里，是否真的存在多走廊？**
+
+我们提供两套口径并在 Top-OD 可视化里对比：
+
+- `LCS`（整条 way 序列相似度聚类）：容易把局部绕行合并/拆分，阈值敏感
+- `Decision points`（way-level 分叉选择 signature）：可解释，但若不筛选会把“走廊内部微分叉”也当 corridor，导致 K 爆炸
+
+为避免碎片化，推荐只在**主干路网**上定义 corridor-defining decision points：
+
+- 输入：`way_features.npz` 的 `way_tier`（0=major,1=minor,2=service,3=other）
+- 过滤：`--dp_tier_keep 0 --dp_next_min_keep 2`（只保留至少有两条主干分叉选项的 decision points）
+
+脚本：`src/data/worldtrace/within_owner_corridor_diversity.py`（详见 `docs/WORLDTRACE_SPATIAL_VIZ.md` 的 Layer 3）

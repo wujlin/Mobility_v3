@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import re
 import sys
 import zipfile
 from dataclasses import asdict, dataclass
@@ -32,6 +33,8 @@ class Cfg:
     merge_dist_thr: float
     corridor_method: str  # lcs|decision_points (only affects Top-K viz coloring)
     min_choice_count: int  # only used when corridor_method=decision_points
+    dp_tier_keep: str  # empty => disable tier filtering for decision-points
+    dp_next_min_keep: int  # only used when dp_tier_keep non-empty
     top2_sep_thr: float
     top_k_od: int
     tz_offset_hours: float
@@ -108,6 +111,30 @@ def _dedup_way_seq_with_xy(
     if not out:
         return tuple(), np.zeros((0, 2), dtype=np.float32)
     return tuple(out), np.asarray(xy, dtype=np.float32)
+
+
+def _parse_int_set(spec: str) -> set[int]:
+    s = str(spec or "").strip()
+    if not s:
+        return set()
+    out: set[int] = set()
+    for tok in re.split(r"[,\s]+", s):
+        t = tok.strip()
+        if not t:
+            continue
+        out.add(int(t))
+    return out
+
+
+def _load_way_tier_map(way_features_npz: Path) -> Dict[int, int]:
+    data = np.load(str(way_features_npz), allow_pickle=True)
+    if "way_osm_id" not in data.files or "way_tier" not in data.files:
+        raise ValueError(f"way_features_npz missing way_osm_id/way_tier: {way_features_npz}")
+    way_osm_id = np.asarray(data["way_osm_id"], dtype=np.int64).reshape(-1)
+    way_tier = np.asarray(data["way_tier"], dtype=np.int64).reshape(-1)
+    if way_osm_id.size != way_tier.size:
+        raise ValueError(f"way_features_npz shape mismatch: way_osm_id={way_osm_id.size} way_tier={way_tier.size}")
+    return {int(w): int(t) for w, t in zip(way_osm_id.tolist(), way_tier.tolist())}
 
 
 def _lcs_length(a: Tuple[int, ...], b: Tuple[int, ...]) -> int:
@@ -207,6 +234,9 @@ def _cluster_decision_points_for_od(
     way_sig: List[Tuple[int, ...]],
     way_xy_sig: List[np.ndarray],
     min_choice_count: int,
+    way_tier: Optional[Dict[int, int]] = None,
+    dp_tier_keep: Optional[set[int]] = None,
+    dp_next_min_keep: int = 2,
 ) -> Dict[str, object]:
     """
     Way-level data-driven decision points within one OD-bin group.
@@ -246,6 +276,32 @@ def _cluster_decision_points_for_od(
         keep = {int(v) for v, c in nxt.items() if int(c) >= min_choice_count}
         if len(keep) >= 2:
             valid_next_set[int(u)] = keep
+
+    decision_points_all = sorted(valid_next_set.keys())
+
+    # Optional: tier-filter decision points (keep only corridor-defining branches on major roads).
+    tier_keep = dp_tier_keep or set()
+    dp_next_min_keep = int(max(1, dp_next_min_keep))
+    dp_tier_all: Dict[int, int] = {}
+    dp_tier_kept: Dict[int, int] = {}
+    if tier_keep and way_tier is not None:
+        filtered: Dict[int, set[int]] = {}
+        for u, vs in valid_next_set.items():
+            ut = int(way_tier.get(int(u), 3))
+            dp_tier_all[int(u)] = ut
+            if ut not in tier_keep:
+                continue
+            keep_vs: set[int] = set()
+            for v in vs:
+                vt = int(way_tier.get(int(v), 3))
+                if vt in tier_keep:
+                    keep_vs.add(int(v))
+            required = int(max(2, dp_next_min_keep))
+            if len(keep_vs) < required:
+                continue
+            filtered[int(u)] = keep_vs
+            dp_tier_kept[int(u)] = ut
+        valid_next_set = filtered
 
     decision_points = sorted(valid_next_set.keys())
 
@@ -301,11 +357,14 @@ def _cluster_decision_points_for_od(
 
     return {
         "decision_points": decision_points,
+        "decision_points_all": decision_points_all,
         "valid_next": {int(u): sorted(list(vs)) for u, vs in valid_next_set.items()},
         "clusters": clusters,
         "rid2c": rid2c,
         "rid_sig": rid_sig,
         "decision_points_xy": dp_xy,
+        "decision_points_tier": dp_tier_kept,
+        "decision_points_tier_all": dp_tier_all,
     }
 
 
@@ -447,6 +506,7 @@ def run(
     out_json: Path,
     out_viz_dir: Optional[Path],
     road_prob_npy: Optional[Path],
+    way_features_npz: Optional[Path],
     cfg: Cfg,
 ) -> Dict[str, object]:
     if pq is None or pa is None:
@@ -454,6 +514,13 @@ def run(
 
     cols = ["traj_csv", "t", "lat", "lon", "y", "x", "osm_way_id"]
     pf = pq.ParquetFile(str(segments_parquet))
+
+    tier_keep = _parse_int_set(cfg.dp_tier_keep)
+    way_tier = None
+    if tier_keep:
+        if way_features_npz is None:
+            raise SystemExit("--dp_tier_keep requires --way_features_npz (need way_osm_id->way_tier mapping).")
+        way_tier = _load_way_tier_map(Path(way_features_npz))
 
     traj_key: List[str] = []
     start_t: List[int] = []
@@ -578,6 +645,9 @@ def run(
             way_sig=way_sig,
             way_xy_sig=way_xy_sig,
             min_choice_count=int(cfg.min_choice_count),
+            way_tier=way_tier,
+            dp_tier_keep=tier_keep,
+            dp_next_min_keep=int(cfg.dp_next_min_keep),
         )
         clusters_dp = dp["clusters"]
         cluster_sizes_dp = [int(c["count"]) for c in clusters_dp]
@@ -623,6 +693,9 @@ def run(
             way_sig=way_sig,
             way_xy_sig=way_xy_sig,
             min_choice_count=int(cfg.min_choice_count),
+            way_tier=way_tier,
+            dp_tier_keep=tier_keep,
+            dp_next_min_keep=int(cfg.dp_next_min_keep),
         )
         clusters_dp = dp["clusters"]
         rid2c_dp = dp["rid2c"]
@@ -645,6 +718,11 @@ def run(
                 "route_ids": [int(r) for r in rids],
                 "cluster_ids": cid_list,
                 "decision_points": [int(x) for x in dp.get("decision_points", [])],
+                "decision_points_all": [int(x) for x in dp.get("decision_points_all", [])],
+                "dp_tier_keep": sorted(list(tier_keep)),
+                "dp_next_min_keep": int(cfg.dp_next_min_keep),
+                "decision_points_tier": {str(k): int(v) for k, v in dp.get("decision_points_tier", {}).items()},
+                "decision_points_tier_all": {str(k): int(v) for k, v in dp.get("decision_points_tier_all", {}).items()},
                 "decision_points_xy": {str(k): [float(v[0]), float(v[1])] for k, v in dp.get("decision_points_xy", {}).items()},
                 "title_extra": str(title_extra),
             }
@@ -657,7 +735,12 @@ def run(
         "ok": True,
         "task": "within_owner_corridor_diversity",
         "created_at": datetime.now(tz=TZ_SHANGHAI).isoformat(),
-        "inputs": {"segments_parquet": str(segments_parquet), "meta_zip": str(meta_zip), "road_prob_npy": (str(road_prob_npy) if road_prob_npy else None)},
+        "inputs": {
+            "segments_parquet": str(segments_parquet),
+            "meta_zip": str(meta_zip),
+            "road_prob_npy": (str(road_prob_npy) if road_prob_npy else None),
+            "way_features_npz": (str(way_features_npz) if way_features_npz else None),
+        },
         "cfg": asdict(cfg),
         "owner": {"owner_hash": _sha1_8(owner_target), "n_trips": int(np.sum(mask_owner)), "unique_owner_count": int(len(counts))},
         "stats": {
@@ -685,6 +768,12 @@ def build_argparser() -> argparse.ArgumentParser:
     p.add_argument("--out_json", type=Path, required=True)
     p.add_argument("--out_viz_dir", type=Path, default=None, help="Optional: save Top-K OD-bin corridor plots.")
     p.add_argument("--road_prob_npy", type=Path, default=None, help="Optional: osm_road_prob.npy for grey road background.")
+    p.add_argument(
+        "--way_features_npz",
+        type=Path,
+        default=None,
+        help="Optional: way_features.npz (must contain way_osm_id + way_tier). Required when using --dp_tier_keep.",
+    )
 
     p.add_argument("--od_bin_deg", type=float, default=0.02)
     p.add_argument("--min_od_dist_km", type=float, default=1.0)
@@ -703,6 +792,18 @@ def build_argparser() -> argparse.ArgumentParser:
         default=2,
         help="Only used when corridor_method=decision_points. A valid branch option must appear in >= this many routes (per OD-bin group).",
     )
+    p.add_argument(
+        "--dp_tier_keep",
+        type=str,
+        default="",
+        help="Optional: comma/space-separated way_tier ids to keep for decision points (e.g., '0' for major roads). Requires --way_features_npz. Tier ids follow build_way_features_from_osm_pbf.py: 0=major,1=minor,2=service,3=other.",
+    )
+    p.add_argument(
+        "--dp_next_min_keep",
+        type=int,
+        default=2,
+        help="Only used when dp_tier_keep is set. Keep a decision point u only if it has >= this many branch options v whose way_tier is also in the keep set (helps filter corridor-internal micro-branches).",
+    )
     p.add_argument("--top2_sep_thr", type=float, default=0.0, help="Reserved (not used yet); keep for future gating.")
     p.add_argument("--top_k_od", type=int, default=10)
     p.add_argument("--tz_offset_hours", type=float, default=-5.0)
@@ -719,6 +820,8 @@ def main() -> None:
         merge_dist_thr=float(args.merge_dist_thr),
         corridor_method=str(args.corridor_method),
         min_choice_count=int(args.min_choice_count),
+        dp_tier_keep=str(args.dp_tier_keep),
+        dp_next_min_keep=int(args.dp_next_min_keep),
         top2_sep_thr=float(args.top2_sep_thr),
         top_k_od=int(args.top_k_od),
         tz_offset_hours=float(args.tz_offset_hours),
@@ -731,6 +834,7 @@ def main() -> None:
         out_json=Path(args.out_json),
         out_viz_dir=(Path(args.out_viz_dir) if args.out_viz_dir is not None else None),
         road_prob_npy=(Path(args.road_prob_npy) if args.road_prob_npy is not None else None),
+        way_features_npz=(Path(args.way_features_npz) if args.way_features_npz is not None else None),
         cfg=cfg,
     )
     print(json.dumps(rep, ensure_ascii=False, indent=2))

@@ -5,6 +5,8 @@
 本审计回答一个前置问题：**WorldTrace 的 `Owner` 能否作为 panel entity，用于把 corridor diversity 分解为 within-owner vs between-owner？**  
 如果 Owner 覆盖不足（同一 OD-bin 内很少出现多个 Owner，或数据高度集中在极少数 Owner），则 Detroit 单城的 panel 分解不可行，需要扩大到 Detroit+Columbus，或更大空间范围。
 
+结论（Detroit 子集，v2）：**between-owner 不可行（multi-owner OD bins 太少）且 Owner 高度集中；within-owner 仍有一定规模（1 owner 且 ≥2 trips 的 OD bins 约 300–353）。**
+
 ---
 
 ## 事实与字段口径
@@ -41,6 +43,30 @@
   - 若 `n_od_bins_ge2owners < 100`，则 Detroit 单城的 between-owner 分解不可行，建议扩大到 Detroit+Columbus。
 - Gate B（Owner 集中度）：
   - 若 `top10_share >= 0.95`（95% trips 来自 <10 个 Owner），说明数据高度集中，corridor diversity 的解释力受限，需要在结果解释中明确限制，或扩大范围稀释集中度。
+
+---
+
+## Detroit 子集结果（v2，真实统计）
+
+来源：`_sync/wsa/icml2026_routegen/A_owner_audit_detroit_v2/report.json`
+
+### Join 质量（Owner 对齐是否可靠）
+- `trips_total=2070`，`meta_found_ratio=1.0`，`owner_found_ratio=1.0`
+- 备注：v1 版本使用 `.name` 作为 key，导致 `.csv` vs `.gpx` 不匹配（`owner_found_ratio=0`），应视为无效；v2 改为 `.stem` 后修复。
+
+### Owner 分布（是否高度集中）
+- `unique_owner_count=2`
+- `top10_share=1.0`（Gate B fail）
+- top-2（hash）：`a4b047d6: 1990 trips`、`4618cc6d: 80 trips`
+- `time_span_hours_per_owner`：p50≈10296h（~1.17y），max≈14042h（~1.6y）；`n_owner_span_lt_1day=0`
+
+### OD 覆盖（是否支持 within/between 分解）
+- `od_bin_deg=0.01`：`n_od_bins=1492`，`n_od_bins_ge2owners=20`（Gate A fail），`n_od_bins_1owner_ge2trips=300`
+- `od_bin_deg=0.02`：`n_od_bins=1110`，`n_od_bins_ge2owners=36`（Gate A fail），`n_od_bins_1owner_ge2trips=353`
+
+结论：
+- **Detroit 单城不满足 between-owner gate**（multi-owner OD bins << 100）。
+- **Owner 集中度极高**（几乎全由 1 个 Owner 贡献），写作时需要明确边界；若要更一般化的结论，应扩展到 Detroit+Columbus 或更大区域。
 
 ---
 

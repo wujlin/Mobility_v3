@@ -438,7 +438,7 @@ bash run_way_casd_prep_rustbelt.sh
 > 训练命令里把 `W5_way_routes_labeled/W3_way_graph/W4_way_features` 分别替换为
 > `W4_way_routes_labeled/W2_way_graph/W3_way_features`，并将 `W6_train_ae/W7_train_flow` 相应替换为 `W5_train_ae/W6_train_flow`。
 
-**(Step A) 训练 AE（48GB GPU 起步建议：`batch_size=512`；若 OOM 再降到 256；`num_workers=24`；建议 `n_epochs=60`）**
+**(Step A) 训练 AE（48GB GPU 起步建议：`batch_size=512`；若 OOM 再降到 256；`num_workers=48`；建议 `n_epochs=60`）**
 
 ```bash
 python -m src.training.train_way_casd_autoencoder \
@@ -446,8 +446,8 @@ python -m src.training.train_way_casd_autoencoder \
   --way_graph_npz "$OUT_BASE/W3_way_graph/way_graph.npz" \
   --way_features_npz "$OUT_BASE/W4_way_features/way_features.npz" \
   --out_dir "$OUT_BASE/W6_train_ae" \
-  --batch_size 512 --num_workers 24 --n_epochs 60 \
-  --d_model 256 --n_latent 32 --max_candidates 64 --max_way_len 128 \
+  --batch_size 512 --num_workers 48 --n_epochs 60 \
+  --d_model 256 --n_latent 64 --max_candidates 64 --max_way_len 128 \
   --device cuda
 ```
 
@@ -460,12 +460,12 @@ python -m src.training.train_way_casd_flow \
   --way_features_npz "$OUT_BASE/W4_way_features/way_features.npz" \
   --ae_ckpt "$OUT_BASE/W6_train_ae/ckpt_best.pt" \
   --out_dir "$OUT_BASE/W7_train_flow" \
-  --batch_size 512 --num_workers 24 --n_epochs 60 \
-  --d_model 256 --n_latent 32 --solver_steps 20 --cfg_drop_prob 0.1 \
+  --batch_size 512 --num_workers 48 --n_epochs 60 \
+  --d_model 256 --n_latent 64 --solver_steps 20 \
   --device cuda
 ```
 
-**(采样 + 可视化) Flow→latent→Way 序列（Beam Search）**
+**(采样 + 可视化) Flow→latent→Way 序列（默认 Greedy；Beam 可选）**
 
 ```bash
 python -m src.evaluation.way_casd_sample_viz \
@@ -476,14 +476,48 @@ python -m src.evaluation.way_casd_sample_viz \
   --flow_ckpt "$OUT_BASE/W7_train_flow/ckpt_best.pt" \
   --out_dir "$OUT_BASE/W8_sample_viz" \
   --n_routes 12 --n_samples_per_route 4 \
-  --beam_size 5 --max_decode_len 160 \
-  --cfg_scale 1.5 --plot_all_ways \
+  --decode greedy --max_decode_len 160 \
+  --plot_all_ways \
   --device cuda
 ```
 
 输出：
-- `W8_sample_viz/report.json`：每条 route 的 success/valid/jaccard/corridor_type
+- `W8_sample_viz/report.json`：每条 route 的 success/valid/jaccard
 - `W8_sample_viz/case_route*.png`：GT（黑）+ 多个 sample（彩色）叠图
+
+**(可选 Step C) Execution Stage：GPS-level 条件扩散（依赖 segments_with_wayid.parquet）**
+
+> 输入是 `segments_with_wayid.parquet`（包含 `y/x/t/osm_way_id`），用 Decision AE 产生 `skeleton_latent` 做条件扩散，输出固定长度 `traj_len` 的轨迹（相对起点）。
+
+```bash
+# Detroit + Columbus（Rust Belt）一起训练 execution
+python -m src.training.train_way_casd_gps_diffusion \
+  --segments_parquet "$RAW_ROOT/worldtrace/detroit_core_v1/segments_with_wayid.parquet" \
+                    "$RAW_ROOT/worldtrace/columbus_core_v1/segments_with_wayid.parquet" \
+  --route_city 0 1 \
+  --way_graph_npz "$OUT_BASE/W3_way_graph/way_graph.npz" \
+  --way_features_npz "$OUT_BASE/W4_way_features/way_features.npz" \
+  --ae_ckpt "$OUT_BASE/W6_train_ae/ckpt_best.pt" \
+  --out_dir "$OUT_BASE/W9_train_exec" \
+  --batch_size 128 --num_workers 48 --n_epochs 60 \
+  --traj_len 256 --max_way_len 128 --prefer_matched \
+  --d_model 256 --n_latent 64 --hidden_dim 128 --emb_dim 512 \
+  --diffusion_steps 100 --prediction_type eps --skel_noise_sigma 0.1 \
+  --device cuda
+
+# 最小可视化（单城一次画几条）
+python -m src.evaluation.way_casd_gps_sample_viz \
+  --segments_parquet "$RAW_ROOT/worldtrace/detroit_core_v1/segments_with_wayid.parquet" \
+  --route_city 0 \
+  --semantic_dir "$RAW_ROOT/worldtrace/detroit_core_v1" \
+  --way_graph_npz "$OUT_BASE/W3_way_graph/way_graph.npz" \
+  --way_features_npz "$OUT_BASE/W4_way_features/way_features.npz" \
+  --ae_ckpt "$OUT_BASE/W6_train_ae/ckpt_best.pt" \
+  --exec_ckpt "$OUT_BASE/W9_train_exec/ckpt_best.pt" \
+  --out_dir "$OUT_BASE/W10_exec_viz" \
+  --n_routes 8 --n_samples_per_route 4 --traj_len 256 --prefer_matched \
+  --device cuda
+```
 
 **(2) segments→graph paths（map-match，T1）**：
 

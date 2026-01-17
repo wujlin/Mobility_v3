@@ -28,11 +28,10 @@ class Cfg:
     n_routes: int
     n_samples_per_route: int
     max_way_len: int
-    beam_size: int
+    decode: str  # "greedy" or "beam"
+    beam_size: int  # only used when decode="beam"
     max_decode_len: int
-    cfg_scale: float
     solver_steps: Optional[int]
-    corridor_type_override: Optional[int]
     plot_all_ways: bool
 
 
@@ -109,22 +108,35 @@ def _is_valid_path(seq: List[int], ptr: np.ndarray, idx: np.ndarray) -> bool:
     return True
 
 
-def _corridor_type_from_tier(seq: List[int], way_tier: np.ndarray, dominant_thr: float = 0.5) -> int:
-    way_tier = np.asarray(way_tier, dtype=np.int64).reshape(-1)
-    if not seq:
-        return 3
-    tiers = way_tier[np.clip(np.asarray(seq, dtype=np.int64), 0, way_tier.shape[0] - 1)]
-    tot = max(1, int(tiers.size))
-    c0 = int(np.sum(tiers == 0))
-    c1 = int(np.sum(tiers == 1))
-    c2 = int(np.sum(tiers == 2))
-    if (c0 / tot) >= dominant_thr:
-        return 0
-    if (c1 / tot) >= dominant_thr:
-        return 1
-    if (c2 / tot) >= dominant_thr:
-        return 2
-    return 3
+def _decode(
+    *,
+    ae: WayCASDAutoEncoder,
+    z: torch.Tensor,
+    route_cond: Dict[str, torch.Tensor],
+    start_way: torch.Tensor,
+    dest_way: torch.Tensor,
+    decode: str,
+    beam_size: int,
+    max_decode_len: int,
+) -> List[List[int]]:
+    if str(decode) == "beam":
+        return ae.decoder.beam_search(
+            way_embedder=ae.way_enc,
+            latent_tokens=z,
+            route_cond=route_cond,
+            start_way=start_way,
+            dest_way=dest_way,
+            beam_size=int(beam_size),
+            max_len=int(max_decode_len),
+        )
+    return ae.decoder.greedy_decode(
+        way_embedder=ae.way_enc,
+        latent_tokens=z,
+        route_cond=route_cond,
+        start_way=start_way,
+        dest_way=dest_way,
+        max_len=int(max_decode_len),
+    )
 
 
 def _seq_to_xy(seq: List[int], *, way_center_x: np.ndarray, way_center_y: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
@@ -192,9 +204,6 @@ def _plot_one(
     dow: int,
     gt_seq: List[int],
     pred_seqs: List[List[int]],
-    gt_corr: int,
-    cond_corr: int,
-    pred_corrs: List[int],
     pred_success: List[bool],
     pred_jaccard: List[float],
     way_center_x: np.ndarray,
@@ -359,21 +368,15 @@ def build_argparser() -> argparse.ArgumentParser:
         help="Optional: per-city semantic dirs (contain osm_road_prob.npy and poi_raster_meta.json). "
         "Index by route_city (e.g., city0_dir city1_dir). If omitted, falls back to scatter background.",
     )
+    p.add_argument("--decode", choices=["greedy", "beam"], default="greedy", help="Decode strategy (default: greedy).")
     p.add_argument("--beam_size", type=int, default=5)
     p.add_argument("--max_decode_len", type=int, default=160)
-    p.add_argument("--cfg_scale", type=float, default=1.5)
     p.add_argument("--solver_steps", type=int, default=0, help="Override solver steps (0=use ckpt/default).")
     p.add_argument(
         "--latent_source",
         choices=["flow", "gt"],
         default="flow",
         help="Where to get latent tokens: flow (default) or gt (encode GT and decode; used to isolate decoder).",
-    )
-    p.add_argument(
-        "--corridor_type_override",
-        type=int,
-        default=-1,
-        help="Force corridor_type in {0,1,2,3}. -1 means use GT corridor_type.",
     )
     p.add_argument("--plot_all_ways", action="store_true", help="Scatter all way centers as grey background.")
     return p
@@ -391,11 +394,10 @@ def main() -> None:
         n_routes=int(args.n_routes),
         n_samples_per_route=int(args.n_samples_per_route),
         max_way_len=int(args.max_way_len),
+        decode=str(args.decode),
         beam_size=int(args.beam_size),
         max_decode_len=int(args.max_decode_len),
-        cfg_scale=float(args.cfg_scale),
         solver_steps=(int(args.solver_steps) if int(args.solver_steps) > 0 else None),
-        corridor_type_override=(None if int(args.corridor_type_override) < 0 else int(args.corridor_type_override)),
         plot_all_ways=bool(args.plot_all_ways),
     )
     _set_seed(cfg.seed)
@@ -474,7 +476,6 @@ def main() -> None:
             dropout=float(flow_cfg_dict.get("dropout", ae_cfg.dropout)),
             noise_sigma=float(flow_cfg_dict.get("noise_sigma", 1.0)),
             solver_steps=int(flow_cfg_dict.get("solver_steps", 20)),
-            cfg_drop_prob=float(flow_cfg_dict.get("cfg_drop_prob", 0.1)),
         )
         flow = LatentFlowMatching(cfg=flow_cfg, cond_cfg=ConditionEncoderCfg(d_model=int(flow_cfg.d_model), coord_scale=1024.0)).to(device)
         flow.load_state_dict(flow_state, strict=True)
@@ -508,13 +509,11 @@ def main() -> None:
         L = int(routes.way_seq_len[rid])
         s = int(routes.way_seq_ptr[rid])
         gt = routes.way_seq_idx[s : s + L].astype(np.int64, copy=False).tolist()
-        gt_corr = int(routes.corridor_type[rid])
         city = int(routes.route_city[rid])
         start_t = int(routes.start_t[rid])
         hour = int(_hour_from_unix(np.asarray([start_t], dtype=np.int64), cfg.tz_offset_hours)[0])
         dow = int(_dow_from_unix(np.asarray([start_t], dtype=np.int64), cfg.tz_offset_hours)[0])
 
-        corr = int(cfg.corridor_type_override) if cfg.corridor_type_override is not None else int(gt_corr)
         K = int(cfg.n_samples_per_route)
         route_cond = {
             "start_pos": torch.as_tensor(np.repeat(routes.start_pos[rid][None, :], K, axis=0), dtype=torch.float32, device=device),
@@ -522,7 +521,6 @@ def main() -> None:
             "hour": torch.as_tensor(np.full((K,), hour, dtype=np.int64), dtype=torch.long, device=device),
             "dow": torch.as_tensor(np.full((K,), dow, dtype=np.int64), dtype=torch.long, device=device),
             "route_city": torch.as_tensor(np.full((K,), city, dtype=np.int64), dtype=torch.long, device=device),
-            "corridor_type": torch.as_tensor(np.full((K,), corr, dtype=np.int64), dtype=torch.long, device=device),
         }
         start_way = torch.as_tensor(np.full((K,), int(routes.start_way[rid]), dtype=np.int64), dtype=torch.long, device=device)
         dest_way = torch.as_tensor(np.full((K,), int(routes.dest_way[rid]), dtype=np.int64), dtype=torch.long, device=device)
@@ -536,18 +534,18 @@ def main() -> None:
             z, _ = ae.encode(way_seq_pad_t)
         else:
             assert flow is not None
-            z = flow.sample(route_cond=route_cond, cfg_scale=float(cfg.cfg_scale), solver_steps=cfg.solver_steps)
-        pred = ae.decoder.beam_search(
-            way_embedder=ae.way_enc,
-            latent_tokens=z,
+            z = flow.sample(route_cond=route_cond, solver_steps=cfg.solver_steps)
+        pred = _decode(
+            ae=ae,
+            z=z,
             route_cond=route_cond,
             start_way=start_way,
             dest_way=dest_way,
+            decode=str(cfg.decode),
             beam_size=int(cfg.beam_size),
-            max_len=int(cfg.max_decode_len),
+            max_decode_len=int(cfg.max_decode_len),
         )
 
-        pred_corrs = [_corridor_type_from_tier(p, wf["way_tier"]) for p in pred]
         pred_success = [bool(p and int(p[-1]) == int(routes.dest_way[rid])) for p in pred]
         pred_valid = [_is_valid_path(p, ptr, idx) for p in pred]
         pred_jac = [_jaccard(gt, p) for p in pred]
@@ -568,9 +566,6 @@ def main() -> None:
             dow=int(dow),
             gt_seq=gt,
             pred_seqs=pred,
-            gt_corr=int(gt_corr),
-            cond_corr=int(corr),
-            pred_corrs=pred_corrs,
             pred_success=pred_success,
             pred_jaccard=pred_jac,
             way_center_x=wf["way_center_x"],
@@ -587,17 +582,15 @@ def main() -> None:
                 "route_city": int(city),
                 "hour": int(hour),
                 "dow": int(dow),
-                "gt": {"len": int(len(gt)), "corridor_type": int(gt_corr)},
-                "cond": {"corridor_type": int(corr)},
+                "gt": {"len": int(len(gt))},
                 "pred": [
                     {
                         "len": int(len(p)),
                         "success": bool(su),
                         "valid": bool(vv),
                         "jaccard": float(jj),
-                        "corridor_type": int(cc),
                     }
-                    for p, su, vv, jj, cc in zip(pred, pred_success, pred_valid, pred_jac, pred_corrs)
+                    for p, su, vv, jj in zip(pred, pred_success, pred_valid, pred_jac)
                 ],
             }
         )

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional
 
 import torch
 import torch.nn as nn
@@ -11,7 +10,6 @@ import torch.nn as nn
 class ConditionEncoderCfg:
     d_model: int = 256
     n_route_cities: int = 4
-    n_corridor_types: int = 4
     coord_scale: float = 1024.0
 
 
@@ -25,7 +23,6 @@ class ConditionEncoder(nn.Module):
       - hour:      (B,) int [0,23]
       - dow:       (B,) int [0,6] (Mon=0)
       - route_city:(B,) int
-      - corridor_type: (B,) int in [0,3] or -1 for 'null'
     """
 
     def __init__(self, cfg: ConditionEncoderCfg) -> None:
@@ -41,7 +38,6 @@ class ConditionEncoder(nn.Module):
             nn.Linear(d_model, d_model),
         )
         self.route_city_embed = nn.Embedding(int(cfg.n_route_cities), d_model)
-        self.corridor_embed = nn.Embedding(int(cfg.n_corridor_types), d_model)
         self.out_ln = nn.LayerNorm(d_model)
 
     def forward(
@@ -52,7 +48,6 @@ class ConditionEncoder(nn.Module):
         hour: torch.Tensor,
         dow: torch.Tensor,
         route_city: torch.Tensor,
-        corridor_type: Optional[torch.Tensor],
     ) -> torch.Tensor:
         start_pos = start_pos.to(dtype=torch.float32)
         dest_pos = dest_pos.to(dtype=torch.float32)
@@ -73,17 +68,5 @@ class ConditionEncoder(nn.Module):
         city = torch.clamp(route_city, 0, self.route_city_embed.num_embeddings - 1)
         city_emb = self.route_city_embed(city)
 
-        if corridor_type is None:
-            corr_emb = torch.zeros_like(city_emb)
-        else:
-            corridor_type = corridor_type.to(dtype=torch.long)
-            is_null = corridor_type < 0
-            corr = torch.clamp(corridor_type, 0, self.corridor_embed.num_embeddings - 1)
-            corr_emb = self.corridor_embed(corr)
-            if bool(is_null.any()):
-                corr_emb = corr_emb.clone()
-                corr_emb[is_null] = 0.0
-
-        out = pos_emb + time_emb + city_emb + corr_emb
+        out = pos_emb + time_emb + city_emb
         return self.out_ln(out)
-

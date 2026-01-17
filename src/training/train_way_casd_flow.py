@@ -49,7 +49,6 @@ class TrainCfg:
     dropout: float
     noise_sigma: float
     solver_steps: int
-    cfg_drop_prob: float
 
 
 def _set_seed(seed: int) -> None:
@@ -156,13 +155,12 @@ def build_argparser() -> argparse.ArgumentParser:
     p.add_argument("--max_routes", type=int, default=None, help="Debug: cap number of routes (after filtering).")
 
     p.add_argument("--d_model", type=int, default=256)
-    p.add_argument("--n_latent", type=int, default=32)
+    p.add_argument("--n_latent", type=int, default=64)
     p.add_argument("--n_layers", type=int, default=6)
     p.add_argument("--n_heads", type=int, default=8)
     p.add_argument("--dropout", type=float, default=0.1)
     p.add_argument("--noise_sigma", type=float, default=1.0)
     p.add_argument("--solver_steps", type=int, default=20)
-    p.add_argument("--cfg_drop_prob", type=float, default=0.1)
     return p
 
 
@@ -191,7 +189,6 @@ def main() -> None:
         dropout=float(args.dropout),
         noise_sigma=float(args.noise_sigma),
         solver_steps=int(args.solver_steps),
-        cfg_drop_prob=float(args.cfg_drop_prob),
     )
 
     _set_seed(cfg.seed)
@@ -299,7 +296,6 @@ def main() -> None:
             dropout=float(cfg.dropout),
             noise_sigma=float(cfg.noise_sigma),
             solver_steps=int(cfg.solver_steps),
-            cfg_drop_prob=float(cfg.cfg_drop_prob),
         ),
         cond_cfg=ConditionEncoderCfg(d_model=int(cfg.d_model), coord_scale=1024.0),
     ).to(device)

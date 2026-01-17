@@ -12,13 +12,12 @@ from src.models.way_casd.conditions import ConditionEncoder, ConditionEncoderCfg
 @dataclass(frozen=True)
 class LatentFlowCfg:
     d_model: int = 256
-    n_latent: int = 32
+    n_latent: int = 64
     n_layers: int = 6
     n_heads: int = 8
     dropout: float = 0.1
     noise_sigma: float = 1.0
     solver_steps: int = 20
-    cfg_drop_prob: float = 0.1
 
 
 class LatentFlowMatching(nn.Module):
@@ -72,21 +71,12 @@ class LatentFlowMatching(nn.Module):
         zt = (1.0 - t_) * z0 + t_ * z1
         v_target = z1 - z0
 
-        corridor_type = route_cond.get("corridor_type", None)
-        if corridor_type is not None:
-            corridor_type = corridor_type.to(device=device)
-            if self.training and float(self.cfg.cfg_drop_prob) > 0.0:
-                drop = torch.rand((B,), device=device) < float(self.cfg.cfg_drop_prob)
-                corridor_type = corridor_type.clone()
-                corridor_type[drop] = -1
-
         cond_emb = self.cond_enc(
             start_pos=route_cond["start_pos"],
             dest_pos=route_cond["dest_pos"],
             hour=route_cond["hour"],
             dow=route_cond["dow"],
             route_city=route_cond["route_city"],
-            corridor_type=corridor_type,
         )
         time_emb = self._time_emb(t)
         x = zt + cond_emb[:, None, :] + time_emb[:, None, :]
@@ -99,7 +89,6 @@ class LatentFlowMatching(nn.Module):
         self,
         *,
         route_cond: Dict[str, torch.Tensor],
-        cfg_scale: float = 1.5,
         solver_steps: Optional[int] = None,
     ) -> torch.Tensor:
         device = next(self.parameters()).device
@@ -113,16 +102,9 @@ class LatentFlowMatching(nn.Module):
         sigma = self.rf_noise_sigma.to(device=device, dtype=torch.float32)
         z = torch.randn((B, L, d), device=device, dtype=torch.float32) * sigma
 
-        corr = route_cond.get("corridor_type", None)
-        corr_uncond = None
-        if corr is not None:
-            corr_uncond = corr.new_full(corr.shape, -1)
-
         for i in range(steps):
             t = torch.full((B,), (float(i) + 0.5) * dt, device=device, dtype=torch.float32)
-            v_u = self._v(z, t, route_cond, corridor_type=corr_uncond)
-            v_c = self._v(z, t, route_cond, corridor_type=corr)
-            v = v_u + float(cfg_scale) * (v_c - v_u)
+            v = self._v(z, t, route_cond)
             z = z + dt * v
 
         return z
@@ -132,8 +114,6 @@ class LatentFlowMatching(nn.Module):
         zt: torch.Tensor,
         t: torch.Tensor,
         route_cond: Dict[str, torch.Tensor],
-        *,
-        corridor_type: Optional[torch.Tensor],
     ) -> torch.Tensor:
         device = zt.device
         cond_emb = self.cond_enc(
@@ -142,9 +122,7 @@ class LatentFlowMatching(nn.Module):
             hour=route_cond["hour"].to(device=device),
             dow=route_cond["dow"].to(device=device),
             route_city=route_cond["route_city"].to(device=device),
-            corridor_type=(corridor_type.to(device=device) if corridor_type is not None else None),
         )
         time_emb = self._time_emb(t.to(device=device))
         x = zt + cond_emb[:, None, :] + time_emb[:, None, :]
         return self.out_ln(self.net(x))
-

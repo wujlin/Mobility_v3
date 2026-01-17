@@ -131,7 +131,7 @@ def build_argparser() -> argparse.ArgumentParser:
     p.add_argument("--max_routes", type=int, default=None, help="Debug: cap number of routes (after filtering).")
 
     p.add_argument("--d_model", type=int, default=256)
-    p.add_argument("--n_latent", type=int, default=32)
+    p.add_argument("--n_latent", type=int, default=64)
     p.add_argument("--n_heads", type=int, default=8)
     p.add_argument("--dropout", type=float, default=0.1)
     p.add_argument("--max_len", type=int, default=128)
@@ -271,4 +271,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

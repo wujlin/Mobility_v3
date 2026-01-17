@@ -29,9 +29,7 @@ class Cfg:
     max_way_len: int
     max_decode_len: int
     beam_sizes: List[int]
-    cfg_scale: float
     solver_steps: Optional[int]
-    corridor_type_override: Optional[int]
     n_per_bucket: int
     decode_len_mode: str  # "fixed" or "relative"
     rel_decode_k: float
@@ -177,9 +175,7 @@ def build_argparser() -> argparse.ArgumentParser:
     p.add_argument("--beam_sizes", type=int, nargs="+", default=[10, 50], help="E.g., --beam_sizes 10 50 100")
     p.add_argument("--latent_source", choices=["gt", "flow"], default="gt")
     p.add_argument("--n_samples_per_route", type=int, default=4, help="Only meaningful for latent_source=flow.")
-    p.add_argument("--cfg_scale", type=float, default=1.5)
     p.add_argument("--solver_steps", type=int, default=0, help="Override solver steps (0=use ckpt/default).")
-    p.add_argument("--corridor_type_override", type=int, default=-1, help="Force corridor_type in {0,1,2,3}. -1 uses GT.")
 
     p.add_argument("--max_way_len", type=int, default=160)
     p.add_argument("--max_decode_len", type=int, default=160)
@@ -210,9 +206,7 @@ def main() -> None:
         max_way_len=int(args.max_way_len),
         max_decode_len=int(args.max_decode_len),
         beam_sizes=[int(x) for x in args.beam_sizes],
-        cfg_scale=float(args.cfg_scale),
         solver_steps=(int(args.solver_steps) if int(args.solver_steps) > 0 else None),
-        corridor_type_override=(None if int(args.corridor_type_override) < 0 else int(args.corridor_type_override)),
         n_per_bucket=int(args.n_per_bucket),
         decode_len_mode=str(args.decode_len_mode),
         rel_decode_k=float(args.rel_decode_k),
@@ -299,7 +293,6 @@ def main() -> None:
                 dropout=float(flow_cfg_dict.get("dropout", 0.1)),
                 noise_sigma=float(flow_cfg_dict.get("noise_sigma", 1.0)),
                 solver_steps=int(flow_cfg_dict.get("solver_steps", 20)),
-                cfg_drop_prob=float(flow_cfg_dict.get("cfg_drop_prob", 0.1)),
             ),
             cond_cfg=ae.decoder.cond_enc.cfg,
         ).to(device)
@@ -326,15 +319,12 @@ def main() -> None:
             hour = int(_hour_from_unix(np.asarray([routes.start_t[int(rid)]], dtype=np.int64), cfg.tz_offset_hours)[0])
             dow = int(_dow_from_unix(np.asarray([routes.start_t[int(rid)]], dtype=np.int64), cfg.tz_offset_hours)[0])
             city = int(routes.route_city[int(rid)])
-            gt_corr = int(routes.corridor_type[int(rid)])
-            corr = int(cfg.corridor_type_override) if cfg.corridor_type_override is not None else int(gt_corr)
             route_cond = {
                 "start_pos": torch.as_tensor(routes.start_pos[int(rid)][None, :], dtype=torch.float32, device=device),
                 "dest_pos": torch.as_tensor(routes.dest_pos[int(rid)][None, :], dtype=torch.float32, device=device),
                 "hour": torch.as_tensor([hour], dtype=torch.long, device=device),
                 "dow": torch.as_tensor([dow], dtype=torch.long, device=device),
                 "route_city": torch.as_tensor([city], dtype=torch.long, device=device),
-                "corridor_type": torch.as_tensor([corr], dtype=torch.long, device=device),
             }
             start_way = torch.as_tensor([int(routes.start_way[int(rid)])], dtype=torch.long, device=device)
             dest_way = torch.as_tensor([int(routes.dest_way[int(rid)])], dtype=torch.long, device=device)
@@ -368,8 +358,6 @@ def main() -> None:
                 hour = int(_hour_from_unix(np.asarray([routes.start_t[int(rid)]], dtype=np.int64), cfg.tz_offset_hours)[0])
                 dow = int(_dow_from_unix(np.asarray([routes.start_t[int(rid)]], dtype=np.int64), cfg.tz_offset_hours)[0])
                 city = int(routes.route_city[int(rid)])
-                gt_corr = int(routes.corridor_type[int(rid)])
-                corr = int(cfg.corridor_type_override) if cfg.corridor_type_override is not None else int(gt_corr)
                 K = int(cfg.n_samples_per_route)
                 route_cond = {
                     "start_pos": torch.as_tensor(np.repeat(routes.start_pos[int(rid)][None, :], K, axis=0), dtype=torch.float32, device=device),
@@ -377,11 +365,10 @@ def main() -> None:
                     "hour": torch.as_tensor(np.full((K,), hour, dtype=np.int64), dtype=torch.long, device=device),
                     "dow": torch.as_tensor(np.full((K,), dow, dtype=np.int64), dtype=torch.long, device=device),
                     "route_city": torch.as_tensor(np.full((K,), city, dtype=np.int64), dtype=torch.long, device=device),
-                    "corridor_type": torch.as_tensor(np.full((K,), corr, dtype=np.int64), dtype=torch.long, device=device),
                 }
                 start_way = torch.as_tensor(np.full((K,), int(routes.start_way[int(rid)]), dtype=np.int64), dtype=torch.long, device=device)
                 dest_way = torch.as_tensor(np.full((K,), int(routes.dest_way[int(rid)]), dtype=np.int64), dtype=torch.long, device=device)
-                z = flow.sample(route_cond=route_cond, cfg_scale=float(cfg.cfg_scale), solver_steps=cfg.solver_steps)
+                z = flow.sample(route_cond=route_cond, solver_steps=cfg.solver_steps)
 
             if cfg.decode_len_mode == "relative":
                 max_len = min(int(cfg.max_decode_len), max(16, int(round(float(cfg.rel_decode_b) + float(cfg.rel_decode_k) * float(L)))))

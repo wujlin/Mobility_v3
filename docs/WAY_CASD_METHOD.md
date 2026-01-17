@@ -48,10 +48,10 @@ Way-CASD 的最小训练数据是：
   变长 token → 固定长度 latent tokens  
   代码：`src/models/casd/perceiver.py`（复用）
 - Constrained AR Decoder（候选集打分）  
-  每步只在 `succ(way)` 候选集中预测下一跳；beam search 可提升到达率  
+  每步只在 `succ(way)` 候选集中预测下一跳；默认用 greedy decode 跑通闭环（beam search 作为可选诊断/回退）  
   代码：`src/models/way_casd/way_decoder.py`
 - 条件向量（ConditionEncoder）  
-  `start_pos/dest_pos + hour/dow + route_city (+ corridor_type 可选)`  
+  `start_pos/dest_pos + hour/dow + route_city`  
   代码：`src/models/way_casd/conditions.py`
 
 训练入口：`src/training/train_way_casd_autoencoder.py`
@@ -62,7 +62,7 @@ Way-CASD 的最小训练数据是：
 
 - Flow：rectified flow / flow matching in latent token space  
   代码：`src/models/way_casd/latent_flow.py`
-- 采样：ODE 迭代 +（可选）CFG（对 corridor_type 做 dropout → guidance）
+- 采样：ODE 迭代（当前版本不使用 CFG；Flow 学习 `p(z | OD, time, city)`）
 
 训练入口：`src/training/train_way_casd_flow.py`
 
@@ -70,6 +70,24 @@ Way-CASD 的最小训练数据是：
 
 - Way-CASD 采样可视化：`src/evaluation/way_casd_sample_viz.py`  
   关键看：到达率、长度是否“撞墙”（`len == max_decode_len`）、以及与 GT 的 overlap/Jaccard。
+
+### 2.5 Execution Stage：GPS-level 条件扩散（Cardiff-style）
+
+目标：在 **路网拓扑保证（way 序列）** 的基础上，生成更“连续/自然”的轨迹几何与速度模式。
+
+输入条件：
+- `route_cond`：`start_pos/dest_pos + hour/dow + route_city`（复用 ConditionEncoder）
+- `skeleton_latent`：来自 decision stage 的 latent tokens（`WayCASDAutoEncoder.encode()` 输出）
+
+模型实现（最小可运行版本）：
+- UNet：`src/models/diffusion/unet1d.py`
+- Cross-attention 控制：`src/models/way_casd/gps_diffusion.py`（`SkeletonCrossAttentionControlMid` → `UNet1D(control_mid=...)`）
+- 训练入口：`src/training/train_way_casd_gps_diffusion.py`
+- 采样可视化：`src/evaluation/way_casd_gps_sample_viz.py`
+
+训练技巧（Cardiff-style，KISS 版）：
+- 对 `skeleton_latent` 做噪声增强（`skel_noise_sigma`），提升对 sampled latent 的鲁棒性
+- 采样时可选硬约束端点（`fix_ends`）：relative coords 下强制首点为 0、末点为 `dest-start`
 
 ---
 
@@ -80,7 +98,7 @@ Way-CASD 的最小训练数据是：
 1) **corridor（走廊 / mode）**：同一 OD（或 OD-bin）下，GT 路线在空间上形成的多个稳定走廊分布。  
    - 这是“数据/行为”概念，用于 **数据筛选与评估**。
 2) **corridor_type（4 类标签）**：我们为了做最小可控性（CFG）引入的 **粗粒度 route label**（dominant tier）。  
-   - 这是“工程条件变量”，不是 corridor 本体；它不应该替代 corridor 的空间分布定义。
+   - 这是“工程标签”，不是 corridor 本体；它不应该替代 corridor 的空间分布定义。当前版本已移除 CFG，`corridor_type` 仅保留作数据分析/审计字段。
 
 `corridor_type` 的生成：`src/data/way_graph/label_corridor_type_from_way_features.py`（dominant tier > 0.5 → major/minor/service else mixed）。
 

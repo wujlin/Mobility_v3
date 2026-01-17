@@ -161,6 +161,7 @@ class WayDecoder(nn.Module):
         latent_tokens: torch.Tensor,  # (B,L,d_model)
         route_cond: Dict[str, torch.Tensor],
         trans: Dict[str, torch.Tensor],
+        cond_emb: Optional[torch.Tensor] = None,  # (B,d_model) optional cache
     ) -> torch.Tensor:
         route_idx = trans["route_idx"].to(dtype=torch.long)
         cur_way = trans["cur_way"].to(dtype=torch.long)
@@ -171,15 +172,15 @@ class WayDecoder(nn.Module):
         if int(route_idx.max().item()) >= B:
             raise ValueError(f"route_idx out of range: max={int(route_idx.max().item())} but B={B}")
 
-        # Condition embedding
-        cond_emb = self.cond_enc(
-            start_pos=route_cond["start_pos"],
-            dest_pos=route_cond["dest_pos"],
-            hour=route_cond["hour"],
-            dow=route_cond["dow"],
-            route_city=route_cond["route_city"],
-            corridor_type=route_cond.get("corridor_type", None),
-        )
+        # Condition embedding (optionally cached per-route for decode speed)
+        if cond_emb is None:
+            cond_emb = self.cond_enc(
+                start_pos=route_cond["start_pos"],
+                dest_pos=route_cond["dest_pos"],
+                hour=route_cond["hour"],
+                dow=route_cond["dow"],
+                route_city=route_cond["route_city"],
+            )
         
         # Compute context with cross-attention
         ctx_t = self._compute_context(
@@ -245,6 +246,14 @@ class WayDecoder(nn.Module):
         for b in range(B):
             sw = int(start_way[b].item())
             dw = int(dest_way[b].item())
+            route_cond_b = {k: v[b : b + 1].to(device=device) for k, v in route_cond.items()}
+            cond_emb_b = self.cond_enc(
+                start_pos=route_cond_b["start_pos"],
+                dest_pos=route_cond_b["dest_pos"],
+                hour=route_cond_b["hour"],
+                dow=route_cond_b["dow"],
+                route_city=route_cond_b["route_city"],
+            )
             beams: List[Tuple[List[int], float]] = [([sw], 0.0)]
 
             for _step in range(max_len):
@@ -271,8 +280,9 @@ class WayDecoder(nn.Module):
                     logits = self.score_candidates(
                         way_embedder=way_embedder,
                         latent_tokens=latent_tokens[b : b + 1],
-                        route_cond={k: v[b : b + 1].to(device=device) for k, v in route_cond.items()},
+                        route_cond=route_cond_b,
                         trans=trans,
+                        cond_emb=cond_emb_b,
                     )[0]
                     logp = F.log_softmax(logits, dim=-1)
                     topk = min(beam_size, int(logp.numel()))
@@ -287,4 +297,63 @@ class WayDecoder(nn.Module):
 
             out.append(beams[0][0] if beams else [sw])
 
+        return out
+
+    @torch.no_grad()
+    def greedy_decode(
+        self,
+        *,
+        way_embedder: nn.Module,
+        latent_tokens: torch.Tensor,  # (B,L,d_model)
+        route_cond: Dict[str, torch.Tensor],
+        start_way: torch.Tensor,  # (B,)
+        dest_way: torch.Tensor,  # (B,)
+        max_len: Optional[int] = None,
+    ) -> List[List[int]]:
+        max_len = int(max_len) if max_len is not None else int(self.cfg.max_len)
+
+        B = int(latent_tokens.shape[0])
+        out: List[List[int]] = []
+        device = latent_tokens.device
+
+        for b in range(B):
+            sw = int(start_way[b].item())
+            dw = int(dest_way[b].item())
+            route_cond_b = {k: v[b : b + 1].to(device=device) for k, v in route_cond.items()}
+            cond_emb_b = self.cond_enc(
+                start_pos=route_cond_b["start_pos"],
+                dest_pos=route_cond_b["dest_pos"],
+                hour=route_cond_b["hour"],
+                dow=route_cond_b["dow"],
+                route_city=route_cond_b["route_city"],
+            )
+
+            path: List[int] = [sw]
+            for _step in range(max_len):
+                if path and self.is_dest_reached(path[-1], dw):
+                    break
+                cand = self.get_succ_candidates(path[-1])
+                if int(cand.numel()) == 0:
+                    break
+                C = min(int(cand.numel()), int(self.cfg.max_candidates))
+                cand = cand[:C].to(device=device)
+                cand_way = cand.view(1, C)
+                cand_mask = torch.ones((1, C), dtype=torch.bool, device=device)
+                trans = {
+                    "route_idx": torch.tensor([0], dtype=torch.long, device=device),
+                    "cur_way": torch.tensor([int(path[-1])], dtype=torch.long, device=device),
+                    "cand_way": cand_way,
+                    "cand_mask": cand_mask,
+                }
+                logits = self.score_candidates(
+                    way_embedder=way_embedder,
+                    latent_tokens=latent_tokens[b : b + 1],
+                    route_cond=route_cond_b,
+                    trans=trans,
+                    cond_emb=cond_emb_b,
+                )[0]
+                j = int(torch.argmax(logits, dim=-1).item()) if int(logits.numel()) else 0
+                path.append(int(cand[j].item()))
+
+            out.append(path)
         return out

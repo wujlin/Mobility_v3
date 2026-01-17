@@ -16,7 +16,7 @@ from src.models.way_casd.way_encoder import WayEncoder, WayFeatureTensors
 @dataclass(frozen=True)
 class WayCASDAECfg:
     d_model: int = 256
-    n_latent: int = 32
+    n_latent: int = 64
     n_heads: int = 8
     dropout: float = 0.1
     max_candidates: int = 32
@@ -47,7 +47,6 @@ class WayCASDAutoEncoder(nn.Module):
         way_adj_ptr,
         way_adj_idx,
         n_route_cities: int = 4,
-        n_corridor_types: int = 4,
         n_highway_types: int = 16,
     ) -> None:
         super().__init__()
@@ -81,7 +80,6 @@ class WayCASDAutoEncoder(nn.Module):
             cond_cfg=ConditionEncoderCfg(
                 d_model=int(cfg.d_model),
                 n_route_cities=int(n_route_cities),
-                n_corridor_types=int(n_corridor_types),
                 coord_scale=float(cfg.coord_scale),
             ),
             way_adj_ptr=way_adj_ptr,

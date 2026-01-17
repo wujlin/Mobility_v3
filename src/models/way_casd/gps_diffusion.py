@@ -15,7 +15,10 @@ from src.models.way_casd.conditions import ConditionEncoder, ConditionEncoderCfg
 class SkeletonCrossAttnCfg:
     d_skel: int = 256
     act_dim: int = 2
+    # Attention internal dim (compute cost ~ O(T*L*model_dim)).
     model_dim: int = 128
+    # Output channels for UNet control_mid. If None, defaults to model_dim.
+    out_dim: Optional[int] = None
     num_heads: int = 4
     diff_steps: int = 100
     weight: float = 1.0
@@ -35,6 +38,7 @@ class SkeletonCrossAttentionControlMid(nn.Module):
         super().__init__()
         self.cfg = cfg
         d = int(cfg.model_dim)
+        out_d = int(cfg.out_dim) if cfg.out_dim is not None else d
         h = int(cfg.num_heads)
         if d <= 0:
             raise ValueError("model_dim must be > 0")
@@ -51,6 +55,7 @@ class SkeletonCrossAttentionControlMid(nn.Module):
         self.kv_proj = nn.Linear(int(cfg.d_skel), d)
         self.attn = nn.MultiheadAttention(d, h, batch_first=True)
         self.t_embed = nn.Embedding(tmax, d)
+        self.out_proj = nn.Identity() if int(out_d) == int(d) else nn.Conv1d(d, int(out_d), kernel_size=1)
 
         self.record_attn: bool = False
         self.last_attn: Optional[torch.Tensor] = None  # (B,H,T,L) if record_attn
@@ -79,8 +84,15 @@ class SkeletonCrossAttentionControlMid(nn.Module):
         # KV: (B,L,d_skel) -> (B,L,model_dim)
         kv = self.kv_proj(skeleton_latent.to(dtype=torch.float32))
 
-        attn_out, attn_w = self.attn(q, kv, kv, need_weights=(bool(need_weights) or bool(self.record_attn)), average_attn_weights=False)
-        control_mid = attn_out.transpose(1, 2).contiguous() * float(self.cfg.weight)  # (B,model_dim,T)
+        attn_out, attn_w = self.attn(
+            q,
+            kv,
+            kv,
+            need_weights=(bool(need_weights) or bool(self.record_attn)),
+            average_attn_weights=False,
+        )
+        control_mid = attn_out.transpose(1, 2).contiguous()  # (B,model_dim,T)
+        control_mid = self.out_proj(control_mid) * float(self.cfg.weight)  # (B,out_dim,T)
 
         if bool(self.record_attn):
             self.last_attn = attn_w.detach()
@@ -144,11 +156,14 @@ class GPSDiffusionExecutionModel(nn.Module):
         self.scheduler = DDPMScheduler(num_train_timesteps=int(cfg.diffusion_steps))
 
         sk = cfg.skel_attn
+        # UNet mid control requires channel match. UNet mid channels = hidden_dim * dim_mults[-1].
+        mid_ch = int(self.unet.mid_block1.block1[0].out_channels)
         self.skel_ctrl = SkeletonCrossAttentionControlMid(
             cfg=SkeletonCrossAttnCfg(
                 d_skel=int(sk.d_skel),
                 act_dim=int(cfg.act_dim),
                 model_dim=int(cfg.hidden_dim),
+                out_dim=int(mid_ch),
                 num_heads=int(sk.num_heads),
                 diff_steps=int(cfg.diffusion_steps),
                 weight=float(sk.weight),

@@ -360,7 +360,8 @@ def run(
         return clusters, sig2c, sig_table
 
     # Compute metrics per OD
-    for od_k, rids in top_od_entries:
+    for od_k, _n in top_od_entries:
+        rids = by_od[od_k]
         clusters, sig2c, sig_table = _corridor_for_od(rids)
         cluster_sizes = [int(c["count"]) for c in clusters]
         n_routes = int(len(rids))
@@ -486,4 +487,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

@@ -30,6 +30,8 @@ class Cfg:
     min_od_dist_km: float
     max_way_seq_len: int
     merge_dist_thr: float
+    corridor_method: str  # lcs|decision_points (only affects Top-K viz coloring)
+    min_choice_count: int  # only used when corridor_method=decision_points
     top2_sep_thr: float
     top_k_od: int
     tz_offset_hours: float
@@ -73,6 +75,39 @@ def _dedup_way_seq(osm_way_id: np.ndarray, *, max_len: int) -> Tuple[int, ...]:
             if len(out) >= int(max_len):
                 break
     return tuple(out)
+
+
+def _dedup_way_seq_with_xy(
+    osm_way_id: np.ndarray,
+    *,
+    x: np.ndarray,
+    y: np.ndarray,
+    max_len: int,
+) -> Tuple[Tuple[int, ...], np.ndarray]:
+    """
+    Deduplicate consecutive osm_way_id (filter <=0), and also return a representative (x,y)
+    per deduplicated way token (the coordinate at the first occurrence of that token).
+    """
+    w = np.asarray(osm_way_id, dtype=np.int64).reshape(-1)
+    x = np.asarray(x, dtype=np.float32).reshape(-1)
+    y = np.asarray(y, dtype=np.float32).reshape(-1)
+    n = int(min(w.size, x.size, y.size))
+    out: List[int] = []
+    xy: List[Tuple[float, float]] = []
+    last = None
+    for i in range(n):
+        iv = int(w[i])
+        if iv <= 0:
+            continue
+        if last is None or iv != last:
+            out.append(iv)
+            xy.append((float(x[i]), float(y[i])))
+            last = iv
+            if len(out) >= int(max_len):
+                break
+    if not out:
+        return tuple(), np.zeros((0, 2), dtype=np.float32)
+    return tuple(out), np.asarray(xy, dtype=np.float32)
 
 
 def _lcs_length(a: Tuple[int, ...], b: Tuple[int, ...]) -> int:
@@ -166,6 +201,114 @@ def _entropy_from_counts(counts: List[int]) -> float:
     return float(h)
 
 
+def _cluster_decision_points_for_od(
+    rids: List[int],
+    *,
+    way_sig: List[Tuple[int, ...]],
+    way_xy_sig: List[np.ndarray],
+    min_choice_count: int,
+) -> Dict[str, object]:
+    """
+    Way-level data-driven decision points within one OD-bin group.
+
+    Definition:
+      A way u is a decision point if there exist >=2 next ways v with count(u->v) >= min_choice_count,
+      where counts are computed from deduplicated way sequences (per-route unique transitions).
+
+    Corridor signature:
+      For each route, extract the sequence of (u,v) decisions encountered along the route,
+      skipping (u->v) pairs where v is not in the valid-next set of u.
+    """
+    min_choice_count = int(max(1, min_choice_count))
+
+    # Transition counts (per-route unique transitions to reduce loop inflation).
+    trans: Dict[int, Dict[int, int]] = {}
+    for rid in rids:
+        seq = way_sig[int(rid)]
+        if len(seq) < 2:
+            continue
+        seen = set()
+        for a, b in zip(seq[:-1], seq[1:]):
+            aa = int(a)
+            bb = int(b)
+            if aa <= 0 or bb <= 0 or aa == bb:
+                continue
+            seen.add((aa, bb))
+        for aa, bb in seen:
+            m = trans.get(aa)
+            if m is None:
+                m = {}
+                trans[aa] = m
+            m[bb] = int(m.get(bb, 0)) + 1
+
+    valid_next_set: Dict[int, set[int]] = {}
+    for u, nxt in trans.items():
+        keep = {int(v) for v, c in nxt.items() if int(c) >= min_choice_count}
+        if len(keep) >= 2:
+            valid_next_set[int(u)] = keep
+
+    decision_points = sorted(valid_next_set.keys())
+
+    # Route -> decision signature
+    sig_to_rids: Dict[Tuple[int, ...], List[int]] = {}
+    rid_sig: Dict[int, Tuple[int, ...]] = {}
+    for rid in rids:
+        seq = way_sig[int(rid)]
+        ds: List[int] = []
+        if len(seq) >= 2 and valid_next_set:
+            for a, b in zip(seq[:-1], seq[1:]):
+                aa = int(a)
+                bb = int(b)
+                vs = valid_next_set.get(aa)
+                if vs is None or bb not in vs:
+                    continue
+                ds.append(aa)
+                ds.append(bb)
+        key = tuple(ds)
+        rid_sig[int(rid)] = key
+        sig_to_rids.setdefault(key, []).append(int(rid))
+
+    # Sort clusters by size desc (stable by signature for tie).
+    clusters_raw = sorted(sig_to_rids.items(), key=lambda kv: (-len(kv[1]), kv[0]))
+    clusters = [{"rep_sig": sig, "count": int(len(rr)), "rep_route_ids": list(rr[:3])} for sig, rr in clusters_raw]
+
+    rid2c: Dict[int, int] = {}
+    for ci, (_sig, rr) in enumerate(clusters_raw):
+        for rrid in rr:
+            rid2c[int(rrid)] = int(ci)
+
+    # Decision point positions (median token coord across routes)
+    dp_xy: Dict[int, Tuple[float, float]] = {}
+    if decision_points:
+        for dp in decision_points:
+            xs: List[float] = []
+            ys: List[float] = []
+            for rid in rids:
+                seq = way_sig[int(rid)]
+                if not seq:
+                    continue
+                try:
+                    j = seq.index(int(dp))
+                except ValueError:
+                    continue
+                xy = way_xy_sig[int(rid)]
+                if xy.shape[0] <= j:
+                    continue
+                xs.append(float(xy[j, 0]))
+                ys.append(float(xy[j, 1]))
+            if xs:
+                dp_xy[int(dp)] = (float(np.median(np.asarray(xs, dtype=np.float64))), float(np.median(np.asarray(ys, dtype=np.float64))))
+
+    return {
+        "decision_points": decision_points,
+        "valid_next": {int(u): sorted(list(vs)) for u, vs in valid_next_set.items()},
+        "clusters": clusters,
+        "rid2c": rid2c,
+        "rid_sig": rid_sig,
+        "decision_points_xy": dp_xy,
+    }
+
+
 def _owner_by_traj_key(meta_zip: Path, keys: List[str]) -> Dict[str, str]:
     out: Dict[str, str] = {}
     with zipfile.ZipFile(meta_zip, "r") as zf:
@@ -197,6 +340,30 @@ def _load_road_prob(path: Optional[Path]) -> Optional[np.ndarray]:
     return np.asarray(a, dtype=np.float32)
 
 
+def _bbox_from_xy(points: np.ndarray, *, pad_ratio: float = 0.08) -> Optional[Tuple[float, float, float, float]]:
+    pts = np.asarray(points, dtype=np.float32).reshape(-1, 2)
+    if pts.size == 0:
+        return None
+    x0 = float(np.min(pts[:, 0]))
+    x1 = float(np.max(pts[:, 0]))
+    y0 = float(np.min(pts[:, 1]))
+    y1 = float(np.max(pts[:, 1]))
+    span = max(x1 - x0, y1 - y0, 1.0)
+    pad = span * float(pad_ratio)
+    return x0 - pad, x1 + pad, y0 - pad, y1 + pad
+
+
+def _clip_xy_for_plot(x: np.ndarray, y: np.ndarray, *, H: int, W: int) -> Tuple[np.ndarray, np.ndarray]:
+    x = np.asarray(x, dtype=np.float32).reshape(-1)
+    y = np.asarray(y, dtype=np.float32).reshape(-1)
+    if x.size == 0 or y.size == 0:
+        return np.zeros((0,), dtype=np.float32), np.zeros((0,), dtype=np.float32)
+    m = np.isfinite(x) & np.isfinite(y) & (x >= 0) & (x < float(W)) & (y >= 0) & (y < float(H))
+    if not np.any(m):
+        return np.zeros((0,), dtype=np.float32), np.zeros((0,), dtype=np.float32)
+    return x[m].astype(np.float32, copy=False), y[m].astype(np.float32, copy=False)
+
+
 def _plot_top_od_bins(
     *,
     out_dir: Path,
@@ -220,21 +387,53 @@ def _plot_top_od_bins(
         if not rid_list:
             continue
         fig, ax = plt.subplots(figsize=(6.0, 6.0), dpi=200)
+        H = int(road_prob.shape[0]) if road_prob is not None else 1024
+        W = int(road_prob.shape[1]) if road_prob is not None else 1024
         if road_prob is not None:
             rp = np.clip(np.asarray(road_prob, dtype=np.float32), 0.0, 1.0)
             ax.imshow(rp, cmap="Greys", origin="upper", alpha=0.35, vmin=0.0, vmax=1.0)
 
         # Plot all trajectories, colored by corridor id.
+        all_pts: List[np.ndarray] = []
         for rid, cid in zip(rid_list, cid_list):
             x, y = routes_xy[int(rid)]
-            if x.size < 2:
+            x2, y2 = _clip_xy_for_plot(x, y, H=H, W=W)
+            if x2.size < 2:
                 continue
             color = palette[int(cid) % len(palette)]
-            ax.plot(x, y, color=color, alpha=0.25, linewidth=1.2)
+            ax.plot(x2, y2, color=color, alpha=0.25, linewidth=1.2)
+            all_pts.append(np.stack([x2, y2], axis=1))
+
+        # Decision points (optional)
+        dps = ent.get("decision_points_xy", None)
+        if isinstance(dps, dict) and dps:
+            xs: List[float] = []
+            ys: List[float] = []
+            for _dp, xy in dps.items():
+                try:
+                    xx, yy = float(xy[0]), float(xy[1])
+                except Exception:
+                    continue
+                xs.append(xx)
+                ys.append(yy)
+            if xs:
+                ax.scatter(xs, ys, s=18, c="black", alpha=0.7, linewidths=0.0, zorder=10)
+
+        # Auto-zoom to the OD's data extent
+        if all_pts:
+            bb = _bbox_from_xy(np.concatenate(all_pts, axis=0))
+            if bb is not None:
+                x0, x1, y0, y1 = bb
+                ax.set_xlim(x0, x1)
+                ax.set_ylim(y1, y0)  # origin="upper"
 
         ax.set_xticks([])
         ax.set_yticks([])
-        ax.set_title(f"OD#{k} n={ent['n_routes']} K={ent['n_clusters']} sizes={ent['cluster_sizes']}")
+        title = f"OD#{k} n={ent['n_routes']} K={ent['n_clusters']} sizes={ent['cluster_sizes']}"
+        extra = ent.get("title_extra", "")
+        if isinstance(extra, str) and extra.strip():
+            title = f"{title} {extra.strip()}"
+        ax.set_title(title)
         fig.tight_layout()
         fig.savefig(out_dir / f"top_od_{k:02d}.png")
         plt.close(fig)
@@ -261,6 +460,7 @@ def run(
     od_key: List[Tuple[int, int, int, int]] = []
     od_km: List[float] = []
     way_sig: List[Tuple[int, ...]] = []
+    way_xy_sig: List[np.ndarray] = []
     routes_xy: List[Tuple[np.ndarray, np.ndarray]] = []
 
     scanned = 0
@@ -293,18 +493,19 @@ def run(
             if t.size < 1:
                 continue
 
-            sig = _dedup_way_seq(osm, max_len=int(cfg.max_way_seq_len))
+            x = np.asarray(d["x"][i], dtype=np.float32)
+            y = np.asarray(d["y"][i], dtype=np.float32)
+            sig, sig_xy = _dedup_way_seq_with_xy(osm, x=x, y=y, max_len=int(cfg.max_way_seq_len))
             if len(sig) < 2:
                 continue
 
-            y = np.asarray(d["y"][i], dtype=np.float32)
-            x = np.asarray(d["x"][i], dtype=np.float32)
             routes_xy.append((x, y))
             traj_key.append(str(key))
             start_t.append(int(t[0]))
             od_key.append(ok)
             od_km.append(float(dist_km))
             way_sig.append(sig)
+            way_xy_sig.append(sig_xy)
             kept += 1
 
     if kept <= 0:
@@ -343,7 +544,7 @@ def run(
         top_od_entries.append((k, int(len(rids))))
     top_od_entries.sort(key=lambda t: -t[1])
 
-    def _corridor_for_od(rids: List[int]) -> Tuple[List[Dict[str, object]], Dict[Tuple[int, ...], int], Dict[Tuple[int, ...], SigEntry]]:
+    def _corridor_for_od_lcs(rids: List[int]) -> Tuple[List[Dict[str, object]], Dict[Tuple[int, ...], int], Dict[Tuple[int, ...], SigEntry]]:
         sig_table: Dict[Tuple[int, ...], SigEntry] = {}
         for rid in rids:
             sig = way_sig[int(rid)]
@@ -362,15 +563,27 @@ def run(
     # Compute metrics per OD
     for od_k, _n in top_od_entries:
         rids = by_od[od_k]
-        clusters, sig2c, sig_table = _corridor_for_od(rids)
-        cluster_sizes = [int(c["count"]) for c in clusters]
+        clusters_lcs, sig2c_lcs, _sig_table = _corridor_for_od_lcs(rids)
+        cluster_sizes_lcs = [int(c["count"]) for c in clusters_lcs]
         n_routes = int(len(rids))
-        n_clusters = int(len(clusters))
-        h = _entropy_from_counts(cluster_sizes)
+        n_clusters = int(len(clusters_lcs))
+        h = _entropy_from_counts(cluster_sizes_lcs)
         eff = float(math.exp(h)) if h > 0 else 1.0
         top2 = 0.0
         if n_clusters >= 2:
-            top2 = float(_lcs_dist(clusters[0]["rep_sig"], clusters[1]["rep_sig"]))
+            top2 = float(_lcs_dist(clusters_lcs[0]["rep_sig"], clusters_lcs[1]["rep_sig"]))
+
+        dp = _cluster_decision_points_for_od(
+            rids,
+            way_sig=way_sig,
+            way_xy_sig=way_xy_sig,
+            min_choice_count=int(cfg.min_choice_count),
+        )
+        clusters_dp = dp["clusters"]
+        cluster_sizes_dp = [int(c["count"]) for c in clusters_dp]
+        n_clusters_dp = int(len(clusters_dp))
+        h_dp = _entropy_from_counts(cluster_sizes_dp)
+        eff_dp = float(math.exp(h_dp)) if h_dp > 0 else 1.0
         rows_out.append(
             {
                 "owner_hash": _sha1_8(owner_target),
@@ -383,7 +596,13 @@ def run(
                 "entropy": float(h),
                 "effective_k": float(eff),
                 "top2_lcs_dist": float(top2),
-                "cluster_sizes": cluster_sizes,
+                "cluster_sizes": cluster_sizes_lcs,
+                "n_decision_points": int(len(dp.get("decision_points", []))),
+                "decision_points": [int(x) for x in dp.get("decision_points", [])],
+                "n_clusters_dp": int(n_clusters_dp),
+                "entropy_dp": float(h_dp),
+                "effective_k_dp": float(eff_dp),
+                "cluster_sizes_dp": cluster_sizes_dp,
             }
         )
 
@@ -398,19 +617,36 @@ def run(
     top_bins_for_viz: List[Dict[str, object]] = []
     for od_k, n in top_od_entries[: int(cfg.top_k_od)]:
         rids = by_od[od_k]
-        clusters, sig2c, _sig_table = _corridor_for_od(rids)
-        # Assign cluster id per route
-        cid_list = []
-        for rid in rids:
-            cid_list.append(int(sig2c.get(way_sig[int(rid)], 0)))
+        clusters_lcs, sig2c_lcs, _sig_table = _corridor_for_od_lcs(rids)
+        dp = _cluster_decision_points_for_od(
+            rids,
+            way_sig=way_sig,
+            way_xy_sig=way_xy_sig,
+            min_choice_count=int(cfg.min_choice_count),
+        )
+        clusters_dp = dp["clusters"]
+        rid2c_dp = dp["rid2c"]
+
+        method = str(cfg.corridor_method)
+        if method == "decision_points":
+            cid_list = [int(rid2c_dp.get(int(rid), 0)) for rid in rids]
+            clusters_viz = clusters_dp
+            title_extra = f"(DP:K={len(clusters_dp)}|LCS:K={len(clusters_lcs)})"
+        else:
+            cid_list = [int(sig2c_lcs.get(way_sig[int(rid)], 0)) for rid in rids]
+            clusters_viz = clusters_lcs
+            title_extra = f"(LCS:K={len(clusters_lcs)}|DP:K={len(clusters_dp)})"
         top_bins_for_viz.append(
             {
                 "od_bin": [int(x) for x in od_k],
                 "n_routes": int(len(rids)),
-                "n_clusters": int(len(clusters)),
-                "cluster_sizes": [int(c["count"]) for c in clusters],
+                "n_clusters": int(len(clusters_viz)),
+                "cluster_sizes": [int(c["count"]) for c in clusters_viz],
                 "route_ids": [int(r) for r in rids],
                 "cluster_ids": cid_list,
+                "decision_points": [int(x) for x in dp.get("decision_points", [])],
+                "decision_points_xy": {str(k): [float(v[0]), float(v[1])] for k, v in dp.get("decision_points_xy", {}).items()},
+                "title_extra": str(title_extra),
             }
         )
 
@@ -454,6 +690,19 @@ def build_argparser() -> argparse.ArgumentParser:
     p.add_argument("--min_od_dist_km", type=float, default=1.0)
     p.add_argument("--max_way_seq_len", type=int, default=128)
     p.add_argument("--merge_dist_thr", type=float, default=0.15)
+    p.add_argument(
+        "--corridor_method",
+        type=str,
+        default="decision_points",
+        choices=["lcs", "decision_points"],
+        help="Which corridor definition to use for Top-K visualization coloring (parquet always contains both LCS and decision-point metrics).",
+    )
+    p.add_argument(
+        "--min_choice_count",
+        type=int,
+        default=2,
+        help="Only used when corridor_method=decision_points. A valid branch option must appear in >= this many routes (per OD-bin group).",
+    )
     p.add_argument("--top2_sep_thr", type=float, default=0.0, help="Reserved (not used yet); keep for future gating.")
     p.add_argument("--top_k_od", type=int, default=10)
     p.add_argument("--tz_offset_hours", type=float, default=-5.0)
@@ -468,6 +717,8 @@ def main() -> None:
         min_od_dist_km=float(args.min_od_dist_km),
         max_way_seq_len=int(args.max_way_seq_len),
         merge_dist_thr=float(args.merge_dist_thr),
+        corridor_method=str(args.corridor_method),
+        min_choice_count=int(args.min_choice_count),
         top2_sep_thr=float(args.top2_sep_thr),
         top_k_od=int(args.top_k_od),
         tz_offset_hours=float(args.tz_offset_hours),

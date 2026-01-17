@@ -200,3 +200,8 @@ python -m src.evaluation.plot_worldtrace_multimodal_od_bins \
 `best_K + entropy(均衡性) + top2 separation(分离度)`（以及 silhouette 作为聚类质量）。
 
 实现与命令见：`docs/WORLDTRACE_SPATIAL_VIZ.md` 的 Layer 3（kmedoids 小节）。
+
+为了避免“只看 Top-10 掩盖潜藏问题”，建议在 Detroit 上开启全量评估与随机可视化：
+
+- `--km_eval_all --km_min_routes 5`：输出 dataset-level 的 `kmedoids_summary`（有多少 OD-bin 多走廊、对应多少 routes）
+- `--viz_random_od 5`：额外随机画 OD，作为 sanity check

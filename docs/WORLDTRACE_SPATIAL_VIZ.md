@@ -130,6 +130,11 @@ python -m src.data.worldtrace.within_owner_corridor_diversity \
   --top_k_od 10
 ```
 
+如果你需要**全量统计**（回答“Detroit 里到底有多少 OD-bin 是多走廊、对应多少 routes 可用于训练”），追加：
+
+- `--km_eval_all --km_min_routes 5`：对所有 `n_routes>=5` 的 OD-bin 计算 k-medoids，并在 `report.json` 写入 `kmedoids_summary`；同时在输出 parquet 增加 `km_*` 列（bestK/silhouette/second_frac 等）。
+- `--viz_random_od 5 --viz_random_seed 0`：额外随机画 5 个 OD（输出到 `top_od_viz/random_od_viz/`），避免只看 Top-10 的“挑样本偏差”。
+
 ### decision-point 的关键风险：走廊分叉 vs 走廊内部细节
 
 在 Detroit 的 top-OD 上我们观察到：若把 **所有** decision points 都用于 corridor signature，容易出现 **K 爆炸/大量单例簇**（把“同一走廊内的细节绕行”也当成 corridor）。

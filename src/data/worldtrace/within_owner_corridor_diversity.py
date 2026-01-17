@@ -35,6 +35,10 @@ class Cfg:
     min_choice_count: int  # only used when corridor_method=decision_points
     dp_tier_keep: str  # empty => disable tier filtering for decision-points
     dp_next_min_keep: int  # only used when dp_tier_keep non-empty
+    km_eval_all: bool  # compute k-medoids stats for all OD bins (slow but honest)
+    km_min_routes: int  # only used when km_eval_all
+    viz_random_od: int  # number of random OD bins to visualize (in addition to top-K)
+    viz_random_seed: int
     top2_sep_thr: float
     top_k_od: int
     tz_offset_hours: float
@@ -418,6 +422,16 @@ def _entropy_from_counts(counts: List[int]) -> float:
         if p > 0:
             h -= p * math.log(p + 1e-12)
     return float(h)
+
+
+def _second_frac_from_sizes(sizes: List[int]) -> float:
+    if len(sizes) < 2:
+        return 0.0
+    tot = float(sum(int(x) for x in sizes))
+    if tot <= 0:
+        return 0.0
+    s = sorted([int(x) for x in sizes], reverse=True)
+    return float(s[1] / tot)
 
 
 def _cluster_decision_points_for_od(
@@ -846,6 +860,24 @@ def run(
         n_clusters_dp = int(len(clusters_dp))
         h_dp = _entropy_from_counts(cluster_sizes_dp)
         eff_dp = float(math.exp(h_dp)) if h_dp > 0 else 1.0
+        km_best_k = None
+        km_best_sil = None
+        km_top2_medoid_dist = None
+        km_entropy = None
+        km_effective_k = None
+        km_second_frac = None
+        if bool(cfg.km_eval_all) and int(n_routes) >= int(cfg.km_min_routes):
+            km = _cluster_kmedoids_for_od(rids, way_sig=way_sig, k_range=(2, 3, 4), seed=0)
+            km_clusters = km.get("clusters", [])
+            km_sizes = [int(c.get("count", 0)) for c in km_clusters] if isinstance(km_clusters, list) else []
+            km_h = _entropy_from_counts(km_sizes) if km_sizes else 0.0
+            km_eff = float(math.exp(km_h)) if km_h > 0 else 1.0
+            km_best_k = int(km.get("best_k", 1))
+            km_best_sil = float(km.get("best_silhouette", 0.0))
+            km_top2_medoid_dist = float(km.get("top2_medoid_dist", 0.0))
+            km_entropy = float(km_h)
+            km_effective_k = float(km_eff)
+            km_second_frac = float(_second_frac_from_sizes(km_sizes))
         rows_out.append(
             {
                 "owner_hash": _sha1_8(owner_target),
@@ -865,6 +897,12 @@ def run(
                 "entropy_dp": float(h_dp),
                 "effective_k_dp": float(eff_dp),
                 "cluster_sizes_dp": cluster_sizes_dp,
+                "km_best_k": km_best_k,
+                "km_best_silhouette": km_best_sil,
+                "km_top2_medoid_dist": km_top2_medoid_dist,
+                "km_entropy": km_entropy,
+                "km_effective_k": km_effective_k,
+                "km_second_frac": km_second_frac,
             }
         )
 
@@ -943,8 +981,125 @@ def run(
             }
         )
 
+    # Random OD visualizations (avoid cherry-picking Top-K only).
+    random_bins_for_viz: List[Dict[str, object]] = []
+    if out_viz_dir is not None and int(cfg.viz_random_od) > 0:
+        min_n = int(cfg.km_min_routes) if bool(cfg.km_eval_all) else 2
+        cand = [od_k for od_k, n in top_od_entries if int(n) >= min_n]
+        rng = np.random.default_rng(int(cfg.viz_random_seed))
+        if cand:
+            k = int(min(int(cfg.viz_random_od), len(cand)))
+            picked = rng.choice(np.asarray(cand, dtype=object), size=k, replace=False).tolist()
+            for od_k in picked:
+                rids = by_od[od_k]
+                clusters_lcs, sig2c_lcs, _sig_table = _corridor_for_od_lcs(rids)
+                dp = _cluster_decision_points_for_od(
+                    rids,
+                    way_sig=way_sig,
+                    way_xy_sig=way_xy_sig,
+                    min_choice_count=int(cfg.min_choice_count),
+                    way_tier=way_tier,
+                    dp_tier_keep=tier_keep,
+                    dp_next_min_keep=int(cfg.dp_next_min_keep),
+                )
+                clusters_dp = dp["clusters"]
+                rid2c_dp = dp["rid2c"]
+                km = _cluster_kmedoids_for_od(rids, way_sig=way_sig, k_range=(2, 3, 4), seed=int(cfg.viz_random_seed))
+                clusters_km = km.get("clusters", [])
+                rid2c_km = km.get("rid2c", {})
+                km_sizes = [int(c.get("count", 0)) for c in clusters_km] if isinstance(clusters_km, list) else []
+                km_h = _entropy_from_counts(km_sizes) if km_sizes else 0.0
+                km_eff = float(math.exp(km_h)) if km_h > 0 else 1.0
+
+                method = str(cfg.corridor_method)
+                if method == "kmedoids":
+                    cid_list = [int(rid2c_km.get(int(rid), 0)) for rid in rids]
+                    clusters_viz = clusters_km
+                    title_extra = (
+                        f"(KM:K={int(km.get('best_k', 1))}|sil={float(km.get('best_silhouette', 0.0)):.2f}"
+                        f"|LCS:K={len(clusters_lcs)}|DP:K={len(clusters_dp)})"
+                    )
+                elif method == "decision_points":
+                    cid_list = [int(rid2c_dp.get(int(rid), 0)) for rid in rids]
+                    clusters_viz = clusters_dp
+                    title_extra = f"(DP:K={len(clusters_dp)}|LCS:K={len(clusters_lcs)}|KM:K={int(km.get('best_k', 1))})"
+                else:
+                    cid_list = [int(sig2c_lcs.get(way_sig[int(rid)], 0)) for rid in rids]
+                    clusters_viz = clusters_lcs
+                    title_extra = f"(LCS:K={len(clusters_lcs)}|DP:K={len(clusters_dp)}|KM:K={int(km.get('best_k', 1))})"
+
+                random_bins_for_viz.append(
+                    {
+                        "od_bin": [int(x) for x in od_k],
+                        "n_routes": int(len(rids)),
+                        "n_clusters": int(len(clusters_viz)),
+                        "cluster_sizes": [int(c["count"]) for c in clusters_viz],
+                        "route_ids": [int(r) for r in rids],
+                        "cluster_ids": cid_list,
+                        "decision_points": [int(x) for x in dp.get("decision_points", [])],
+                        "decision_points_all": [int(x) for x in dp.get("decision_points_all", [])],
+                        "dp_tier_keep": sorted(list(tier_keep)),
+                        "dp_next_min_keep": int(cfg.dp_next_min_keep),
+                        "decision_points_tier": {str(k): int(v) for k, v in dp.get("decision_points_tier", {}).items()},
+                        "decision_points_tier_all": {str(k): int(v) for k, v in dp.get("decision_points_tier_all", {}).items()},
+                        "decision_points_xy": {str(k): [float(v[0]), float(v[1])] for k, v in dp.get("decision_points_xy", {}).items()},
+                        "kmedoids": {
+                            "best_k": int(km.get("best_k", 1)),
+                            "best_silhouette": float(km.get("best_silhouette", 0.0)),
+                            "silhouette_by_k": km.get("silhouette_by_k", {}),
+                            "medoid_rids": [int(x) for x in km.get("medoid_rids", [])],
+                            "top2_medoid_dist": float(km.get("top2_medoid_dist", 0.0)),
+                            "cluster_sizes": [int(x) for x in km_sizes],
+                            "entropy": float(km_h),
+                            "effective_k": float(km_eff),
+                        },
+                        "title_extra": str(title_extra),
+                    }
+                )
+
     if out_viz_dir is not None:
         _plot_top_od_bins(out_dir=Path(out_viz_dir), od_bins=top_bins_for_viz, road_prob=road_prob, routes_xy=routes_xy, palette=palette)
+        if random_bins_for_viz:
+            _plot_top_od_bins(
+                out_dir=Path(out_viz_dir) / "random_od_viz",
+                od_bins=random_bins_for_viz,
+                road_prob=road_prob,
+                routes_xy=routes_xy,
+                palette=palette,
+            )
+
+    # Aggregate k-medoids summary across all OD bins (when enabled).
+    km_summary: Dict[str, object] = {"enabled": bool(cfg.km_eval_all), "km_min_routes": int(cfg.km_min_routes)}
+    if bool(cfg.km_eval_all):
+        rows_km = [r for r in rows_out if r.get("km_best_k") is not None]
+        best_k_hist: Dict[str, int] = {}
+        n_od_eval = int(len(rows_km))
+        n_routes_eval = int(sum(int(r.get("n_routes", 0)) for r in rows_km))
+        for r in rows_km:
+            k = int(r.get("km_best_k") or 1)
+            best_k_hist[str(k)] = int(best_k_hist.get(str(k), 0) + 1)
+
+        def _count_gate(*, sil_min: float, second_min: float) -> Dict[str, int]:
+            od_n = 0
+            rt_n = 0
+            for r in rows_km:
+                sil = float(r.get("km_best_silhouette") or 0.0)
+                sec = float(r.get("km_second_frac") or 0.0)
+                if sil >= float(sil_min) and sec >= float(second_min):
+                    od_n += 1
+                    rt_n += int(r.get("n_routes", 0))
+            return {"n_od_bins": int(od_n), "n_routes": int(rt_n)}
+
+        km_summary = {
+            "enabled": True,
+            "km_min_routes": int(cfg.km_min_routes),
+            "n_od_bins_eval": int(n_od_eval),
+            "n_routes_eval": int(n_routes_eval),
+            "best_k_hist": best_k_hist,
+            "gate_sil05_second02": _count_gate(sil_min=0.5, second_min=0.2),
+            "gate_sil07_second02": _count_gate(sil_min=0.7, second_min=0.2),
+            "gate_sil05_second01": _count_gate(sil_min=0.5, second_min=0.1),
+        }
 
     report: Dict[str, object] = {
         "ok": True,
@@ -969,6 +1124,8 @@ def run(
             "out_viz_dir": (str(out_viz_dir) if out_viz_dir is not None else None),
         },
         "top_od_bins": top_bins_for_viz,
+        "random_od_bins": random_bins_for_viz,
+        "kmedoids_summary": km_summary,
     }
     out_json.parent.mkdir(parents=True, exist_ok=True)
     out_json.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -999,7 +1156,7 @@ def build_argparser() -> argparse.ArgumentParser:
         type=str,
         default="decision_points",
         choices=["lcs", "decision_points", "kmedoids"],
-        help="Which corridor definition to use for Top-K visualization coloring (parquet always contains both LCS and decision-point metrics; kmedoids is computed for Top-K ODs).",
+        help="Which corridor definition to use for visualization coloring (parquet always contains LCS + decision-point metrics; kmedoids is computed for Top-K and optionally for all via --km_eval_all).",
     )
     p.add_argument(
         "--min_choice_count",
@@ -1019,6 +1176,10 @@ def build_argparser() -> argparse.ArgumentParser:
         default=2,
         help="Only used when dp_tier_keep is set. Keep a decision point u only if it has >= this many branch options v whose way_tier is also in the keep set (helps filter corridor-internal micro-branches).",
     )
+    p.add_argument("--km_eval_all", action="store_true", help="Compute k-medoids (K in {2,3,4}) for ALL OD bins (within owner). Slow but yields honest dataset-level stats.")
+    p.add_argument("--km_min_routes", type=int, default=5, help="Only used when --km_eval_all. Evaluate OD bins with at least this many routes.")
+    p.add_argument("--viz_random_od", type=int, default=5, help="Also visualize this many RANDOM OD bins (avoid cherry-picking Top-K). Set 0 to disable.")
+    p.add_argument("--viz_random_seed", type=int, default=0)
     p.add_argument("--top2_sep_thr", type=float, default=0.0, help="Reserved (not used yet); keep for future gating.")
     p.add_argument("--top_k_od", type=int, default=10)
     p.add_argument("--tz_offset_hours", type=float, default=-5.0)
@@ -1037,6 +1198,10 @@ def main() -> None:
         min_choice_count=int(args.min_choice_count),
         dp_tier_keep=str(args.dp_tier_keep),
         dp_next_min_keep=int(args.dp_next_min_keep),
+        km_eval_all=bool(args.km_eval_all),
+        km_min_routes=int(args.km_min_routes),
+        viz_random_od=int(args.viz_random_od),
+        viz_random_seed=int(args.viz_random_seed),
         top2_sep_thr=float(args.top2_sep_thr),
         top_k_od=int(args.top_k_od),
         tz_offset_hours=float(args.tz_offset_hours),

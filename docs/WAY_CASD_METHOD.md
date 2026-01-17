@@ -187,3 +187,16 @@ python -m src.evaluation.plot_worldtrace_multimodal_od_bins \
 - 过滤：`--dp_tier_keep 0 --dp_next_min_keep 2`（只保留至少有两条主干分叉选项的 decision points）
 
 脚本：`src/data/worldtrace/within_owner_corridor_diversity.py`（详见 `docs/WORLDTRACE_SPATIAL_VIZ.md` 的 Layer 3）
+
+### 4.5 corridor diversity 的“务实口径”：K-medoids + silhouette 选 K
+
+当我们发现“阈值聚类/分叉点 signature”会陷入定义争论时，可以改用文献里更常见的报告方式：
+
+- 先验给定一个小范围的 corridor 数量：`K ∈ {2,3,4}`
+- 用距离矩阵上的 K-medoids 聚类得到 corridors
+- 用 silhouette score 在 `{2,3,4}` 中选择 `best_K`
+
+这不会宣称“发现了真实的 K”，而是在一个有文献支撑的范围里选择最能解释数据的 K，并输出三件套：
+`best_K + entropy(均衡性) + top2 separation(分离度)`（以及 silhouette 作为聚类质量）。
+
+实现与命令见：`docs/WORLDTRACE_SPATIAL_VIZ.md` 的 Layer 3（kmedoids 小节）。

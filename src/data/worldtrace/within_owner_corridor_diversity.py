@@ -167,6 +167,198 @@ def _lcs_dist(a: Tuple[int, ...], b: Tuple[int, ...]) -> float:
     return 1.0 - (float(l) / float(ml))
 
 
+def _pairwise_lcs_dist(seqs: List[Tuple[int, ...]]) -> np.ndarray:
+    n = int(len(seqs))
+    if n <= 0:
+        return np.zeros((0, 0), dtype=np.float32)
+    D = np.zeros((n, n), dtype=np.float32)
+    for i in range(n):
+        for j in range(i + 1, n):
+            d = float(_lcs_dist(seqs[i], seqs[j]))
+            D[i, j] = d
+            D[j, i] = d
+    return D
+
+
+def _silhouette_score_precomputed(D: np.ndarray, labels: np.ndarray) -> float:
+    D = np.asarray(D, dtype=np.float32)
+    labels = np.asarray(labels, dtype=np.int64).reshape(-1)
+    n = int(labels.size)
+    if n <= 2:
+        return 0.0
+    uniq = np.unique(labels)
+    if int(uniq.size) < 2:
+        return 0.0
+    # Precompute indices per cluster.
+    idx_by_c: Dict[int, np.ndarray] = {}
+    for c in uniq.tolist():
+        idx = np.nonzero(labels == int(c))[0].astype(np.int64)
+        idx_by_c[int(c)] = idx
+    s = np.zeros((n,), dtype=np.float32)
+    for i in range(n):
+        c = int(labels[i])
+        same = idx_by_c.get(c)
+        if same is None or int(same.size) <= 1:
+            s[i] = 0.0
+            continue
+        # a(i): mean intra-cluster distance (exclude self)
+        m = same[same != i]
+        if int(m.size) <= 0:
+            s[i] = 0.0
+            continue
+        a = float(np.mean(D[i, m]))
+        # b(i): min mean distance to other clusters
+        b = float("inf")
+        for oc, idx in idx_by_c.items():
+            if int(oc) == int(c) or int(idx.size) <= 0:
+                continue
+            b = min(b, float(np.mean(D[i, idx])))
+        if not np.isfinite(b):
+            s[i] = 0.0
+            continue
+        denom = max(a, b)
+        s[i] = 0.0 if denom <= 1e-12 else float((b - a) / denom)
+    return float(np.mean(s))
+
+
+def _kmedoids_init_farthest(D: np.ndarray, *, k: int, seed: int) -> np.ndarray:
+    D = np.asarray(D, dtype=np.float32)
+    n = int(D.shape[0])
+    if k <= 0 or n <= 0:
+        return np.zeros((0,), dtype=np.int64)
+    k = int(min(k, n))
+    rng = np.random.default_rng(int(seed))
+    first = int(rng.integers(0, n))
+    medoids: List[int] = [first]
+    while len(medoids) < k:
+        dmin = np.min(D[:, np.asarray(medoids, dtype=np.int64)], axis=1)
+        dmin[np.asarray(medoids, dtype=np.int64)] = -1.0
+        cand = int(np.argmax(dmin))
+        if cand in medoids:
+            # Fallback: pick any remaining index.
+            rem = [i for i in range(n) if i not in medoids]
+            if not rem:
+                break
+            cand = int(rng.choice(np.asarray(rem, dtype=np.int64)))
+        medoids.append(cand)
+    return np.asarray(medoids, dtype=np.int64)
+
+
+def _kmedoids_pam(D: np.ndarray, *, k: int, seed: int, max_iter: int = 100) -> Tuple[np.ndarray, np.ndarray, float]:
+    """
+    PAM-style k-medoids with swap improvement (small-n friendly, deterministic by seed).
+    Returns: (medoid_indices_in_0..n-1, labels_in_0..k-1, total_cost).
+    """
+    D = np.asarray(D, dtype=np.float32)
+    n = int(D.shape[0])
+    k = int(min(max(1, k), n))
+    medoids = _kmedoids_init_farthest(D, k=k, seed=int(seed))
+    if int(medoids.size) < k:
+        k = int(medoids.size)
+    if k <= 0:
+        return np.zeros((0,), dtype=np.int64), np.zeros((n,), dtype=np.int64), 0.0
+
+    def _cost(m: np.ndarray) -> float:
+        return float(np.min(D[:, m], axis=1).sum())
+
+    best_cost = _cost(medoids)
+    for _ in range(int(max_iter)):
+        improved = False
+        is_medoid = np.zeros((n,), dtype=bool)
+        is_medoid[medoids] = True
+        for mi in range(k):
+            for h in range(n):
+                if bool(is_medoid[h]):
+                    continue
+                trial = medoids.copy()
+                trial[mi] = int(h)
+                c = _cost(trial)
+                if c + 1e-9 < best_cost:
+                    medoids = trial
+                    best_cost = float(c)
+                    improved = True
+                    is_medoid[:] = False
+                    is_medoid[medoids] = True
+        if not improved:
+            break
+
+    labels = np.argmin(D[:, medoids], axis=1).astype(np.int64, copy=False)
+    return medoids, labels, float(best_cost)
+
+
+def _cluster_kmedoids_for_od(
+    rids: List[int],
+    *,
+    way_sig: List[Tuple[int, ...]],
+    k_range: Tuple[int, ...] = (2, 3, 4),
+    seed: int = 0,
+) -> Dict[str, object]:
+    # Build per-route seq list in the same order as rids.
+    seqs = [way_sig[int(rid)] for rid in rids]
+    n = int(len(seqs))
+    if n < 2:
+        return {"best_k": 1, "best_silhouette": 0.0, "silhouette_by_k": {}, "clusters": [], "rid2c": {}, "medoid_rids": []}
+
+    D = _pairwise_lcs_dist(seqs)
+    best_k = 0
+    best_sil = -1e9
+    best_medoids = None
+    best_labels = None
+    sil_by_k: Dict[str, float] = {}
+    for k in k_range:
+        kk = int(k)
+        if kk < 2 or kk > n:
+            continue
+        medoids, labels, _cost = _kmedoids_pam(D, k=kk, seed=int(seed), max_iter=100)
+        sil = _silhouette_score_precomputed(D, labels)
+        sil_by_k[str(kk)] = float(sil)
+        if (sil > best_sil + 1e-9) or (abs(sil - best_sil) <= 1e-9 and (best_k == 0 or kk < best_k)):
+            best_sil = float(sil)
+            best_k = int(kk)
+            best_medoids = medoids
+            best_labels = labels
+
+    if best_labels is None or best_medoids is None or best_k <= 0:
+        return {"best_k": 1, "best_silhouette": 0.0, "silhouette_by_k": sil_by_k, "clusters": [], "rid2c": {}, "medoid_rids": []}
+
+    # Reorder clusters by size desc (stable).
+    counts = np.bincount(best_labels, minlength=int(best_k)).astype(np.int64, copy=False)
+    order = np.argsort(-counts, kind="stable").astype(np.int64, copy=False)
+    new_id = np.empty_like(order)
+    new_id[order] = np.arange(int(best_k), dtype=np.int64)
+    labels2 = new_id[best_labels]
+    medoids2 = best_medoids[order]
+
+    clusters: List[Dict[str, object]] = []
+    rid2c: Dict[int, int] = {}
+    medoid_rids: List[int] = []
+    for ci in range(int(best_k)):
+        idx = np.nonzero(labels2 == int(ci))[0].astype(np.int64, copy=False)
+        rr = [int(rids[int(j)]) for j in idx.tolist()]
+        mpos = int(medoids2[ci])
+        mrid = int(rids[mpos])
+        medoid_rids.append(mrid)
+        rep = [mrid] + [r for r in rr if r != mrid][:2]
+        clusters.append({"count": int(len(rr)), "medoid_rid": int(mrid), "rep_route_ids": rep})
+        for r in rr:
+            rid2c[int(r)] = int(ci)
+
+    # Top-2 separation: distance between medoids of the 2 largest clusters.
+    top2_medoid_dist = 0.0
+    if int(best_k) >= 2:
+        top2_medoid_dist = float(D[int(medoids2[0]), int(medoids2[1])])
+
+    return {
+        "best_k": int(best_k),
+        "best_silhouette": float(best_sil),
+        "silhouette_by_k": sil_by_k,
+        "clusters": clusters,
+        "rid2c": rid2c,
+        "medoid_rids": medoid_rids,
+        "top2_medoid_dist": float(top2_medoid_dist),
+    }
+
+
 @dataclass
 class SigEntry:
     count: int
@@ -699,16 +891,29 @@ def run(
         )
         clusters_dp = dp["clusters"]
         rid2c_dp = dp["rid2c"]
+        km = _cluster_kmedoids_for_od(rids, way_sig=way_sig, k_range=(2, 3, 4), seed=0)
+        clusters_km = km.get("clusters", [])
+        rid2c_km = km.get("rid2c", {})
+        km_sizes = [int(c.get("count", 0)) for c in clusters_km] if isinstance(clusters_km, list) else []
+        km_h = _entropy_from_counts(km_sizes) if km_sizes else 0.0
+        km_eff = float(math.exp(km_h)) if km_h > 0 else 1.0
 
         method = str(cfg.corridor_method)
-        if method == "decision_points":
+        if method == "kmedoids":
+            cid_list = [int(rid2c_km.get(int(rid), 0)) for rid in rids]
+            clusters_viz = clusters_km
+            title_extra = (
+                f"(KM:K={int(km.get('best_k', 1))}|sil={float(km.get('best_silhouette', 0.0)):.2f}"
+                f"|LCS:K={len(clusters_lcs)}|DP:K={len(clusters_dp)})"
+            )
+        elif method == "decision_points":
             cid_list = [int(rid2c_dp.get(int(rid), 0)) for rid in rids]
             clusters_viz = clusters_dp
-            title_extra = f"(DP:K={len(clusters_dp)}|LCS:K={len(clusters_lcs)})"
+            title_extra = f"(DP:K={len(clusters_dp)}|LCS:K={len(clusters_lcs)}|KM:K={int(km.get('best_k', 1))})"
         else:
             cid_list = [int(sig2c_lcs.get(way_sig[int(rid)], 0)) for rid in rids]
             clusters_viz = clusters_lcs
-            title_extra = f"(LCS:K={len(clusters_lcs)}|DP:K={len(clusters_dp)})"
+            title_extra = f"(LCS:K={len(clusters_lcs)}|DP:K={len(clusters_dp)}|KM:K={int(km.get('best_k', 1))})"
         top_bins_for_viz.append(
             {
                 "od_bin": [int(x) for x in od_k],
@@ -724,6 +929,16 @@ def run(
                 "decision_points_tier": {str(k): int(v) for k, v in dp.get("decision_points_tier", {}).items()},
                 "decision_points_tier_all": {str(k): int(v) for k, v in dp.get("decision_points_tier_all", {}).items()},
                 "decision_points_xy": {str(k): [float(v[0]), float(v[1])] for k, v in dp.get("decision_points_xy", {}).items()},
+                "kmedoids": {
+                    "best_k": int(km.get("best_k", 1)),
+                    "best_silhouette": float(km.get("best_silhouette", 0.0)),
+                    "silhouette_by_k": km.get("silhouette_by_k", {}),
+                    "medoid_rids": [int(x) for x in km.get("medoid_rids", [])],
+                    "top2_medoid_dist": float(km.get("top2_medoid_dist", 0.0)),
+                    "cluster_sizes": [int(x) for x in km_sizes],
+                    "entropy": float(km_h),
+                    "effective_k": float(km_eff),
+                },
                 "title_extra": str(title_extra),
             }
         )
@@ -783,8 +998,8 @@ def build_argparser() -> argparse.ArgumentParser:
         "--corridor_method",
         type=str,
         default="decision_points",
-        choices=["lcs", "decision_points"],
-        help="Which corridor definition to use for Top-K visualization coloring (parquet always contains both LCS and decision-point metrics).",
+        choices=["lcs", "decision_points", "kmedoids"],
+        help="Which corridor definition to use for Top-K visualization coloring (parquet always contains both LCS and decision-point metrics; kmedoids is computed for Top-K ODs).",
     )
     p.add_argument(
         "--min_choice_count",

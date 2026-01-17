@@ -97,6 +97,39 @@ python -m src.data.worldtrace.within_owner_corridor_diversity \
 - `corridor_method=decision_points`：Top-10 出图按 **way-level 数据驱动 decision points** 进行 corridor 着色。
 - `min_choice_count`：decision-point 去噪阈值；某个 `(way_i -> next_way)` 需在该 OD-bin 内出现 ≥ 该次数，才算“有效选择”。
 
+### 另一路线（推荐）：K-medoids + silhouette 选择 K（避免阈值死循环）
+
+如果我们承认“corridor 的普适定义是 ill-posed”，那就不再试图**发现 K**，而是把 K 作为一个**可解释的选择集规模**：
+
+- 固定候选：`K ∈ {2,3,4}`（route choice 文献常见的“实质不同路径”数量级）
+- 距离：仍用 LCS distance（对小变体更宽容）
+- 聚类：K-medoids（直接在距离矩阵上工作）
+- 选择：silhouette score 最大的 K（簇内紧凑 + 簇间分离）
+
+实现：`within_owner_corridor_diversity.py` 在 Top-OD 里会额外计算 kmedoids，并把 `best_K / silhouette / medoids` 写进 `report.json`。
+
+可视化命令（Top-10 用 kmedoids 着色）：
+
+```bash
+export RAW_ROOT=/home/jinlin/data/geoexplicit_data
+export EXP_ROOT="$RAW_ROOT/experiments/icml2026_routegen"
+
+python -m src.data.worldtrace.within_owner_corridor_diversity \
+  --segments_parquet "$RAW_ROOT/worldtrace/detroit_core_v1/segments_with_wayid.parquet" \
+  --meta_zip "$RAW_ROOT/worldtrace/OpenTrace_WorldTrace/Meta.zip" \
+  --road_prob_npy "$RAW_ROOT/worldtrace/detroit_core_v1/osm_road_prob.npy" \
+  --out_parquet "$EXP_ROOT/A_within_owner_corridor_detroit_km/corridor_diversity_within_owner.parquet" \
+  --out_json "$EXP_ROOT/A_within_owner_corridor_detroit_km/report.json" \
+  --out_viz_dir "$EXP_ROOT/A_within_owner_corridor_detroit_km/top_od_viz" \
+  --od_bin_deg 0.02 \
+  --min_od_dist_km 1.0 \
+  --max_way_seq_len 128 \
+  --merge_dist_thr 0.15 \
+  --corridor_method kmedoids \
+  --min_choice_count 2 \
+  --top_k_od 10
+```
+
 ### decision-point 的关键风险：走廊分叉 vs 走廊内部细节
 
 在 Detroit 的 top-OD 上我们观察到：若把 **所有** decision points 都用于 corridor signature，容易出现 **K 爆炸/大量单例簇**（把“同一走廊内的细节绕行”也当成 corridor）。

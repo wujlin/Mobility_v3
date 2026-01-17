@@ -4,7 +4,9 @@ import argparse
 import hashlib
 import json
 import math
+import os
 import sys
+import time
 import zipfile
 from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta, timezone
@@ -18,6 +20,14 @@ try:
 except ModuleNotFoundError:  # optional
     pq = None
 
+try:
+    import multiprocessing as mp
+    from concurrent.futures import ProcessPoolExecutor, as_completed
+except ModuleNotFoundError:  # pragma: no cover
+    mp = None
+    ProcessPoolExecutor = None  # type: ignore[assignment]
+    as_completed = None  # type: ignore[assignment]
+
 TZ_SHANGHAI = timezone(timedelta(hours=8))
 
 
@@ -27,6 +37,9 @@ class OwnerAuditCfg:
     min_od_dist_km: float
     max_rows_per_segments: int
     dump_top_owner_n: int
+    num_workers: int
+    mp_start: str
+    log_every: int
 
 
 @dataclass(frozen=True)
@@ -43,6 +56,42 @@ class TripRow:
 
 def _sha1_8(s: str) -> str:
     return hashlib.sha1(s.encode("utf-8", errors="ignore")).hexdigest()[:8]
+
+
+def _normalize_owner(v: Any) -> Optional[str]:
+    if v is None:
+        return None
+    if isinstance(v, str):
+        s = v.strip()
+        return s if s else None
+    if isinstance(v, (int, float, bool)):
+        return str(v)
+    if isinstance(v, (list, dict)):
+        try:
+            s = json.dumps(v, ensure_ascii=False, sort_keys=True)
+        except TypeError:
+            s = str(v)
+        s = s.strip()
+        if s in ("", "[]", "{}"):
+            return None
+        return s
+    s = str(v).strip()
+    return s if s else None
+
+
+def _extract_owner(obj: Dict[str, Any]) -> Optional[str]:
+    # Common keys (data card + variants)
+    for k in ("Owner", "owner", "OWNER"):
+        if k in obj:
+            return _normalize_owner(obj.get(k))
+    # Some datasets wrap meta in nested dicts.
+    for parent in ("properties", "meta", "metadata", "info"):
+        v = obj.get(parent, None)
+        if isinstance(v, dict):
+            for k in ("Owner", "owner", "OWNER"):
+                if k in v:
+                    return _normalize_owner(v.get(k))
+    return None
 
 
 def _haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
@@ -120,14 +169,15 @@ def _read_segments_parquet(path: Path, *, city: str, max_rows: int) -> List[Trip
 def _meta_member_candidates(traj_base: str) -> List[str]:
     base = str(traj_base)
     stem = str(Path(base).stem)
-    # Try common patterns: same name with .json, maybe with Meta/ prefix.
+    # Try common patterns: same stem with .json across possible zip layouts.
     names = [
         f"{stem}.json",
-        f"{base}.json",  # if base already has no suffix
-        str(Path(base).with_suffix(".json")),
         f"Meta/{stem}.json",
-        f"Meta/{Path(base).with_suffix('.json')}",
         f"meta/{stem}.json",
+        # WorldTrace official HF layout often has nested directories.
+        f"data/yuanshao/OpenTrace/Meta/{stem}.json",
+        f"data/yuanshao/OpenTrace/meta/{stem}.json",
+        f"OpenTrace/Meta/{stem}.json",
     ]
     # Dedup while preserving order.
     seen = set()
@@ -156,8 +206,8 @@ def _load_owner_map_from_meta_zip(meta_zip: Path, wanted_traj_base: Sequence[str
                     continue
                 except json.JSONDecodeError:
                     continue
-                owner = obj.get("Owner")
-                if isinstance(owner, str) and owner:
+                owner = _extract_owner(obj)
+                if owner:
                     owner_by_base[tb] = owner
                     break
 
@@ -181,14 +231,188 @@ def _load_owner_map_from_meta_zip(meta_zip: Path, wanted_traj_base: Sequence[str
             base = Path(filename).name
             if base not in missing:
                 continue
-            owner = obj.get("Owner", None)
-            if isinstance(owner, str) and owner:
+            owner = _extract_owner(obj)
+            if owner:
                 owner_by_base[base] = owner
             missing.discard(base)
             if not missing:
                 break
 
     return owner_by_base, int(n_json_read)
+
+
+def _process_traj_base_chunk(meta_zip: str, keys: List[str]) -> Tuple[Dict[str, str], List[str], int]:
+    owner_by_key: Dict[str, str] = {}
+    found_keys: List[str] = []
+    n_json_read = 0
+    with zipfile.ZipFile(meta_zip, "r") as zf:
+        for key in keys:
+            found = False
+            for cand in _meta_member_candidates(key):
+                try:
+                    with zf.open(cand, "r") as f:
+                        obj = json.load(f)
+                    n_json_read += 1
+                    found = True
+                except KeyError:
+                    continue
+                except json.JSONDecodeError:
+                    continue
+                owner = _extract_owner(obj)
+                if owner:
+                    owner_by_key[str(key)] = owner
+                break
+            if found:
+                found_keys.append(str(key))
+    return owner_by_key, found_keys, int(n_json_read)
+
+
+def _load_owner_map_with_progress(
+    *,
+    meta_zip: Path,
+    wanted_keys: Sequence[str],
+    num_workers: int,
+    mp_start: str,
+    log_every: int,
+) -> Tuple[Dict[str, str], int, int, Dict[str, int]]:
+    """
+    Load Owner mapping for a list of trajectory basenames.
+
+    Fast path (recommended): direct lookup by member name candidates, parallelized by chunk.
+    Fallback: scan Meta.zip for remaining missing (still with progress).
+    """
+    wanted = sorted({str(x) for x in wanted_keys if str(x)})
+    n_total = int(len(wanted))
+    if n_total == 0:
+        return {}, 0
+
+    num_workers = int(num_workers)
+    if num_workers <= 0:
+        num_workers = os.cpu_count() or 1
+    num_workers = max(1, int(num_workers))
+    log_every = max(1, int(log_every))
+
+    # Heuristic: small jobs are faster sequentially.
+    use_mp = bool(num_workers > 1 and n_total >= 500 and mp is not None and ProcessPoolExecutor is not None)
+    t0 = time.time()
+    owner_by_key: Dict[str, str] = {}
+    found_set: set[str] = set()
+    n_json_read = 0
+    match_mode = {"by_meta_id": 0, "by_filename_stem": 0}
+
+    if not use_mp:
+        with zipfile.ZipFile(meta_zip, "r") as zf:
+            found = 0
+            for i, tb in enumerate(wanted, start=1):
+                meta_found = False
+                for cand in _meta_member_candidates(tb):
+                    try:
+                        with zf.open(cand, "r") as f:
+                            obj = json.load(f)
+                        n_json_read += 1
+                        meta_found = True
+                    except KeyError:
+                        continue
+                    except json.JSONDecodeError:
+                        continue
+                    owner = _extract_owner(obj)
+                    if owner:
+                        owner_by_key[tb] = owner
+                        found += 1
+                    break
+                if meta_found:
+                    found_set.add(tb)
+                if (i % log_every) == 0 or i == n_total:
+                    elapsed = max(1e-6, float(time.time() - t0))
+                    rps = float(i) / elapsed
+                    print(
+                        f"[INFO] owner_lookup processed={i}/{n_total} found={found} elapsed_s={elapsed:.1f} rps={rps:.1f}",
+                        file=sys.stderr,
+                    )
+    else:
+        # Chunk wanted list; each worker opens Meta.zip once.
+        chunks: List[List[str]] = []
+        chunk_size = max(200, int(math.ceil(float(n_total) / float(num_workers * 8))))
+        for s in range(0, n_total, chunk_size):
+            chunks.append(wanted[s : s + chunk_size])
+        n_chunks = int(len(chunks))
+
+        ctx = mp.get_context(str(mp_start))
+        done = 0
+        found = 0
+        with ProcessPoolExecutor(max_workers=int(num_workers), mp_context=ctx) as ex:
+            futs = [ex.submit(_process_traj_base_chunk, str(meta_zip), ch) for ch in chunks]
+            for fut in as_completed(futs):
+                d, found_bases, n_read = fut.result()
+                done += 1
+                n_json_read += int(n_read)
+                owner_by_key.update(d)
+                found_set.update(found_bases)
+                found = int(len(owner_by_key))
+                if (done % max(1, (log_every // chunk_size))) == 0 or done == n_chunks:
+                    elapsed = max(1e-6, float(time.time() - t0))
+                    cps = float(done) / elapsed
+                    print(
+                        f"[INFO] owner_lookup chunks={done}/{n_chunks} found={found} elapsed_s={elapsed:.1f} chunks_ps={cps:.2f}",
+                        file=sys.stderr,
+                    )
+
+    # Only fallback-scan Meta.zip if we failed to locate the corresponding meta json by filename candidates.
+    missing = set(wanted) - set(found_set)
+    if not missing:
+        return owner_by_key, int(n_json_read), int(len(found_set)), match_mode
+
+    # Fallback: scan Meta.zip until we find all missing.
+    print(f"[WARN] direct lookup missed {len(missing)}/{n_total}; fallback scanning Meta.zip...", file=sys.stderr)
+    with zipfile.ZipFile(meta_zip, "r") as zf:
+        infos = zf.infolist()
+        total = int(len(infos))
+        scanned = 0
+        next_log = log_every
+        for info in infos:
+            scanned += 1
+            if not info.filename.endswith(".json"):
+                continue
+            try:
+                with zf.open(info, "r") as f:
+                    obj = json.load(f)
+                n_json_read += 1
+            except json.JSONDecodeError:
+                continue
+            filename = obj.get("Filename", obj.get("filename", None))
+            k_id = Path(info.filename).stem
+            k_fname = Path(filename).stem if isinstance(filename, str) and filename else ""
+
+            hit = False
+            if k_id and k_id in missing:
+                found_set.add(k_id)
+                owner = _extract_owner(obj)
+                if owner:
+                    owner_by_key[k_id] = owner
+                missing.discard(k_id)
+                match_mode["by_meta_id"] += 1
+                hit = True
+            if k_fname and k_fname in missing:
+                found_set.add(k_fname)
+                owner = _extract_owner(obj)
+                if owner:
+                    owner_by_key[k_fname] = owner
+                missing.discard(k_fname)
+                match_mode["by_filename_stem"] += 1
+                hit = True
+            if hit and not missing:
+                break
+            if scanned >= next_log:
+                elapsed = max(1e-6, float(time.time() - t0))
+                pct = 100.0 * float(scanned) / float(max(1, total))
+                rps = float(scanned) / elapsed
+                print(
+                    f"[INFO] meta_scan scanned={scanned}/{total} ({pct:.1f}%) missing={len(missing)} elapsed_s={elapsed:.1f} rps={rps:.1f}",
+                    file=sys.stderr,
+                )
+                next_log += log_every
+
+    return owner_by_key, int(n_json_read), int(len(found_set)), match_mode
 
 
 def _percentiles(x: np.ndarray, ps: Sequence[float]) -> Dict[str, float]:
@@ -274,11 +498,17 @@ def run_audit(*, meta_zip: Path, segments_parquet: Sequence[Path], segments_labe
         trips = keep
 
     # 3) Join owner from meta zip.
-    wanted = sorted({t.traj_base for t in trips})
-    owner_by_base, n_meta_json_read = _load_owner_map_from_meta_zip(Path(meta_zip), wanted_traj_base=wanted)
+    wanted_keys = sorted({Path(t.traj_base).stem for t in trips})
+    owner_by_key, n_meta_json_read, n_meta_found, match_mode = _load_owner_map_with_progress(
+        meta_zip=Path(meta_zip),
+        wanted_keys=wanted_keys,
+        num_workers=int(cfg.num_workers),
+        mp_start=str(cfg.mp_start),
+        log_every=int(cfg.log_every),
+    )
     n_owner_found = 0
     for i, r in enumerate(trips):
-        owner = owner_by_base.get(r.traj_base, None)
+        owner = owner_by_key.get(Path(r.traj_base).stem, None)
         if owner:
             n_owner_found += 1
         trips[i] = TripRow(**{**asdict(r), "owner": owner})
@@ -343,9 +573,12 @@ def run_audit(*, meta_zip: Path, segments_parquet: Sequence[Path], segments_labe
         },
         "cfg": asdict(cfg),
         "join": {
-            "traj_key": "Path(traj_csv).name",
-            "meta_key": "Path(Meta.Filename).name",
+            "traj_key": "Path(traj_csv).stem",
+            "meta_key": "Path(Meta.Filename).stem OR Path(meta_json_path).stem",
             "meta_json_read": int(n_meta_json_read),
+            "meta_found": int(n_meta_found),
+            "meta_found_ratio": float(n_meta_found) / float(max(1, len(wanted_keys))),
+            "match_mode": match_mode,
             "trips_total": int(len(trips)),
             "trips_kept_after_od_filter": int(len(trips)),
             "trips_with_owner": int(trips_with_owner),
@@ -448,6 +681,9 @@ def build_argparser() -> argparse.ArgumentParser:
     p.add_argument("--min_od_dist_km", type=float, default=1.0, help="Filter trips with OD distance < this threshold.")
     p.add_argument("--max_rows_per_segments", type=int, default=0, help="Debug cap per segments parquet (0=no cap).")
     p.add_argument("--num_top_owners", type=int, default=20, help="How many top owners to include (hashed).")
+    p.add_argument("--num_workers", type=int, default=24, help="Parallel workers for Owner join (Meta.zip lookups).")
+    p.add_argument("--mp_start", type=str, default="fork", choices=["fork", "spawn"], help="Multiprocessing start method.")
+    p.add_argument("--log_every", type=int, default=2000, help="Progress log frequency (items; used for lookup/scan).")
     return p
 
 
@@ -464,6 +700,9 @@ def main() -> None:
         min_od_dist_km=float(args.min_od_dist_km),
         max_rows_per_segments=int(args.max_rows_per_segments),
         dump_top_owner_n=int(args.num_top_owners),
+        num_workers=int(args.num_workers),
+        mp_start=str(args.mp_start),
+        log_every=int(args.log_every),
     )
 
     report = run_audit(
@@ -482,4 +721,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

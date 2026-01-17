@@ -12,10 +12,12 @@
 - `Owner` 位于 **Meta.zip 的 Meta JSON**（不是 Trajectory CSV）。参见 `docs/DATA_CONTRACT.md`。
 - Detroit/Columbus 子集的 `segments_with_wayid.parquet` 中包含 `traj_csv`（来自 `Trajectory.zip` 的 member name）。
 - 连接键（审计使用的最稳妥口径）：
-  - segments：`traj_key = Path(traj_csv).name`
-  - meta：`meta_key = Path(Meta.Filename).name`
+  - segments：`traj_key = Path(traj_csv).stem`（去掉 `.csv`）
+  - meta：两种来源二选一（脚本自动兼容）  
+    - `Path(Meta.Filename).stem`（Meta JSON 的 `Filename` 通常是 `.gpx`，与 `.csv` 只差扩展名）  
+    - `Path(meta_json_path).stem`（Meta JSON 文件名本身若是 numeric id，也可直接对齐 `traj_csv` stem）
 
-> 解释：zip 内部可能带目录前缀（例如 `Trajectory/xxx.csv`），用 basename 规避路径不一致。
+> 解释：Meta JSON 的 `Filename` 常见为 `.gpx`，直接用 `.name` 会导致 `.csv` vs `.gpx` 不匹配；用 `.stem` 可以消除扩展名差异。
 
 ---
 
@@ -59,7 +61,10 @@ python -m src.data.worldtrace.audit_owner_from_meta_and_segments \
   --out_md  "$EXP_ROOT/A_owner_audit_detroit/report.md" \
   --od_bin_deg 0.01 0.02 \
   --min_od_dist_km 1.0 \
-  --num_top_owners 20
+  --num_top_owners 20 \
+  --num_workers 48 \
+  --mp_start fork \
+  --log_every 2000
 ```
 
 ### Detroit + Columbus（若 Detroit Gate 失败）
@@ -78,7 +83,10 @@ python -m src.data.worldtrace.audit_owner_from_meta_and_segments \
   --out_md  "$EXP_ROOT/A_owner_audit_rustbelt/report.md" \
   --od_bin_deg 0.01 0.02 \
   --min_od_dist_km 1.0 \
-  --num_top_owners 20
+  --num_top_owners 20 \
+  --num_workers 48 \
+  --mp_start fork \
+  --log_every 5000
 ```
 
 ---
@@ -87,4 +95,3 @@ python -m src.data.worldtrace.audit_owner_from_meta_and_segments \
 
 - `report.json`：机器可读的完整统计（不输出原始 Owner，仅输出 `owner_hash` 与计数）
 - `report.md`：面向 PI review 的精简摘要（可直接转发）
-

@@ -209,9 +209,122 @@
 - (2) 对齐 route choice 的“流量/概率份额”；
 - (3) 对齐 route choice 的 overlap 思维（CF/PS）与 ML 的 APD/FPD。
 
+## 6. 用 Owner/device ID 分解 corridor diversity：within-individual vs between-individual
+
+> 这个问题的关键不是“怎么计算 corridor diversity”，而是 **“corridor diversity 的解释权归因（attribution）”**：
+> - **同一个人**（同一 device/Owner）在不同时间对同一 OD 选择不同 corridor → 更像 *within-individual variability*（时变性 / 随机性 / 学习与习惯）
+> - **不同人**（不同 Owner）对同一 OD 选择不同 corridor → 更像 *between-individual heterogeneity*（偏好异质性 / 人群分层）
+
+### 6.1 文献锚点：确实有人用“个体ID + 多日 GPS/轨迹”讨论（或建模）个体内/个体间变异
+
+下面这些工作可以作为你在 related work 里“方法论 framing”的直接引用点：
+
+1) **GPS 观察数据上，显式区分 intra- vs inter- individual route variability**
+- Spissu, Meloni, Sanjust (2011, TRR) 基于 GPS 记录的日常路线数据，明确讨论了 **intraindividual vs interindividual variability**，并指出不同出行目的下两类变异的相对强弱不同（例如“非通勤/自由出行”更偏个体内波动，“工作/学习”更偏个体间差异）。
+
+2) **家庭/个体可识别的 GPS 轨迹：同一主体多次路径变化的经验描述**
+- Jan, Horowitz, Peng (2000, TRR) 使用家庭层面的 GPS 车辆轨迹分析 path choice 的变化性，并讨论了“同一主体在不同出行中的路径差异”这一现象与 OD 定义/定位误差的敏感性。
+- Arifin & Axhausen (2011/2012) 用一周多日 GPS 记录刻画通勤者的“route deviation / route switching”，以“每个通勤者是否、何时出现多路径”来度量日内/日间的个体内变化，并给出了人群层面的分布统计。
+
+3) **离散选择建模里，把“个体间异质性”与“重复观测相关性”拆开处理（panel / mixed logit）**
+- Han, Algers, Engelson (2001, TRB) 明确指出 mixed logit 可以同时处理：
+  - 系数在个体间随机变化（taste heterogeneity across drivers）
+  - 同一受访者的重复选择相关性（correlation in disturbance over repeated choices）
+  这是“within vs between”在 route choice 建模里的经典分解框架。
+
+4) **更接近你“众包 GPS + OD 级 corridor”语境的做法：multi-level random effects**
+- Li et al. (2018/2019, IET ITS) 在 path-size 框架下引入 **multi-level random effects**，把未观测异质性拆成 traveler-specific、OD-pair-specific、observation-specific 等层次；其中 traveler-specific 更接近“个体间偏好差异”，observation-specific 更接近“同一人同一 OD 的随机波动/情境噪声”。
+
+> 关键 takeaway：只要数据里有可追踪的个体标识（Owner / device ID / vehicle ID），文献里就会把路线选择看作 **panel（重复观测）**，并用“描述统计 + 随机效用模型”的方式把 within 与 between 拆开。
+
+### 6.2 “分解”在方法上通常怎么落地？（你可以直接复用到 WorldTrace）
+
+这里给出三类做法，按“模型假设强度”从弱到强：
+
+#### A) 描述统计分解（最容易写进 methodology & ablation）
+
+**核心思想**：先把每条 trip 映射到 corridor label（由你的 LCS 聚类得到），然后分别在“同一 Owner 内”和“Owner 之间”做统计。
+
+- **Within-owner（个体内）**
+  - 对每个 Owner、每个 OD：计算其 corridor 分布的熵 H(C | Owner, OD)，再对 Owner 做平均。
+  - 或者用更直观的：unique corridors per owner（同一人跑过多少条 corridor）。
+- **Between-owner（个体间）**
+  - 比较不同 Owner 的“主导 corridor”是否不同：例如 owner-level mode share 的熵 / Gini。
+  - 或者更直接：两两 Owner 的“平均路径原型”之间的距离（LCS / overlap）。
+- **对照/检验（你论文里很需要）**
+  - 直接报告：
+    - 平均 LCS 距离（within-owner pairs） vs 平均 LCS 距离（between-owner pairs）
+    - 或者二者之比（between / within）作为“异质性主导程度”的指标
+
+这套做法的优点：不依赖强模型假设，最容易解释，也能直接回应“众包 GPS 里 corridor diversity 的含义”。
+
+#### B) Panel / mixed logit（经典离散选择分解）
+
+**核心思想**：把每个 Owner 看作一个 panel 个体，对“corridor/route 的选择”建模。
+
+- between-individual：随机系数（random coefficients / random effects）
+- within-individual：同一人跨出行的误差相关性、或情境噪声（repeated choice correlation / scale / error components）
+
+这条线的优点：和交通 route choice 的 mainstream 完全对齐；缺点是需要你明确 choice set 或至少明确 corridor choice set。
+
+#### C) 信息论的干净分解（写作上很强，但需要你先有 corridor label）
+
+如果把 corridor label 记为随机变量 C，Owner 记为 U，那么在每个 OD 上有一个非常“教科书式”的分解：
+
+- 总体 corridor 多样性：H(C | OD)
+- 可以分解成：
+  - 平均个体内不确定性：E_u [ H(C | U=u, OD) ]
+  - 个体身份带来的可解释差异（异质性强弱）：I(C ; U | OD)
+
+其中 I(C ; U | OD) 越大，说明“知道是谁（Owner）”越能预测他会走哪条 corridor → between-individual heterogeneity 更强。
+
+### 6.3 你可以如何把它落在 WorldTrace（Owner 字段）的 framing 上？
+
+你最终要回答的是：**WorldTrace 的“同 OD 多轨迹”到底在解释什么？**
+
+- 如果 **Owner/device ID 稳定且能代表单一出行主体**：
+  - 你可以直接把 route choice 问题写成 panel 数据（每个 Owner 多次选择），并按照 6.2 的 A/B/C 做分解。
+  - 论文表达上就能非常清楚：
+    - “总体 corridor diversity” = within + between（并给出定量比例/对照）
+
+- 如果 **Owner 无法可靠对应“同一个人”**（例如多人共用设备、Owner 是匿名桶、或缺失率高）：
+  - 你至少要在论文里把它写成“device-level panel”或“partially observed identity”，并在实验中做敏感性：
+    - 只在 Owner 可信的子集上报告 within/between
+    - 或者把“同一 OD 多轨迹”严格解释为“总体（混合）多样性”，并承认无法拆分来源
+
+> 建议：把这一段写成 *methodological framing*，并把“within vs between”的分解做成一张表（每个城市/OD bin 的 within entropy、between MI、overall entropy）。这会显著增强你方法的可解释性。
+
 ---
 
 ## 参考文献（可作为 Phase 2 深挖清单）
+
+### Route choice / overlap / corridor components
+- Cascetta, E., Nuzzolo, A., Russo, F., & Vitetta, A. (1996). *A modified logit route choice model overcoming path overlapping problems* (C-Logit). ISTTT.
+- Ben-Akiva, M., & Bierlaire, M. (1999). *Path Size Logit / path size formulation*（见 Handbook of Transportation Science 等）。
+- Frejinger, E. (2005). *Route Choice Models with Subpath Components* (STRC 2005). https://www.strc.ch/2005/Frejinger.pdf
+- Frejinger, E., & Bierlaire, M. (2006). *Capturing Correlation in Route Choice Models using Subnetworks* (STRC 2006). https://www.strc.ch/2006/Frejinger_Bierlaire_STRC_2006.pdf
+- Frejinger, E., & Bierlaire, M. (2007). *Capturing correlation with subnetworks in route choice models*. Transportation Research Part B, 41(3), 363–378.
+- Fosgerau, M., Frejinger, E., & Karlstrom, A. (2013). *A link based network route choice model with unrestricted choice set* (Recursive Logit). Transportation Research Part B.
+- Prato, C. G. (2009). *Route choice modeling: Past, present and future research directions*. Transport Reviews.（综述，含 overlap/choice set 讨论）
+
+### Route choice variability / panel effects（可用于 within-individual vs between-individual framing）
+- Jan, O., Horowitz, A. J., & Peng, Z.-R. (2000). *Using GPS Data to Understand Variations in Path Choice*. Transportation Research Record, 1725, 37–44.
+- Spissu, E., Meloni, I., & Sanjust, B. (2011). *Behavioral Analysis of Choice of Daily Route with Data from Global Positioning System*. Transportation Research Record, 2230, 96–103.
+- Arifin, Z. N., & Axhausen, K. W. (2012). *Investigating Commute Mode and Route Choice Variabilities in Jakarta Using Multi-Day GPS Data*. International Journal of Technology, 3(1), 45–55.
+- Han, B., Algers, S., & Engelson, L. (2001). *Accommodating Drivers' Taste Variation and Repeated Choice Correlation in Route Choice Modeling by Using the Mixed Logit Model*. TRB 80th Annual Meeting (Paper 01-2954).
+- Li, D., Miwa, T., Xu, C., & Li, Z. (2019). *Non-linear fixed and multi-level random effects of origin–destination specific attributes on route choice behaviour*. IET Intelligent Transport Systems, 13(4), 654–660.
+
+### Trajectory generation / multi-modal evaluation
+- Salzmann, T., Ivanovic, B., Chakravarty, P., & Pavone, M. (2020). *Trajectron++: Dynamically-Feasible Trajectory Forecasting With Heterogeneous Data* (ECCV 2020).（ADE/FDE、KDE-NLL、Best-of-N）
+- Cui, H., Radosavljevic, V., Chou, F.-C., et al. (2018/2019). *Multimodal Trajectory Predictions for Autonomous Driving using Deep Convolutional Networks* (arXiv:1809.10732).（MTP loss / 多模态预测）
+- Yuan, Y., & Kitani, K. (2020). *Diversifying Trajectory Forecasting with ...*（提出/使用 APD、multi-modal metrics 的一系列工作；在后续论文如 Motron 中被沿用）。
+- Salzmann, T., et al. (2022). *Motron: Multimodal Probabilistic Human Motion Forecasting* (CVPR 2022).（APD + multi-modal ADE/FDE）
+
+### Corridor extraction / trajectory clustering / network path clustering
+- Zygouras, E., & Psyllidis, A. (2017). *Defining and finding corridors and routes from trajectories: A literature review*. International Journal of Geographical Information Science.
+- Jiang, S., et al. (2015/2016). *Discovering Urban Bike Sharing Primary Corridors from Trajectories*（使用轨迹相似性/聚类抽取 corridors 的代表性 pipeline）。
+- Wang, Z., et al. (2020). *k-paths: Representative Paths in Road Networks* (VLDB 2020).（path-level aggregation / representative path extraction）
+- Hunter, T., Herring, R., Abbeel, P., & Bayen, A. (2009). *Path inference filter: A framework for probabilistic map matching, path inference, and travel time prediction from GPS data*.（从稀疏 GPS 得到路径分布，可用于 OD/corridor 份额估计）
 
 ### Route choice / overlap / corridor components
 - Cascetta, E., Nuzzolo, A., Russo, F., & Vitetta, A. (1996). *A modified logit route choice model overcoming path overlapping problems* (C-Logit). ISTTT.

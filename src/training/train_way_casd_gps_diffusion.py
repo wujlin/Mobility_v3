@@ -392,6 +392,12 @@ def build_argparser() -> argparse.ArgumentParser:
     p.add_argument("--skel_attn_heads", type=int, default=4)
     p.add_argument("--skel_noise_sigma", type=float, default=0.1)
     p.add_argument("--coord_scale", type=float, default=1024.0)
+
+    # Long-run training ergonomics
+    p.add_argument("--resume_ckpt", type=Path, default=None, help="Optional: resume from a previous execution ckpt (.pt).")
+    p.add_argument("--resume_epoch", type=int, default=None, help="Optional: override resume epoch (when ckpt has no epoch).")
+    p.add_argument("--save_every", type=int, default=20, help="Save ckpt_last.pt every N epochs (best ckpt still saved on improve).")
+    p.add_argument("--early_stop_patience", type=int, default=0, help="Optional early stop (0=disable).")
     return p
 
 
@@ -546,24 +552,143 @@ def main() -> None:
     opt = torch.optim.AdamW(model.parameters(), lr=float(cfg.lr), weight_decay=float(cfg.weight_decay))
 
     best = float("inf")
+    best_epoch = 0
     best_path = out_dir / "ckpt_best.pt"
-    history = []
+    last_path = out_dir / "ckpt_last.pt"
+    progress_path = out_dir / "progress.json"
+    hist_path = out_dir / "history.jsonl"
 
-    for epoch in range(1, int(cfg.n_epochs) + 1):
+    start_epoch = 1
+    history = []
+    patience = 0
+
+    if args.resume_ckpt is not None:
+        ckpt = torch.load(str(args.resume_ckpt), map_location="cpu")
+        if isinstance(ckpt, dict) and "model_state_dict" in ckpt:
+            missing, unexpected = model.load_state_dict(ckpt["model_state_dict"], strict=False)
+            if missing or unexpected:
+                log.warning(f"resume: model state mismatch: missing={len(missing)} unexpected={len(unexpected)}")
+            if "opt_state_dict" in ckpt:
+                try:
+                    opt.load_state_dict(ckpt["opt_state_dict"])
+                except Exception as e:  # pragma: no cover
+                    log.warning(f"resume: failed to load optimizer state (ignored): {e}")
+            if "best_val_loss" in ckpt:
+                try:
+                    best = float(ckpt["best_val_loss"])
+                except Exception:
+                    best = float("inf")
+            if "best_epoch" in ckpt:
+                try:
+                    best_epoch = int(ckpt["best_epoch"])
+                except Exception:
+                    best_epoch = 0
+            if "history" in ckpt and isinstance(ckpt["history"], list):
+                history = ckpt["history"]
+            if "epoch" in ckpt:
+                try:
+                    start_epoch = int(ckpt["epoch"]) + 1
+                except Exception:
+                    start_epoch = 1
+        elif isinstance(ckpt, dict):
+            # weights-only checkpoint
+            missing, unexpected = model.load_state_dict(ckpt, strict=False)
+            if missing or unexpected:
+                log.warning(f"resume: model state mismatch: missing={len(missing)} unexpected={len(unexpected)}")
+
+        if args.resume_epoch is not None:
+            start_epoch = int(args.resume_epoch) + 1
+
+        log.info(
+            f"resume_ckpt={args.resume_ckpt} start_epoch={start_epoch} best_val_loss={best} best_epoch={best_epoch} history_len={len(history)}"
+        )
+
+    # If best is unknown (e.g., weights-only resume), initialize from current val.
+    if not np.isfinite(best) or best == float("inf"):
+        va0 = eval_epoch(ae=ae, model=model, loader=val_loader, device=device)
+        best = float(va0["loss"])
+        best_epoch = int(start_epoch - 1)
+        log.info(f"init best_val_loss={best:.6f} from current weights (epoch={best_epoch})")
+
+    save_every = max(1, int(args.save_every))
+    early_stop_patience = max(0, int(args.early_stop_patience))
+
+    for epoch in range(int(start_epoch), int(cfg.n_epochs) + 1):
         tr = train_epoch(ae=ae, model=model, loader=train_loader, opt=opt, device=device)
         va = eval_epoch(ae=ae, model=model, loader=val_loader, device=device)
         history.append({"epoch": int(epoch), "train": tr, "val": va})
         log.info(f"epoch={epoch} train_loss={tr['loss']:.4f} val_loss={va['loss']:.4f}")
-        if float(va["loss"]) < best:
+
+        # Append lightweight history for long runs.
+        with hist_path.open("a", encoding="utf-8") as f:
+            f.write(json.dumps({"epoch": int(epoch), "train_loss": float(tr["loss"]), "val_loss": float(va["loss"])}) + "\n")
+
+        # Best checkpoint.
+        if float(va["loss"]) < float(best):
             best = float(va["loss"])
+            best_epoch = int(epoch)
+            patience = 0
             torch.save(
                 {
                     "model_state_dict": model.state_dict(),
                     "config": asdict(cfg),
                     "created_at": datetime.now(tz=TZ_SHANGHAI).isoformat(),
+                    "epoch": int(epoch),
+                    "best_val_loss": float(best),
+                    "best_epoch": int(best_epoch),
                 },
                 str(best_path),
             )
+        else:
+            patience += 1
+
+        # Periodic last checkpoint for resuming.
+        if (int(epoch) % save_every) == 0:
+            torch.save(
+                {
+                    "model_state_dict": model.state_dict(),
+                    "opt_state_dict": opt.state_dict(),
+                    "config": asdict(cfg),
+                    "created_at": datetime.now(tz=TZ_SHANGHAI).isoformat(),
+                    "epoch": int(epoch),
+                    "best_val_loss": float(best),
+                    "best_epoch": int(best_epoch),
+                },
+                str(last_path),
+            )
+
+        # Progress snapshot (small JSON, cheap to update).
+        progress = {
+            "ok": True,
+            "task": "train_way_casd_gps_diffusion",
+            "created_at": datetime.now(tz=TZ_SHANGHAI).isoformat(),
+            "epoch": int(epoch),
+            "train_loss": float(tr["loss"]),
+            "val_loss": float(va["loss"]),
+            "best_val_loss": float(best),
+            "best_epoch": int(best_epoch),
+            "save_every": int(save_every),
+            "early_stop_patience": int(early_stop_patience),
+        }
+        progress_path.write_text(json.dumps(progress, ensure_ascii=False, indent=2), encoding="utf-8")
+
+        if early_stop_patience > 0 and patience >= early_stop_patience:
+            log.info(f"early_stop: patience={patience} reached (best_epoch={best_epoch} best_val_loss={best:.6f})")
+            break
+
+    # Always save a final last checkpoint.
+    torch.save(
+        {
+            "model_state_dict": model.state_dict(),
+            "opt_state_dict": opt.state_dict(),
+            "config": asdict(cfg),
+            "created_at": datetime.now(tz=TZ_SHANGHAI).isoformat(),
+            "epoch": int(history[-1]["epoch"]) if history else int(start_epoch - 1),
+            "best_val_loss": float(best),
+            "best_epoch": int(best_epoch),
+        },
+        str(last_path),
+    )
 
     report = {
         "ok": True,
@@ -579,6 +704,11 @@ def main() -> None:
         "out_dir": str(out_dir),
         "best_val_loss": float(best),
         "best_ckpt": str(best_path),
+        "last_ckpt": str(last_path),
+        "best_epoch": int(best_epoch),
+        "start_epoch": int(start_epoch),
+        "early_stop_patience": int(early_stop_patience),
+        "save_every": int(save_every),
         "history": history,
     }
     (out_dir / "report.json").write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")

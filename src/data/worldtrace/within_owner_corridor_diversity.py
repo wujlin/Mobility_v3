@@ -989,8 +989,9 @@ def run(
         rng = np.random.default_rng(int(cfg.viz_random_seed))
         if cand:
             k = int(min(int(cfg.viz_random_od), len(cand)))
-            picked = rng.choice(np.asarray(cand, dtype=object), size=k, replace=False).tolist()
-            for od_k in picked:
+            pick_idx = rng.choice(int(len(cand)), size=int(k), replace=False)
+            for ii in pick_idx.tolist():
+                od_k = cand[int(ii)]  # keep as tuple (avoid numpy .tolist() turning it into list)
                 rids = by_od[od_k]
                 clusters_lcs, sig2c_lcs, _sig_table = _corridor_for_od_lcs(rids)
                 dp = _cluster_decision_points_for_od(

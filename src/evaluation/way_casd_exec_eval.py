@@ -40,6 +40,9 @@ class EvalCfg:
     fix_ends: bool
     coord_scale: float
 
+    batch_routes: int
+    frechet_points: int
+
     onroad_prob_thr: float
     spatial_stride: int
     speed_bins: int
@@ -151,6 +154,18 @@ def _path_len(pos_yx: np.ndarray) -> np.ndarray:
     step = np.linalg.norm(disp, axis=-1)
     return np.sum(step, axis=1)
 
+def _linspace_indices(*, T: int, n: int) -> np.ndarray:
+    T = int(T)
+    n = int(n)
+    if n <= 0 or T <= 0:
+        return np.zeros((0,), dtype=np.int64)
+    if n >= T:
+        return np.arange(T, dtype=np.int64)
+    idx = np.rint(np.linspace(0, float(T - 1), n, dtype=np.float64)).astype(np.int64, copy=False)
+    idx[0] = 0
+    idx[-1] = T - 1
+    return np.clip(idx, 0, T - 1).astype(np.int64, copy=False)
+
 
 @torch.no_grad()
 def run_eval(
@@ -224,98 +239,136 @@ def run_eval(
     gt_abs_list = []
     pred_abs_best_list = []
 
-    for rid in picked:
-        ways0 = way_col[int(rid)] or []
-        ys0 = y_col[int(rid)] or []
-        xs0 = x_col[int(rid)] or []
-        ts0 = t_col[int(rid)] or []
-        if m_col is not None:
-            mm = m_col[int(rid)] or []
-            if len(mm) == len(ys0):
-                keep = [int(v) != 0 for v in mm]
-                ys = [int(y) for y, k in zip(ys0, keep) if k]
-                xs = [int(x) for x, k in zip(xs0, keep) if k]
-                ts = [int(t) for t, k in zip(ts0, keep) if k]
-                ways = [int(w) for w, k in zip(ways0, keep) if k]
+    K = int(cfg.n_samples_per_route)
+    batch_routes = max(1, int(cfg.batch_routes))
+    fre_n = max(0, int(cfg.frechet_points))
+    fre_idx = _linspace_indices(T=int(cfg.traj_len), n=int(fre_n)) if fre_n > 0 else None
+
+    for b0 in range(0, len(picked), int(batch_routes)):
+        rids = picked[b0 : b0 + int(batch_routes)]
+        enc_list: List[List[int]] = []
+        lens: List[int] = []
+        gt_abs_batch: List[np.ndarray] = []
+        start_pos_batch: List[np.ndarray] = []
+        dest_pos_batch: List[np.ndarray] = []
+        hour_batch: List[int] = []
+        dow_batch: List[int] = []
+
+        for rid in rids:
+            ways0 = way_col[int(rid)] or []
+            ys0 = y_col[int(rid)] or []
+            xs0 = x_col[int(rid)] or []
+            ts0 = t_col[int(rid)] or []
+            if m_col is not None:
+                mm = m_col[int(rid)] or []
+                if len(mm) == len(ys0):
+                    keep = [int(v) != 0 for v in mm]
+                    ys = [int(y) for y, k in zip(ys0, keep) if k]
+                    xs = [int(x) for x, k in zip(xs0, keep) if k]
+                    ts = [int(t) for t, k in zip(ts0, keep) if k]
+                    ways = [int(w) for w, k in zip(ways0, keep) if k]
+                else:
+                    ys = [int(y) for y in ys0]
+                    xs = [int(x) for x in xs0]
+                    ts = [int(t) for t in ts0]
+                    ways = [int(w) for w in ways0]
             else:
                 ys = [int(y) for y in ys0]
                 xs = [int(x) for x in xs0]
                 ts = [int(t) for t in ts0]
                 ways = [int(w) for w in ways0]
-        else:
-            ys = [int(y) for y in ys0]
-            xs = [int(x) for x in xs0]
-            ts = [int(t) for t in ts0]
-            ways = [int(w) for w in ways0]
 
-        ways = [int(w) for w in ways if int(w) > 0]
-        ways = _dedup_consecutive(ways)
-        enc = [way_to_idx[int(w)] for w in ways if int(w) in way_to_idx]
-        enc = enc[: int(cfg.max_way_len)]
-        L = int(len(enc))
-        if L < int(cfg.min_way_len):
+            ways = [int(w) for w in ways if int(w) > 0]
+            ways = _dedup_consecutive(ways)
+            enc = [way_to_idx[int(w)] for w in ways if int(w) in way_to_idx]
+            enc = enc[: int(cfg.max_way_len)]
+            L = int(len(enc))
+            if L < int(cfg.min_way_len):
+                continue
+
+            yx = np.stack([np.asarray(ys, dtype=np.float32), np.asarray(xs, dtype=np.float32)], axis=1)
+            gt_abs = _resample_polyline(yx, n=int(cfg.traj_len))
+            start_pos = gt_abs[0].astype(np.float32, copy=False)
+            dest_pos = gt_abs[-1].astype(np.float32, copy=False)
+
+            start_t = int(ts[0])
+            hour = int(_hour_from_unix(np.asarray([start_t], dtype=np.int64), float(cfg.tz_offset_hours))[0])
+            dow = int(_dow_from_unix(np.asarray([start_t], dtype=np.int64), float(cfg.tz_offset_hours))[0])
+
+            enc_list.append(enc)
+            lens.append(L)
+            gt_abs_batch.append(gt_abs.astype(np.float32, copy=False))
+            start_pos_batch.append(start_pos.astype(np.float32, copy=False))
+            dest_pos_batch.append(dest_pos.astype(np.float32, copy=False))
+            hour_batch.append(int(hour))
+            dow_batch.append(int(dow))
+
+        B = int(len(enc_list))
+        if B <= 0:
             continue
 
-        yx = np.stack([np.asarray(ys, dtype=np.float32), np.asarray(xs, dtype=np.float32)], axis=1)
-        gt_abs = _resample_polyline(yx, n=int(cfg.traj_len))
-        start_pos = gt_abs[0].astype(np.float32, copy=False)
-        dest_pos = gt_abs[-1].astype(np.float32, copy=False)
-        gt_rel = (gt_abs - start_pos[None, :]) / float(cfg.coord_scale)
+        maxL = int(max(lens))
+        pad = np.full((B, maxL), -1, dtype=np.int64)
+        for i, enc in enumerate(enc_list):
+            Li = int(len(enc))
+            pad[i, :Li] = np.asarray(enc, dtype=np.int64)
 
-        start_t = int(ts[0])
-        hour = int(_hour_from_unix(np.asarray([start_t], dtype=np.int64), float(cfg.tz_offset_hours))[0])
-        dow = int(_dow_from_unix(np.asarray([start_t], dtype=np.int64), float(cfg.tz_offset_hours))[0])
-
-        pad = np.full((1, L), -1, dtype=np.int64)
-        pad[0, :L] = np.asarray(enc, dtype=np.int64)
         z, _ = ae.encode(torch.as_tensor(pad, dtype=torch.long, device=device))
 
+        start_pos_np = np.stack(start_pos_batch, axis=0).astype(np.float32, copy=False)  # (B,2)
+        dest_pos_np = np.stack(dest_pos_batch, axis=0).astype(np.float32, copy=False)  # (B,2)
         rc = {
-            "start_pos": torch.as_tensor(start_pos[None, :], dtype=torch.float32, device=device),
-            "dest_pos": torch.as_tensor(dest_pos[None, :], dtype=torch.float32, device=device),
-            "hour": torch.as_tensor([hour], dtype=torch.long, device=device),
-            "dow": torch.as_tensor([dow], dtype=torch.long, device=device),
-            "route_city": torch.as_tensor([int(route_city)], dtype=torch.long, device=device),
+            "start_pos": torch.as_tensor(start_pos_np, dtype=torch.float32, device=device),
+            "dest_pos": torch.as_tensor(dest_pos_np, dtype=torch.float32, device=device),
+            "hour": torch.as_tensor(np.asarray(hour_batch, dtype=np.int64), dtype=torch.long, device=device),
+            "dow": torch.as_tensor(np.asarray(dow_batch, dtype=np.int64), dtype=torch.long, device=device),
+            "route_city": torch.full((B,), int(route_city), dtype=torch.long, device=device),
         }
 
-        K = int(cfg.n_samples_per_route)
-        preds_rel = []
-        preds_abs = []
-        for _k in range(K):
-            pr = exec_model.sample(route_cond=rc, skeleton_latent=z, traj_len=int(cfg.traj_len), fix_ends=bool(cfg.fix_ends))
-            pr = pr[0].detach().cpu().numpy().astype(np.float32, copy=False)  # (T,2) rel
-            preds_rel.append(pr)
-            preds_abs.append(start_pos[None, :] + pr * float(cfg.coord_scale))
-        preds_rel = np.stack(preds_rel, axis=0)  # (K,T,2)
-        preds_abs = np.stack(preds_abs, axis=0)  # (K,T,2)
+        # Sample K trajectories per route in one batched call (GPU-efficient).
+        z_rep = z.repeat_interleave(int(K), dim=0)
+        rc_rep = {k: v.repeat_interleave(int(K), dim=0) for k, v in rc.items()}
+        pr_rel = exec_model.sample(route_cond=rc_rep, skeleton_latent=z_rep, traj_len=int(cfg.traj_len), fix_ends=bool(cfg.fix_ends))
+        pr_rel_np = pr_rel.detach().cpu().numpy().astype(np.float32, copy=False)  # (B*K,T,2)
 
-        # micro metrics (best/mean over K), in absolute grid coordinates (yx)
-        gt_abs_k = np.repeat(gt_abs[None, :, :], K, axis=0)
-        ade_k = np.linalg.norm(preds_abs - gt_abs_k, axis=-1).mean(axis=-1)
-        fde_k = np.linalg.norm(preds_abs[:, -1, :] - gt_abs[None, -1, :], axis=-1)
-        fre_k = compute_frechet_per_sample(preds_abs, gt_abs_k)
+        start_rep = np.repeat(start_pos_np, repeats=int(K), axis=0).astype(np.float32, copy=False)  # (B*K,2)
+        preds_abs_rep = start_rep[:, None, :] + pr_rel_np * float(cfg.coord_scale)  # (B*K,T,2)
+        preds_abs = preds_abs_rep.reshape(B, int(K), int(cfg.traj_len), 2)
 
-        ade_best.append(float(np.min(ade_k)))
-        ade_mean.append(float(np.mean(ade_k)))
-        fde_best.append(float(np.min(fde_k)))
-        fde_mean.append(float(np.mean(fde_k)))
-        fre_best.append(float(np.min(fre_k)))
-        fre_mean.append(float(np.mean(fre_k)))
+        gt_abs_arr = np.stack(gt_abs_batch, axis=0).astype(np.float32, copy=False)  # (B,T,2)
 
-        # pick best sample by ADE for distribution metrics
-        best_idx = int(np.argmin(ade_k))
-        gt_abs_list.append(gt_abs.astype(np.float32, copy=False))
-        pred_abs_best_list.append(preds_abs[best_idx].astype(np.float32, copy=False))
+        diff = preds_abs - gt_abs_arr[:, None, :, :]
+        ade_k = np.linalg.norm(diff, axis=-1).mean(axis=-1)  # (B,K)
+        fde_k = np.linalg.norm(preds_abs[:, :, -1, :] - gt_abs_arr[:, None, -1, :], axis=-1)  # (B,K)
 
-        # on-road stats (best sample)
-        if road_prob is not None:
-            p_mean, r_on = _road_stats_for_abs_yx(abs_yx=preds_abs[best_idx], road_prob=road_prob, prob_thr=float(cfg.onroad_prob_thr))
-            road_prob_mean.append(float(p_mean))
-            onroad_rate.append(float(r_on))
+        if fre_idx is not None and fre_idx.size > 0:
+            pred_f = preds_abs[:, :, fre_idx, :].reshape(B * int(K), int(fre_idx.size), 2)
+            gt_f = np.repeat(gt_abs_arr[:, None, fre_idx, :], repeats=int(K), axis=1).reshape(B * int(K), int(fre_idx.size), 2)
+            fre_flat = compute_frechet_per_sample(pred_f, gt_f).reshape(B, int(K))
+        else:
+            fre_flat = np.full((B, int(K)), np.nan, dtype=np.float32)
 
-        # length distribution
-        length_gt.append(float(_path_len(gt_abs[None, :, :])[0]))
-        length_pred.append(float(_path_len(preds_abs[best_idx][None, :, :])[0]))
+        for i in range(B):
+            ade_best.append(float(np.min(ade_k[i])))
+            ade_mean.append(float(np.mean(ade_k[i])))
+            fde_best.append(float(np.min(fde_k[i])))
+            fde_mean.append(float(np.mean(fde_k[i])))
+            fre_best.append(float(np.min(fre_flat[i])))
+            fre_mean.append(float(np.mean(fre_flat[i])))
+
+            best_idx = int(np.argmin(ade_k[i]))
+            gt_abs_list.append(gt_abs_arr[i].astype(np.float32, copy=False))
+            pred_abs_best_list.append(preds_abs[i, best_idx].astype(np.float32, copy=False))
+
+            if road_prob is not None:
+                p_mean, r_on = _road_stats_for_abs_yx(
+                    abs_yx=preds_abs[i, best_idx], road_prob=road_prob, prob_thr=float(cfg.onroad_prob_thr)
+                )
+                road_prob_mean.append(float(p_mean))
+                onroad_rate.append(float(r_on))
+
+            length_gt.append(float(_path_len(gt_abs_arr[i : i + 1])[0]))
+            length_pred.append(float(_path_len(preds_abs[i, best_idx : best_idx + 1])[0]))
 
     # aggregate
     out: Dict[str, object] = {
@@ -328,6 +381,7 @@ def run_eval(
             "FDE_mean": float(np.mean(fde_mean)) if fde_mean else float("nan"),
             "Frechet_best": float(np.mean(fre_best)) if fre_best else float("nan"),
             "Frechet_mean": float(np.mean(fre_mean)) if fre_mean else float("nan"),
+            "frechet_points": int(fre_n),
         },
         "onroad": (
             {
@@ -398,6 +452,9 @@ def build_argparser() -> argparse.ArgumentParser:
     p.add_argument("--no_fix_ends", action="store_true")
     p.add_argument("--coord_scale", type=float, default=1024.0)
 
+    p.add_argument("--batch_routes", type=int, default=16, help="GPU batching: number of routes per sampling batch (each expands by K).")
+    p.add_argument("--frechet_points", type=int, default=64, help="Downsample points for discrete Frechet (0=skip).")
+
     p.add_argument("--onroad_prob_thr", type=float, default=0.5)
     p.add_argument("--spatial_stride", type=int, default=4)
     p.add_argument("--speed_bins", type=int, default=120)
@@ -433,6 +490,8 @@ def main() -> None:
         prefer_matched=bool(args.prefer_matched),
         fix_ends=(not bool(args.no_fix_ends)),
         coord_scale=float(args.coord_scale),
+        batch_routes=int(args.batch_routes),
+        frechet_points=int(args.frechet_points),
         onroad_prob_thr=float(args.onroad_prob_thr),
         spatial_stride=int(args.spatial_stride),
         speed_bins=int(args.speed_bins),

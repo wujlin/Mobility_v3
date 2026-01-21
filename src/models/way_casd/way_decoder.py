@@ -103,6 +103,83 @@ class WayDecoder(nn.Module):
     def is_dest_reached(self, way_id: int, dest_way: int) -> bool:
         return int(way_id) == int(dest_way)
 
+    def _select_decode_candidates(
+        self,
+        *,
+        way_embedder: nn.Module,
+        cand_full: torch.Tensor,  # (C_full,)
+        dest_pos: torch.Tensor,  # (1,2) or (2,)
+        dest_way: int,
+        max_candidates: Optional[int],
+        candidate_policy: str,
+        include_dest_if_successor: bool,
+    ) -> torch.Tensor:
+        """
+        Select a decode-time candidate subset from full successors.
+
+        max_candidates:
+          - None: use self.cfg.max_candidates
+          - <=0: use all successors (no truncation)
+          - >0: truncate to that many
+
+        candidate_policy:
+          - "first": keep the first-K successors (status quo)
+          - "destdist": keep the K successors closest to dest_pos (in normalized coord space)
+
+        include_dest_if_successor:
+          If dest_way is a direct successor but gets truncated out, force-include it
+          (mirror training-time _ensure_target behavior for the last hop).
+        """
+        if int(cand_full.numel()) == 0:
+            return cand_full
+
+        if max_candidates is None:
+            k = int(self.cfg.max_candidates)
+        else:
+            k = int(max_candidates)
+
+        # <=0 means "use all"
+        if k <= 0 or int(cand_full.numel()) <= k:
+            return cand_full
+
+        policy = str(candidate_policy).lower().strip()
+        if policy == "destdist":
+            # Compute candidate-to-destination distance in the same normalized coord space
+            # as WayEncoder._lookup and score_candidates().
+            dest = dest_pos.to(dtype=torch.float32)
+            if dest.ndim == 2:
+                dest = dest[0]
+            coord_scale = float(getattr(way_embedder, "coord_scale", self.coord_scale))
+            if coord_scale > 0:
+                dest = dest / coord_scale
+            try:
+                cand_geom, _tier, _hw = way_embedder._lookup(cand_full)
+                cand_center = cand_geom[..., :2].to(dtype=torch.float32)
+                dist = torch.norm(dest[None, :] - cand_center, dim=-1)
+                order = torch.argsort(dist, dim=0)
+                cand = cand_full[order[:k]]
+            except Exception:
+                cand = cand_full[:k]
+        else:
+            cand = cand_full[:k]
+
+        if bool(include_dest_if_successor):
+            dw = int(dest_way)
+            if dw >= 0:
+                try:
+                    in_full = bool((cand_full == dw).any().item())
+                    in_sel = bool((cand == dw).any().item())
+                except Exception:
+                    in_full, in_sel = False, False
+                if in_full and (not in_sel):
+                    if int(cand.numel()) < k:
+                        cand = torch.cat([cand, cand.new_tensor([dw])], dim=0)
+                    else:
+                        cand = cand.clone()
+                        cand[-1] = int(dw)
+
+        return cand
+
     def _compute_context(
         self,
         *,
@@ -235,6 +312,9 @@ class WayDecoder(nn.Module):
         dest_way: torch.Tensor,  # (B,)
         beam_size: int = 5,
         max_len: Optional[int] = None,
+        max_candidates: Optional[int] = None,
+        candidate_policy: str = "first",
+        include_dest_if_successor: bool = False,
     ) -> List[List[int]]:
         max_len = int(max_len) if max_len is not None else int(self.cfg.max_len)
         beam_size = max(1, int(beam_size))
@@ -264,11 +344,21 @@ class WayDecoder(nn.Module):
                         new_beams.append((path, score))
                         continue
                     all_finished = False
-                    cand = self.get_succ_candidates(path[-1])
-                    if int(cand.numel()) == 0:
+                    cand_full = self.get_succ_candidates(path[-1])
+                    if int(cand_full.numel()) == 0:
                         continue
-                    C = min(int(cand.numel()), int(self.cfg.max_candidates))
-                    cand = cand[:C].to(device=device)
+                    cand = self._select_decode_candidates(
+                        way_embedder=way_embedder,
+                        cand_full=cand_full.to(device=device),
+                        dest_pos=route_cond_b["dest_pos"],
+                        dest_way=dw,
+                        max_candidates=max_candidates,
+                        candidate_policy=candidate_policy,
+                        include_dest_if_successor=include_dest_if_successor,
+                    )
+                    C = int(cand.numel())
+                    if C <= 0:
+                        continue
                     cand_way = cand.view(1, C)
                     cand_mask = torch.ones((1, C), dtype=torch.bool, device=device)
                     trans = {
@@ -309,6 +399,9 @@ class WayDecoder(nn.Module):
         start_way: torch.Tensor,  # (B,)
         dest_way: torch.Tensor,  # (B,)
         max_len: Optional[int] = None,
+        max_candidates: Optional[int] = None,
+        candidate_policy: str = "first",
+        include_dest_if_successor: bool = False,
     ) -> List[List[int]]:
         max_len = int(max_len) if max_len is not None else int(self.cfg.max_len)
 
@@ -332,11 +425,21 @@ class WayDecoder(nn.Module):
             for _step in range(max_len):
                 if path and self.is_dest_reached(path[-1], dw):
                     break
-                cand = self.get_succ_candidates(path[-1])
-                if int(cand.numel()) == 0:
+                cand_full = self.get_succ_candidates(path[-1])
+                if int(cand_full.numel()) == 0:
                     break
-                C = min(int(cand.numel()), int(self.cfg.max_candidates))
-                cand = cand[:C].to(device=device)
+                cand = self._select_decode_candidates(
+                    way_embedder=way_embedder,
+                    cand_full=cand_full.to(device=device),
+                    dest_pos=route_cond_b["dest_pos"],
+                    dest_way=dw,
+                    max_candidates=max_candidates,
+                    candidate_policy=candidate_policy,
+                    include_dest_if_successor=include_dest_if_successor,
+                )
+                C = int(cand.numel())
+                if C <= 0:
+                    break
                 cand_way = cand.view(1, C)
                 cand_mask = torch.ones((1, C), dtype=torch.bool, device=device)
                 trans = {

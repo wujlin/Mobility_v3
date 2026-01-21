@@ -33,6 +33,9 @@ class EvalCfg:
     max_decode_len: int
     beam_size: int
     solver_steps: Optional[int]
+    decode_max_candidates: int  # -1=use model cfg; 0=all successors; >0=override
+    decode_candidate_policy: str  # "first" | "destdist"
+    decode_include_dest_if_successor: bool
 
 
 def _set_seed(seed: int) -> None:
@@ -109,7 +112,11 @@ def _decode_one(
     method: DecodeMethod,
     beam_size: int,
     max_decode_len: int,
+    decode_max_candidates: int,
+    decode_candidate_policy: str,
+    decode_include_dest_if_successor: bool,
 ) -> List[List[int]]:
+    max_candidates = None if int(decode_max_candidates) < 0 else int(decode_max_candidates)
     if str(method) == "beam":
         return ae.decoder.beam_search(
             way_embedder=ae.way_enc,
@@ -119,6 +126,9 @@ def _decode_one(
             dest_way=dest_way,
             beam_size=int(beam_size),
             max_len=int(max_decode_len),
+            max_candidates=max_candidates,
+            candidate_policy=str(decode_candidate_policy),
+            include_dest_if_successor=bool(decode_include_dest_if_successor),
         )
     return ae.decoder.greedy_decode(
         way_embedder=ae.way_enc,
@@ -127,7 +137,43 @@ def _decode_one(
         start_way=start_way,
         dest_way=dest_way,
         max_len=int(max_decode_len),
+        max_candidates=max_candidates,
+        candidate_policy=str(decode_candidate_policy),
+        include_dest_if_successor=bool(decode_include_dest_if_successor),
     )
+
+
+def _is_reachable_bfs(ptr: np.ndarray, idx: np.ndarray, start: int, dest: int, *, max_visits: int = 200000) -> bool:
+    """
+    Reachability check on a CSR way-graph. Intended for small graphs (~10^4 ways).
+    """
+    ptr = np.asarray(ptr, dtype=np.int64)
+    idx = np.asarray(idx, dtype=np.int64)
+    n = int(ptr.size) - 1
+    if start < 0 or dest < 0 or start >= n or dest >= n:
+        return False
+    if start == dest:
+        return True
+
+    visited = np.zeros((n,), dtype=np.bool_)
+    q: List[int] = [int(start)]
+    visited[int(start)] = True
+    seen = 0
+    while q:
+        u = q.pop()
+        s = int(ptr[u])
+        e = int(ptr[u + 1])
+        for v in idx[s:e].tolist():
+            vv = int(v)
+            if not visited[vv]:
+                if vv == int(dest):
+                    return True
+                visited[vv] = True
+                q.append(vv)
+        seen += 1
+        if seen >= int(max_visits):
+            break
+    return bool(visited[int(dest)])
 
 
 @torch.no_grad()
@@ -140,6 +186,10 @@ def _eval_city(
     flow: Optional[LatentFlowMatching],
     latent_sources: Sequence[LatentSource],
     decode_methods: Sequence[DecodeMethod],
+    way_adj_ptr: np.ndarray,
+    way_adj_idx: np.ndarray,
+    way_center_y: np.ndarray,
+    way_center_x: np.ndarray,
     device: torch.device,
     log_every: int = 50,
 ) -> Dict[str, object]:
@@ -183,8 +233,81 @@ def _eval_city(
     start_way_t = torch.as_tensor(start_way, dtype=torch.long, device=device)
     dest_way_t = torch.as_tensor(dest_way, dtype=torch.long, device=device)
 
-    # Pad GT for encoder
+    # ---------------- Diagnostics: GT consistency / reachability / candidate coverage ----------------
     B = int(pick.size)
+    start_match = 0
+    dest_match = 0
+    reachable = 0
+    for sw, dw, gt in zip(start_way.tolist(), dest_way.tolist(), gt_seqs):
+        if gt:
+            start_match += int(int(sw) == int(gt[0]))
+            dest_match += int(int(dw) == int(gt[-1]))
+        reachable += int(_is_reachable_bfs(way_adj_ptr, way_adj_idx, int(sw), int(dw)))
+
+    k_eff = int(cfg.decode_max_candidates)
+    if k_eff < 0:
+        k_eff = int(ae.cfg.max_candidates)
+
+    way_center_y = np.asarray(way_center_y, dtype=np.float64).reshape(-1)
+    way_center_x = np.asarray(way_center_x, dtype=np.float64).reshape(-1)
+
+    def _select_cands(prev: int, dest_yx: np.ndarray) -> np.ndarray:
+        s = int(way_adj_ptr[int(prev)])
+        e = int(way_adj_ptr[int(prev) + 1])
+        succ = np.asarray(way_adj_idx[s:e], dtype=np.int64)
+        if k_eff <= 0 or succ.size <= k_eff:
+            return succ
+        if str(cfg.decode_candidate_policy).lower().strip() == "destdist":
+            cy = way_center_y[succ]
+            cx = way_center_x[succ]
+            dy = cy - float(dest_yx[0])
+            dx = cx - float(dest_yx[1])
+            dist = dy * dy + dx * dx
+            order = np.argsort(dist)
+            return succ[order[:k_eff]]
+        return succ[:k_eff]
+
+    n_trans_total = 0
+    n_trans_in = 0
+    n_final_total = 0
+    n_final_in = 0
+    prev_degs: List[int] = []
+    for gt, dpos in zip(gt_seqs, dest_pos):
+        if len(gt) <= 1:
+            continue
+        dpos_yx = np.asarray(dpos, dtype=np.float64).reshape(2)
+        for j in range(1, len(gt)):
+            prev = int(gt[j - 1])
+            tgt = int(gt[j])
+            s = int(way_adj_ptr[prev])
+            e = int(way_adj_ptr[prev + 1])
+            prev_degs.append(int(e - s))
+            cands = _select_cands(prev, dpos_yx)
+            n_trans_total += 1
+            n_trans_in += int(int(tgt) in set(cands.tolist()))
+        prev = int(gt[-2])
+        tgt = int(gt[-1])
+        cands = _select_cands(prev, dpos_yx)
+        n_final_total += 1
+        n_final_in += int(int(tgt) in set(cands.tolist()))
+
+    def _deg_q(q: float) -> float:
+        if not prev_degs:
+            return float("nan")
+        a = np.asarray(prev_degs, dtype=np.float64)
+        return float(np.quantile(a, float(q)))
+
+    diag = {
+        "gt_start_match_rate": float(start_match) / float(max(1, B)),
+        "gt_dest_match_rate": float(dest_match) / float(max(1, B)),
+        "dest_reachable_rate": float(reachable) / float(max(1, B)),
+        "decode_k_eff": int(k_eff),
+        "gt_next_in_decode_cands_rate": float(n_trans_in) / float(max(1, n_trans_total)),
+        "gt_final_in_decode_cands_rate": float(n_final_in) / float(max(1, n_final_total)),
+        "gt_prev_out_deg": {"p50": _deg_q(0.50), "p90": _deg_q(0.90), "max": float(max(prev_degs)) if prev_degs else float("nan")},
+    }
+
+    # Pad GT for encoder
     maxL = int(gt_len.max())
     pad = np.full((B, maxL), -1, dtype=np.int64)
     for i, seq in enumerate(gt_seqs):
@@ -252,6 +375,9 @@ def _eval_city(
                         method=dec,
                         beam_size=int(cfg.beam_size),
                         max_decode_len=int(cfg.max_decode_len),
+                        decode_max_candidates=int(cfg.decode_max_candidates),
+                        decode_candidate_policy=str(cfg.decode_candidate_policy),
+                        decode_include_dest_if_successor=bool(cfg.decode_include_dest_if_successor),
                     )
                     pred_per_k.append(preds)
 
@@ -328,7 +454,14 @@ def _eval_city(
             }
             results[key] = out
 
-    return {"city": int(city), "n_candidates": int(ids.size), "n_eval": int(pick.size), "picked_route_ids": pick.tolist(), "results": results}
+    return {
+        "city": int(city),
+        "n_candidates": int(ids.size),
+        "n_eval": int(pick.size),
+        "picked_route_ids": pick.tolist(),
+        "diag": diag,
+        "results": results,
+    }
 
 
 def build_argparser() -> argparse.ArgumentParser:
@@ -344,6 +477,18 @@ def build_argparser() -> argparse.ArgumentParser:
     p.add_argument("--decode_methods", type=str, nargs="+", default=["greedy", "beam"], choices=["greedy", "beam"])
     p.add_argument("--beam_size", type=int, default=10)
     p.add_argument("--solver_steps", type=int, default=0, help="Override flow solver steps (0=use ckpt/default).")
+    p.add_argument(
+        "--decode_max_candidates",
+        type=int,
+        default=-1,
+        help="Decode candidate cap: -1=use model cfg; 0=all successors; >0=override.",
+    )
+    p.add_argument("--decode_candidate_policy", type=str, default="first", choices=["first", "destdist"])
+    p.add_argument(
+        "--decode_include_dest_if_successor",
+        action="store_true",
+        help="If dest_way is a direct successor but truncated out, force-include it (decode-time only).",
+    )
 
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--device", type=str, default="cuda")
@@ -370,6 +515,9 @@ def main() -> None:
         max_decode_len=int(args.max_decode_len),
         beam_size=int(args.beam_size),
         solver_steps=(int(args.solver_steps) if int(args.solver_steps) > 0 else None),
+        decode_max_candidates=int(args.decode_max_candidates),
+        decode_candidate_policy=str(args.decode_candidate_policy),
+        decode_include_dest_if_successor=bool(args.decode_include_dest_if_successor),
     )
     _set_seed(cfg.seed)
     device = torch.device(cfg.device if (cfg.device != "cuda" or torch.cuda.is_available()) else "cpu")
@@ -464,6 +612,10 @@ def main() -> None:
                 flow=flow,
                 latent_sources=[str(x) for x in args.latent_sources],  # type: ignore[arg-type]
                 decode_methods=[str(x) for x in args.decode_methods],  # type: ignore[arg-type]
+                way_adj_ptr=np.asarray(wg["way_adj_ptr"], dtype=np.int64),
+                way_adj_idx=np.asarray(wg["way_adj_idx"], dtype=np.int64),
+                way_center_y=np.asarray(wf["way_center_y"], dtype=np.float32),
+                way_center_x=np.asarray(wf["way_center_x"], dtype=np.float32),
                 device=device,
                 log_every=50,
             )
@@ -475,4 +627,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

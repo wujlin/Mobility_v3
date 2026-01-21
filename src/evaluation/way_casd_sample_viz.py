@@ -32,6 +32,9 @@ class Cfg:
     beam_size: int  # only used when decode="beam"
     max_decode_len: int
     solver_steps: Optional[int]
+    decode_max_candidates: int  # -1=use model cfg; 0=all successors; >0=override
+    decode_candidate_policy: str  # "first" | "destdist"
+    decode_include_dest_if_successor: bool
     plot_all_ways: bool
 
 
@@ -118,7 +121,11 @@ def _decode(
     decode: str,
     beam_size: int,
     max_decode_len: int,
+    decode_max_candidates: int,
+    decode_candidate_policy: str,
+    decode_include_dest_if_successor: bool,
 ) -> List[List[int]]:
+    max_candidates = None if int(decode_max_candidates) < 0 else int(decode_max_candidates)
     if str(decode) == "beam":
         return ae.decoder.beam_search(
             way_embedder=ae.way_enc,
@@ -128,6 +135,9 @@ def _decode(
             dest_way=dest_way,
             beam_size=int(beam_size),
             max_len=int(max_decode_len),
+            max_candidates=max_candidates,
+            candidate_policy=str(decode_candidate_policy),
+            include_dest_if_successor=bool(decode_include_dest_if_successor),
         )
     return ae.decoder.greedy_decode(
         way_embedder=ae.way_enc,
@@ -136,6 +146,9 @@ def _decode(
         start_way=start_way,
         dest_way=dest_way,
         max_len=int(max_decode_len),
+        max_candidates=max_candidates,
+        candidate_policy=str(decode_candidate_policy),
+        include_dest_if_successor=bool(decode_include_dest_if_successor),
     )
 
 
@@ -371,6 +384,18 @@ def build_argparser() -> argparse.ArgumentParser:
     p.add_argument("--decode", choices=["greedy", "beam"], default="greedy", help="Decode strategy (default: greedy).")
     p.add_argument("--beam_size", type=int, default=5)
     p.add_argument("--max_decode_len", type=int, default=160)
+    p.add_argument(
+        "--decode_max_candidates",
+        type=int,
+        default=-1,
+        help="Decode candidate cap: -1=use model cfg; 0=all successors; >0=override.",
+    )
+    p.add_argument("--decode_candidate_policy", type=str, default="first", choices=["first", "destdist"])
+    p.add_argument(
+        "--decode_include_dest_if_successor",
+        action="store_true",
+        help="If dest_way is a direct successor but truncated out, force-include it (decode-time only).",
+    )
     p.add_argument("--solver_steps", type=int, default=0, help="Override solver steps (0=use ckpt/default).")
     p.add_argument(
         "--latent_source",
@@ -398,6 +423,9 @@ def main() -> None:
         beam_size=int(args.beam_size),
         max_decode_len=int(args.max_decode_len),
         solver_steps=(int(args.solver_steps) if int(args.solver_steps) > 0 else None),
+        decode_max_candidates=int(args.decode_max_candidates),
+        decode_candidate_policy=str(args.decode_candidate_policy),
+        decode_include_dest_if_successor=bool(args.decode_include_dest_if_successor),
         plot_all_ways=bool(args.plot_all_ways),
     )
     _set_seed(cfg.seed)
@@ -544,6 +572,9 @@ def main() -> None:
             decode=str(cfg.decode),
             beam_size=int(cfg.beam_size),
             max_decode_len=int(cfg.max_decode_len),
+            decode_max_candidates=int(cfg.decode_max_candidates),
+            decode_candidate_policy=str(cfg.decode_candidate_policy),
+            decode_include_dest_if_successor=bool(cfg.decode_include_dest_if_successor),
         )
 
         pred_success = [bool(p and int(p[-1]) == int(routes.dest_way[rid])) for p in pred]

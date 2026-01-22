@@ -315,6 +315,7 @@ class WayDecoder(nn.Module):
         max_candidates: Optional[int] = None,
         candidate_policy: str = "first",
         include_dest_if_successor: bool = False,
+        guided_dest_alpha: float = 0.0,
     ) -> List[List[int]]:
         max_len = int(max_len) if max_len is not None else int(self.cfg.max_len)
         beam_size = max(1, int(beam_size))
@@ -374,6 +375,19 @@ class WayDecoder(nn.Module):
                         trans=trans,
                         cond_emb=cond_emb_b,
                     )[0]
+                    alpha = float(guided_dest_alpha)
+                    if abs(alpha) > 1e-12:
+                        try:
+                            coord_scale = float(getattr(way_embedder, "coord_scale", self.coord_scale))
+                            dest = route_cond_b["dest_pos"].to(dtype=torch.float32)
+                            if coord_scale > 0:
+                                dest = dest / coord_scale
+                            cand_geom, _tier, _hw = way_embedder._lookup(cand_way)
+                            cand_center = cand_geom[..., :2].to(dtype=torch.float32)
+                            dist = torch.norm(dest[:, None, :] - cand_center, dim=-1)  # (1,C)
+                            logits = logits - alpha * dist[0]
+                        except Exception:
+                            pass
                     logp = F.log_softmax(logits, dim=-1)
                     topk = min(beam_size, int(logp.numel()))
                     vals, ids = torch.topk(logp, k=topk, dim=-1)
@@ -402,6 +416,7 @@ class WayDecoder(nn.Module):
         max_candidates: Optional[int] = None,
         candidate_policy: str = "first",
         include_dest_if_successor: bool = False,
+        guided_dest_alpha: float = 0.0,
     ) -> List[List[int]]:
         max_len = int(max_len) if max_len is not None else int(self.cfg.max_len)
 
@@ -455,6 +470,19 @@ class WayDecoder(nn.Module):
                     trans=trans,
                     cond_emb=cond_emb_b,
                 )[0]
+                alpha = float(guided_dest_alpha)
+                if abs(alpha) > 1e-12:
+                    try:
+                        coord_scale = float(getattr(way_embedder, "coord_scale", self.coord_scale))
+                        dest = route_cond_b["dest_pos"].to(dtype=torch.float32)
+                        if coord_scale > 0:
+                            dest = dest / coord_scale
+                        cand_geom, _tier, _hw = way_embedder._lookup(cand_way)
+                        cand_center = cand_geom[..., :2].to(dtype=torch.float32)
+                        dist = torch.norm(dest[:, None, :] - cand_center, dim=-1)  # (1,C)
+                        logits = logits - alpha * dist[0]
+                    except Exception:
+                        pass
                 j = int(torch.argmax(logits, dim=-1).item()) if int(logits.numel()) else 0
                 path.append(int(cand[j].item()))
 

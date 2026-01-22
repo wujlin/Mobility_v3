@@ -33,6 +33,7 @@ class Cfg:
     decode_max_candidates: int  # -1=use model cfg; 0=all successors; >0=override
     decode_candidate_policy: str  # first | destdist
     decode_include_dest_if_successor: bool
+    decode_guided_dest_alpha: float
 
     last_k_steps: int
     reachability_max_visits: int
@@ -324,6 +325,7 @@ def run(cfg: Cfg, *, way_routes_npz: Path, way_graph_npz: Path, way_features_npz
                     max_candidates=(None if int(cfg.decode_max_candidates) < 0 else int(cfg.decode_max_candidates)),
                     candidate_policy=str(cfg.decode_candidate_policy),
                     include_dest_if_successor=bool(cfg.decode_include_dest_if_successor),
+                    guided_dest_alpha=float(cfg.decode_guided_dest_alpha),
                 )[0]
             else:
                 pred = ae.decoder.greedy_decode(
@@ -336,6 +338,7 @@ def run(cfg: Cfg, *, way_routes_npz: Path, way_graph_npz: Path, way_features_npz
                     max_candidates=(None if int(cfg.decode_max_candidates) < 0 else int(cfg.decode_max_candidates)),
                     candidate_policy=str(cfg.decode_candidate_policy),
                     include_dest_if_successor=bool(cfg.decode_include_dest_if_successor),
+                    guided_dest_alpha=float(cfg.decode_guided_dest_alpha),
                 )[0]
 
             pred = [int(x) for x in pred]
@@ -537,6 +540,12 @@ def build_argparser() -> argparse.ArgumentParser:
     p.add_argument("--decode_max_candidates", type=int, default=-1, help="-1=use model cfg; 0=all successors; >0=override.")
     p.add_argument("--decode_candidate_policy", choices=["first", "destdist"], default="first")
     p.add_argument("--decode_include_dest_if_successor", action="store_true")
+    p.add_argument(
+        "--decode_guided_dest_alpha",
+        type=float,
+        default=0.0,
+        help="Decode-time heuristic: logits <- logits - alpha * dist_to_dest (in normalized coord space).",
+    )
 
     p.add_argument("--last_k_steps", type=int, default=5, help="Inspect last K transitions for dest/pred-of-dest availability.")
     p.add_argument("--reachability_max_visits", type=int, default=200000, help="Safety cap for reverse BFS visits.")
@@ -558,6 +567,7 @@ def main() -> None:
         decode_max_candidates=int(args.decode_max_candidates),
         decode_candidate_policy=str(args.decode_candidate_policy),
         decode_include_dest_if_successor=bool(args.decode_include_dest_if_successor),
+        decode_guided_dest_alpha=float(args.decode_guided_dest_alpha),
         last_k_steps=int(args.last_k_steps),
         reachability_max_visits=int(args.reachability_max_visits),
         progress_every=int(args.progress_every),
@@ -576,4 +586,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

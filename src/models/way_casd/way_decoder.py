@@ -22,6 +22,9 @@ class WayDecoderCfg:
     n_cross_heads: int = 4
     # Backward compatibility:
     use_dest_dist: bool = True
+    # Query enrichment (for early-step disambiguation)
+    use_step_emb: bool = False
+    use_dest_query: bool = False
 
 
 class WayDecoder(nn.Module):
@@ -48,12 +51,26 @@ class WayDecoder(nn.Module):
         self.cond_enc = ConditionEncoder(cond_cfg)
         self.coord_scale = float(getattr(cond_cfg, "coord_scale", 0.0))
 
+        self.use_step_emb = bool(cfg.use_step_emb)
+        self.use_dest_query = bool(cfg.use_dest_query)
+
         self.register_buffer("way_adj_ptr", torch.as_tensor(way_adj_ptr, dtype=torch.long), persistent=False)
         self.register_buffer("way_adj_idx", torch.as_tensor(way_adj_idx, dtype=torch.long), persistent=False)
 
         d_model = int(cfg.d_model)
         hidden = int(cfg.hidden_dim)
-        
+
+        if self.use_step_emb:
+            # Step index is clamped to [0, max_len], so this is safe across decode lengths.
+            self.step_emb = nn.Embedding(int(cfg.max_len) + 1, d_model)
+        else:
+            self.step_emb = None
+
+        if self.use_dest_query:
+            self.dest_proj = nn.Linear(2, d_model)
+        else:
+            self.dest_proj = None
+
         # Cross-attention: query=cur_way, key/value=latent_tokens
         self.use_cross_attn = bool(cfg.use_cross_attn)
         if self.use_cross_attn:
@@ -188,6 +205,8 @@ class WayDecoder(nn.Module):
         cond_emb: torch.Tensor,  # (B, d_model)
         cur_way: torch.Tensor,  # (T,)
         route_idx: torch.Tensor,  # (T,)
+        step: torch.Tensor,  # (T,)
+        dest_pos: torch.Tensor,  # (B,2)
     ) -> torch.Tensor:
         """
         Compute context vector for each transition.
@@ -204,7 +223,25 @@ class WayDecoder(nn.Module):
         # Get current way embeddings
         cur_emb, _ = way_embedder(cur_way[:, None])  # (T, 1, d_model)
         cur_emb = cur_emb[:, 0, :]  # (T, d_model)
-        
+
+        # Enrich query (optional)
+        query_vec = cur_emb
+        if self.use_step_emb and self.step_emb is not None:
+            s = step.to(dtype=torch.long)
+            # Clamp step to avoid OOB when max_decode_len > cfg.max_len
+            s = torch.clamp(s, 0, self.step_emb.num_embeddings - 1)
+            query_vec = query_vec + self.step_emb(s)
+
+        if self.use_dest_query and self.dest_proj is not None:
+            # Project destination position in the same normalized coord space
+            # used by ConditionEncoder / WayEncoder.
+            dest = dest_pos.to(dtype=torch.float32)
+            coord_scale = float(getattr(way_embedder, "coord_scale", self.coord_scale))
+            if coord_scale > 0:
+                dest = dest / coord_scale
+            dest_t = dest[route_idx]  # (T,2)
+            query_vec = query_vec + self.dest_proj(dest_t)
+
         if self.use_cross_attn:
             # Cross-attention: each cur_way queries its route's latent_tokens
             # We need to gather latent_tokens by route_idx
@@ -215,10 +252,10 @@ class WayDecoder(nn.Module):
             # Gather latent tokens for each transition
             lat_gathered = latent_tokens[route_idx]  # (T, L, d_model)
             
-            # Cross-attention: query=cur_emb (T,1,d), key/value=lat_gathered (T,L,d)
-            query = cur_emb.unsqueeze(1)  # (T, 1, d_model)
+            # Cross-attention: query=query_vec (T,1,d), key/value=lat_gathered (T,L,d)
+            query = query_vec.unsqueeze(1)  # (T, 1, d_model)
             attn_out, _ = self.cross_attn(query, lat_gathered, lat_gathered)  # (T, 1, d_model)
-            attn_out = self.cross_ln(attn_out[:, 0, :] + cur_emb)  # (T, d_model), residual
+            attn_out = self.cross_ln(attn_out[:, 0, :] + query_vec)  # (T, d_model), residual
             
             # Combine with condition embedding
             cond_t = cond_emb[route_idx]  # (T, d_model)
@@ -244,6 +281,10 @@ class WayDecoder(nn.Module):
         cur_way = trans["cur_way"].to(dtype=torch.long)
         cand_way = trans["cand_way"].to(dtype=torch.long)
         cand_mask = trans["cand_mask"].to(dtype=torch.bool)
+        step = trans.get("step", None)
+        if step is None:
+            step = torch.zeros_like(cur_way)
+        step = step.to(dtype=torch.long)
 
         B = int(latent_tokens.shape[0])
         if int(route_idx.max().item()) >= B:
@@ -266,6 +307,8 @@ class WayDecoder(nn.Module):
             cond_emb=cond_emb,
             cur_way=cur_way,
             route_idx=route_idx,
+            step=step,
+            dest_pos=route_cond["dest_pos"],
         )
 
         # Current way projection
@@ -362,11 +405,13 @@ class WayDecoder(nn.Module):
                         continue
                     cand_way = cand.view(1, C)
                     cand_mask = torch.ones((1, C), dtype=torch.bool, device=device)
+                    step_idx = max(0, int(len(path) - 1))
                     trans = {
                         "route_idx": torch.tensor([0], dtype=torch.long, device=device),
                         "cur_way": torch.tensor([int(path[-1])], dtype=torch.long, device=device),
                         "cand_way": cand_way,
                         "cand_mask": cand_mask,
+                        "step": torch.tensor([step_idx], dtype=torch.long, device=device),
                     }
                     logits = self.score_candidates(
                         way_embedder=way_embedder,
@@ -437,7 +482,7 @@ class WayDecoder(nn.Module):
             )
 
             path: List[int] = [sw]
-            for _step in range(max_len):
+            for step_idx in range(max_len):
                 if path and self.is_dest_reached(path[-1], dw):
                     break
                 cand_full = self.get_succ_candidates(path[-1])
@@ -462,6 +507,7 @@ class WayDecoder(nn.Module):
                     "cur_way": torch.tensor([int(path[-1])], dtype=torch.long, device=device),
                     "cand_way": cand_way,
                     "cand_mask": cand_mask,
+                    "step": torch.tensor([int(step_idx)], dtype=torch.long, device=device),
                 }
                 logits = self.score_candidates(
                     way_embedder=way_embedder,

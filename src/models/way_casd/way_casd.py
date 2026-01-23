@@ -27,6 +27,9 @@ class WayCASDAECfg:
     # Cross-attention decoder (key improvement for latent utilization)
     decoder_use_cross_attn: bool = True
     decoder_n_cross_heads: int = 4
+    # Query enrichment (optional)
+    decoder_use_step_emb: bool = False
+    decoder_use_dest_query: bool = False
 
 
 class WayCASDAutoEncoder(nn.Module):
@@ -76,6 +79,8 @@ class WayCASDAutoEncoder(nn.Module):
                 use_dest_dist=bool(cfg.decoder_use_dest_dist),
                 use_cross_attn=bool(cfg.decoder_use_cross_attn),
                 n_cross_heads=int(cfg.decoder_n_cross_heads),
+                use_step_emb=bool(cfg.decoder_use_step_emb),
+                use_dest_query=bool(cfg.decoder_use_dest_query),
             ),
             cond_cfg=ConditionEncoderCfg(
                 d_model=int(cfg.d_model),

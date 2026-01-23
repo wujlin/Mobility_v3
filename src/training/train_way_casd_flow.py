@@ -84,6 +84,21 @@ def _infer_decoder_use_dest_dist_from_state(state: Dict[str, torch.Tensor]) -> b
     return True
 
 
+def _infer_decoder_use_cross_attn_from_state(state: Dict[str, torch.Tensor]) -> bool:
+    for k in state.keys():
+        if str(k).startswith("decoder.cross_attn."):
+            return True
+    return False
+
+
+def _infer_decoder_use_step_emb_from_state(state: Dict[str, torch.Tensor]) -> bool:
+    return any(str(k).startswith("decoder.step_emb.") for k in state.keys())
+
+
+def _infer_decoder_use_dest_query_from_state(state: Dict[str, torch.Tensor]) -> bool:
+    return any(str(k).startswith("decoder.dest_proj.") for k in state.keys())
+
+
 def _to_device(batch: Dict[str, object], device: torch.device) -> Dict[str, object]:
     way_seq_pad = batch["way_seq_pad"].to(device)
     route_cond = {k: v.to(device) for k, v in batch["route_cond"].items()}
@@ -252,14 +267,33 @@ def main() -> None:
         collate_fn=collate_fn,
     )
 
+    ckpt = torch.load(str(args.ae_ckpt), map_location=device)
+    ae_state = ckpt["model_state_dict"] if isinstance(ckpt, dict) and "model_state_dict" in ckpt else ckpt
+    ae_cfg_dict: Dict[str, object] = {}
+    if isinstance(ckpt, dict) and isinstance(ckpt.get("config", None), dict):
+        ae_cfg_dict = ckpt["config"]  # type: ignore[assignment]
+
+    if not isinstance(ae_state, dict):
+        raise TypeError(f"Unexpected AE state format: {type(ae_state)}")
+
+    use_dest_dist = _infer_decoder_use_dest_dist_from_state(ae_state)
+    use_cross_attn = _infer_decoder_use_cross_attn_from_state(ae_state)
+    use_step_emb = _infer_decoder_use_step_emb_from_state(ae_state) or bool(ae_cfg_dict.get("decoder_use_step_emb", False))
+    use_dest_query = _infer_decoder_use_dest_query_from_state(ae_state) or bool(ae_cfg_dict.get("decoder_use_dest_query", False))
+
     ae = WayCASDAutoEncoder(
         cfg=WayCASDAECfg(
-            d_model=int(cfg.d_model),
-            n_latent=int(cfg.n_latent),
-            n_heads=int(cfg.n_heads),
-            dropout=float(cfg.dropout),
-            max_candidates=int(cfg.max_candidates),
-            max_len=int(cfg.max_way_len),
+            d_model=int(ae_cfg_dict.get("d_model", cfg.d_model)),
+            n_latent=int(ae_cfg_dict.get("n_latent", cfg.n_latent)),
+            n_heads=int(ae_cfg_dict.get("n_heads", cfg.n_heads)),
+            dropout=float(ae_cfg_dict.get("dropout", cfg.dropout)),
+            max_candidates=int(ae_cfg_dict.get("max_candidates", cfg.max_candidates)),
+            max_len=int(ae_cfg_dict.get("max_len", cfg.max_way_len)),
+            coord_scale=float(ae_cfg_dict.get("coord_scale", 1024.0)),
+            decoder_use_dest_dist=bool(use_dest_dist),
+            decoder_use_cross_attn=bool(use_cross_attn),
+            decoder_use_step_emb=bool(use_step_emb),
+            decoder_use_dest_query=bool(use_dest_query),
         ),
         way_features=way_features,
         way_adj_ptr=wg["way_adj_ptr"],
@@ -267,28 +301,7 @@ def main() -> None:
         n_highway_types=int(max(4, n_highway_types)),
     ).to(device)
 
-    ckpt = torch.load(str(args.ae_ckpt), map_location=device)
-    ae_state = ckpt["model_state_dict"] if isinstance(ckpt, dict) and "model_state_dict" in ckpt else ckpt
-    if isinstance(ae_state, dict):
-        use_dest_dist = _infer_decoder_use_dest_dist_from_state(ae_state)
-        if not bool(use_dest_dist):
-            # Rebuild AE with legacy decoder shape to load old checkpoints.
-            ae = WayCASDAutoEncoder(
-                cfg=WayCASDAECfg(
-                    d_model=int(cfg.d_model),
-                    n_latent=int(cfg.n_latent),
-                    n_heads=int(cfg.n_heads),
-                    dropout=float(cfg.dropout),
-                    max_candidates=int(cfg.max_candidates),
-                    max_len=int(cfg.max_way_len),
-                    decoder_use_dest_dist=False,
-                ),
-                way_features=way_features,
-                way_adj_ptr=wg["way_adj_ptr"],
-                way_adj_idx=wg["way_adj_idx"],
-                n_highway_types=int(max(4, n_highway_types)),
-            ).to(device)
-    ae.load_state_dict(ae_state)
+    ae.load_state_dict(ae_state, strict=True)
     ae.eval()
     for p in ae.parameters():
         p.requires_grad_(False)

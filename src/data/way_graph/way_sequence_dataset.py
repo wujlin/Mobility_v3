@@ -168,6 +168,7 @@ def make_way_casd_collate_fn(
         route_idx: List[int] = []
         cur_way: List[int] = []
         target_idx: List[int] = []
+        step: List[int] = []
         cand_way_rows: List[np.ndarray] = []
         cand_mask_rows: List[np.ndarray] = []
 
@@ -190,6 +191,7 @@ def make_way_casd_collate_fn(
                 route_idx.append(bi)
                 cur_way.append(prev)
                 target_idx.append(pos)
+                step.append(int(j - 1))
                 cand_way_rows.append(row)
                 cand_mask_rows.append(mask)
 
@@ -206,6 +208,7 @@ def make_way_casd_collate_fn(
             "cand_way": cand_way,
             "cand_mask": cand_mask,
             "target_idx": torch.as_tensor(np.asarray(target_idx, dtype=np.int64), dtype=torch.long),
+            "step": torch.as_tensor(np.asarray(step, dtype=np.int64), dtype=torch.long),
         }
 
         return {

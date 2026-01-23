@@ -86,6 +86,22 @@ def _infer_decoder_use_dest_dist_from_state(state: Dict[str, torch.Tensor]) -> b
     return True
 
 
+def _infer_decoder_use_cross_attn_from_state(state: Dict[str, torch.Tensor]) -> bool:
+    # New decoder has keys like "decoder.cross_attn.in_proj_weight".
+    for k in state.keys():
+        if str(k).startswith("decoder.cross_attn."):
+            return True
+    return False
+
+
+def _infer_decoder_use_step_emb_from_state(state: Dict[str, torch.Tensor]) -> bool:
+    return any(str(k).startswith("decoder.step_emb.") for k in state.keys())
+
+
+def _infer_decoder_use_dest_query_from_state(state: Dict[str, torch.Tensor]) -> bool:
+    return any(str(k).startswith("decoder.dest_proj.") for k in state.keys())
+
+
 def _jaccard(a: List[int], b: List[int]) -> float:
     sa = set(int(x) for x in a)
     sb = set(int(x) for x in b)
@@ -469,6 +485,9 @@ def main() -> None:
     # ===== Load AE =====
     ae_state, ae_cfg_dict = _load_ckpt_state_and_cfg(Path(args.ae_ckpt))
     use_dest_dist = _infer_decoder_use_dest_dist_from_state(ae_state)
+    use_cross_attn = _infer_decoder_use_cross_attn_from_state(ae_state) or bool(ae_cfg_dict.get("decoder_use_cross_attn", True))
+    use_step_emb = _infer_decoder_use_step_emb_from_state(ae_state) or bool(ae_cfg_dict.get("decoder_use_step_emb", False))
+    use_dest_query = _infer_decoder_use_dest_query_from_state(ae_state) or bool(ae_cfg_dict.get("decoder_use_dest_query", False))
     ae_cfg = WayCASDAECfg(
         d_model=int(ae_cfg_dict.get("d_model", 256)),
         n_latent=int(ae_cfg_dict.get("n_latent", 32)),
@@ -476,8 +495,12 @@ def main() -> None:
         dropout=float(ae_cfg_dict.get("dropout", 0.1)),
         max_candidates=int(ae_cfg_dict.get("max_candidates", 32)),
         max_len=int(ae_cfg_dict.get("max_len", 160)),
-        coord_scale=1024.0,
+        coord_scale=float(ae_cfg_dict.get("coord_scale", 1024.0)),
         decoder_use_dest_dist=bool(use_dest_dist),
+        decoder_use_cross_attn=bool(use_cross_attn),
+        decoder_n_cross_heads=int(ae_cfg_dict.get("decoder_n_cross_heads", 4)),
+        decoder_use_step_emb=bool(use_step_emb),
+        decoder_use_dest_query=bool(use_dest_query),
     )
     ae = WayCASDAutoEncoder(
         cfg=ae_cfg,

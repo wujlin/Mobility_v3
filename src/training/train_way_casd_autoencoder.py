@@ -45,6 +45,8 @@ class TrainCfg:
     n_heads: int
     dropout: float
     max_len: int
+    decoder_use_step_emb: bool
+    decoder_use_dest_query: bool
 
 
 def _set_seed(seed: int) -> None:
@@ -135,6 +137,8 @@ def build_argparser() -> argparse.ArgumentParser:
     p.add_argument("--n_heads", type=int, default=8)
     p.add_argument("--dropout", type=float, default=0.1)
     p.add_argument("--max_len", type=int, default=128)
+    p.add_argument("--decoder_use_step_emb", action="store_true", help="Add step embedding into cross-attn query (decoder).")
+    p.add_argument("--decoder_use_dest_query", action="store_true", help="Add dest_pos projection into cross-attn query (decoder).")
 
     # Long-run training ergonomics
     p.add_argument("--resume_ckpt", type=Path, default=None, help="Optional: resume from ckpt_last.pt/ckpt_best.pt.")
@@ -167,6 +171,8 @@ def main() -> None:
         n_heads=int(args.n_heads),
         dropout=float(args.dropout),
         max_len=int(args.max_len),
+        decoder_use_step_emb=bool(args.decoder_use_step_emb),
+        decoder_use_dest_query=bool(args.decoder_use_dest_query),
     )
 
     _set_seed(cfg.seed)
@@ -232,6 +238,8 @@ def main() -> None:
             dropout=float(cfg.dropout),
             max_candidates=int(cfg.max_candidates),
             max_len=int(cfg.max_len),
+            decoder_use_step_emb=bool(cfg.decoder_use_step_emb),
+            decoder_use_dest_query=bool(cfg.decoder_use_dest_query),
         ),
         way_features=way_features,
         way_adj_ptr=wg["way_adj_ptr"],

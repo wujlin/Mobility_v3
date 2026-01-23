@@ -553,6 +553,8 @@ def main() -> None:
             decoder_use_dest_dist=bool(ae_cfg_dict.get("decoder_use_dest_dist", True)),
             decoder_use_cross_attn=bool(ae_cfg_dict.get("decoder_use_cross_attn", True)),
             decoder_n_cross_heads=int(ae_cfg_dict.get("decoder_n_cross_heads", 4)),
+            decoder_use_step_emb=bool(ae_cfg_dict.get("decoder_use_step_emb", False)),
+            decoder_use_dest_query=bool(ae_cfg_dict.get("decoder_use_dest_query", False)),
         ),
         way_features=way_features,
         way_adj_ptr=wg["way_adj_ptr"],

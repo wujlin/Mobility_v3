@@ -100,6 +100,14 @@ def _infer_decoder_use_cross_attn_from_state(state: Dict[str, torch.Tensor]) -> 
     return False
 
 
+def _infer_decoder_use_step_emb_from_state(state: Dict[str, torch.Tensor]) -> bool:
+    return any(str(k).startswith("decoder.step_emb.") for k in state.keys())
+
+
+def _infer_decoder_use_dest_query_from_state(state: Dict[str, torch.Tensor]) -> bool:
+    return any(str(k).startswith("decoder.dest_proj.") for k in state.keys())
+
+
 def _split_dataset(n: int, val_ratio: float, seed: int) -> Tuple[np.ndarray, np.ndarray]:
     rng = np.random.default_rng(int(seed))
     perm = rng.permutation(int(n))
@@ -454,6 +462,8 @@ def main() -> None:
     ae_state, ae_cfg_dict = _load_ckpt_state_and_cfg(Path(args.ae_ckpt))
     use_dest_dist = _infer_decoder_use_dest_dist_from_state(ae_state)
     use_cross_attn = _infer_decoder_use_cross_attn_from_state(ae_state)
+    use_step_emb = _infer_decoder_use_step_emb_from_state(ae_state) or bool(ae_cfg_dict.get("decoder_use_step_emb", False))
+    use_dest_query = _infer_decoder_use_dest_query_from_state(ae_state) or bool(ae_cfg_dict.get("decoder_use_dest_query", False))
     ae_cfg = WayCASDAECfg(
         d_model=int(ae_cfg_dict.get("d_model", cfg.d_model)),
         n_latent=int(ae_cfg_dict.get("n_latent", cfg.n_latent)),
@@ -464,6 +474,8 @@ def main() -> None:
         coord_scale=float(ae_cfg_dict.get("coord_scale", cfg.coord_scale)),
         decoder_use_dest_dist=bool(use_dest_dist),
         decoder_use_cross_attn=bool(use_cross_attn),
+        decoder_use_step_emb=bool(use_step_emb),
+        decoder_use_dest_query=bool(use_dest_query),
     )
     ae = WayCASDAutoEncoder(
         cfg=ae_cfg,

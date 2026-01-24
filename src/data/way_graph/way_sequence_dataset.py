@@ -163,6 +163,7 @@ def make_way_casd_collate_fn(
             "start_way": torch.as_tensor(np.asarray([int(b["start_way"]) for b in batch], dtype=np.int64), dtype=torch.long),
             "dest_way": torch.as_tensor(np.asarray([int(b["dest_way"]) for b in batch], dtype=np.int64), dtype=torch.long),
         }
+        route_id = torch.as_tensor(np.asarray([int(b["route_id"]) for b in batch], dtype=np.int64), dtype=torch.long)
 
         # Packed transitions: for each step j>=1, predict way[j] from way[j-1] candidates.
         route_idx: List[int] = []
@@ -212,6 +213,7 @@ def make_way_casd_collate_fn(
         }
 
         return {
+            "route_id": route_id,
             "way_seq_pad": torch.as_tensor(way_pad, dtype=torch.long),
             "way_seq_len": torch.as_tensor(way_lens, dtype=torch.long),
             "route_cond": route_cond,

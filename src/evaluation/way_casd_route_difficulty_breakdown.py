@@ -126,8 +126,16 @@ def _eval_subset(
     feat: Dict[int, Dict[str, float]] = {}
 
     # Graph pointers for route feature computation (CPU np arrays)
-    ptr = np.asarray(ae.decoder.way_adj_ptr, dtype=np.int64)
-    idx = np.asarray(ae.decoder.way_adj_idx, dtype=np.int64)
+    ptr_t = ae.decoder.way_adj_ptr
+    idx_t = ae.decoder.way_adj_idx
+    if isinstance(ptr_t, torch.Tensor):
+        ptr = ptr_t.detach().cpu().numpy().astype(np.int64, copy=False)
+    else:
+        ptr = np.asarray(ptr_t, dtype=np.int64)
+    if isinstance(idx_t, torch.Tensor):
+        idx = idx_t.detach().cpu().numpy().astype(np.int64, copy=False)
+    else:
+        idx = np.asarray(idx_t, dtype=np.int64)
 
     for batch in tqdm(loader, desc="eval", dynamic_ncols=True):
         b = _to_device(batch, device)
@@ -366,4 +374,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

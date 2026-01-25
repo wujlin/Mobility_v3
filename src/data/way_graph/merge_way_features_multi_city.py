@@ -56,6 +56,8 @@ def merge_features(inputs: List[Path], way_routes_npz: Path, out_npz: Path) -> D
     filled = np.zeros((M,), dtype=bool)
 
     hw_vocab = None
+    sem_keys = None
+    out_semantic = None
 
     for inp in inputs:
         data = np.load(str(inp), allow_pickle=True)
@@ -79,6 +81,24 @@ def merge_features(inputs: List[Path], way_routes_npz: Path, out_npz: Path) -> D
             if isinstance(meta, dict) and "vocab" in meta and "highway" in meta["vocab"]:
                 if hw_vocab is None:
                     hw_vocab = meta["vocab"]["highway"]
+            if isinstance(meta, dict) and "semantic" in meta and isinstance(meta["semantic"], dict):
+                keys = meta["semantic"].get("keys")
+                if isinstance(keys, (list, tuple)) and keys:
+                    if sem_keys is None:
+                        sem_keys = list(keys)
+                    else:
+                        if list(keys) != list(sem_keys):
+                            raise ValueError(f"semantic keys mismatch across inputs: {inp} has {list(keys)} expected {list(sem_keys)}")
+
+        city_sem = None
+        if "way_semantic" in data.files:
+            city_sem = np.asarray(data["way_semantic"], dtype=np.float32)
+            if city_sem.ndim != 2 or city_sem.shape[0] != M:
+                raise ValueError(f"Bad way_semantic shape in {inp}: {city_sem.shape} (expected {(M, 'C')})")
+            if out_semantic is None:
+                out_semantic = np.zeros((M, int(city_sem.shape[1])), dtype=np.float32)
+            elif out_semantic.shape[1] != int(city_sem.shape[1]):
+                raise ValueError(f"way_semantic dim mismatch: {inp} has C={city_sem.shape[1]} expected {out_semantic.shape[1]}")
 
         # Fill unfilled positions with this city's data.
         city_has_data = city_len > 0
@@ -91,6 +111,10 @@ def merge_features(inputs: List[Path], way_routes_npz: Path, out_npz: Path) -> D
         out_dir_x[to_fill] = city_dir_x[to_fill]
         out_tier[to_fill] = city_tier[to_fill]
         out_hw_code[to_fill] = city_hw[to_fill]
+        if out_semantic is not None:
+            if city_sem is None:
+                raise ValueError(f"Missing way_semantic in {inp} but previous inputs had it (need consistent features).")
+            out_semantic[to_fill] = city_sem[to_fill]
         filled[to_fill] = True
 
     n_filled = int(np.sum(filled))
@@ -112,10 +136,11 @@ def merge_features(inputs: List[Path], way_routes_npz: Path, out_npz: Path) -> D
             },
         },
     }
+    if out_semantic is not None:
+        meta["semantic"] = {"keys": list(sem_keys) if sem_keys else [], "dim": int(out_semantic.shape[1])}
 
     out_npz.parent.mkdir(parents=True, exist_ok=True)
-    np.savez_compressed(
-        out_npz,
+    out_kwargs = dict(
         way_osm_id=unified_way_osm_id,
         way_len_m=out_len_m,
         way_center_y=out_center_y,
@@ -126,6 +151,9 @@ def merge_features(inputs: List[Path], way_routes_npz: Path, out_npz: Path) -> D
         way_highway_code=out_hw_code,
         meta=meta,
     )
+    if out_semantic is not None:
+        out_kwargs["way_semantic"] = out_semantic
+    np.savez_compressed(out_npz, **out_kwargs)
     return {"ok": True, "out_npz": str(out_npz), "meta": meta}
 
 

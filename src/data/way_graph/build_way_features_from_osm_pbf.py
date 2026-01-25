@@ -86,6 +86,7 @@ def _split_pyrosm_network(net) -> Tuple[object, Optional[object]]:
 @dataclass(frozen=True)
 class Config:
     road_types: str
+    semantic_channels: str
 
 
 def build_way_features(*, osm_pbf: Path, semantic_dir: Path, way_routes_npz: Path, out_npz: Path, cfg: Config) -> Dict[str, object]:
@@ -230,11 +231,68 @@ def build_way_features(*, osm_pbf: Path, semantic_dir: Path, way_routes_npz: Pat
     way_tier = np.argmax(tier_sum, axis=1).astype(np.int64, copy=False)
     way_hw_code = np.argmax(hw_sum, axis=1).astype(np.int64, copy=False)
 
+    # ---------------- Semantic raster sampling (optional) ----------------
+    semantic_keys = [x.strip() for x in str(cfg.semantic_channels or "").split(",") if str(x).strip()]
+    semantic_keys = list(dict.fromkeys(semantic_keys))  # de-dup, keep order
+    semantic_keys_ok = {"road_prob_major", "road_prob_minor", "road_prob_service", "entropy", "poi_total"}
+    for k in semantic_keys:
+        if k not in semantic_keys_ok:
+            raise ValueError(f"Bad semantic channel: {k} (expected one of {sorted(semantic_keys_ok)})")
+
+    way_semantic = None
+    if semantic_keys:
+        # Load rasters (H,W) float32
+        def _load_raster(name: str, path: Path) -> np.ndarray:
+            if not path.exists():
+                raise FileNotFoundError(f"Missing {name} raster: {path}")
+            a = np.load(path).astype(np.float32, copy=False)
+            if a.ndim != 2 or a.shape != (H, W):
+                raise ValueError(f"Bad {name} shape in {path}: {a.shape} (expected {(H, W)})")
+            return a
+
+        rasters: Dict[str, np.ndarray] = {}
+        for k in semantic_keys:
+            if k == "road_prob_major":
+                rasters[k] = _load_raster(k, Path(semantic_dir) / "osm_road_prob_major.npy")
+            elif k == "road_prob_minor":
+                rasters[k] = _load_raster(k, Path(semantic_dir) / "osm_road_prob_minor.npy")
+            elif k == "road_prob_service":
+                rasters[k] = _load_raster(k, Path(semantic_dir) / "osm_road_prob_service.npy")
+            elif k == "entropy":
+                rasters[k] = _load_raster(k, Path(semantic_dir) / "landuse_entropy.npy")
+            elif k == "poi_total":
+                poi_paths = sorted(Path(semantic_dir).glob("poi_density_*.npy"))
+                if not poi_paths:
+                    raise FileNotFoundError(f"No poi_density_*.npy under: {semantic_dir}")
+                poi_total = None
+                for pp in poi_paths:
+                    a = np.load(pp).astype(np.float32, copy=False)
+                    if a.ndim != 2 or a.shape != (H, W):
+                        raise ValueError(f"Bad poi_density shape in {pp}: {a.shape} (expected {(H, W)})")
+                    poi_total = a if poi_total is None else (poi_total + a)
+                assert poi_total is not None
+                rasters[k] = poi_total.astype(np.float32, copy=False)
+
+        C = int(len(semantic_keys))
+        way_semantic = np.zeros((M, C), dtype=np.float32)
+        # Sample nearest pixel at way center (y,x in grid coordinates).
+        yy = np.rint(way_center_y).astype(np.int64, copy=False)
+        xx = np.rint(way_center_x).astype(np.int64, copy=False)
+        yy = np.clip(yy, 0, H - 1)
+        xx = np.clip(xx, 0, W - 1)
+        valid_way = way_len_m > 0
+        for ci, k in enumerate(semantic_keys):
+            r = rasters[k]
+            v = r[yy, xx]
+            # Keep missing ways at 0
+            v = np.where(valid_way, v, 0.0).astype(np.float32, copy=False)
+            way_semantic[:, ci] = v
+
     meta = {
         "created_at": datetime.now(tz=TZ_SHANGHAI).isoformat(),
         "task": "build_way_features_from_osm_pbf",
         "inputs": {"osm_pbf": str(osm_pbf), "semantic_dir": str(semantic_dir), "way_routes_npz": str(way_routes_npz)},
-        "config": {"road_types": str(cfg.road_types)},
+        "config": {"road_types": str(cfg.road_types), "semantic_channels": str(cfg.semantic_channels)},
         "grid": {"H": int(grid.H), "W": int(grid.W), "bbox": grid.bbox.__dict__},
         "vocab": {"highway": hw_vocab},
         "stats": {
@@ -248,10 +306,23 @@ def build_way_features(*, osm_pbf: Path, semantic_dir: Path, way_routes_npz: Pat
             "elapsed_s": float(time.time() - t0),
         },
     }
+    if semantic_keys:
+        assert way_semantic is not None
+        meta["semantic"] = {
+            "keys": list(semantic_keys),
+            "sampling": "nearest_center",
+            "stats": {
+                k: {
+                    "mean": float(np.mean(way_semantic[:, i])) if M else float("nan"),
+                    "p90": float(np.percentile(way_semantic[:, i], 90)) if M else float("nan"),
+                    "max": float(np.max(way_semantic[:, i])) if M else float("nan"),
+                }
+                for i, k in enumerate(semantic_keys)
+            },
+        }
 
     out_npz.parent.mkdir(parents=True, exist_ok=True)
-    np.savez_compressed(
-        out_npz,
+    out_kwargs = dict(
         way_osm_id=way_osm_id.astype(np.int64, copy=False),
         way_len_m=way_len_m.astype(np.float32, copy=False),
         way_center_y=way_center_y.astype(np.float32, copy=False),
@@ -262,6 +333,9 @@ def build_way_features(*, osm_pbf: Path, semantic_dir: Path, way_routes_npz: Pat
         way_highway_code=way_hw_code.astype(np.int64, copy=False),
         meta=meta,
     )
+    if way_semantic is not None:
+        out_kwargs["way_semantic"] = way_semantic.astype(np.float32, copy=False)
+    np.savez_compressed(out_npz, **out_kwargs)
     return {"ok": True, "out_npz": str(out_npz), "meta": meta}
 
 
@@ -272,6 +346,12 @@ def build_argparser() -> argparse.ArgumentParser:
     p.add_argument("--way_routes_npz", type=Path, required=True)
     p.add_argument("--out_npz", type=Path, required=True)
     p.add_argument("--road_types", choices=["A", "B"], default="B")
+    p.add_argument(
+        "--semantic_channels",
+        type=str,
+        default="",
+        help="Optional comma-separated semantic raster channels to sample at way center: road_prob_major,road_prob_minor,road_prob_service,entropy,poi_total. Empty=disable.",
+    )
     return p
 
 
@@ -282,7 +362,7 @@ def main() -> None:
         semantic_dir=Path(args.semantic_dir),
         way_routes_npz=Path(args.way_routes_npz),
         out_npz=Path(args.out_npz),
-        cfg=Config(road_types=str(args.road_types)),
+        cfg=Config(road_types=str(args.road_types), semantic_channels=str(args.semantic_channels)),
     )
     meta = report["meta"]
     st = meta["stats"]

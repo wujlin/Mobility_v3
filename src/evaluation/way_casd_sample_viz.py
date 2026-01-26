@@ -101,6 +101,9 @@ def _infer_decoder_use_step_emb_from_state(state: Dict[str, torch.Tensor]) -> bo
 def _infer_decoder_use_dest_query_from_state(state: Dict[str, torch.Tensor]) -> bool:
     return any(str(k).startswith("decoder.dest_proj.") for k in state.keys())
 
+def _infer_decoder_use_past_context_from_state(state: Dict[str, torch.Tensor]) -> bool:
+    return any(str(k).startswith("decoder.past_encoder.") for k in state.keys())
+
 
 def _jaccard(a: List[int], b: List[int]) -> float:
     sa = set(int(x) for x in a)
@@ -480,6 +483,14 @@ def main() -> None:
     use_cross_attn = _infer_decoder_use_cross_attn_from_state(ae_state) or bool(ae_cfg_dict.get("decoder_use_cross_attn", True))
     use_step_emb = _infer_decoder_use_step_emb_from_state(ae_state) or bool(ae_cfg_dict.get("decoder_use_step_emb", False))
     use_dest_query = _infer_decoder_use_dest_query_from_state(ae_state) or bool(ae_cfg_dict.get("decoder_use_dest_query", False))
+    use_past_context = _infer_decoder_use_past_context_from_state(ae_state) or bool(ae_cfg_dict.get("decoder_use_past_context", False))
+    past_k = int(ae_cfg_dict.get("decoder_past_k", 8))
+    if use_past_context:
+        pe = ae_state.get("decoder.past_encoder.pos_emb.weight", None)
+        if isinstance(pe, torch.Tensor) and pe.ndim == 2 and int(pe.shape[0]) > 0:
+            past_k = int(pe.shape[0])
+    past_n_layers = int(ae_cfg_dict.get("decoder_past_n_layers", 2))
+    past_n_heads = int(ae_cfg_dict.get("decoder_past_n_heads", 4))
     ae_cfg = WayCASDAECfg(
         d_model=int(ae_cfg_dict.get("d_model", 256)),
         n_latent=int(ae_cfg_dict.get("n_latent", 32)),
@@ -493,6 +504,10 @@ def main() -> None:
         decoder_n_cross_heads=int(ae_cfg_dict.get("decoder_n_cross_heads", 4)),
         decoder_use_step_emb=bool(use_step_emb),
         decoder_use_dest_query=bool(use_dest_query),
+        decoder_use_past_context=bool(use_past_context),
+        decoder_past_k=int(past_k),
+        decoder_past_n_layers=int(past_n_layers),
+        decoder_past_n_heads=int(past_n_heads),
     )
     ae = WayCASDAutoEncoder(
         cfg=ae_cfg,

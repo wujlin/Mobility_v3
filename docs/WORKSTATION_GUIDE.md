@@ -454,6 +454,33 @@ export OUT_BASE="$EXP_ROOT/WAYCASD1_waydata_rustbelt_seed0"
 bash run_way_casd_prep_rustbelt.sh
 ```
 
+**(推荐) Strict v1 + 语义 features：目录口径（避免路径写错）**
+
+> 这个版本用于“数据质量优先 + 注入 `way_semantic`”。目录名里会出现 `*_strict_v1/`，并额外生成 `W4_way_features_sem/` 与 `W5_way_routes_strict/`。
+>
+> 常见踩坑：把 `way_routes_strict_masklen0.npz` 错写到 `way_features_sem/` 目录下。**正确口径是：routes/graph/features 分别在 W5/W3/W4。**
+
+典型设置（Rust Belt strict v1）：
+
+```bash
+export OUT_BASE="$EXP_ROOT/WAYCASD1_waydata_rustbelt_seed0_strict_v1"
+```
+
+| stage | 目录 | 关键文件 |
+|---|---|---|
+| audit | `$OUT_BASE/W0_audit/` | `report_strict.json`, `strict_route_coverage_audit.json` |
+| graph | `$OUT_BASE/W3_way_graph_strict/` | `way_graph.npz` |
+| features（含语义） | `$OUT_BASE/W4_way_features_sem/` | `way_features.npz`（包含 `way_semantic`） |
+| routes（strict） | `$OUT_BASE/W5_way_routes_strict/` | `way_routes_strict_masklen0.npz` |
+
+建议训练/评估前显式设定 3 个路径变量（后续所有命令都用它们，避免手滑）：
+
+```bash
+export WAY_ROUTES_NPZ="$OUT_BASE/W5_way_routes_strict/way_routes_strict_masklen0.npz"
+export WAY_GRAPH_NPZ="$OUT_BASE/W3_way_graph_strict/way_graph.npz"
+export WAY_FEATS_NPZ="$OUT_BASE/W4_way_features_sem/way_features.npz"
+```
+
 > [!NOTE]
 > 如果你跑的是 `bash run_way_casd_prep.sh`（单城市），目录命名是 `W1/W2/W3/W4`；
 > 训练命令里把 `W5_way_routes_labeled/W3_way_graph/W4_way_features` 分别替换为
@@ -463,9 +490,9 @@ bash run_way_casd_prep_rustbelt.sh
 
 ```bash
 python -m src.training.train_way_casd_autoencoder \
-  --way_routes_npz "$OUT_BASE/W5_way_routes_labeled/way_routes_labeled.npz" \
-  --way_graph_npz "$OUT_BASE/W3_way_graph/way_graph.npz" \
-  --way_features_npz "$OUT_BASE/W4_way_features/way_features.npz" \
+  --way_routes_npz "$WAY_ROUTES_NPZ" \
+  --way_graph_npz "$WAY_GRAPH_NPZ" \
+  --way_features_npz "$WAY_FEATS_NPZ" \
   --out_dir "$OUT_BASE/W6_train_ae" \
   --batch_size 512 --num_workers 48 --n_epochs 60 \
   --d_model 256 --n_latent 64 --max_candidates 64 --max_way_len 128 \
@@ -476,9 +503,9 @@ python -m src.training.train_way_casd_autoencoder \
 
 ```bash
 python -m src.training.train_way_casd_flow \
-  --way_routes_npz "$OUT_BASE/W5_way_routes_labeled/way_routes_labeled.npz" \
-  --way_graph_npz "$OUT_BASE/W3_way_graph/way_graph.npz" \
-  --way_features_npz "$OUT_BASE/W4_way_features/way_features.npz" \
+  --way_routes_npz "$WAY_ROUTES_NPZ" \
+  --way_graph_npz "$WAY_GRAPH_NPZ" \
+  --way_features_npz "$WAY_FEATS_NPZ" \
   --ae_ckpt "$OUT_BASE/W6_train_ae/ckpt_best.pt" \
   --out_dir "$OUT_BASE/W7_train_flow" \
   --batch_size 512 --num_workers 48 --n_epochs 60 \
@@ -490,9 +517,9 @@ python -m src.training.train_way_casd_flow \
 
 ```bash
 python -m src.evaluation.way_casd_sample_viz \
-  --way_routes_npz "$OUT_BASE/W5_way_routes_labeled/way_routes_labeled.npz" \
-  --way_graph_npz "$OUT_BASE/W3_way_graph/way_graph.npz" \
-  --way_features_npz "$OUT_BASE/W4_way_features/way_features.npz" \
+  --way_routes_npz "$WAY_ROUTES_NPZ" \
+  --way_graph_npz "$WAY_GRAPH_NPZ" \
+  --way_features_npz "$WAY_FEATS_NPZ" \
   --ae_ckpt "$OUT_BASE/W6_train_ae/ckpt_best.pt" \
   --flow_ckpt "$OUT_BASE/W7_train_flow/ckpt_best.pt" \
   --out_dir "$OUT_BASE/W8_sample_viz" \
@@ -516,8 +543,8 @@ python -m src.training.train_way_casd_gps_diffusion \
   --segments_parquet "$RAW_ROOT/worldtrace/detroit_core_v1/segments_with_wayid.parquet" \
                     "$RAW_ROOT/worldtrace/columbus_core_v1/segments_with_wayid.parquet" \
   --route_city 0 1 \
-  --way_graph_npz "$OUT_BASE/W3_way_graph/way_graph.npz" \
-  --way_features_npz "$OUT_BASE/W4_way_features/way_features.npz" \
+  --way_graph_npz "$WAY_GRAPH_NPZ" \
+  --way_features_npz "$WAY_FEATS_NPZ" \
   --ae_ckpt "$OUT_BASE/W6_train_ae/ckpt_best.pt" \
   --out_dir "$OUT_BASE/W9_train_exec" \
   --batch_size 128 --num_workers 48 --n_epochs 60 \
@@ -531,8 +558,8 @@ python -m src.evaluation.way_casd_gps_sample_viz \
   --segments_parquet "$RAW_ROOT/worldtrace/detroit_core_v1/segments_with_wayid.parquet" \
   --route_city 0 \
   --semantic_dir "$RAW_ROOT/worldtrace/detroit_core_v1" \
-  --way_graph_npz "$OUT_BASE/W3_way_graph/way_graph.npz" \
-  --way_features_npz "$OUT_BASE/W4_way_features/way_features.npz" \
+  --way_graph_npz "$WAY_GRAPH_NPZ" \
+  --way_features_npz "$WAY_FEATS_NPZ" \
   --ae_ckpt "$OUT_BASE/W6_train_ae/ckpt_best.pt" \
   --exec_ckpt "$OUT_BASE/W9_train_exec/ckpt_best.pt" \
   --out_dir "$OUT_BASE/W10_exec_viz" \

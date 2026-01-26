@@ -25,6 +25,93 @@ class WayDecoderCfg:
     # Query enrichment (for early-step disambiguation)
     use_step_emb: bool = False
     use_dest_query: bool = False
+    # Past context: encode past-K path with small Transformer
+    use_past_context: bool = False
+    past_k: int = 8  # Number of past steps to include
+    past_n_layers: int = 2  # Transformer layers for past encoding
+    past_n_heads: int = 4  # Attention heads in past encoder
+
+
+class PastContextEncoder(nn.Module):
+    """
+    Encodes past-K way embeddings using a small Transformer.
+    
+    Input: past_emb (T, K, d_model), past_mask (T, K)
+    Output: context (T, d_model) - aggregated past context
+    """
+
+    def __init__(
+        self,
+        *,
+        d_model: int,
+        n_layers: int = 2,
+        n_heads: int = 4,
+        dropout: float = 0.1,
+        max_k: int = 16,
+    ) -> None:
+        super().__init__()
+        self.d_model = int(d_model)
+        self.max_k = int(max_k)
+
+        # Learnable position embeddings for past positions (relative: -K, ..., -1)
+        self.pos_emb = nn.Embedding(int(max_k), int(d_model))
+
+        # Small Transformer encoder
+        encoder_layer = nn.TransformerEncoderLayer(
+            d_model=int(d_model),
+            nhead=int(n_heads),
+            dim_feedforward=int(d_model) * 2,
+            dropout=float(dropout),
+            activation="gelu",
+            batch_first=True,
+            norm_first=True,
+        )
+        self.transformer = nn.TransformerEncoder(encoder_layer, num_layers=int(n_layers))
+        self.out_ln = nn.LayerNorm(int(d_model))
+
+    def forward(
+        self,
+        past_emb: torch.Tensor,  # (T, K, d_model)
+        past_mask: torch.Tensor,  # (T, K) bool, True=valid
+    ) -> torch.Tensor:
+        """
+        Args:
+            past_emb: (T, K, d_model) past way embeddings
+            past_mask: (T, K) True where past_way is valid
+        Returns:
+            context: (T, d_model) aggregated past context
+        """
+        T, K, d = past_emb.shape
+        device = past_emb.device
+
+        # Add position embeddings (positions 0..K-1 represent past-K..past-1)
+        pos_idx = torch.arange(K, device=device, dtype=torch.long)
+        pos_idx = torch.clamp(pos_idx, 0, self.max_k - 1)
+        pos = self.pos_emb(pos_idx)  # (K, d_model)
+        x = past_emb + pos.unsqueeze(0)  # (T, K, d_model)
+
+        # Transformer expects key_padding_mask: True = ignore
+        key_padding_mask = ~past_mask  # (T, K)
+
+        # Handle all-masked case (first step has no history)
+        all_masked = key_padding_mask.all(dim=-1)  # (T,)
+        if all_masked.any():
+            # For all-masked rows, unmask the first position to avoid NaN
+            key_padding_mask = key_padding_mask.clone()
+            key_padding_mask[all_masked, 0] = False
+
+        # Transformer encoding
+        x = self.transformer(x, src_key_padding_mask=key_padding_mask)  # (T, K, d_model)
+
+        # Aggregate: take last valid position (most recent past)
+        # For simplicity, use masked mean
+        mask_expand = past_mask.unsqueeze(-1).float()  # (T, K, 1)
+        x_masked = x * mask_expand
+        sum_x = x_masked.sum(dim=1)  # (T, d_model)
+        count = mask_expand.sum(dim=1).clamp(min=1.0)  # (T, 1)
+        context = self.out_ln(sum_x / count)  # (T, d_model)
+
+        return context
 
 
 class WayDecoder(nn.Module):
@@ -96,6 +183,20 @@ class WayDecoder(nn.Module):
                 nn.Dropout(float(cfg.dropout)),
                 nn.Linear(hidden, hidden),
             )
+
+        # Past context encoder (Transformer over past-K path)
+        self.use_past_context = bool(cfg.use_past_context)
+        self.past_k = int(cfg.past_k)
+        if self.use_past_context:
+            self.past_encoder = PastContextEncoder(
+                d_model=int(d_model),
+                n_layers=int(cfg.past_n_layers),
+                n_heads=int(cfg.past_n_heads),
+                dropout=float(cfg.dropout),
+                max_k=int(cfg.past_k),
+            )
+        else:
+            self.past_encoder = None
         
         self.cur_proj = nn.Linear(d_model, hidden)
         self.cand_proj = nn.Linear(d_model, hidden)
@@ -207,12 +308,16 @@ class WayDecoder(nn.Module):
         route_idx: torch.Tensor,  # (T,)
         step: torch.Tensor,  # (T,)
         dest_pos: torch.Tensor,  # (B,2)
+        past_way: Optional[torch.Tensor] = None,  # (T, K) past way IDs, -1 for padding
+        past_mask: Optional[torch.Tensor] = None,  # (T, K) bool, True=valid
     ) -> torch.Tensor:
         """
         Compute context vector for each transition.
         
         If use_cross_attn: query latent_tokens with cur_way embedding.
         Otherwise: use mean-pooled latent.
+        
+        If use_past_context: incorporate past_way history via Transformer encoder.
         
         Returns: ctx (T, hidden_dim)
         """
@@ -241,6 +346,15 @@ class WayDecoder(nn.Module):
                 dest = dest / coord_scale
             dest_t = dest[route_idx]  # (T,2)
             query_vec = query_vec + self.dest_proj(dest_t)
+
+        # Past context: encode history using Transformer
+        if self.use_past_context and self.past_encoder is not None:
+            if past_way is not None and past_mask is not None:
+                # Embed past ways
+                past_emb, _ = way_embedder(past_way)  # (T, K, d_model)
+                past_ctx = self.past_encoder(past_emb, past_mask)  # (T, d_model)
+                query_vec = query_vec + past_ctx
+            # If past_way is None (e.g., step 0), query_vec remains unchanged
 
         if self.use_cross_attn:
             # Cross-attention: each cur_way queries its route's latent_tokens
@@ -286,6 +400,14 @@ class WayDecoder(nn.Module):
             step = torch.zeros_like(cur_way)
         step = step.to(dtype=torch.long)
 
+        # Past context (optional)
+        past_way = trans.get("past_way", None)
+        past_way_mask = trans.get("past_mask", None)
+        if past_way is not None:
+            past_way = past_way.to(dtype=torch.long)
+        if past_way_mask is not None:
+            past_way_mask = past_way_mask.to(dtype=torch.bool)
+
         B = int(latent_tokens.shape[0])
         if int(route_idx.max().item()) >= B:
             raise ValueError(f"route_idx out of range: max={int(route_idx.max().item())} but B={B}")
@@ -300,7 +422,7 @@ class WayDecoder(nn.Module):
                 route_city=route_cond["route_city"],
             )
         
-        # Compute context with cross-attention
+        # Compute context with cross-attention (and past context if enabled)
         ctx_t = self._compute_context(
             way_embedder=way_embedder,
             latent_tokens=latent_tokens,
@@ -309,6 +431,8 @@ class WayDecoder(nn.Module):
             route_idx=route_idx,
             step=step,
             dest_pos=route_cond["dest_pos"],
+            past_way=past_way,
+            past_mask=past_way_mask,
         )
 
         # Current way projection
@@ -406,6 +530,20 @@ class WayDecoder(nn.Module):
                     cand_way = cand.view(1, C)
                     cand_mask = torch.ones((1, C), dtype=torch.bool, device=device)
                     step_idx = max(0, int(len(path) - 1))
+
+                    # Build past_way for past context
+                    past_way_tensor: Optional[torch.Tensor] = None
+                    past_mask_tensor: Optional[torch.Tensor] = None
+                    if self.use_past_context and len(path) > 0:
+                        K = self.past_k
+                        past_list = path[:-1][-K:] if len(path) > 1 else []
+                        past_arr = [-1] * K
+                        for i, w in enumerate(past_list):
+                            offset = K - len(past_list)
+                            past_arr[offset + i] = w
+                        past_way_tensor = torch.tensor([past_arr], dtype=torch.long, device=device)
+                        past_mask_tensor = (past_way_tensor >= 0)
+
                     trans = {
                         "route_idx": torch.tensor([0], dtype=torch.long, device=device),
                         "cur_way": torch.tensor([int(path[-1])], dtype=torch.long, device=device),
@@ -413,6 +551,10 @@ class WayDecoder(nn.Module):
                         "cand_mask": cand_mask,
                         "step": torch.tensor([step_idx], dtype=torch.long, device=device),
                     }
+                    if past_way_tensor is not None:
+                        trans["past_way"] = past_way_tensor
+                        trans["past_mask"] = past_mask_tensor
+
                     logits = self.score_candidates(
                         way_embedder=way_embedder,
                         latent_tokens=latent_tokens[b : b + 1],
@@ -502,6 +644,26 @@ class WayDecoder(nn.Module):
                     break
                 cand_way = cand.view(1, C)
                 cand_mask = torch.ones((1, C), dtype=torch.bool, device=device)
+
+                # Build past_way for past context (last K ways before current)
+                past_way_tensor: Optional[torch.Tensor] = None
+                past_mask_tensor: Optional[torch.Tensor] = None
+                if self.use_past_context and len(path) > 0:
+                    K = self.past_k
+                    # path includes current position; we want past-K *before* current
+                    # At step_idx, path has step_idx+1 elements (including start)
+                    # past = path[max(0, len(path)-K):len(path)] but excluding current? 
+                    # Actually we want the history leading up to current way.
+                    # path[-1] is cur_way, so past is path[:-1][-K:]
+                    past_list = path[:-1][-K:] if len(path) > 1 else []
+                    past_arr = [-1] * K
+                    for i, w in enumerate(past_list):
+                        # Right-align: most recent at the end
+                        offset = K - len(past_list)
+                        past_arr[offset + i] = w
+                    past_way_tensor = torch.tensor([past_arr], dtype=torch.long, device=device)  # (1, K)
+                    past_mask_tensor = (past_way_tensor >= 0)  # (1, K)
+
                 trans = {
                     "route_idx": torch.tensor([0], dtype=torch.long, device=device),
                     "cur_way": torch.tensor([int(path[-1])], dtype=torch.long, device=device),
@@ -509,6 +671,10 @@ class WayDecoder(nn.Module):
                     "cand_mask": cand_mask,
                     "step": torch.tensor([int(step_idx)], dtype=torch.long, device=device),
                 }
+                if past_way_tensor is not None:
+                    trans["past_way"] = past_way_tensor
+                    trans["past_mask"] = past_mask_tensor
+
                 logits = self.score_candidates(
                     way_embedder=way_embedder,
                     latent_tokens=latent_tokens[b : b + 1],

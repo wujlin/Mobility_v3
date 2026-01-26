@@ -47,6 +47,11 @@ class TrainCfg:
     max_len: int
     decoder_use_step_emb: bool
     decoder_use_dest_query: bool
+    # Past context
+    decoder_use_past_context: bool
+    decoder_past_k: int
+    decoder_past_n_layers: int
+    decoder_past_n_heads: int
 
 
 def _set_seed(seed: int) -> None:
@@ -139,6 +144,11 @@ def build_argparser() -> argparse.ArgumentParser:
     p.add_argument("--max_len", type=int, default=128)
     p.add_argument("--decoder_use_step_emb", action="store_true", help="Add step embedding into cross-attn query (decoder).")
     p.add_argument("--decoder_use_dest_query", action="store_true", help="Add dest_pos projection into cross-attn query (decoder).")
+    # Past context: encode past-K path with small Transformer
+    p.add_argument("--decoder_use_past_context", action="store_true", help="Add past-K path context via Transformer encoder.")
+    p.add_argument("--decoder_past_k", type=int, default=8, help="Number of past steps to include.")
+    p.add_argument("--decoder_past_n_layers", type=int, default=2, help="Transformer layers for past encoder.")
+    p.add_argument("--decoder_past_n_heads", type=int, default=4, help="Attention heads in past encoder.")
 
     # Long-run training ergonomics
     p.add_argument("--resume_ckpt", type=Path, default=None, help="Optional: resume from ckpt_last.pt/ckpt_best.pt.")
@@ -173,6 +183,10 @@ def main() -> None:
         max_len=int(args.max_len),
         decoder_use_step_emb=bool(args.decoder_use_step_emb),
         decoder_use_dest_query=bool(args.decoder_use_dest_query),
+        decoder_use_past_context=bool(args.decoder_use_past_context),
+        decoder_past_k=int(args.decoder_past_k),
+        decoder_past_n_layers=int(args.decoder_past_n_layers),
+        decoder_past_n_heads=int(args.decoder_past_n_heads),
     )
 
     _set_seed(cfg.seed)
@@ -199,6 +213,7 @@ def main() -> None:
         way_adj_idx=wg["way_adj_idx"],
         max_candidates=int(cfg.max_candidates),
         tz_offset_hours=float(cfg.tz_offset_hours),
+        past_k=int(cfg.decoder_past_k),
     )
 
     pin = bool(device.type == "cuda")
@@ -235,6 +250,10 @@ def main() -> None:
             max_len=int(cfg.max_len),
             decoder_use_step_emb=bool(cfg.decoder_use_step_emb),
             decoder_use_dest_query=bool(cfg.decoder_use_dest_query),
+            decoder_use_past_context=bool(cfg.decoder_use_past_context),
+            decoder_past_k=int(cfg.decoder_past_k),
+            decoder_past_n_layers=int(cfg.decoder_past_n_layers),
+            decoder_past_n_heads=int(cfg.decoder_past_n_heads),
         ),
         way_features=way_features,
         way_adj_ptr=wg["way_adj_ptr"],

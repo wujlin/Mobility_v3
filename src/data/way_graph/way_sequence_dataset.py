@@ -119,10 +119,12 @@ def make_way_casd_collate_fn(
     way_adj_idx: np.ndarray,
     max_candidates: int,
     tz_offset_hours: float,
+    past_k: int = 8,  # Number of past steps to include for past context
 ) -> Callable[[List[Dict[str, np.ndarray]]], Dict[str, torch.Tensor]]:
     way_adj_ptr = np.asarray(way_adj_ptr, dtype=np.int64)
     way_adj_idx = np.asarray(way_adj_idx, dtype=np.int64)
     max_candidates = int(max_candidates)
+    past_k = int(past_k)
 
     def _succ_cands(way: int) -> np.ndarray:
         s = int(way_adj_ptr[way])
@@ -172,6 +174,8 @@ def make_way_casd_collate_fn(
         step: List[int] = []
         cand_way_rows: List[np.ndarray] = []
         cand_mask_rows: List[np.ndarray] = []
+        past_way_rows: List[np.ndarray] = []
+        past_mask_rows: List[np.ndarray] = []
 
         for bi in range(B):
             L = int(way_lens[bi])
@@ -189,19 +193,36 @@ def make_way_casd_collate_fn(
                 mask = np.zeros((max_candidates,), dtype=bool)
                 mask[:C] = True
                 pos = int(np.where(row == tgt)[0][0])
+
+                # Build past_way: last K ways before current step (seq[0:j-1])
+                # Right-aligned: most recent at the end
+                past_seq = seq[:j - 1] if j > 1 else np.array([], dtype=np.int64)
+                past_len = min(int(past_seq.size), past_k)
+                past_row = np.full((past_k,), -1, dtype=np.int64)
+                if past_len > 0:
+                    offset = past_k - past_len
+                    past_row[offset:] = past_seq[-past_len:]
+                past_m = (past_row >= 0)
+
                 route_idx.append(bi)
                 cur_way.append(prev)
                 target_idx.append(pos)
                 step.append(int(j - 1))
                 cand_way_rows.append(row)
                 cand_mask_rows.append(mask)
+                past_way_rows.append(past_row)
+                past_mask_rows.append(past_m)
 
         if not cand_way_rows:
             cand_way = torch.zeros((0, int(max_candidates)), dtype=torch.long)
             cand_mask = torch.zeros((0, int(max_candidates)), dtype=torch.bool)
+            past_way = torch.zeros((0, int(past_k)), dtype=torch.long)
+            past_mask = torch.zeros((0, int(past_k)), dtype=torch.bool)
         else:
             cand_way = torch.as_tensor(np.stack(cand_way_rows, axis=0), dtype=torch.long)
             cand_mask = torch.as_tensor(np.stack(cand_mask_rows, axis=0), dtype=torch.bool)
+            past_way = torch.as_tensor(np.stack(past_way_rows, axis=0), dtype=torch.long)
+            past_mask = torch.as_tensor(np.stack(past_mask_rows, axis=0), dtype=torch.bool)
 
         trans = {
             "route_idx": torch.as_tensor(np.asarray(route_idx, dtype=np.int64), dtype=torch.long),
@@ -210,6 +231,8 @@ def make_way_casd_collate_fn(
             "cand_mask": cand_mask,
             "target_idx": torch.as_tensor(np.asarray(target_idx, dtype=np.int64), dtype=torch.long),
             "step": torch.as_tensor(np.asarray(step, dtype=np.int64), dtype=torch.long),
+            "past_way": past_way,
+            "past_mask": past_mask,
         }
 
         return {

@@ -15,7 +15,7 @@ from src.evaluation.distribution_metrics import compute_distribution_metrics, co
 from src.evaluation.micro_metrics import compute_frechet_per_sample
 from src.models.way_casd.gps_diffusion import GPSDiffusionCfg, GPSDiffusionExecutionModel
 from src.models.way_casd.way_casd import WayCASDAECfg, WayCASDAutoEncoder
-from src.models.way_casd.way_encoder import make_way_feature_tensors
+from src.models.way_casd.way_encoder import load_way_features_from_npz, make_way_feature_tensors
 
 try:
     import pyarrow.parquet as pq  # type: ignore
@@ -507,16 +507,7 @@ def main() -> None:
     way_osm_id = np.asarray(wf["way_osm_id"], dtype=np.int64).reshape(-1)
     way_to_idx = {int(w): int(i) for i, w in enumerate(way_osm_id.tolist())}
 
-    way_features = make_way_feature_tensors(
-        way_center_y=wf["way_center_y"],
-        way_center_x=wf["way_center_x"],
-        way_dir_y=wf["way_dir_y"],
-        way_dir_x=wf["way_dir_x"],
-        way_len_m=wf["way_len_m"],
-        way_tier=wf["way_tier"],
-        way_highway_code=wf["way_highway_code"],
-        device=device,
-    )
+    way_features = load_way_features_from_npz(Path(args.way_features_npz), device=device)
     n_highway_types = int(np.max(np.asarray(wf["way_highway_code"], dtype=np.int64))) + 1
 
     # Load AE (encoder only).

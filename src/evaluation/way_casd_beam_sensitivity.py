@@ -14,7 +14,7 @@ import torch
 from src.data.way_graph.way_sequence_dataset import load_way_routes_npz
 from src.models.way_casd.latent_flow import LatentFlowCfg, LatentFlowMatching
 from src.models.way_casd.way_casd import WayCASDAECfg, WayCASDAutoEncoder
-from src.models.way_casd.way_encoder import make_way_feature_tensors
+from src.models.way_casd.way_encoder import load_way_features_from_npz, make_way_feature_tensors
 
 TZ_SHANGHAI = timezone(timedelta(hours=8))
 
@@ -249,16 +249,7 @@ def main() -> None:
     way_adj_idx = np.asarray(wg["way_adj_idx"], dtype=np.int64)
 
     n_highway_types = int(np.max(np.asarray(wf["way_highway_code"], dtype=np.int64))) + 1
-    way_features = make_way_feature_tensors(
-        way_center_y=wf["way_center_y"],
-        way_center_x=wf["way_center_x"],
-        way_dir_y=wf["way_dir_y"],
-        way_dir_x=wf["way_dir_x"],
-        way_len_m=wf["way_len_m"],
-        way_tier=wf["way_tier"],
-        way_highway_code=wf["way_highway_code"],
-        device=device,
-    )
+    way_features = load_way_features_from_npz(Path(args.way_features_npz), device=device)
 
     ae_state, ae_cfg_dict = _load_ckpt_state_and_cfg(Path(args.ae_ckpt))
     use_dest_dist = _infer_decoder_use_dest_dist_from_state(ae_state)

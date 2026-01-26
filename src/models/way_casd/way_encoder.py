@@ -1,8 +1,10 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Optional, Tuple
 
+import numpy as np
 import torch
 import torch.nn as nn
 
@@ -16,6 +18,7 @@ class WayFeatureTensors:
     way_len_m: torch.Tensor  # (M,)
     way_tier: torch.Tensor  # (M,)
     way_highway_code: torch.Tensor  # (M,)
+    way_semantic: Optional[torch.Tensor] = None  # (M, C_semantic) optional
 
 
 def _as_tensor(x, *, dtype: torch.dtype) -> torch.Tensor:
@@ -33,8 +36,14 @@ def make_way_feature_tensors(
     way_len_m,
     way_tier,
     way_highway_code,
+    way_semantic=None,
     device: Optional[torch.device] = None,
 ) -> WayFeatureTensors:
+    sem = None
+    if way_semantic is not None:
+        sem = _as_tensor(way_semantic, dtype=torch.float32)
+        if sem.ndim == 1:
+            sem = sem.unsqueeze(-1)
     out = WayFeatureTensors(
         way_center_y=_as_tensor(way_center_y, dtype=torch.float32),
         way_center_x=_as_tensor(way_center_x, dtype=torch.float32),
@@ -43,6 +52,7 @@ def make_way_feature_tensors(
         way_len_m=_as_tensor(way_len_m, dtype=torch.float32),
         way_tier=_as_tensor(way_tier, dtype=torch.long),
         way_highway_code=_as_tensor(way_highway_code, dtype=torch.long),
+        way_semantic=sem,
     )
     if device is None:
         return out
@@ -54,6 +64,29 @@ def make_way_feature_tensors(
         way_len_m=out.way_len_m.to(device=device),
         way_tier=out.way_tier.to(device=device),
         way_highway_code=out.way_highway_code.to(device=device),
+        way_semantic=out.way_semantic.to(device=device) if out.way_semantic is not None else None,
+    )
+
+
+def load_way_features_from_npz(path: Path, *, device: Optional[torch.device] = None) -> WayFeatureTensors:
+    """
+    Unified loader for way_features.npz -> WayFeatureTensors.
+    Automatically loads way_semantic if present.
+    """
+    wf = np.load(str(path), allow_pickle=True)
+    way_semantic = wf.get("way_semantic", None)
+    if way_semantic is not None:
+        way_semantic = np.asarray(way_semantic, dtype=np.float32)
+    return make_way_feature_tensors(
+        way_center_y=wf["way_center_y"],
+        way_center_x=wf["way_center_x"],
+        way_dir_y=wf["way_dir_y"],
+        way_dir_x=wf["way_dir_x"],
+        way_len_m=wf["way_len_m"],
+        way_tier=wf["way_tier"],
+        way_highway_code=wf["way_highway_code"],
+        way_semantic=way_semantic,
+        device=device,
     )
 
 
@@ -88,6 +121,20 @@ class WayEncoder(nn.Module):
         self.register_buffer("way_len_m", features.way_len_m, persistent=False)
         self.register_buffer("way_tier", features.way_tier, persistent=False)
         self.register_buffer("way_highway_code", features.way_highway_code, persistent=False)
+
+        # Semantic features (optional)
+        self.n_semantic = 0
+        if features.way_semantic is not None:
+            self.register_buffer("way_semantic", features.way_semantic, persistent=False)
+            self.n_semantic = int(features.way_semantic.shape[-1])
+            self.semantic_mlp = nn.Sequential(
+                nn.Linear(self.n_semantic, int(d_model)),
+                nn.SiLU(),
+                nn.Linear(int(d_model), int(d_model)),
+            )
+        else:
+            self.register_buffer("way_semantic", None, persistent=False)
+            self.semantic_mlp = None
 
         self.geom_mlp = nn.Sequential(
             nn.Linear(5, int(d_model)),
@@ -142,6 +189,15 @@ class WayEncoder(nn.Module):
         x = self.geom_mlp(geom)
         x = x + self.tier_embed(torch.clamp(tier, 0, self.tier_embed.num_embeddings - 1))
         x = x + self.highway_embed(torch.clamp(hw, 0, self.highway_embed.num_embeddings - 1))
+
+        # Add semantic features if available
+        if self.way_semantic is not None and self.semantic_mlp is not None:
+            way_ids_clamped = torch.clamp(way_ids.to(dtype=torch.long), min=0)
+            sem = self.way_semantic[way_ids_clamped]  # (..., C_semantic)
+            mask_expand = (way_ids >= 0).unsqueeze(-1).expand_as(sem)
+            sem = torch.where(mask_expand, sem, torch.zeros_like(sem))
+            x = x + self.semantic_mlp(sem)
+
         x = self.out_ln(x)
         mask = way_ids >= 0
         return x, mask

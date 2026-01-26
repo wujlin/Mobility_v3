@@ -18,7 +18,7 @@ from src.data.way_graph.way_sequence_dataset import (
     make_way_casd_collate_fn,
 )
 from src.models.way_casd.way_casd import WayCASDAECfg, WayCASDAutoEncoder
-from src.models.way_casd.way_encoder import make_way_feature_tensors
+from src.models.way_casd.way_encoder import load_way_features_from_npz, make_way_feature_tensors
 
 TZ_SHANGHAI = timezone(timedelta(hours=8))
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -181,16 +181,11 @@ def main() -> None:
 
     wg = np.load(str(args.way_graph_npz), allow_pickle=True)
     wf = np.load(str(args.way_features_npz), allow_pickle=True)
-    way_features = make_way_feature_tensors(
-        way_center_y=wf["way_center_y"],
-        way_center_x=wf["way_center_x"],
-        way_dir_y=wf["way_dir_y"],
-        way_dir_x=wf["way_dir_x"],
-        way_len_m=wf["way_len_m"],
-        way_tier=wf["way_tier"],
-        way_highway_code=wf["way_highway_code"],
-    )
+    way_features = load_way_features_from_npz(Path(args.way_features_npz))
     n_highway_types = int(np.max(np.asarray(wf["way_highway_code"], dtype=np.int64))) + 1
+    n_semantic = way_features.way_semantic.shape[-1] if way_features.way_semantic is not None else 0
+    if n_semantic > 0:
+        log.info(f"loaded way_semantic: n_channels={n_semantic}")
 
     routes = load_way_routes_npz(Path(args.way_routes_npz))
     dataset = WayRouteDataset(routes, max_routes=cfg.max_routes, max_way_len=int(cfg.max_way_len))

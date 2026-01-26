@@ -55,23 +55,41 @@ df -h | head
 | 数据 | 目录 | 关键文件（示例） | 说明 |
 |---|---|---|---|
 | WorldTrace 原始包 | `$RAW_ROOT/worldtrace/OpenTrace_WorldTrace/` | `Trajectory.zip`, `Meta.zip` | 主数据底座（大文件，不进 git） |
-| Detroit segments | `$RAW_ROOT/worldtrace/detroit_core_v1/` | `segments.parquet` | Detroit core 连续段（建模/审计输入） |
-| Columbus segments | `$RAW_ROOT/worldtrace/columbus_core_v1/` | `segments.parquet` | 参考城市（构造 behavioral reference） |
+| Detroit segments（Way-CASD） | `$RAW_ROOT/worldtrace/detroit_core_v1/` | `segments_with_wayid.parquet` | Way-CASD 主线输入（包含 `osm_way_id`） |
+| Columbus segments（Way-CASD） | `$RAW_ROOT/worldtrace/columbus_core_v1/` | `segments_with_wayid.parquet` | 同上 |
+| segments.parquet（legacy） | `$RAW_ROOT/worldtrace/<city>_core_v1/` | `segments.parquet` | 旧版不含 `osm_way_id`；除非明确需要，否则不要用它做 Way-level pipeline |
 | OSM（Detroit） | `$RAW_ROOT/osm/` | `michigan-latest.osm.pbf` | 用于生成 `road_prob/dist_to_road`（soft prior） |
 | OSM（Columbus） | `$RAW_ROOT/osm/` | `ohio-latest.osm.pbf` | 同上 |
 | OSM 软先验产物（每城） | `$RAW_ROOT/worldtrace/<city>_core_v1/` | `osm_road_prob.npy`, `osm_dist_to_road_m.npy`, `osm_road_prob_meta.json` | **唯一口径以 meta 为准**（variant/sigma/buffer/tier_weights 等） |
 | SafeGraph（POI shards） | `$RAW_ROOT/safegraph/safegraph_unzip/` | `Global_Places_POI_Data-*.csv` | 目前为 Places Base 分片；Rich/Geometry 若缺失需在契约里标注 |
-| POI 栅格化产物（每城） | `$RAW_ROOT/worldtrace/<city>_core_v1/` | `poi_density_*.npy`, `poi_raster_meta.json` | 必须写清 `grid_shape`/bbox 与过滤口径 |
+| POI 栅格化产物（可选） | `$RAW_ROOT/worldtrace/<city>_core_v1/` | `poi_density_*.npy`, `poi_raster_meta.json` | 用于 POI heatmap / 语义通道；不保证每城都有（Detroit/Columbus 当前已生成；其他城市若缺失需额外生成） |
 | Wayback 遥感（Detroit） | `$RAW_ROOT/wayback/detroit_core_z16_fixed_multi_r6/` | `wayback_scan_meta.json`, `z16/.../rid_<release_id>.jpg` | 以 `release_id` 作为快照标识；不以 release_date 做时间证据 |
 | Census/ACS（Detroit） | `$RAW_ROOT/census/detroit_core_v1/` | `acs_tract_*.csv`, `tract_covariates_*.parquet` | TIGER 若遇 403 可手动下载；注意 GeoParquet vs 普通 parquet 读取方式 |
+
+> [!NOTE]
+> `poi_density_*.npy/landuse_entropy.npy` **不是 Way-CASD 必需输入**（Decision/Execution 训练不依赖它）；主要用于 **POI heatmap 可视化** 与（可选）语义通道实验。  
+> 若某城市缺失这些文件，可用 SafeGraph base shards 生成到对应的 `$RAW_ROOT/worldtrace/<city>_core_v1/`：
+>
+> ```bash
+> python -m src.data.safegraph.build_poi_rasters \
+>   --base_dir "$RAW_ROOT/safegraph/safegraph_unzip" \
+>   --base_glob "Global_Places_POI_Data-*.csv" \
+>   --out_dir "$RAW_ROOT/worldtrace/<city>_core_v1" \
+>   --bbox <min_lon> <min_lat> <max_lon> <max_lat> \
+>   --grid_h <H> --grid_w <W> \
+>   --vintage 2024-01
+> ```
+>
+> 口径要求：`--bbox/--grid_h/--grid_w` 必须与该城市的 `osm_road_prob_meta.json` 里的 grid 一致（否则 POI 栅格与 road_prob 无法对齐）。
 
 #### 1.1.2 数据快照（仅用于排错；不作为论文证据）
 
 > 目的：当“跑不动/找不到文件/数据不一致”时，用一组可复现检查项快速判断是否为**路径/缺文件/版本不同**导致。  
 > 说明：数值会随数据版本变化；论文正文不直接引用。
 
-- Detroit（WorldTrace core）：`$RAW_ROOT/worldtrace/detroit_core_v1/segments.parquet`（约 2.3k segments）
-- Columbus（WorldTrace core）：`$RAW_ROOT/worldtrace/columbus_core_v1/segments.parquet`（约 5.2k segments）
+- Detroit（WorldTrace core, Way-CASD）：`$RAW_ROOT/worldtrace/detroit_core_v1/segments_with_wayid.parquet`（约 2.3k segments）
+- Columbus（WorldTrace core, Way-CASD）：`$RAW_ROOT/worldtrace/columbus_core_v1/segments_with_wayid.parquet`（约 5.2k segments）
+- （legacy）兼容旧脚本：`$RAW_ROOT/worldtrace/<city>_core_v1/segments.parquet`（不含 `osm_way_id`）
 - SafeGraph Places（Base shards）：`$RAW_ROOT/safegraph/safegraph_unzip/Global_Places_POI_Data-*.csv`（当前 64 分片）
 - Wayback Detroit（z=16，多 release）：`$RAW_ROOT/wayback/detroit_core_z16_fixed_multi_r6/`（目标 6×3472=20832 tiles）
 - Census Detroit（tract covariates）：`$RAW_ROOT/census/detroit_core_v1/tract_covariates_detroit_core.clean.parquet`（约 419 tracts）
@@ -169,7 +187,9 @@ tmux attach -t detroit
 ```bash
 python -m src.data.worldtrace.build_detroit_segments \
   --trajectory_zip "$RAW_ROOT/worldtrace/OpenTrace_WorldTrace/Trajectory.zip" \
-  --out_parquet "$RAW_ROOT/worldtrace/<city>_core_v1/segments.parquet" \
+  --out_parquet "$RAW_ROOT/worldtrace/<city>_core_v1/segments_with_wayid.parquet" \
+  --bbox <min_lon> <min_lat> <max_lon> <max_lat> \
+  --require_way_id \
   --num_workers 24 \
   --chunk_size 5000 \
   --mp_start fork \
@@ -211,6 +231,7 @@ python tools/gen_routegen_sync_manifest.py \
   --root _sync/wsa/icml2026_routegen \
   --out_json docs/ICML_2026_ROUTEGEN_SYNC_MANIFEST.json \
   --out_md docs/ICML_2026_ROUTEGEN_SYNC_MANIFEST.md
+```
 
 ### 6.2 ICML 2026 RouteGen（Graph）最短复现命令（T3/T4）
 

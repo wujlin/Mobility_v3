@@ -14,7 +14,7 @@ from torch.utils.data import DataLoader, Subset
 
 from src.data.way_graph.way_sequence_dataset import WayRouteDataset, load_way_routes_npz, make_way_casd_collate_fn
 from src.models.way_casd.way_casd import WayCASDAECfg, WayCASDAutoEncoder
-from src.models.way_casd.way_encoder import make_way_feature_tensors
+from src.models.way_casd.way_encoder import load_way_features_from_npz, make_way_feature_tensors
 
 try:
     from tqdm import tqdm
@@ -222,16 +222,7 @@ def main() -> None:
         top_k_hard=int(args.top_k_hard),
     )
 
-    way_features = make_way_feature_tensors(
-        way_center_y=wf["way_center_y"],
-        way_center_x=wf["way_center_x"],
-        way_dir_y=wf["way_dir_y"],
-        way_dir_x=wf["way_dir_x"],
-        way_len_m=wf["way_len_m"],
-        way_tier=wf["way_tier"],
-        way_highway_code=wf["way_highway_code"],
-        device=device,
-    )
+    way_features = load_way_features_from_npz(Path(args.way_features_npz), device=device)
     n_highway_types = int(np.max(np.asarray(wf["way_highway_code"], dtype=np.int64))) + 1
 
     ae = WayCASDAutoEncoder(

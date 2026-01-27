@@ -45,6 +45,7 @@ class TrainCfg:
     n_heads: int
     dropout: float
     max_len: int
+    decoder_use_dest_dist: bool
     decoder_use_step_emb: bool
     decoder_use_dest_query: bool
     # Past context
@@ -142,6 +143,12 @@ def build_argparser() -> argparse.ArgumentParser:
     p.add_argument("--n_heads", type=int, default=8)
     p.add_argument("--dropout", type=float, default=0.1)
     p.add_argument("--max_len", type=int, default=128)
+    p.add_argument(
+        "--decoder_use_dest_dist",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Include candidate-to-destination distance as an extra scalar feature in the decoder scorer.",
+    )
     p.add_argument("--decoder_use_step_emb", action="store_true", help="Add step embedding into cross-attn query (decoder).")
     p.add_argument("--decoder_use_dest_query", action="store_true", help="Add dest_pos projection into cross-attn query (decoder).")
     # Past context: encode past-K path with small Transformer
@@ -181,6 +188,7 @@ def main() -> None:
         n_heads=int(args.n_heads),
         dropout=float(args.dropout),
         max_len=int(args.max_len),
+        decoder_use_dest_dist=bool(args.decoder_use_dest_dist),
         decoder_use_step_emb=bool(args.decoder_use_step_emb),
         decoder_use_dest_query=bool(args.decoder_use_dest_query),
         decoder_use_past_context=bool(args.decoder_use_past_context),
@@ -248,6 +256,7 @@ def main() -> None:
             dropout=float(cfg.dropout),
             max_candidates=int(cfg.max_candidates),
             max_len=int(cfg.max_len),
+            decoder_use_dest_dist=bool(cfg.decoder_use_dest_dist),
             decoder_use_step_emb=bool(cfg.decoder_use_step_emb),
             decoder_use_dest_query=bool(cfg.decoder_use_dest_query),
             decoder_use_past_context=bool(cfg.decoder_use_past_context),

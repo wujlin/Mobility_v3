@@ -488,6 +488,8 @@ export WAY_FEATS_NPZ="$OUT_BASE/W4_way_features_sem/way_features.npz"
 
 **(Step A) 训练 AE（48GB GPU 起步建议：`batch_size=512`；若 OOM 再降到 256；`num_workers=48`；建议 `n_epochs=60`）**
 
+> 可选诊断：如果你要验证 “decoder 是否过度依赖 `dest_dist` 产生 shortcut”，在训练命令里加 `--no-decoder_use_dest_dist`（默认是启用的）。
+
 ```bash
 python -m src.training.train_way_casd_autoencoder \
   --way_routes_npz "$WAY_ROUTES_NPZ" \

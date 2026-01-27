@@ -266,6 +266,8 @@ def run(
     div_gt_rank: List[int] = []
     div_gt_gap: List[float] = []
     div_is_close: List[bool] = []  # top1-top2 margin small
+    div_dist_pred_closer: List[bool] = []  # dest_dist shortcut hypothesis
+    div_dist_diff: List[float] = []  # dist_pred - dist_gt (negative means pred is closer)
 
     # Q3 containers (diverged but succeeded)
     recov_rejoin: List[bool] = []
@@ -428,6 +430,18 @@ def run(
 
                 # First divergence transition (while on GT prefix)
                 if first_div_transition is None and gt_next is not None and pred_next != int(gt_next):
+                    # Compute dest_dist for pred_next and gt_next (Euclidean to dest_pos)
+                    dist_pred = None
+                    dist_gt = None
+                    dist_pred_closer = None
+                    if 0 <= pred_next < len(way_center_y) and 0 <= int(gt_next) < len(way_center_y):
+                        pred_cy, pred_cx = float(way_center_y[pred_next]), float(way_center_x[pred_next])
+                        gt_cy, gt_cx = float(way_center_y[int(gt_next)]), float(way_center_x[int(gt_next)])
+                        dy, dx = float(dest_pos[0]), float(dest_pos[1])
+                        dist_pred = float(np.sqrt((pred_cy - dy) ** 2 + (pred_cx - dx) ** 2))
+                        dist_gt = float(np.sqrt((gt_cy - dy) ** 2 + (gt_cx - dx) ** 2))
+                        dist_pred_closer = bool(dist_pred < dist_gt)
+                    
                     first_div_transition = {
                         "step_idx": int(step_idx),
                         "cur_way": int(cur),
@@ -443,6 +457,9 @@ def run(
                         "close_call": bool(close_call),
                         "hop_cur": int(hop[cur]) if 0 <= cur < int(hop.size) else -1,
                         "hop_pred_next": int(hop[pred_next]) if 0 <= pred_next < int(hop.size) else -1,
+                        "dist_pred_to_dest": dist_pred,
+                        "dist_gt_to_dest": dist_gt,
+                        "dist_pred_closer": dist_pred_closer,
                     }
                     div_outdeg.append(int(succ_full_n))
                     if gt_in_full is not None:
@@ -455,6 +472,10 @@ def run(
                         div_gt_gap.append(float(gt_gap))
                     div_margin.append(float(margin))
                     div_is_close.append(bool(close_call))
+                    if dist_pred_closer is not None:
+                        div_dist_pred_closer.append(bool(dist_pred_closer))
+                    if dist_pred is not None and dist_gt is not None:
+                        div_dist_diff.append(float(dist_pred) - float(dist_gt))
 
                 # Minimal step log (for possible focus trace)
                 step_logs.append(
@@ -593,6 +614,14 @@ def run(
             "first_div_close_call_frac": float(np.mean([1.0 if bool(x) else 0.0 for x in div_is_close])) if div_is_close else None,
             "first_div_gt_rank_quantiles": _quantiles_int(div_gt_rank),
             "first_div_gt_gap_quantiles": _quantiles_float(div_gt_gap),
+        },
+        "q4_dest_dist_shortcut": {
+            "first_div_pred_closer_to_dest_frac": float(np.mean([1.0 if bool(x) else 0.0 for x in div_dist_pred_closer])) if div_dist_pred_closer else None,
+            "first_div_dist_diff_quantiles": _quantiles_float(div_dist_diff),
+            "interpretation": (
+                "pred_closer_frac > 0.7 suggests dest_dist shortcut; ~0.5 suggests other cause"
+                if div_dist_pred_closer else "no data"
+            ),
         },
         "q3_recovery": {
             "diverged_success_n": int(len(diverged_succ)),

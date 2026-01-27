@@ -80,6 +80,31 @@ def _jaccard(a: List[int], b: List[int]) -> float:
     return float(inter) / float(union) if union > 0 else 0.0
 
 
+def _first_diverge_step(gt: List[int], pred: List[int]) -> Optional[int]:
+    """
+    Return the first step index where pred diverges from gt (0-based).
+    If sequences are identical, return None.
+    If one is a strict prefix of the other, divergence is at the first missing index.
+    """
+    n = min(len(gt), len(pred))
+    for i in range(n):
+        if int(gt[i]) != int(pred[i]):
+            return int(i)
+    if len(gt) != len(pred):
+        return int(n)
+    return None
+
+
+def _quantiles_int(values: List[int], qs: Tuple[int, ...] = (0, 50, 90, 95, 99, 100)) -> Dict[str, Optional[int]]:
+    if not values:
+        return {f"p{q:02d}": None for q in qs}
+    arr = np.asarray(values, dtype=np.float64)
+    out: Dict[str, Optional[int]] = {}
+    for q in qs:
+        out[f"p{q:02d}"] = int(np.percentile(arr, float(q)))
+    return out
+
+
 def _infer_decoder_config_from_state(state: Dict[str, torch.Tensor]) -> Dict[str, object]:
     """Infer decoder config from checkpoint state dict."""
     cfg = {}
@@ -289,11 +314,31 @@ def run(
 
     # Run three conditions
     results = {"true": [], "shuffle": [], "zero": []}
+    true_per_route: List[Dict[str, object]] = []
     
     print("Running true z_enc...")
     for i in range(N):
-        _, succ, jac = decode_with_z(i, all_z_enc[i])
-        results["true"].append({"success": succ, "jaccard": jac, "city": int(all_meta[i]["city"]), "route_id": int(all_rids[i])})
+        pred, succ, jac = decode_with_z(i, all_z_enc[i])
+        city = int(all_meta[i]["city"])
+        rid = int(all_rids[i])
+        gt = all_gt[i]
+        div = _first_diverge_step(gt, pred)
+        seq_exact = (len(gt) == len(pred)) and all(int(a) == int(b) for a, b in zip(gt, pred))
+        jac_1 = bool(abs(float(jac) - 1.0) < 1e-12)
+        results["true"].append({"success": succ, "jaccard": jac, "city": city, "route_id": rid})
+        true_per_route.append(
+            {
+                "route_id": rid,
+                "city": city,
+                "gt_len": int(len(gt)),
+                "pred_len": int(len(pred)),
+                "success": bool(succ),
+                "jaccard": float(jac),
+                "jaccard_eq_1": bool(jac_1),
+                "seq_exact": bool(seq_exact),
+                "diverge_step": (int(div) if div is not None else None),
+            }
+        )
 
     print("Running shuffle z_enc...")
     for i in range(N):
@@ -330,6 +375,46 @@ def run(
             lst = [r for r in results[cond] if int(r.get("city", -1)) == int(city)]
             summary_by_city[key][cond] = agg(lst)
 
+    # --- Additional diagnosis on true condition ---
+    def _analyze_true(rows: List[Dict[str, object]]) -> Dict[str, object]:
+        succ_rows = [r for r in rows if bool(r.get("success", False))]
+        fail_rows = [r for r in rows if not bool(r.get("success", False))]
+
+        def _frac(mask: List[bool]) -> float:
+            return float(sum(bool(x) for x in mask)) / float(len(mask)) if mask else 0.0
+
+        fail_div_steps = [int(r["diverge_step"]) for r in fail_rows if r.get("diverge_step") is not None]
+        succ_div_steps = [int(r["diverge_step"]) for r in succ_rows if r.get("diverge_step") is not None]
+
+        out: Dict[str, object] = {
+            "n": int(len(rows)),
+            "n_success": int(len(succ_rows)),
+            "n_fail": int(len(fail_rows)),
+            "success_rate": float(len(succ_rows)) / float(len(rows)) if rows else 0.0,
+            "success_seq_exact_rate": _frac([bool(r.get("seq_exact", False)) for r in succ_rows]),
+            "success_jaccard_eq_1_rate": _frac([bool(r.get("jaccard_eq_1", False)) for r in succ_rows]),
+            "success_diverged_rate": _frac([r.get("diverge_step") is not None and not bool(r.get("seq_exact", False)) for r in succ_rows]),
+            "fail_diverge_step_quantiles": _quantiles_int(fail_div_steps),
+            "fail_diverge_le3_frac": _frac([r.get("diverge_step") is not None and int(r["diverge_step"]) <= 3 for r in fail_rows if r.get("diverge_step") is not None]),
+            "fail_diverge_le5_frac": _frac([r.get("diverge_step") is not None and int(r["diverge_step"]) <= 5 for r in fail_rows if r.get("diverge_step") is not None]),
+            "success_diverge_step_quantiles": _quantiles_int(succ_div_steps),
+        }
+
+        # A few examples to inspect quickly
+        succ_non_exact = [r for r in succ_rows if not bool(r.get("seq_exact", False))]
+        succ_non_exact.sort(key=lambda r: float(r.get("jaccard", 0.0)))
+        fail_early = [r for r in fail_rows if r.get("diverge_step") is not None]
+        fail_early.sort(key=lambda r: int(r.get("diverge_step", 10**9)))
+        out["examples_success_non_exact"] = [int(r["route_id"]) for r in succ_non_exact[:10]]
+        out["examples_fail_early_diverge"] = [int(r["route_id"]) for r in fail_early[:10]]
+        return out
+
+    true_analysis = _analyze_true(true_per_route)
+    true_analysis_by_city: Dict[str, Dict[str, object]] = {}
+    for city in (0, 1):
+        rows_city = [r for r in true_per_route if int(r.get("city", -1)) == int(city)]
+        true_analysis_by_city[f"city{city}"] = _analyze_true(rows_city)
+
     # Interpretation
     true_succ = summary["true"]["success_rate"]
     shuffle_succ = summary["shuffle"]["success_rate"]
@@ -360,6 +445,9 @@ def run(
         "n_routes_total": N,
         "summary": summary,
         "summary_by_city": summary_by_city,
+        "true_analysis": true_analysis,
+        "true_analysis_by_city": true_analysis_by_city,
+        "true_per_route": true_per_route,
         "interpretation": interpretation,
     }
 

@@ -347,6 +347,11 @@ def main() -> None:
         # while Flow training only needs the encoder. Fall back to a non-strict load to unblock training.
         log.warning(f"AE strict load failed; falling back to strict=False. err={e}")
         missing, unexpected = ae.load_state_dict(ae_state, strict=False)
+        # Flow training depends on the encoder (way_enc + perceiver compressor). If those are missing,
+        # training would silently proceed with wrong weights, which is unacceptable.
+        missing_critical = [k for k in missing if str(k).startswith(("way_enc.", "compress."))]
+        if missing_critical:
+            raise RuntimeError(f"AE load missing critical encoder keys (example={missing_critical[:3]})")
         if missing:
             log.warning(f"AE non-strict load: missing={len(missing)} (example={missing[:3]})")
         if unexpected:
@@ -422,6 +427,18 @@ def main() -> None:
         best = float(va0["loss"])
         best_epoch = int(start_epoch - 1)
         log.info(f"init best_val_loss={best:.6f} from current weights (epoch={best_epoch})")
+        # Ensure ckpt_best exists even if training is interrupted or val never improves.
+        torch.save(
+            {
+                "model_state_dict": flow.state_dict(),
+                "config": asdict(cfg),
+                "created_at": datetime.now(tz=TZ_SHANGHAI).isoformat(),
+                "epoch": int(best_epoch),
+                "best_val_loss": float(best),
+                "best_epoch": int(best_epoch),
+            },
+            str(best_path),
+        )
 
     save_every = max(1, int(args.save_every))
     early_stop_patience = max(0, int(args.early_stop_patience))
@@ -497,6 +514,9 @@ def main() -> None:
         },
         str(last_path),
     )
+    if not best_path.exists() and last_path.exists():
+        # Safety: some runs might never improve over init; keep evaluation scripts unblocked.
+        best_path.write_bytes(last_path.read_bytes())
 
     report = {
         "ok": True,

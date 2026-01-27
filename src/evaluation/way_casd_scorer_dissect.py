@@ -98,27 +98,33 @@ def run(
     way_features = load_way_features_from_npz(Path(way_features_npz), device=device)
     ckpt = torch.load(str(ae_ckpt), map_location=device)
     state = ckpt["model_state_dict"] if isinstance(ckpt, dict) and "model_state_dict" in ckpt else ckpt
-    ae_cfg_dict = ckpt.get("config", {}) if isinstance(ckpt, dict) else {}
+    ckpt_cfg = ckpt.get("config", {}) if isinstance(ckpt, dict) else {}
 
     inferred = {
-        "decoder_use_dest_dist": _infer_decoder_use_dest_dist_from_state(state) if isinstance(state, dict) else True,
-        "decoder_use_cross_attn": _infer_flag(state, "decoder.cross_attn.") if isinstance(state, dict) else True,
-        "decoder_use_past_context": _infer_flag(state, "decoder.past_encoder.") if isinstance(state, dict) else False,
-        "decoder_use_step_emb": _infer_flag(state, "decoder.step_emb.") if isinstance(state, dict) else False,
+        "decoder_use_dest_dist": _infer_decoder_use_dest_dist_from_state(state) if isinstance(state, dict) else bool(ckpt_cfg.get("decoder_use_dest_dist", True)),
+        "decoder_use_cross_attn": _infer_flag(state, "decoder.cross_attn.") if isinstance(state, dict) else bool(ckpt_cfg.get("decoder_use_cross_attn", True)),
+        "decoder_use_past_context": _infer_flag(state, "decoder.past_encoder.") if isinstance(state, dict) else bool(ckpt_cfg.get("decoder_use_past_context", False)),
+        "decoder_use_step_emb": _infer_flag(state, "decoder.step_emb.") if isinstance(state, dict) else bool(ckpt_cfg.get("decoder_use_step_emb", False)),
+        "decoder_use_dest_query": _infer_flag(state, "decoder.dest_proj.") if isinstance(state, dict) else bool(ckpt_cfg.get("decoder_use_dest_query", False)),
     }
 
     ae_cfg = WayCASDAECfg(
-        d_model=int(ae_cfg_dict.get("d_model", 256)),
-        n_latent=int(ae_cfg_dict.get("n_latent", 64)),
-        max_len=int(ae_cfg_dict.get("max_len", 256)),
-        max_candidates=int(ae_cfg_dict.get("max_candidates", 64)),
-        n_cities=int(ae_cfg_dict.get("n_cities", 4)),
-        n_highway_types=int(n_highway_types),
-        decoder_hidden=int(ae_cfg_dict.get("decoder_hidden", 512)),
+        d_model=int(ckpt_cfg.get("d_model", 256)),
+        n_latent=int(ckpt_cfg.get("n_latent", 64)),
+        n_heads=int(ckpt_cfg.get("n_heads", 8)),
+        dropout=float(ckpt_cfg.get("dropout", 0.1)),
+        max_candidates=int(ckpt_cfg.get("max_candidates", 32)),
+        max_len=int(ckpt_cfg.get("max_len", cfg.max_way_len)),
+        coord_scale=float(ckpt_cfg.get("coord_scale", 1024.0)),
         decoder_use_dest_dist=bool(inferred["decoder_use_dest_dist"]),
         decoder_use_cross_attn=bool(inferred["decoder_use_cross_attn"]),
-        decoder_use_past_context=bool(inferred["decoder_use_past_context"]),
+        decoder_n_cross_heads=int(ckpt_cfg.get("decoder_n_cross_heads", 4)),
         decoder_use_step_emb=bool(inferred["decoder_use_step_emb"]),
+        decoder_use_dest_query=bool(inferred["decoder_use_dest_query"]),
+        decoder_use_past_context=bool(inferred["decoder_use_past_context"]),
+        decoder_past_k=int(ckpt_cfg.get("decoder_past_k", 8)),
+        decoder_past_n_layers=int(ckpt_cfg.get("decoder_past_n_layers", 2)),
+        decoder_past_n_heads=int(ckpt_cfg.get("decoder_past_n_heads", 4)),
     )
 
     ae = WayCASDAutoEncoder(
@@ -126,31 +132,41 @@ def run(
         way_adj_ptr=ptr,
         way_adj_idx=idx,
         way_features=way_features,
+        n_highway_types=int(max(4, n_highway_types)),
     ).to(device)
-    ae.load_state_dict(state, strict=False)
+    strict_ok = True
+    try:
+        ae.load_state_dict(state, strict=True)
+    except Exception:
+        strict_ok = False
+        ae.load_state_dict(state, strict=False)
     ae.eval()
 
     # Sample routes
-    all_idx = list(range(len(routes["way_ptr"]) - 1))
-    np.random.shuffle(all_idx)
-    sample_idx = all_idx[:cfg.n_routes]
+    keep = (routes.way_seq_len > 1) & (routes.way_seq_len <= int(cfg.max_way_len))
+    all_idx = np.nonzero(keep)[0].astype(np.int64, copy=False)
+    rng = np.random.default_rng(int(cfg.seed))
+    rng.shuffle(all_idx)
+    sample_idx = all_idx[: min(int(cfg.n_routes), int(all_idx.size))]
 
     # Accumulate dissection stats
     dissections: List[Dict[str, Any]] = []
 
     for ri in sample_idx:
-        s = int(routes["way_ptr"][ri])
-        e = int(routes["way_ptr"][ri + 1])
-        if e <= s:
+        rid = int(ri)
+        L = int(routes.way_seq_len[rid])
+        if L < 2 or L > int(cfg.max_way_len):
             continue
-        gt = [int(x) for x in routes["way_idx"][s:e]]
-        if len(gt) < 2 or len(gt) > cfg.max_way_len:
+        s = int(routes.way_seq_ptr[rid])
+        e = s + L
+        gt = [int(x) for x in routes.way_seq_idx[s:e].tolist()]
+        if len(gt) < 2:
             continue
 
-        start_pos = np.asarray([routes["start_y"][ri], routes["start_x"][ri]], dtype=np.float64)
-        dest_pos = np.asarray([routes["dest_y"][ri], routes["dest_x"][ri]], dtype=np.float64)
-        start_t = int(routes["start_t"][ri])
-        route_city = int(routes["route_city"][ri])
+        start_pos = np.asarray(routes.start_pos[rid], dtype=np.float64).reshape(2)
+        dest_pos = np.asarray(routes.dest_pos[rid], dtype=np.float64).reshape(2)
+        start_t = int(routes.start_t[rid])
+        route_city = int(routes.route_city[rid])
         start_way = int(gt[0])
         dest_way = int(gt[-1])
 
@@ -166,9 +182,9 @@ def run(
         }
 
         # Encode GT
-        way_seq = torch.tensor([gt + [-1] * (cfg.max_way_len - len(gt))], dtype=torch.long, device=device)
-        way_len = torch.tensor([len(gt)], dtype=torch.long, device=device)
-        z_enc = ae.encode(way_seq=way_seq, way_len=way_len)
+        pad_n = int(cfg.max_way_len) - int(len(gt))
+        way_seq_pad = torch.tensor([gt + ([-1] * max(0, pad_n))], dtype=torch.long, device=device)
+        z_enc, _mask = ae.encode(way_seq_pad)
 
         cond_emb = ae.decoder.cond_enc(
             start_pos=route_cond["start_pos"],
@@ -223,7 +239,7 @@ def run(
             
             # Get scorer internals
             logits = ae.decoder.score_candidates(
-                way_embedder=ae.encoder,
+                way_embedder=ae.way_enc,
                 latent_tokens=z_enc,
                 route_cond=route_cond,
                 trans=trans,
@@ -241,14 +257,14 @@ def run(
                     
                     # Get intermediate representations
                     # Re-compute to get internal values
-                    cur_emb, _ = ae.encoder(trans["cur_way"][:, None])  # (1, 1, d_model)
+                    cur_emb, _ = ae.way_enc(trans["cur_way"][:, None])  # (1, 1, d_model)
                     cur_emb = cur_emb[:, 0, :]  # (1, d_model)
                     
-                    cand_emb, _ = ae.encoder(trans["cand_way"])  # (1, C, d_model)
+                    cand_emb, _ = ae.way_enc(trans["cand_way"])  # (1, C, d_model)
                     
                     # ctx via cross-attention
                     ctx_t = ae.decoder._compute_context(
-                        way_embedder=ae.encoder,
+                        way_embedder=ae.way_enc,
                         latent_tokens=z_enc,
                         cond_emb=cond_emb,
                         cur_way=trans["cur_way"],
@@ -312,13 +328,13 @@ def run(
                     
                     # Construct scorer input for pred and gt
                     if ae.decoder.cfg.use_dest_dist:
-                        coord_scale = float(getattr(ae.encoder, "coord_scale", 1024.0))
+                        coord_scale = float(getattr(ae.way_enc, "coord_scale", 1024.0))
                         dest_norm = route_cond["dest_pos"][0].to(dtype=torch.float32) / coord_scale
                         
-                        cand_geom_pred, _, _ = ae.encoder._lookup(torch.tensor([[pred_next]], dtype=torch.long, device=device))
+                        cand_geom_pred, _, _ = ae.way_enc._lookup(torch.tensor([[pred_next]], dtype=torch.long, device=device))
                         dist_pred_t = torch.norm(dest_norm - cand_geom_pred[0, 0, :2]).unsqueeze(0)
                         
-                        cand_geom_gt, _, _ = ae.encoder._lookup(torch.tensor([[gt_next]], dtype=torch.long, device=device))
+                        cand_geom_gt, _, _ = ae.way_enc._lookup(torch.tensor([[gt_next]], dtype=torch.long, device=device))
                         dist_gt_t = torch.norm(dest_norm - cand_geom_gt[0, 0, :2]).unsqueeze(0)
                         
                         x_pred = torch.cat([ctx_h, cur_h_vec, cand_h_pred, dist_pred_t])

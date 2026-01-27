@@ -48,6 +48,8 @@ class TrainCfg:
     decoder_use_dest_dist: bool
     decoder_use_step_emb: bool
     decoder_use_dest_query: bool
+    # Cross-attention
+    decoder_use_cross_attn: bool
     # Past context
     decoder_use_past_context: bool
     decoder_past_k: int
@@ -151,6 +153,13 @@ def build_argparser() -> argparse.ArgumentParser:
     )
     p.add_argument("--decoder_use_step_emb", action="store_true", help="Add step embedding into cross-attn query (decoder).")
     p.add_argument("--decoder_use_dest_query", action="store_true", help="Add dest_pos projection into cross-attn query (decoder).")
+    # Cross-attention ablation
+    p.add_argument(
+        "--decoder_use_cross_attn",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Use cross-attention to query latent tokens (default=True). Set --no-decoder_use_cross_attn to ablate.",
+    )
     # Past context: encode past-K path with small Transformer
     p.add_argument("--decoder_use_past_context", action="store_true", help="Add past-K path context via Transformer encoder.")
     p.add_argument("--decoder_past_k", type=int, default=8, help="Number of past steps to include.")
@@ -191,6 +200,7 @@ def main() -> None:
         decoder_use_dest_dist=bool(args.decoder_use_dest_dist),
         decoder_use_step_emb=bool(args.decoder_use_step_emb),
         decoder_use_dest_query=bool(args.decoder_use_dest_query),
+        decoder_use_cross_attn=bool(args.decoder_use_cross_attn),
         decoder_use_past_context=bool(args.decoder_use_past_context),
         decoder_past_k=int(args.decoder_past_k),
         decoder_past_n_layers=int(args.decoder_past_n_layers),
@@ -257,6 +267,7 @@ def main() -> None:
             max_candidates=int(cfg.max_candidates),
             max_len=int(cfg.max_len),
             decoder_use_dest_dist=bool(cfg.decoder_use_dest_dist),
+            decoder_use_cross_attn=bool(cfg.decoder_use_cross_attn),
             decoder_use_step_emb=bool(cfg.decoder_use_step_emb),
             decoder_use_dest_query=bool(cfg.decoder_use_dest_query),
             decoder_use_past_context=bool(cfg.decoder_use_past_context),

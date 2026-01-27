@@ -99,6 +99,38 @@ def _infer_decoder_use_dest_query_from_state(state: Dict[str, torch.Tensor]) -> 
     return any(str(k).startswith("decoder.dest_proj.") for k in state.keys())
 
 
+def _infer_decoder_use_past_context_from_state(state: Dict[str, torch.Tensor]) -> bool:
+    return any(str(k).startswith("decoder.past_encoder.") for k in state.keys())
+
+
+def _infer_decoder_past_k_from_state(state: Dict[str, torch.Tensor]) -> Optional[int]:
+    w = state.get("decoder.past_encoder.pos_emb.weight", None)
+    if isinstance(w, torch.Tensor) and w.ndim == 2:
+        return int(w.shape[0])
+    return None
+
+
+def _infer_decoder_past_n_layers_from_state(state: Dict[str, torch.Tensor]) -> Optional[int]:
+    # Keys look like: decoder.past_encoder.transformer.layers.{i}.*
+    max_i = -1
+    prefix = "decoder.past_encoder.transformer.layers."
+    for k in state.keys():
+        ks = str(k)
+        if not ks.startswith(prefix):
+            continue
+        rest = ks[len(prefix) :]
+        # rest begins with "{i}."
+        i_str = rest.split(".", 1)[0]
+        try:
+            i = int(i_str)
+        except Exception:
+            continue
+        max_i = max(max_i, i)
+    if max_i >= 0:
+        return int(max_i + 1)
+    return None
+
+
 def _to_device(batch: Dict[str, object], device: torch.device) -> Dict[str, object]:
     way_seq_pad = batch["way_seq_pad"].to(device)
     route_cond = {k: v.to(device) for k, v in batch["route_cond"].items()}
@@ -275,6 +307,14 @@ def main() -> None:
     use_cross_attn = _infer_decoder_use_cross_attn_from_state(ae_state)
     use_step_emb = _infer_decoder_use_step_emb_from_state(ae_state) or bool(ae_cfg_dict.get("decoder_use_step_emb", False))
     use_dest_query = _infer_decoder_use_dest_query_from_state(ae_state) or bool(ae_cfg_dict.get("decoder_use_dest_query", False))
+    use_past_ctx = _infer_decoder_use_past_context_from_state(ae_state) or bool(ae_cfg_dict.get("decoder_use_past_context", False))
+    past_k = ae_cfg_dict.get("decoder_past_k", None)
+    if past_k is None:
+        past_k = _infer_decoder_past_k_from_state(ae_state)
+    past_n_layers = ae_cfg_dict.get("decoder_past_n_layers", None)
+    if past_n_layers is None:
+        past_n_layers = _infer_decoder_past_n_layers_from_state(ae_state)
+    past_n_heads = ae_cfg_dict.get("decoder_past_n_heads", None)
 
     ae = WayCASDAutoEncoder(
         cfg=WayCASDAECfg(
@@ -289,6 +329,10 @@ def main() -> None:
             decoder_use_cross_attn=bool(use_cross_attn),
             decoder_use_step_emb=bool(use_step_emb),
             decoder_use_dest_query=bool(use_dest_query),
+            decoder_use_past_context=bool(use_past_ctx),
+            decoder_past_k=int(past_k) if past_k is not None else 8,
+            decoder_past_n_layers=int(past_n_layers) if past_n_layers is not None else 2,
+            decoder_past_n_heads=int(past_n_heads) if past_n_heads is not None else 4,
         ),
         way_features=way_features,
         way_adj_ptr=wg["way_adj_ptr"],
@@ -296,7 +340,17 @@ def main() -> None:
         n_highway_types=int(max(4, n_highway_types)),
     ).to(device)
 
-    ae.load_state_dict(ae_state, strict=True)
+    try:
+        ae.load_state_dict(ae_state, strict=True)
+    except RuntimeError as e:
+        # Most common reason: training checkpoint contains decoder-only keys (e.g., past_context encoder)
+        # while Flow training only needs the encoder. Fall back to a non-strict load to unblock training.
+        log.warning(f"AE strict load failed; falling back to strict=False. err={e}")
+        missing, unexpected = ae.load_state_dict(ae_state, strict=False)
+        if missing:
+            log.warning(f"AE non-strict load: missing={len(missing)} (example={missing[:3]})")
+        if unexpected:
+            log.warning(f"AE non-strict load: unexpected={len(unexpected)} (example={unexpected[:3]})")
     ae.eval()
     for p in ae.parameters():
         p.requires_grad_(False)

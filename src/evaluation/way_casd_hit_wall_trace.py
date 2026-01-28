@@ -81,6 +81,7 @@ def _infer_decoder_cfg_from_state(state: Dict[str, torch.Tensor]) -> Dict[str, A
     cfg["decoder_use_cross_attn"] = any(str(k).startswith("decoder.cross_attn.") for k in state.keys())
     cfg["decoder_use_step_emb"] = any(str(k).startswith("decoder.step_emb.") for k in state.keys())
     cfg["decoder_use_dest_query"] = any(str(k).startswith("decoder.dest_proj.") for k in state.keys())
+    cfg["decoder_use_dir_query"] = any(str(k).startswith("decoder.dir_query_proj.") for k in state.keys())
     cfg["decoder_use_past_context"] = any(str(k).startswith("decoder.past_encoder.") for k in state.keys())
 
     pe = state.get("decoder.past_encoder.pos_emb.weight", None)
@@ -341,6 +342,7 @@ def run(
             decoder_n_cross_heads=int(ae_cfg_dict.get("decoder_n_cross_heads", 4)),
             decoder_use_step_emb=bool(inferred.get("decoder_use_step_emb", False)),
             decoder_use_dest_query=bool(inferred.get("decoder_use_dest_query", False)),
+            decoder_use_dir_query=bool(inferred.get("decoder_use_dir_query", False)),
             decoder_use_past_context=bool(inferred.get("decoder_use_past_context", False)),
             decoder_past_k=int(inferred.get("decoder_past_k", 8)),
             decoder_past_n_layers=int(ae_cfg_dict.get("decoder_past_n_layers", 2)),

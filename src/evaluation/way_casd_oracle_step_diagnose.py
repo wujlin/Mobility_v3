@@ -200,6 +200,7 @@ def run(
         "decoder_use_cross_attn": _infer_flag(state, "decoder.cross_attn.") if isinstance(state, dict) else True,
         "decoder_use_step_emb": _infer_flag(state, "decoder.step_emb.") if isinstance(state, dict) else False,
         "decoder_use_dest_query": _infer_flag(state, "decoder.dest_proj.") if isinstance(state, dict) else False,
+        "decoder_use_dir_query": _infer_flag(state, "decoder.dir_query_proj.") if isinstance(state, dict) else False,
         "decoder_use_past_context": _infer_flag(state, "decoder.past_encoder.") if isinstance(state, dict) else False,
         "decoder_past_k": 8,
     }
@@ -221,6 +222,7 @@ def run(
             decoder_n_cross_heads=int(ae_cfg_dict.get("decoder_n_cross_heads", 4)),
             decoder_use_step_emb=bool(inferred["decoder_use_step_emb"]),
             decoder_use_dest_query=bool(inferred["decoder_use_dest_query"]),
+            decoder_use_dir_query=bool(inferred.get("decoder_use_dir_query", False)),
             decoder_use_past_context=bool(inferred["decoder_use_past_context"]),
             decoder_past_k=int(inferred["decoder_past_k"]),
             decoder_past_n_layers=int(ae_cfg_dict.get("decoder_past_n_layers", 2)),

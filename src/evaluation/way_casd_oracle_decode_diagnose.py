@@ -166,6 +166,10 @@ def _infer_decoder_use_dest_query_from_state(state: Dict[str, torch.Tensor]) -> 
     return any(str(k).startswith("decoder.dest_proj.") for k in state.keys())
 
 
+def _infer_decoder_use_dir_query_from_state(state: Dict[str, torch.Tensor]) -> bool:
+    return any(str(k).startswith("decoder.dir_query_proj.") for k in state.keys())
+
+
 def _infer_decoder_use_past_context_from_state(state: Dict[str, torch.Tensor]) -> bool:
     return any(str(k).startswith("decoder.past_encoder.") for k in state.keys())
 
@@ -242,6 +246,7 @@ def run(cfg: Cfg, *, way_routes_npz: Path, way_graph_npz: Path, way_features_npz
     use_cross_attn = (_infer_decoder_use_cross_attn_from_state(state) if isinstance(state, dict) else False) or bool(ae_cfg.get("decoder_use_cross_attn", True))
     use_step_emb = (_infer_decoder_use_step_emb_from_state(state) if isinstance(state, dict) else False) or bool(ae_cfg.get("decoder_use_step_emb", False))
     use_dest_query = (_infer_decoder_use_dest_query_from_state(state) if isinstance(state, dict) else False) or bool(ae_cfg.get("decoder_use_dest_query", False))
+    use_dir_query = (_infer_decoder_use_dir_query_from_state(state) if isinstance(state, dict) else False) or bool(ae_cfg.get("decoder_use_dir_query", False))
     use_past_context = (_infer_decoder_use_past_context_from_state(state) if isinstance(state, dict) else False) or bool(ae_cfg.get("decoder_use_past_context", False))
     past_k = int(ae_cfg.get("decoder_past_k", 8))
     if use_past_context and isinstance(state, dict):
@@ -264,6 +269,7 @@ def run(cfg: Cfg, *, way_routes_npz: Path, way_graph_npz: Path, way_features_npz
             decoder_n_cross_heads=int(ae_cfg.get("decoder_n_cross_heads", 4)),
             decoder_use_step_emb=bool(use_step_emb),
             decoder_use_dest_query=bool(use_dest_query),
+            decoder_use_dir_query=bool(use_dir_query),
             decoder_use_past_context=bool(use_past_context),
             decoder_past_k=int(past_k),
             decoder_past_n_layers=int(past_n_layers),
@@ -318,6 +324,7 @@ def run(cfg: Cfg, *, way_routes_npz: Path, way_graph_npz: Path, way_features_npz
             "decoder_use_cross_attn": bool(use_cross_attn),
             "decoder_use_step_emb": bool(use_step_emb),
             "decoder_use_dest_query": bool(use_dest_query),
+            "decoder_use_dir_query": bool(use_dir_query),
             "decoder_use_past_context": bool(use_past_context),
             "decoder_past_k": int(past_k),
             "decoder_past_n_layers": int(past_n_layers),

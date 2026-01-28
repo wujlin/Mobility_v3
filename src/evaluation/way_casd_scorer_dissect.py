@@ -106,6 +106,7 @@ def run(
         "decoder_use_past_context": _infer_flag(state, "decoder.past_encoder.") if isinstance(state, dict) else bool(ckpt_cfg.get("decoder_use_past_context", False)),
         "decoder_use_step_emb": _infer_flag(state, "decoder.step_emb.") if isinstance(state, dict) else bool(ckpt_cfg.get("decoder_use_step_emb", False)),
         "decoder_use_dest_query": _infer_flag(state, "decoder.dest_proj.") if isinstance(state, dict) else bool(ckpt_cfg.get("decoder_use_dest_query", False)),
+        "decoder_use_dir_query": _infer_flag(state, "decoder.dir_query_proj.") if isinstance(state, dict) else bool(ckpt_cfg.get("decoder_use_dir_query", False)),
     }
 
     ae_cfg = WayCASDAECfg(
@@ -121,6 +122,7 @@ def run(
         decoder_n_cross_heads=int(ckpt_cfg.get("decoder_n_cross_heads", 4)),
         decoder_use_step_emb=bool(inferred["decoder_use_step_emb"]),
         decoder_use_dest_query=bool(inferred["decoder_use_dest_query"]),
+        decoder_use_dir_query=bool(inferred["decoder_use_dir_query"]),
         decoder_use_past_context=bool(inferred["decoder_use_past_context"]),
         decoder_past_k=int(ckpt_cfg.get("decoder_past_k", 8)),
         decoder_past_n_layers=int(ckpt_cfg.get("decoder_past_n_layers", 2)),

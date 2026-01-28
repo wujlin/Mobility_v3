@@ -25,6 +25,8 @@ class WayDecoderCfg:
     # Query enrichment (for early-step disambiguation)
     use_step_emb: bool = False
     use_dest_query: bool = False
+    # Query-time direction hint (use candidate direction statistics to query z)
+    use_dir_query: bool = False
     # Past context: encode past-K path with small Transformer
     use_past_context: bool = False
     past_k: int = 8  # Number of past steps to include
@@ -140,6 +142,7 @@ class WayDecoder(nn.Module):
 
         self.use_step_emb = bool(cfg.use_step_emb)
         self.use_dest_query = bool(cfg.use_dest_query)
+        self.use_dir_query = bool(cfg.use_dir_query)
 
         self.register_buffer("way_adj_ptr", torch.as_tensor(way_adj_ptr, dtype=torch.long), persistent=False)
         self.register_buffer("way_adj_idx", torch.as_tensor(way_adj_idx, dtype=torch.long), persistent=False)
@@ -157,6 +160,12 @@ class WayDecoder(nn.Module):
             self.dest_proj = nn.Linear(2, d_model)
         else:
             self.dest_proj = None
+
+        # Query-time direction hint: project mean candidate direction (dy, dx) into d_model.
+        if self.use_dir_query:
+            self.dir_query_proj = nn.Linear(2, d_model)
+        else:
+            self.dir_query_proj = None
 
         # Cross-attention: query=cur_way, key/value=latent_tokens
         self.use_cross_attn = bool(cfg.use_cross_attn)
@@ -305,6 +314,8 @@ class WayDecoder(nn.Module):
         latent_tokens: torch.Tensor,  # (B, L, d_model)
         cond_emb: torch.Tensor,  # (B, d_model)
         cur_way: torch.Tensor,  # (T,)
+        cand_way: Optional[torch.Tensor] = None,  # (T, C) candidate way IDs (optional)
+        cand_mask: Optional[torch.Tensor] = None,  # (T, C) bool mask for candidates (optional)
         route_idx: torch.Tensor,  # (T,)
         step: torch.Tensor,  # (T,)
         dest_pos: torch.Tensor,  # (B,2)
@@ -346,6 +357,24 @@ class WayDecoder(nn.Module):
                 dest = dest / coord_scale
             dest_t = dest[route_idx]  # (T,2)
             query_vec = query_vec + self.dest_proj(dest_t)
+
+        # Direction hint: summarize candidate directions at this decision step.
+        # This is meant to disambiguate "which direction to query" from z_enc when
+        # multiple successors share similar local features.
+        if self.use_dir_query and self.dir_query_proj is not None and cand_way is not None:
+            try:
+                cand_geom, _tier, _hw = way_embedder._lookup(cand_way)  # (T,C,5)
+                cand_dirs = cand_geom[..., 2:4].to(dtype=torch.float32)  # (T,C,2) (dy,dx)
+                if cand_mask is not None:
+                    m = cand_mask.to(dtype=torch.float32).unsqueeze(-1)  # (T,C,1)
+                    denom = m.sum(dim=1).clamp(min=1.0)  # (T,1)
+                    mean_dir = (cand_dirs * m).sum(dim=1) / denom  # (T,2)
+                else:
+                    mean_dir = cand_dirs.mean(dim=1)  # (T,2)
+                query_vec = query_vec + self.dir_query_proj(mean_dir.to(device=device))
+            except Exception:
+                # Keep decode robust if lookup fails for any reason.
+                pass
 
         # Past context: encode history using Transformer
         if self.use_past_context and self.past_encoder is not None:
@@ -428,6 +457,8 @@ class WayDecoder(nn.Module):
             latent_tokens=latent_tokens,
             cond_emb=cond_emb,
             cur_way=cur_way,
+            cand_way=cand_way,
+            cand_mask=cand_mask,
             route_idx=route_idx,
             step=step,
             dest_pos=route_cond["dest_pos"],

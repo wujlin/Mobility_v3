@@ -101,6 +101,21 @@ def _infer_decoder_use_dest_query_from_state(state: Dict[str, torch.Tensor]) -> 
     return any(str(k).startswith("decoder.dest_proj.") for k in state.keys())
 
 
+def _infer_decoder_use_dir_query_from_state(state: Dict[str, torch.Tensor]) -> bool:
+    return any(str(k).startswith("decoder.dir_query_proj.") for k in state.keys())
+
+
+def _infer_decoder_use_past_context_from_state(state: Dict[str, torch.Tensor]) -> bool:
+    return any(str(k).startswith("decoder.past_encoder.") for k in state.keys())
+
+
+def _infer_decoder_past_k_from_state(state: Dict[str, torch.Tensor]) -> Optional[int]:
+    w = state.get("decoder.past_encoder.pos_emb.weight", None)
+    if isinstance(w, torch.Tensor) and w.ndim == 2 and int(w.shape[0]) > 0:
+        return int(w.shape[0])
+    return None
+
+
 def _slice_csr(ptr: np.ndarray, idx: np.ndarray, i: int) -> np.ndarray:
     s = int(ptr[i])
     e = int(ptr[i + 1])
@@ -256,6 +271,15 @@ def main() -> None:
     use_cross_attn = _infer_decoder_use_cross_attn_from_state(ae_state) or bool(ae_cfg_dict.get("decoder_use_cross_attn", True))
     use_step_emb = _infer_decoder_use_step_emb_from_state(ae_state) or bool(ae_cfg_dict.get("decoder_use_step_emb", False))
     use_dest_query = _infer_decoder_use_dest_query_from_state(ae_state) or bool(ae_cfg_dict.get("decoder_use_dest_query", False))
+    use_dir_query = _infer_decoder_use_dir_query_from_state(ae_state) or bool(ae_cfg_dict.get("decoder_use_dir_query", False))
+    use_past_ctx = _infer_decoder_use_past_context_from_state(ae_state) or bool(ae_cfg_dict.get("decoder_use_past_context", False))
+    past_k = int(ae_cfg_dict.get("decoder_past_k", 8))
+    if use_past_ctx:
+        pk = _infer_decoder_past_k_from_state(ae_state)
+        if pk is not None:
+            past_k = int(pk)
+    past_n_layers = int(ae_cfg_dict.get("decoder_past_n_layers", 2))
+    past_n_heads = int(ae_cfg_dict.get("decoder_past_n_heads", 4))
     d_model = int(ae_cfg_dict.get("d_model", 256))
     n_latent = int(ae_cfg_dict.get("n_latent", 32))
     n_heads = int(ae_cfg_dict.get("n_heads", 8))
@@ -278,13 +302,22 @@ def main() -> None:
             decoder_n_cross_heads=int(ae_cfg_dict.get("decoder_n_cross_heads", 4)),
             decoder_use_step_emb=bool(use_step_emb),
             decoder_use_dest_query=bool(use_dest_query),
+            decoder_use_dir_query=bool(use_dir_query),
+            decoder_use_past_context=bool(use_past_ctx),
+            decoder_past_k=int(past_k),
+            decoder_past_n_layers=int(past_n_layers),
+            decoder_past_n_heads=int(past_n_heads),
         ),
         way_features=way_features,
         way_adj_ptr=way_adj_ptr,
         way_adj_idx=way_adj_idx,
         n_highway_types=int(max(4, n_highway_types)),
     ).to(device)
-    ae.load_state_dict(ae_state, strict=True)
+    try:
+        ae.load_state_dict(ae_state, strict=True)
+    except Exception as e:
+        print(f"[WARN] strict load_state_dict failed, fallback strict=False: {e}")
+        ae.load_state_dict(ae_state, strict=False)
     ae.eval()
 
     flow = None

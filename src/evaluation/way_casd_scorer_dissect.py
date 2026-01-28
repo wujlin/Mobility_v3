@@ -72,6 +72,13 @@ def _infer_flag(state: Dict[str, torch.Tensor], prefix: str) -> bool:
     return any(str(k).startswith(prefix) for k in state.keys())
 
 
+def _infer_n_route_cities_from_state(state: Dict[str, torch.Tensor]) -> Optional[int]:
+    w = state.get("decoder.cond_enc.route_city_embed.weight", None)
+    if isinstance(w, torch.Tensor) and w.ndim == 2 and int(w.shape[0]) > 0:
+        return int(w.shape[0])
+    return None
+
+
 @torch.no_grad()
 def run(
     cfg: Cfg,
@@ -107,6 +114,7 @@ def run(
         "decoder_use_step_emb": _infer_flag(state, "decoder.step_emb.") if isinstance(state, dict) else bool(ckpt_cfg.get("decoder_use_step_emb", False)),
         "decoder_use_dest_query": _infer_flag(state, "decoder.dest_proj.") if isinstance(state, dict) else bool(ckpt_cfg.get("decoder_use_dest_query", False)),
         "decoder_use_dir_query": _infer_flag(state, "decoder.dir_query_proj.") if isinstance(state, dict) else bool(ckpt_cfg.get("decoder_use_dir_query", False)),
+        "decoder_use_cand_query": _infer_flag(state, "decoder.cand_query_proj.") if isinstance(state, dict) else bool(ckpt_cfg.get("decoder_use_cand_query", False)),
     }
 
     ae_cfg = WayCASDAECfg(
@@ -123,17 +131,26 @@ def run(
         decoder_use_step_emb=bool(inferred["decoder_use_step_emb"]),
         decoder_use_dest_query=bool(inferred["decoder_use_dest_query"]),
         decoder_use_dir_query=bool(inferred["decoder_use_dir_query"]),
+        decoder_use_cand_query=bool(inferred["decoder_use_cand_query"]),
         decoder_use_past_context=bool(inferred["decoder_use_past_context"]),
         decoder_past_k=int(ckpt_cfg.get("decoder_past_k", 8)),
         decoder_past_n_layers=int(ckpt_cfg.get("decoder_past_n_layers", 2)),
         decoder_past_n_heads=int(ckpt_cfg.get("decoder_past_n_heads", 4)),
     )
 
+    n_route_cities = _infer_n_route_cities_from_state(state) if isinstance(state, dict) else None
+    if n_route_cities is None:
+        if routes.route_city is not None:
+            n_route_cities = int(np.max(np.asarray(routes.route_city, dtype=np.int64))) + 1
+        else:
+            n_route_cities = 1
+
     ae = WayCASDAutoEncoder(
         cfg=ae_cfg,
         way_adj_ptr=ptr,
         way_adj_idx=idx,
         way_features=way_features,
+        n_route_cities=int(n_route_cities),
         n_highway_types=int(max(4, n_highway_types)),
     ).to(device)
     strict_ok = True

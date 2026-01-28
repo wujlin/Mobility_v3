@@ -34,6 +34,7 @@ _sync/**
 !_sync/**/*.png
 !_sync/**/*.pdf
 !_sync/**/*.svg
+!_sync/**/*.npz
 *.pt
 *.pth
 *.ckpt

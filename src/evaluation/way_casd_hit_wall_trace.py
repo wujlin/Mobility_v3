@@ -82,6 +82,7 @@ def _infer_decoder_cfg_from_state(state: Dict[str, torch.Tensor]) -> Dict[str, A
     cfg["decoder_use_step_emb"] = any(str(k).startswith("decoder.step_emb.") for k in state.keys())
     cfg["decoder_use_dest_query"] = any(str(k).startswith("decoder.dest_proj.") for k in state.keys())
     cfg["decoder_use_dir_query"] = any(str(k).startswith("decoder.dir_query_proj.") for k in state.keys())
+    cfg["decoder_use_cand_query"] = any(str(k).startswith("decoder.cand_query_proj.") for k in state.keys())
     cfg["decoder_use_past_context"] = any(str(k).startswith("decoder.past_encoder.") for k in state.keys())
 
     pe = state.get("decoder.past_encoder.pos_emb.weight", None)
@@ -236,6 +237,7 @@ def _trace_one_hit_wall(
             gt_next_logit = None
             gt_next_rank = None
             chosen_logit = float(logits[j].item())
+            gt_pos = None
 
             if gt_prefix_ok:
                 # If we are still exactly on GT prefix, then GT next is well-defined.
@@ -244,8 +246,68 @@ def _trace_one_hit_wall(
                     gt_next_rank = _rank_of_way(logits, cand_sel, int(gt_next))
                     if gt_next_rank is not None:
                         # direct fetch
-                        pos = int(torch.nonzero(cand_sel == int(gt_next), as_tuple=False)[0].item())
-                        gt_next_logit = float(logits[pos].item())
+                        gt_pos = int(torch.nonzero(cand_sel == int(gt_next), as_tuple=False)[0].item())
+                        gt_next_logit = float(logits[gt_pos].item())
+
+            # Extra diagnostics (context/candidate/dist diffs)
+            ctx_norm = None
+            ctx_pred_norm = None
+            ctx_gt_norm = None
+            ctx_diff_norm = None
+            cand_h_diff = None
+            dist_pred_to_dest = None
+            dist_gt_to_dest = None
+            dist_pred_minus_gt = None
+            try:
+                # Candidate embedding diff
+                cand_emb_dbg, _ = ae.way_enc(cand_way)  # (1,C,d)
+                cand_h_dbg = ae.decoder.cand_proj(cand_emb_dbg)[0]  # (C,H)
+                if gt_pos is not None:
+                    cand_h_diff = float(torch.norm(cand_h_dbg[int(j)] - cand_h_dbg[int(gt_pos)]).item())
+
+                # Context norms
+                ctx_out_dbg = ae.decoder._compute_context(
+                    way_embedder=ae.way_enc,
+                    latent_tokens=z_enc,
+                    cond_emb=cond_emb,
+                    cur_way=trans["cur_way"],
+                    cand_way=trans["cand_way"],
+                    cand_mask=trans["cand_mask"],
+                    route_idx=trans["route_idx"],
+                    step=trans["step"],
+                    dest_pos=route_cond["dest_pos"],
+                    past_way=trans.get("past_way", None),
+                    past_mask=trans.get("past_mask", None),
+                )
+                if ctx_out_dbg.ndim == 2:
+                    v = ctx_out_dbg[0]
+                    ctx_norm = float(torch.norm(v).item())
+                    ctx_pred_norm = ctx_norm
+                    ctx_gt_norm = ctx_norm
+                    ctx_diff_norm = 0.0
+                else:
+                    v_pred = ctx_out_dbg[0, int(j)]
+                    ctx_pred_norm = float(torch.norm(v_pred).item())
+                    ctx_norm = ctx_pred_norm
+                    if gt_pos is not None:
+                        v_gt = ctx_out_dbg[0, int(gt_pos)]
+                        ctx_gt_norm = float(torch.norm(v_gt).item())
+                        ctx_diff_norm = float(torch.norm(v_pred - v_gt).item())
+
+                # Distance-to-dest (normalized coord space)
+                coord_scale = float(getattr(ae.way_enc, "coord_scale", ae.decoder.coord_scale))
+                dest = route_cond["dest_pos"].to(dtype=torch.float32)
+                if coord_scale > 0:
+                    dest = dest / coord_scale
+                cand_geom, _tier, _hw = ae.way_enc._lookup(cand_way)
+                cand_center = cand_geom[..., :2].to(dtype=torch.float32)  # (1,C,2)
+                dists = torch.norm(dest[:, None, :] - cand_center, dim=-1)[0]  # (C,)
+                dist_pred_to_dest = float(dists[int(j)].item())
+                if gt_pos is not None:
+                    dist_gt_to_dest = float(dists[int(gt_pos)].item())
+                    dist_pred_minus_gt = float(dist_pred_to_dest - dist_gt_to_dest)
+            except Exception:
+                pass
 
             last_logs.append(
                 {
@@ -262,6 +324,14 @@ def _trace_one_hit_wall(
                     "gt_next_rank": int(gt_next_rank) if gt_next_rank is not None else None,
                     "gt_next_logit": float(gt_next_logit) if gt_next_logit is not None else None,
                     "chosen_minus_gt_next": float(chosen_logit - float(gt_next_logit)) if gt_next_logit is not None else None,
+                    "ctx_norm": ctx_norm,
+                    "ctx_pred_norm": ctx_pred_norm,
+                    "ctx_gt_norm": ctx_gt_norm,
+                    "ctx_diff_norm": ctx_diff_norm,
+                    "cand_h_diff": cand_h_diff,
+                    "dist_pred_to_dest": dist_pred_to_dest,
+                    "dist_gt_to_dest": dist_gt_to_dest,
+                    "dist_pred_minus_gt": dist_pred_minus_gt,
                 }
             )
 
@@ -343,6 +413,7 @@ def run(
             decoder_use_step_emb=bool(inferred.get("decoder_use_step_emb", False)),
             decoder_use_dest_query=bool(inferred.get("decoder_use_dest_query", False)),
             decoder_use_dir_query=bool(inferred.get("decoder_use_dir_query", False)),
+            decoder_use_cand_query=bool(inferred.get("decoder_use_cand_query", False)),
             decoder_use_past_context=bool(inferred.get("decoder_use_past_context", False)),
             decoder_past_k=int(inferred.get("decoder_past_k", 8)),
             decoder_past_n_layers=int(ae_cfg_dict.get("decoder_past_n_layers", 2)),

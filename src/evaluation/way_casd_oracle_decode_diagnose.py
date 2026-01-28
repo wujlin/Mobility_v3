@@ -170,8 +170,19 @@ def _infer_decoder_use_dir_query_from_state(state: Dict[str, torch.Tensor]) -> b
     return any(str(k).startswith("decoder.dir_query_proj.") for k in state.keys())
 
 
+def _infer_decoder_use_cand_query_from_state(state: Dict[str, torch.Tensor]) -> bool:
+    return any(str(k).startswith("decoder.cand_query_proj.") for k in state.keys())
+
+
 def _infer_decoder_use_past_context_from_state(state: Dict[str, torch.Tensor]) -> bool:
     return any(str(k).startswith("decoder.past_encoder.") for k in state.keys())
+
+
+def _infer_n_route_cities_from_state(state: Dict[str, torch.Tensor]) -> Optional[int]:
+    w = state.get("decoder.cond_enc.route_city_embed.weight", None)
+    if isinstance(w, torch.Tensor) and w.ndim == 2 and int(w.shape[0]) > 0:
+        return int(w.shape[0])
+    return None
 
 
 def _select_decode_succ(
@@ -247,6 +258,7 @@ def run(cfg: Cfg, *, way_routes_npz: Path, way_graph_npz: Path, way_features_npz
     use_step_emb = (_infer_decoder_use_step_emb_from_state(state) if isinstance(state, dict) else False) or bool(ae_cfg.get("decoder_use_step_emb", False))
     use_dest_query = (_infer_decoder_use_dest_query_from_state(state) if isinstance(state, dict) else False) or bool(ae_cfg.get("decoder_use_dest_query", False))
     use_dir_query = (_infer_decoder_use_dir_query_from_state(state) if isinstance(state, dict) else False) or bool(ae_cfg.get("decoder_use_dir_query", False))
+    use_cand_query = (_infer_decoder_use_cand_query_from_state(state) if isinstance(state, dict) else False) or bool(ae_cfg.get("decoder_use_cand_query", False))
     use_past_context = (_infer_decoder_use_past_context_from_state(state) if isinstance(state, dict) else False) or bool(ae_cfg.get("decoder_use_past_context", False))
     past_k = int(ae_cfg.get("decoder_past_k", 8))
     if use_past_context and isinstance(state, dict):
@@ -255,6 +267,11 @@ def run(cfg: Cfg, *, way_routes_npz: Path, way_graph_npz: Path, way_features_npz
             past_k = int(pe.shape[0])
     past_n_layers = int(ae_cfg.get("decoder_past_n_layers", 2))
     past_n_heads = int(ae_cfg.get("decoder_past_n_heads", 4))
+    n_route_cities = _infer_n_route_cities_from_state(state) if isinstance(state, dict) else None
+    if n_route_cities is None:
+        n_route_cities = int(ae_cfg.get("n_route_cities", 4))
+    n_city_obs = int(np.max(routes.route_city.astype(np.int64))) + 1
+    n_route_cities = max(int(n_route_cities), int(n_city_obs))
     ae = WayCASDAutoEncoder(
         cfg=WayCASDAECfg(
             d_model=int(ae_cfg.get("d_model", 256)),
@@ -270,6 +287,7 @@ def run(cfg: Cfg, *, way_routes_npz: Path, way_graph_npz: Path, way_features_npz
             decoder_use_step_emb=bool(use_step_emb),
             decoder_use_dest_query=bool(use_dest_query),
             decoder_use_dir_query=bool(use_dir_query),
+            decoder_use_cand_query=bool(use_cand_query),
             decoder_use_past_context=bool(use_past_context),
             decoder_past_k=int(past_k),
             decoder_past_n_layers=int(past_n_layers),
@@ -279,6 +297,7 @@ def run(cfg: Cfg, *, way_routes_npz: Path, way_graph_npz: Path, way_features_npz
         way_adj_ptr=ptr,
         way_adj_idx=idx,
         n_highway_types=int(max(4, n_highway_types)),
+        n_route_cities=int(n_route_cities),
     ).to(device)
     strict_ok = True
     try:
@@ -325,10 +344,12 @@ def run(cfg: Cfg, *, way_routes_npz: Path, way_graph_npz: Path, way_features_npz
             "decoder_use_step_emb": bool(use_step_emb),
             "decoder_use_dest_query": bool(use_dest_query),
             "decoder_use_dir_query": bool(use_dir_query),
+            "decoder_use_cand_query": bool(use_cand_query),
             "decoder_use_past_context": bool(use_past_context),
             "decoder_past_k": int(past_k),
             "decoder_past_n_layers": int(past_n_layers),
             "decoder_past_n_heads": int(past_n_heads),
+            "n_route_cities": int(n_route_cities),
         },
         "inputs": {
             "way_routes_npz": str(way_routes_npz),

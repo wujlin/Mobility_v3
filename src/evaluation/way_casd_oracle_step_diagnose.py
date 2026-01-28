@@ -201,6 +201,7 @@ def run(
         "decoder_use_step_emb": _infer_flag(state, "decoder.step_emb.") if isinstance(state, dict) else False,
         "decoder_use_dest_query": _infer_flag(state, "decoder.dest_proj.") if isinstance(state, dict) else False,
         "decoder_use_dir_query": _infer_flag(state, "decoder.dir_query_proj.") if isinstance(state, dict) else False,
+        "decoder_use_cand_query": _infer_flag(state, "decoder.cand_query_proj.") if isinstance(state, dict) else False,
         "decoder_use_past_context": _infer_flag(state, "decoder.past_encoder.") if isinstance(state, dict) else False,
         "decoder_past_k": 8,
     }
@@ -223,6 +224,7 @@ def run(
             decoder_use_step_emb=bool(inferred["decoder_use_step_emb"]),
             decoder_use_dest_query=bool(inferred["decoder_use_dest_query"]),
             decoder_use_dir_query=bool(inferred.get("decoder_use_dir_query", False)),
+            decoder_use_cand_query=bool(inferred.get("decoder_use_cand_query", False)),
             decoder_use_past_context=bool(inferred["decoder_use_past_context"]),
             decoder_past_k=int(inferred["decoder_past_k"]),
             decoder_past_n_layers=int(ae_cfg_dict.get("decoder_past_n_layers", 2)),
@@ -418,6 +420,7 @@ def run(
                 gt_in_sel = None
                 gt_rank = None
                 gt_gap = None
+                logit_gap_pred_gt = None
                 if gt_next is not None:
                     full_list = set(int(x) for x in cand_full.detach().to("cpu").numpy().reshape(-1).tolist())
                     sel_list = [int(x) for x in cand_sel.detach().to("cpu").numpy().reshape(-1).tolist()]
@@ -429,6 +432,7 @@ def run(
                         order = np.argsort(-logits_np)
                         gt_rank = int(np.where(order == gt_pos)[0][0]) + 1  # 1-based
                         gt_gap = float(np.max(logits_np) - float(logits_np[gt_pos]))
+                        logit_gap_pred_gt = float(float(logits_np[j]) - float(logits_np[gt_pos]))
 
                 # First divergence transition (while on GT prefix)
                 if first_div_transition is None and gt_next is not None and pred_next != int(gt_next):
@@ -436,6 +440,7 @@ def run(
                     dist_pred = None
                     dist_gt = None
                     dist_pred_closer = None
+                    dist_pred_minus_gt = None
                     if 0 <= pred_next < len(way_center_y) and 0 <= int(gt_next) < len(way_center_y):
                         pred_cy, pred_cx = float(way_center_y[pred_next]), float(way_center_x[pred_next])
                         gt_cy, gt_cx = float(way_center_y[int(gt_next)]), float(way_center_x[int(gt_next)])
@@ -443,6 +448,57 @@ def run(
                         dist_pred = float(np.sqrt((pred_cy - dy) ** 2 + (pred_cx - dx) ** 2))
                         dist_gt = float(np.sqrt((gt_cy - dy) ** 2 + (gt_cx - dx) ** 2))
                         dist_pred_closer = bool(dist_pred < dist_gt)
+                        dist_pred_minus_gt = float(dist_pred - dist_gt)
+
+                    # Extra diagnostics (candidate/context differences)
+                    ctx_norm = None
+                    ctx_pred_norm = None
+                    ctx_gt_norm = None
+                    ctx_diff_norm = None
+                    cand_h_diff = None
+                    try:
+                        # Candidate embedding diff
+                        cand_emb_dbg, _ = ae.way_enc(cand_way)  # (1,C,d)
+                        cand_h_dbg = ae.decoder.cand_proj(cand_emb_dbg)[0]  # (C,H)
+                        if gt_rank is not None and gt_in_sel:
+                            sel_list = [int(x) for x in cand_sel.detach().to("cpu").numpy().reshape(-1).tolist()]
+                            gt_pos2 = int(sel_list.index(int(gt_next)))
+                            cand_h_diff = float(torch.norm(cand_h_dbg[int(j)] - cand_h_dbg[int(gt_pos2)]).item())
+
+                        # Context norm(s)
+                        ctx_out_dbg = ae.decoder._compute_context(
+                            way_embedder=ae.way_enc,
+                            latent_tokens=z_enc,
+                            cond_emb=cond_emb,
+                            cur_way=trans["cur_way"],
+                            cand_way=trans["cand_way"],
+                            cand_mask=trans["cand_mask"],
+                            cur_emb=None,
+                            cand_emb=None,
+                            route_idx=trans["route_idx"],
+                            step=trans["step"],
+                            dest_pos=route_cond["dest_pos"],
+                            past_way=trans.get("past_way", None),
+                            past_mask=trans.get("past_mask", None),
+                        )
+                        if ctx_out_dbg.ndim == 2:
+                            v = ctx_out_dbg[0]
+                            ctx_norm = float(torch.norm(v).item())
+                            ctx_pred_norm = ctx_norm
+                            ctx_gt_norm = ctx_norm
+                            ctx_diff_norm = 0.0
+                        else:
+                            v_pred = ctx_out_dbg[0, int(j)]
+                            ctx_pred_norm = float(torch.norm(v_pred).item())
+                            ctx_norm = ctx_pred_norm
+                            if gt_in_sel:
+                                sel_list = [int(x) for x in cand_sel.detach().to("cpu").numpy().reshape(-1).tolist()]
+                                gt_pos2 = int(sel_list.index(int(gt_next)))
+                                v_gt = ctx_out_dbg[0, gt_pos2]
+                                ctx_gt_norm = float(torch.norm(v_gt).item())
+                                ctx_diff_norm = float(torch.norm(v_pred - v_gt).item())
+                    except Exception:
+                        pass
                     
                     first_div_transition = {
                         "step_idx": int(step_idx),
@@ -456,12 +512,19 @@ def run(
                         "gt_rank": gt_rank,
                         "logit_margin": float(margin),
                         "gt_gap": gt_gap,
+                        "logit_gap_pred_gt": logit_gap_pred_gt,
                         "close_call": bool(close_call),
                         "hop_cur": int(hop[cur]) if 0 <= cur < int(hop.size) else -1,
                         "hop_pred_next": int(hop[pred_next]) if 0 <= pred_next < int(hop.size) else -1,
                         "dist_pred_to_dest": dist_pred,
                         "dist_gt_to_dest": dist_gt,
+                        "dist_pred_minus_gt": dist_pred_minus_gt,
                         "dist_pred_closer": dist_pred_closer,
+                        "ctx_norm": ctx_norm,
+                        "ctx_pred_norm": ctx_pred_norm,
+                        "ctx_gt_norm": ctx_gt_norm,
+                        "ctx_diff_norm": ctx_diff_norm,
+                        "cand_h_diff": cand_h_diff,
                     }
                     div_outdeg.append(int(succ_full_n))
                     if gt_in_full is not None:

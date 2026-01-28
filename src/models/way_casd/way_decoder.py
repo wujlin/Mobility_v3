@@ -27,6 +27,9 @@ class WayDecoderCfg:
     use_dest_query: bool = False
     # Query-time direction hint (use candidate direction statistics to query z)
     use_dir_query: bool = False
+    # Candidate-aware cross-attention: let each candidate query z_enc separately so
+    # latent information can directly participate in candidate ranking.
+    use_cand_query: bool = False
     # Past context: encode past-K path with small Transformer
     use_past_context: bool = False
     past_k: int = 8  # Number of past steps to include
@@ -143,6 +146,7 @@ class WayDecoder(nn.Module):
         self.use_step_emb = bool(cfg.use_step_emb)
         self.use_dest_query = bool(cfg.use_dest_query)
         self.use_dir_query = bool(cfg.use_dir_query)
+        self.use_cand_query = bool(cfg.use_cand_query)
 
         self.register_buffer("way_adj_ptr", torch.as_tensor(way_adj_ptr, dtype=torch.long), persistent=False)
         self.register_buffer("way_adj_idx", torch.as_tensor(way_adj_idx, dtype=torch.long), persistent=False)
@@ -166,6 +170,12 @@ class WayDecoder(nn.Module):
             self.dir_query_proj = nn.Linear(2, d_model)
         else:
             self.dir_query_proj = None
+
+        # Candidate-aware query: project candidate embedding into d_model and add to base query.
+        if self.use_cand_query:
+            self.cand_query_proj = nn.Linear(d_model, d_model)
+        else:
+            self.cand_query_proj = None
 
         # Cross-attention: query=cur_way, key/value=latent_tokens
         self.use_cross_attn = bool(cfg.use_cross_attn)
@@ -316,6 +326,8 @@ class WayDecoder(nn.Module):
         cur_way: torch.Tensor,  # (T,)
         cand_way: Optional[torch.Tensor] = None,  # (T, C) candidate way IDs (optional)
         cand_mask: Optional[torch.Tensor] = None,  # (T, C) bool mask for candidates (optional)
+        cur_emb: Optional[torch.Tensor] = None,  # (T, d_model) optional cache
+        cand_emb: Optional[torch.Tensor] = None,  # (T, C, d_model) optional cache
         route_idx: torch.Tensor,  # (T,)
         step: torch.Tensor,  # (T,)
         dest_pos: torch.Tensor,  # (B,2)
@@ -330,15 +342,18 @@ class WayDecoder(nn.Module):
         
         If use_past_context: incorporate past_way history via Transformer encoder.
         
-        Returns: ctx (T, hidden_dim)
+        Returns:
+            - ctx (T, hidden_dim) when candidate-agnostic
+            - ctx (T, C, hidden_dim) when use_cand_query=True (candidate-aware)
         """
         B = int(latent_tokens.shape[0])
         T = int(cur_way.shape[0])
         device = latent_tokens.device
         
-        # Get current way embeddings
-        cur_emb, _ = way_embedder(cur_way[:, None])  # (T, 1, d_model)
-        cur_emb = cur_emb[:, 0, :]  # (T, d_model)
+        # Get current way embeddings (optional cache)
+        if cur_emb is None:
+            cur_emb2, _ = way_embedder(cur_way[:, None])  # (T, 1, d_model)
+            cur_emb = cur_emb2[:, 0, :]  # (T, d_model)
 
         # Enrich query (optional)
         query_vec = cur_emb
@@ -386,23 +401,48 @@ class WayDecoder(nn.Module):
             # If past_way is None (e.g., step 0), query_vec remains unchanged
 
         if self.use_cross_attn:
-            # Cross-attention: each cur_way queries its route's latent_tokens
-            # We need to gather latent_tokens by route_idx
-            # latent_tokens: (B, L, d_model) -> expand to (T, L, d_model) by route_idx
-            L = int(latent_tokens.shape[1])
-            d = int(latent_tokens.shape[2])
-            
-            # Gather latent tokens for each transition
+            # Gather latent tokens for each transition: (B, L, d) -> (T, L, d)
             lat_gathered = latent_tokens[route_idx]  # (T, L, d_model)
-            
-            # Cross-attention: query=query_vec (T,1,d), key/value=lat_gathered (T,L,d)
-            query = query_vec.unsqueeze(1)  # (T, 1, d_model)
-            attn_out, _ = self.cross_attn(query, lat_gathered, lat_gathered)  # (T, 1, d_model)
-            attn_out = self.cross_ln(attn_out[:, 0, :] + query_vec)  # (T, d_model), residual
-            
-            # Combine with condition embedding
             cond_t = cond_emb[route_idx]  # (T, d_model)
-            ctx = self.ctx_mlp(torch.cat([cond_t, attn_out], dim=-1))  # (T, hidden)
+
+            # Candidate-aware cross-attention (optional): each candidate queries z_enc separately.
+            # This allows z_enc to contribute directly to candidate ranking, not just as a global bias.
+            if (
+                self.use_cand_query
+                and self.cand_query_proj is not None
+                and cand_way is not None
+                and cand_mask is not None
+            ):
+                if cand_emb is None:
+                    cand_emb2, _ = way_embedder(cand_way)  # (T,C,d_model)
+                    cand_emb = cand_emb2
+                T2, C = int(cand_way.shape[0]), int(cand_way.shape[1])
+                if T2 != T:
+                    raise ValueError(f"cand_way T mismatch: T={T} vs cand_way.shape[0]={T2}")
+
+                cand_q = query_vec[:, None, :] + self.cand_query_proj(cand_emb)  # (T,C,d_model)
+                valid = cand_mask.to(dtype=torch.bool)
+                idx = valid.nonzero(as_tuple=False)  # (N,2)
+                if int(idx.numel()) == 0:
+                    return torch.zeros((T, C, int(self.cfg.hidden_dim)), dtype=query_vec.dtype, device=device)
+                t_idx = idx[:, 0]
+                c_idx = idx[:, 1]
+
+                qv = cand_q[t_idx, c_idx]  # (N,d_model)
+                kv = lat_gathered[t_idx]  # (N,L,d_model)
+                query = qv.unsqueeze(1)  # (N,1,d_model)
+                attn_out, _ = self.cross_attn(query, kv, kv)  # (N,1,d_model)
+                attn_vec = self.cross_ln(attn_out[:, 0, :] + qv)  # (N,d_model)
+                ctx_v = self.ctx_mlp(torch.cat([cond_t[t_idx], attn_vec], dim=-1))  # (N,hidden)
+
+                ctx = torch.zeros((T, C, ctx_v.shape[-1]), dtype=ctx_v.dtype, device=ctx_v.device)
+                ctx[t_idx, c_idx] = ctx_v
+            else:
+                # Candidate-independent context (original): (T,hidden)
+                query = query_vec.unsqueeze(1)  # (T,1,d_model)
+                attn_out, _ = self.cross_attn(query, lat_gathered, lat_gathered)  # (T,1,d_model)
+                attn_out = self.cross_ln(attn_out[:, 0, :] + query_vec)  # (T,d_model), residual
+                ctx = self.ctx_mlp(torch.cat([cond_t, attn_out], dim=-1))  # (T,hidden)
         else:
             # Fallback: mean-pooled latent
             lat_vec = latent_tokens.mean(dim=1)  # (B, d_model)
@@ -451,14 +491,21 @@ class WayDecoder(nn.Module):
                 route_city=route_cond["route_city"],
             )
         
+        # Precompute embeddings (reused by context + scorer)
+        cur_emb, _ = way_embedder(cur_way[:, None])
+        cur_emb = cur_emb[:, 0, :]
+        cand_emb, _ = way_embedder(cand_way)
+
         # Compute context with cross-attention (and past context if enabled)
-        ctx_t = self._compute_context(
+        ctx_out = self._compute_context(
             way_embedder=way_embedder,
             latent_tokens=latent_tokens,
             cond_emb=cond_emb,
             cur_way=cur_way,
             cand_way=cand_way,
             cand_mask=cand_mask,
+            cur_emb=cur_emb,
+            cand_emb=cand_emb,
             route_idx=route_idx,
             step=step,
             dest_pos=route_cond["dest_pos"],
@@ -467,16 +514,16 @@ class WayDecoder(nn.Module):
         )
 
         # Current way projection
-        cur_emb, _ = way_embedder(cur_way[:, None])
-        cur_emb = cur_emb[:, 0, :]
         cur_h = self.cur_proj(cur_emb)
 
         # Candidate way embeddings
-        cand_emb, _ = way_embedder(cand_way)
         cand_h = self.cand_proj(cand_emb)
 
         T, C = cand_way.shape
-        ctx_h = ctx_t[:, None, :].expand(T, C, -1)
+        if int(ctx_out.ndim) == 2:
+            ctx_h = ctx_out[:, None, :].expand(T, C, -1)
+        else:
+            ctx_h = ctx_out
         cur_h2 = cur_h[:, None, :].expand(T, C, -1)
         
         if bool(self.cfg.use_dest_dist):

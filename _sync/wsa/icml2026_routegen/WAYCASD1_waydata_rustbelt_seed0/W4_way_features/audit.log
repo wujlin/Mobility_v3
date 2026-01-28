@@ -1,0 +1,4 @@
+[way_features] /home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD1_waydata_rustbelt_seed0/W4_way_features/way_features.npz
+[ways] 19551 missing_frac=0.131
+[way_len_m] p50=92.3 p90=466.2 max=3705.6
+[tier_counts] 0:10822 1:3631 2:2538 3:2560

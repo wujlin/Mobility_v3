@@ -1,0 +1,254 @@
+{
+  "ok": true,
+  "task": "way_casd_city_data_audit",
+  "created_at": "2026-01-28T17:57:51.667297+08:00",
+  "cfg": {
+    "seed": 0,
+    "val_ratio": 0.1,
+    "max_way_len": 160
+  },
+  "inputs": {
+    "way_routes_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD1_waydata_rustbelt_seed0_strict_v1/W5_way_routes_strict/way_routes_strict_masklen0.npz",
+    "way_graph_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD1_waydata_rustbelt_seed0_strict_v1/W3_way_graph_strict/way_graph.npz"
+  },
+  "n_cities": 2,
+  "splits": {
+    "all": {
+      "n_routes": 5392,
+      "by_city": {
+        "0": {
+          "n_routes": 1456,
+          "route_len": {
+            "p50": 34,
+            "p90": 59,
+            "max": 132,
+            "quantiles": {
+              "p00": 2,
+              "p50": 34,
+              "p90": 59,
+              "p95": 65,
+              "p99": 81,
+              "p100": 132
+            }
+          },
+          "ways_used": 7973,
+          "outdeg": {
+            "p50": 1,
+            "p90": 2,
+            "max": 10,
+            "quantiles": {
+              "p00": 0,
+              "p50": 1,
+              "p90": 2,
+              "p95": 2,
+              "p99": 3,
+              "p100": 10
+            },
+            "frac_gt2": 0.046782892261382165,
+            "frac_gt8": 0.00012542330364981815,
+            "frac_gt32": 0.0
+          },
+          "tokens": {
+            "n_tokens": 50029,
+            "tokens_per_route_mean": 34.36057692307692
+          }
+        },
+        "1": {
+          "n_routes": 3936,
+          "route_len": {
+            "p50": 20,
+            "p90": 49,
+            "max": 91,
+            "quantiles": {
+              "p00": 2,
+              "p50": 20,
+              "p90": 49,
+              "p95": 60,
+              "p99": 73,
+              "p100": 91
+            }
+          },
+          "ways_used": 7188,
+          "outdeg": {
+            "p50": 1,
+            "p90": 2,
+            "max": 13,
+            "quantiles": {
+              "p00": 0,
+              "p50": 1,
+              "p90": 2,
+              "p95": 3,
+              "p99": 5,
+              "p100": 13
+            },
+            "frac_gt2": 0.09237618252643294,
+            "frac_gt8": 0.0002782415136338342,
+            "frac_gt32": 0.0
+          },
+          "tokens": {
+            "n_tokens": 95009,
+            "tokens_per_route_mean": 24.13846544715447
+          }
+        }
+      }
+    },
+    "train": {
+      "n_routes": 4853,
+      "by_city": {
+        "0": {
+          "n_routes": 1324,
+          "route_len": {
+            "p50": 34,
+            "p90": 59,
+            "max": 132,
+            "quantiles": {
+              "p00": 2,
+              "p50": 34,
+              "p90": 59,
+              "p95": 65,
+              "p99": 81,
+              "p100": 132
+            }
+          },
+          "ways_used": 7648,
+          "outdeg": {
+            "p50": 1,
+            "p90": 2,
+            "max": 10,
+            "quantiles": {
+              "p00": 0,
+              "p50": 1,
+              "p90": 2,
+              "p95": 2,
+              "p99": 3,
+              "p100": 10
+            },
+            "frac_gt2": 0.04877092050209205,
+            "frac_gt8": 0.0001307531380753138,
+            "frac_gt32": 0.0
+          },
+          "tokens": {
+            "n_tokens": 45579,
+            "tokens_per_route_mean": 34.42522658610272
+          }
+        },
+        "1": {
+          "n_routes": 3529,
+          "route_len": {
+            "p50": 20,
+            "p90": 49,
+            "max": 91,
+            "quantiles": {
+              "p00": 2,
+              "p50": 20,
+              "p90": 49,
+              "p95": 60,
+              "p99": 72,
+              "p100": 91
+            }
+          },
+          "ways_used": 6956,
+          "outdeg": {
+            "p50": 1,
+            "p90": 2,
+            "max": 13,
+            "quantiles": {
+              "p00": 0,
+              "p50": 1,
+              "p90": 2,
+              "p95": 3,
+              "p99": 5,
+              "p100": 13
+            },
+            "frac_gt2": 0.09545715928694652,
+            "frac_gt8": 0.0002875215641173088,
+            "frac_gt32": 0.0
+          },
+          "tokens": {
+            "n_tokens": 85699,
+            "tokens_per_route_mean": 24.28421649192406
+          }
+        }
+      }
+    },
+    "val": {
+      "n_routes": 539,
+      "by_city": {
+        "0": {
+          "n_routes": 132,
+          "route_len": {
+            "p50": 33,
+            "p90": 58,
+            "max": 88,
+            "quantiles": {
+              "p00": 2,
+              "p50": 33,
+              "p90": 58,
+              "p95": 62,
+              "p99": 70,
+              "p100": 88
+            }
+          },
+          "ways_used": 2580,
+          "outdeg": {
+            "p50": 1,
+            "p90": 2,
+            "max": 10,
+            "quantiles": {
+              "p00": 0,
+              "p50": 1,
+              "p90": 2,
+              "p95": 3,
+              "p99": 4,
+              "p100": 10
+            },
+            "frac_gt2": 0.087984496124031,
+            "frac_gt8": 0.0003875968992248062,
+            "frac_gt32": 0.0
+          },
+          "tokens": {
+            "n_tokens": 4450,
+            "tokens_per_route_mean": 33.71212121212121
+          }
+        },
+        "1": {
+          "n_routes": 407,
+          "route_len": {
+            "p50": 17,
+            "p90": 48,
+            "max": 82,
+            "quantiles": {
+              "p00": 2,
+              "p50": 17,
+              "p90": 48,
+              "p95": 60,
+              "p99": 73,
+              "p100": 82
+            }
+          },
+          "ways_used": 2991,
+          "outdeg": {
+            "p50": 1,
+            "p90": 3,
+            "max": 13,
+            "quantiles": {
+              "p00": 0,
+              "p50": 1,
+              "p90": 3,
+              "p95": 4,
+              "p99": 5,
+              "p100": 13
+            },
+            "frac_gt2": 0.14075560013373453,
+            "frac_gt8": 0.0006686726847208291,
+            "frac_gt32": 0.0
+          },
+          "tokens": {
+            "n_tokens": 9310,
+            "tokens_per_route_mean": 22.874692874692876
+          }
+        }
+      }
+    }
+  }
+}

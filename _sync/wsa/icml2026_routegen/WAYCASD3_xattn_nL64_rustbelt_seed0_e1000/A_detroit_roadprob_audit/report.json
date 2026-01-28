@@ -1,0 +1,92 @@
+{
+  "ok": true,
+  "task": "audit_osm_road_prob",
+  "created_at": "2026-01-18T17:21:02.599918+08:00",
+  "cfg": {
+    "seed": 0,
+    "n_routes": 5000,
+    "prefer_matched": true,
+    "point_stride": 2,
+    "prob_thr": [
+      0.3,
+      0.5,
+      0.7
+    ]
+  },
+  "inputs": {
+    "segments_parquet": "/home/jinlin/data/geoexplicit_data/worldtrace/detroit_core_v1/segments_with_wayid.parquet",
+    "road_prob_npy": "/home/jinlin/data/geoexplicit_data/worldtrace/detroit_core_v1/osm_road_prob.npy"
+  },
+  "road_prob_global": {
+    "shape": [
+      1024,
+      1024
+    ],
+    "value": {
+      "mean": 0.7609827729104385,
+      "p10": 6.325012069340595e-17,
+      "p50": 1.0,
+      "p90": 1.0,
+      "p99": 1.0,
+      "min": 0.0,
+      "max": 1.0
+    },
+    "coverage": {
+      "0.3": 0.8102636337280273,
+      "0.5": 0.7772855758666992,
+      "0.7": 0.6905889511108398
+    }
+  },
+  "gt_sample": {
+    "n_routes_sampled": 2295,
+    "n_routes_used": 2295,
+    "total_points_used": 525602,
+    "matched_ratio": {
+      "mean": 0.992242924443138,
+      "p10": 0.984531310375283,
+      "p50": 1.0,
+      "p90": 1.0,
+      "p99": 1.0,
+      "min": 0.8006279434850864,
+      "max": 1.0
+    },
+    "prob_mean": {
+      "mean": 0.9591552673868297,
+      "p10": 0.9833577275276184,
+      "p50": 1.0,
+      "p90": 1.0,
+      "p99": 1.0,
+      "min": 0.0,
+      "max": 1.0
+    },
+    "onroad_rate": {
+      "0.3": {
+        "mean": 0.9617349533720663,
+        "p10": 1.0,
+        "p50": 1.0,
+        "p90": 1.0,
+        "p99": 1.0,
+        "min": 0.0,
+        "max": 1.0
+      },
+      "0.5": {
+        "mean": 0.9593585808786167,
+        "p10": 0.9865891658676894,
+        "p50": 1.0,
+        "p90": 1.0,
+        "p99": 1.0,
+        "min": 0.0,
+        "max": 1.0
+      },
+      "0.7": {
+        "mean": 0.9540094607408401,
+        "p10": 0.9634988584474886,
+        "p50": 1.0,
+        "p90": 1.0,
+        "p99": 1.0,
+        "min": 0.0,
+        "max": 1.0
+      }
+    }
+  }
+}

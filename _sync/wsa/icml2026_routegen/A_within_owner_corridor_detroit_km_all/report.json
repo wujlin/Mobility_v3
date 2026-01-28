@@ -1,0 +1,2785 @@
+{
+  "ok": true,
+  "task": "within_owner_corridor_diversity",
+  "created_at": "2026-01-17T17:11:00.578639+08:00",
+  "inputs": {
+    "segments_parquet": "/home/jinlin/data/geoexplicit_data/worldtrace/detroit_core_v1/segments_with_wayid.parquet",
+    "meta_zip": "/home/jinlin/data/geoexplicit_data/worldtrace/OpenTrace_WorldTrace/Meta.zip",
+    "road_prob_npy": "/home/jinlin/data/geoexplicit_data/worldtrace/detroit_core_v1/osm_road_prob.npy",
+    "way_features_npz": null
+  },
+  "cfg": {
+    "od_bin_deg": 0.02,
+    "min_od_dist_km": 1.0,
+    "max_way_seq_len": 128,
+    "merge_dist_thr": 0.15,
+    "corridor_method": "kmedoids",
+    "min_choice_count": 2,
+    "dp_tier_keep": "",
+    "dp_next_min_keep": 2,
+    "km_eval_all": true,
+    "km_min_routes": 5,
+    "viz_random_od": 20,
+    "viz_random_seed": 0,
+    "top2_sep_thr": 0.0,
+    "top_k_od": 10,
+    "tz_offset_hours": -5.0,
+    "owner": ""
+  },
+  "owner": {
+    "owner_hash": "a4b047d6",
+    "n_trips": 1989,
+    "unique_owner_count": 2
+  },
+  "stats": {
+    "scanned": 2295,
+    "kept": 2069,
+    "n_od_bins_owner": 1073,
+    "n_od_bins_owner_ge2trips": 375
+  },
+  "outputs": {
+    "out_parquet": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/A_within_owner_corridor_detroit_km_all/corridor_diversity_within_owner.parquet",
+    "out_viz_dir": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/A_within_owner_corridor_detroit_km_all/top_od_viz"
+  },
+  "top_od_bins": [
+    {
+      "od_bin": [
+        -4156,
+        2123,
+        -4156,
+        2124
+      ],
+      "n_routes": 45,
+      "n_clusters": 2,
+      "cluster_sizes": [
+        25,
+        20
+      ],
+      "route_ids": [
+        52,
+        185,
+        186,
+        239,
+        268,
+        372,
+        462,
+        514,
+        541,
+        563,
+        565,
+        622,
+        687,
+        778,
+        782,
+        810,
+        841,
+        853,
+        895,
+        952,
+        995,
+        1034,
+        1054,
+        1078,
+        1119,
+        1130,
+        1151,
+        1255,
+        1259,
+        1354,
+        1524,
+        1528,
+        1567,
+        1729,
+        1754,
+        1759,
+        1766,
+        1773,
+        1803,
+        1823,
+        1856,
+        1928,
+        2033,
+        2035,
+        2062
+      ],
+      "cluster_ids": [
+        0,
+        0,
+        1,
+        0,
+        1,
+        1,
+        1,
+        1,
+        0,
+        0,
+        1,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        1,
+        0,
+        1,
+        0,
+        1,
+        1,
+        1,
+        1,
+        0,
+        0,
+        1,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        1,
+        1,
+        0,
+        1,
+        1,
+        0,
+        0
+      ],
+      "decision_points": [
+        8695790,
+        38726624,
+        421886348,
+        422038859,
+        422038860,
+        422038862,
+        422103497,
+        487239944,
+        503514648,
+        505602745,
+        505602756,
+        505852644,
+        505852651,
+        969733898
+      ],
+      "decision_points_all": [
+        8695790,
+        38726624,
+        421886348,
+        422038859,
+        422038860,
+        422038862,
+        422103497,
+        487239944,
+        503514648,
+        505602745,
+        505602756,
+        505852644,
+        505852651,
+        969733898
+      ],
+      "dp_tier_keep": [],
+      "dp_next_min_keep": 2,
+      "decision_points_tier": {},
+      "decision_points_tier_all": {},
+      "decision_points_xy": {
+        "8695790": [
+          493.0,
+          33.0
+        ],
+        "38726624": [
+          495.0,
+          94.0
+        ],
+        "421886348": [
+          494.0,
+          67.0
+        ],
+        "422038859": [
+          497.0,
+          131.0
+        ],
+        "422038860": [
+          497.0,
+          128.0
+        ],
+        "422038862": [
+          497.0,
+          126.0
+        ],
+        "422103497": [
+          497.0,
+          125.0
+        ],
+        "487239944": [
+          492.0,
+          7.0
+        ],
+        "503514648": [
+          497.0,
+          121.0
+        ],
+        "505602745": [
+          497.0,
+          130.0
+        ],
+        "505602756": [
+          498.0,
+          149.0
+        ],
+        "505852644": [
+          495.0,
+          89.0
+        ],
+        "505852651": [
+          495.0,
+          79.0
+        ],
+        "969733898": [
+          477.0,
+          115.0
+        ]
+      },
+      "kmedoids": {
+        "best_k": 2,
+        "best_silhouette": 0.6643393635749817,
+        "silhouette_by_k": {
+          "2": 0.6643393635749817,
+          "3": 0.5897271633148193,
+          "4": 0.6075860857963562
+        },
+        "medoid_rids": [
+          1773,
+          462
+        ],
+        "top2_medoid_dist": 0.9428571462631226,
+        "cluster_sizes": [
+          25,
+          20
+        ],
+        "entropy": 0.6869615765953234,
+        "effective_k": 1.9876669749984421
+      },
+      "title_extra": "(KM:K=2|sil=0.66|LCS:K=18|DP:K=30)"
+    },
+    {
+      "od_bin": [
+        -4156,
+        2124,
+        -4156,
+        2123
+      ],
+      "n_routes": 18,
+      "n_clusters": 3,
+      "cluster_sizes": [
+        11,
+        6,
+        1
+      ],
+      "route_ids": [
+        49,
+        68,
+        276,
+        277,
+        417,
+        461,
+        567,
+        654,
+        696,
+        728,
+        751,
+        852,
+        911,
+        933,
+        1018,
+        1085,
+        1507,
+        1965
+      ],
+      "cluster_ids": [
+        0,
+        2,
+        1,
+        0,
+        1,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        1,
+        0,
+        1
+      ],
+      "decision_points": [
+        421886359,
+        421886361,
+        487239945,
+        505031788,
+        1090784107
+      ],
+      "decision_points_all": [
+        421886359,
+        421886361,
+        487239945,
+        505031788,
+        1090784107
+      ],
+      "dp_tier_keep": [],
+      "dp_next_min_keep": 2,
+      "decision_points_tier": {},
+      "decision_points_tier_all": {},
+      "decision_points_xy": {
+        "421886359": [
+          494.0,
+          54.0
+        ],
+        "421886361": [
+          494.0,
+          70.0
+        ],
+        "487239945": [
+          492.0,
+          7.0
+        ],
+        "505031788": [
+          492.0,
+          0.0
+        ],
+        "1090784107": [
+          472.0,
+          99.5
+        ]
+      },
+      "kmedoids": {
+        "best_k": 3,
+        "best_silhouette": 0.7475154995918274,
+        "silhouette_by_k": {
+          "2": 0.7282143831253052,
+          "3": 0.7475154995918274,
+          "4": 0.6729387044906616
+        },
+        "medoid_rids": [
+          277,
+          276,
+          68
+        ],
+        "top2_medoid_dist": 1.0,
+        "cluster_sizes": [
+          11,
+          6,
+          1
+        ],
+        "entropy": 0.8277381569959199,
+        "effective_k": 2.2881374751284578
+      },
+      "title_extra": "(KM:K=3|sil=0.75|LCS:K=8|DP:K=10)"
+    },
+    {
+      "od_bin": [
+        -4155,
+        2122,
+        -4156,
+        2124
+      ],
+      "n_routes": 16,
+      "n_clusters": 2,
+      "cluster_sizes": [
+        14,
+        2
+      ],
+      "route_ids": [
+        155,
+        221,
+        259,
+        385,
+        603,
+        1134,
+        1210,
+        1248,
+        1280,
+        1371,
+        1411,
+        1530,
+        1606,
+        1730,
+        1864,
+        1867
+      ],
+      "cluster_ids": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0
+      ],
+      "decision_points": [
+        489758578,
+        969733898
+      ],
+      "decision_points_all": [
+        489758578,
+        969733898
+      ],
+      "dp_tier_keep": [],
+      "dp_next_min_keep": 2,
+      "decision_points_tier": {},
+      "decision_points_tier_all": {},
+      "decision_points_xy": {
+        "489758578": [
+          528.0,
+          186.0
+        ],
+        "969733898": [
+          477.0,
+          115.0
+        ]
+      },
+      "kmedoids": {
+        "best_k": 2,
+        "best_silhouette": 0.744281530380249,
+        "silhouette_by_k": {
+          "2": 0.744281530380249,
+          "3": 0.7103235721588135,
+          "4": 0.579836368560791
+        },
+        "medoid_rids": [
+          259,
+          1730
+        ],
+        "top2_medoid_dist": 0.9444444179534912,
+        "cluster_sizes": [
+          14,
+          2
+        ],
+        "entropy": 0.3767701612544368,
+        "effective_k": 1.4575692649781753
+      },
+      "title_extra": "(KM:K=2|sil=0.74|LCS:K=5|DP:K=3)"
+    },
+    {
+      "od_bin": [
+        -4154,
+        2116,
+        -4155,
+        2122
+      ],
+      "n_routes": 15,
+      "n_clusters": 2,
+      "cluster_sizes": [
+        8,
+        7
+      ],
+      "route_ids": [
+        28,
+        189,
+        226,
+        242,
+        272,
+        443,
+        518,
+        817,
+        885,
+        950,
+        1504,
+        1560,
+        1726,
+        1859,
+        1866
+      ],
+      "cluster_ids": [
+        1,
+        0,
+        1,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        1,
+        1,
+        1,
+        1,
+        0
+      ],
+      "decision_points": [
+        8731349,
+        8731829,
+        39364592,
+        220163474,
+        458623307,
+        490871430,
+        613434461,
+        1014010644
+      ],
+      "decision_points_all": [
+        8731349,
+        8731829,
+        39364592,
+        220163474,
+        458623307,
+        490871430,
+        613434461,
+        1014010644
+      ],
+      "dp_tier_keep": [],
+      "dp_next_min_keep": 2,
+      "decision_points_tier": {},
+      "decision_points_tier_all": {},
+      "decision_points_xy": {
+        "8731349": [
+          600.0,
+          593.0
+        ],
+        "8731829": [
+          548.0,
+          386.0
+        ],
+        "39364592": [
+          581.0,
+          371.0
+        ],
+        "220163474": [
+          623.0,
+          647.0
+        ],
+        "458623307": [
+          627.0,
+          658.0
+        ],
+        "490871430": [
+          601.0,
+          388.0
+        ],
+        "613434461": [
+          603.0,
+          599.0
+        ],
+        "1014010644": [
+          529.0,
+          256.0
+        ]
+      },
+      "kmedoids": {
+        "best_k": 2,
+        "best_silhouette": 0.8731595873832703,
+        "silhouette_by_k": {
+          "2": 0.8731595873832703,
+          "3": 0.6140860915184021,
+          "4": 0.3772304952144623
+        },
+        "medoid_rids": [
+          817,
+          1504
+        ],
+        "top2_medoid_dist": 0.5806451439857483,
+        "cluster_sizes": [
+          8,
+          7
+        ],
+        "entropy": 0.6909233093118181,
+        "effective_k": 1.9955571994429828
+      },
+      "title_extra": "(KM:K=2|sil=0.87|LCS:K=2|DP:K=12)"
+    },
+    {
+      "od_bin": [
+        -4156,
+        2122,
+        -4156,
+        2124
+      ],
+      "n_routes": 13,
+      "n_clusters": 4,
+      "cluster_sizes": [
+        8,
+        3,
+        1,
+        1
+      ],
+      "route_ids": [
+        56,
+        111,
+        261,
+        291,
+        304,
+        574,
+        655,
+        759,
+        783,
+        1616,
+        1686,
+        1693,
+        2036
+      ],
+      "cluster_ids": [
+        2,
+        0,
+        0,
+        0,
+        3,
+        1,
+        0,
+        0,
+        1,
+        0,
+        1,
+        0,
+        0
+      ],
+      "decision_points": [
+        247516731,
+        969733898
+      ],
+      "decision_points_all": [
+        247516731,
+        969733898
+      ],
+      "dp_tier_keep": [],
+      "dp_next_min_keep": 2,
+      "decision_points_tier": {},
+      "decision_points_tier_all": {},
+      "decision_points_xy": {
+        "247516731": [
+          500.0,
+          180.0
+        ],
+        "969733898": [
+          477.0,
+          115.0
+        ]
+      },
+      "kmedoids": {
+        "best_k": 4,
+        "best_silhouette": 0.5577802658081055,
+        "silhouette_by_k": {
+          "2": 0.3963210880756378,
+          "3": 0.48494529724121094,
+          "4": 0.5577802658081055
+        },
+        "medoid_rids": [
+          1616,
+          574,
+          56,
+          304
+        ],
+        "top2_medoid_dist": 0.38461539149284363,
+        "cluster_sizes": [
+          8,
+          3,
+          1,
+          1
+        ],
+        "entropy": 1.0317671113465354,
+        "effective_k": 2.806020005914861
+      },
+      "title_extra": "(KM:K=4|sil=0.56|LCS:K=6|DP:K=6)"
+    },
+    {
+      "od_bin": [
+        -4160,
+        2121,
+        -4154,
+        2118
+      ],
+      "n_routes": 12,
+      "n_clusters": 4,
+      "cluster_sizes": [
+        6,
+        3,
+        2,
+        1
+      ],
+      "route_ids": [
+        200,
+        203,
+        274,
+        326,
+        826,
+        877,
+        884,
+        1187,
+        1328,
+        1715,
+        2006,
+        2015
+      ],
+      "cluster_ids": [
+        1,
+        0,
+        0,
+        2,
+        0,
+        2,
+        3,
+        0,
+        1,
+        0,
+        0,
+        1
+      ],
+      "decision_points": [
+        490902512,
+        507170634
+      ],
+      "decision_points_all": [
+        490902512,
+        507170634
+      ],
+      "dp_tier_keep": [],
+      "dp_next_min_keep": 2,
+      "decision_points_tier": {},
+      "decision_points_tier_all": {},
+      "decision_points_xy": {
+        "490902512": [
+          466.0,
+          409.0
+        ],
+        "507170634": [
+          204.0,
+          272.0
+        ]
+      },
+      "kmedoids": {
+        "best_k": 4,
+        "best_silhouette": 0.6795899271965027,
+        "silhouette_by_k": {
+          "2": 0.6754679679870605,
+          "3": 0.6217656135559082,
+          "4": 0.6795899271965027
+        },
+        "medoid_rids": [
+          274,
+          200,
+          326,
+          884
+        ],
+        "top2_medoid_dist": 0.2380952388048172,
+        "cluster_sizes": [
+          6,
+          3,
+          2,
+          1
+        ],
+        "entropy": 1.1988493129096212,
+        "effective_k": 3.3162987042636614
+      },
+      "title_extra": "(KM:K=4|sil=0.68|LCS:K=5|DP:K=5)"
+    },
+    {
+      "od_bin": [
+        -4156,
+        2124,
+        -4155,
+        2120
+      ],
+      "n_routes": 11,
+      "n_clusters": 2,
+      "cluster_sizes": [
+        7,
+        4
+      ],
+      "route_ids": [
+        22,
+        93,
+        285,
+        570,
+        719,
+        888,
+        1243,
+        1486,
+        1545,
+        1769,
+        1777
+      ],
+      "cluster_ids": [
+        0,
+        1,
+        0,
+        1,
+        1,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "decision_points": [
+        1090784107
+      ],
+      "decision_points_all": [
+        1090784107
+      ],
+      "dp_tier_keep": [],
+      "dp_next_min_keep": 2,
+      "decision_points_tier": {},
+      "decision_points_tier_all": {},
+      "decision_points_xy": {
+        "1090784107": [
+          472.0,
+          100.0
+        ]
+      },
+      "kmedoids": {
+        "best_k": 2,
+        "best_silhouette": 0.6928244829177856,
+        "silhouette_by_k": {
+          "2": 0.6928244829177856,
+          "3": 0.632512629032135,
+          "4": 0.5144324898719788
+        },
+        "medoid_rids": [
+          1545,
+          719
+        ],
+        "top2_medoid_dist": 0.25,
+        "cluster_sizes": [
+          7,
+          4
+        ],
+        "entropy": 0.6554817738993928,
+        "effective_k": 1.9260702242483807
+      },
+      "title_extra": "(KM:K=2|sil=0.69|LCS:K=2|DP:K=2)"
+    },
+    {
+      "od_bin": [
+        -4154,
+        2116,
+        -4155,
+        2121
+      ],
+      "n_routes": 10,
+      "n_clusters": 3,
+      "cluster_sizes": [
+        6,
+        3,
+        1
+      ],
+      "route_ids": [
+        6,
+        172,
+        520,
+        532,
+        906,
+        1066,
+        1229,
+        1299,
+        1412,
+        1725
+      ],
+      "cluster_ids": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        1,
+        1,
+        2,
+        1
+      ],
+      "decision_points": [
+        39364592,
+        220163474,
+        458623307,
+        613434461
+      ],
+      "decision_points_all": [
+        39364592,
+        220163474,
+        458623307,
+        613434461
+      ],
+      "dp_tier_keep": [],
+      "dp_next_min_keep": 2,
+      "decision_points_tier": {},
+      "decision_points_tier_all": {},
+      "decision_points_xy": {
+        "39364592": [
+          581.0,
+          371.0
+        ],
+        "220163474": [
+          623.0,
+          647.0
+        ],
+        "458623307": [
+          627.0,
+          658.0
+        ],
+        "613434461": [
+          603.0,
+          598.0
+        ]
+      },
+      "kmedoids": {
+        "best_k": 3,
+        "best_silhouette": 0.7095963954925537,
+        "silhouette_by_k": {
+          "2": 0.6709110140800476,
+          "3": 0.7095963954925537,
+          "4": 0.6910678148269653
+        },
+        "medoid_rids": [
+          6,
+          1725,
+          1412
+        ],
+        "top2_medoid_dist": 0.6379310488700867,
+        "cluster_sizes": [
+          6,
+          3,
+          1
+        ],
+        "entropy": 0.8979457248537798,
+        "effective_k": 2.454555595883784
+      },
+      "title_extra": "(KM:K=3|sil=0.71|LCS:K=4|DP:K=8)"
+    },
+    {
+      "od_bin": [
+        -4148,
+        2120,
+        -4153,
+        2118
+      ],
+      "n_routes": 10,
+      "n_clusters": 4,
+      "cluster_sizes": [
+        6,
+        2,
+        1,
+        1
+      ],
+      "route_ids": [
+        66,
+        257,
+        812,
+        922,
+        972,
+        1173,
+        1542,
+        1934,
+        1993,
+        2046
+      ],
+      "cluster_ids": [
+        0,
+        0,
+        1,
+        0,
+        1,
+        3,
+        2,
+        0,
+        0,
+        0
+      ],
+      "decision_points": [],
+      "decision_points_all": [],
+      "dp_tier_keep": [],
+      "dp_next_min_keep": 2,
+      "decision_points_tier": {},
+      "decision_points_tier_all": {},
+      "decision_points_xy": {},
+      "kmedoids": {
+        "best_k": 4,
+        "best_silhouette": 0.6398760080337524,
+        "silhouette_by_k": {
+          "2": 0.573882520198822,
+          "3": 0.6122163534164429,
+          "4": 0.6398760080337524
+        },
+        "medoid_rids": [
+          1993,
+          812,
+          1542,
+          1173
+        ],
+        "top2_medoid_dist": 0.29629629850387573,
+        "cluster_sizes": [
+          6,
+          2,
+          1,
+          1
+        ],
+        "entropy": 1.0888999753412236,
+        "effective_k": 2.9710040965981217
+      },
+      "title_extra": "(KM:K=4|sil=0.64|LCS:K=4|DP:K=1)"
+    },
+    {
+      "od_bin": [
+        -4152,
+        2117,
+        -4156,
+        2118
+      ],
+      "n_routes": 10,
+      "n_clusters": 2,
+      "cluster_sizes": [
+        9,
+        1
+      ],
+      "route_ids": [
+        76,
+        766,
+        1184,
+        1373,
+        1588,
+        1772,
+        1811,
+        1841,
+        1964,
+        2056
+      ],
+      "cluster_ids": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0
+      ],
+      "decision_points": [
+        8767854,
+        220163474,
+        442765265
+      ],
+      "decision_points_all": [
+        8767854,
+        220163474,
+        442765265
+      ],
+      "dp_tier_keep": [],
+      "dp_next_min_keep": 2,
+      "decision_points_tier": {},
+      "decision_points_tier_all": {},
+      "decision_points_xy": {
+        "8767854": [
+          700.0,
+          642.0
+        ],
+        "220163474": [
+          623.0,
+          647.0
+        ],
+        "442765265": [
+          539.0,
+          484.0
+        ]
+      },
+      "kmedoids": {
+        "best_k": 2,
+        "best_silhouette": 0.6945431232452393,
+        "silhouette_by_k": {
+          "2": 0.6945431232452393,
+          "3": 0.48612141609191895,
+          "4": 0.46339958906173706
+        },
+        "medoid_rids": [
+          1184,
+          1964
+        ],
+        "top2_medoid_dist": 0.7627118825912476,
+        "cluster_sizes": [
+          9,
+          1
+        ],
+        "entropy": 0.32508297338944825,
+        "effective_k": 1.3841454884589177
+      },
+      "title_extra": "(KM:K=2|sil=0.69|LCS:K=4|DP:K=4)"
+    }
+  ],
+  "random_od_bins": [
+    {
+      "od_bin": [
+        -4160,
+        2121,
+        -4155,
+        2120
+      ],
+      "n_routes": 5,
+      "n_clusters": 3,
+      "cluster_sizes": [
+        2,
+        2,
+        1
+      ],
+      "route_ids": [
+        280,
+        365,
+        453,
+        1302,
+        1531
+      ],
+      "cluster_ids": [
+        2,
+        1,
+        1,
+        0,
+        0
+      ],
+      "decision_points": [],
+      "decision_points_all": [],
+      "dp_tier_keep": [],
+      "dp_next_min_keep": 2,
+      "decision_points_tier": {},
+      "decision_points_tier_all": {},
+      "decision_points_xy": {},
+      "kmedoids": {
+        "best_k": 3,
+        "best_silhouette": 0.6332577466964722,
+        "silhouette_by_k": {
+          "2": 0.4821545481681824,
+          "3": 0.6332577466964722,
+          "4": 0.3287179470062256
+        },
+        "medoid_rids": [
+          1531,
+          365,
+          280
+        ],
+        "top2_medoid_dist": 0.2702702581882477,
+        "cluster_sizes": [
+          2,
+          2,
+          1
+        ],
+        "entropy": 1.0549201679831441,
+        "effective_k": 2.8717458874839723
+      },
+      "title_extra": "(KM:K=3|sil=0.63|LCS:K=3|DP:K=1)"
+    },
+    {
+      "od_bin": [
+        -4156,
+        2118,
+        -4156,
+        2117
+      ],
+      "n_routes": 8,
+      "n_clusters": 2,
+      "cluster_sizes": [
+        7,
+        1
+      ],
+      "route_ids": [
+        48,
+        166,
+        483,
+        887,
+        929,
+        969,
+        1306,
+        1668
+      ],
+      "cluster_ids": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        1
+      ],
+      "decision_points": [
+        219725284
+      ],
+      "decision_points_all": [
+        219725284
+      ],
+      "dp_tier_keep": [],
+      "dp_next_min_keep": 2,
+      "decision_points_tier": {},
+      "decision_points_tier_all": {},
+      "decision_points_xy": {
+        "219725284": [
+          497.0,
+          545.0
+        ]
+      },
+      "kmedoids": {
+        "best_k": 2,
+        "best_silhouette": 0.7056253552436829,
+        "silhouette_by_k": {
+          "2": 0.7056253552436829,
+          "3": 0.5001251697540283,
+          "4": 0.4070436358451843
+        },
+        "medoid_rids": [
+          929,
+          1668
+        ],
+        "top2_medoid_dist": 1.0,
+        "cluster_sizes": [
+          7,
+          1
+        ],
+        "entropy": 0.3767701612544368,
+        "effective_k": 1.4575692649781753
+      },
+      "title_extra": "(KM:K=2|sil=0.71|LCS:K=3|DP:K=3)"
+    },
+    {
+      "od_bin": [
+        -4160,
+        2121,
+        -4163,
+        2123
+      ],
+      "n_routes": 9,
+      "n_clusters": 2,
+      "cluster_sizes": [
+        5,
+        4
+      ],
+      "route_ids": [
+        250,
+        534,
+        871,
+        879,
+        1433,
+        1671,
+        1753,
+        1915,
+        1935
+      ],
+      "cluster_ids": [
+        0,
+        0,
+        1,
+        1,
+        0,
+        1,
+        0,
+        0,
+        1
+      ],
+      "decision_points": [],
+      "decision_points_all": [],
+      "dp_tier_keep": [],
+      "dp_next_min_keep": 2,
+      "decision_points_tier": {},
+      "decision_points_tier_all": {},
+      "decision_points_xy": {},
+      "kmedoids": {
+        "best_k": 2,
+        "best_silhouette": 0.5922665596008301,
+        "silhouette_by_k": {
+          "2": 0.5922665596008301,
+          "3": 0.5194196701049805,
+          "4": 0.5349522233009338
+        },
+        "medoid_rids": [
+          534,
+          879
+        ],
+        "top2_medoid_dist": 0.36000001430511475,
+        "cluster_sizes": [
+          5,
+          4
+        ],
+        "entropy": 0.6869615765953234,
+        "effective_k": 1.9876669749984421
+      },
+      "title_extra": "(KM:K=2|sil=0.59|LCS:K=4|DP:K=1)"
+    },
+    {
+      "od_bin": [
+        -4155,
+        2124,
+        -4155,
+        2124
+      ],
+      "n_routes": 5,
+      "n_clusters": 2,
+      "cluster_sizes": [
+        4,
+        1
+      ],
+      "route_ids": [
+        1520,
+        1716,
+        1865,
+        1930,
+        2005
+      ],
+      "cluster_ids": [
+        0,
+        0,
+        1,
+        0,
+        0
+      ],
+      "decision_points": [
+        504717218
+      ],
+      "decision_points_all": [
+        504717218
+      ],
+      "dp_tier_keep": [],
+      "dp_next_min_keep": 2,
+      "decision_points_tier": {},
+      "decision_points_tier_all": {},
+      "decision_points_xy": {
+        "504717218": [
+          561.0,
+          7.0
+        ]
+      },
+      "kmedoids": {
+        "best_k": 2,
+        "best_silhouette": 0.6990000009536743,
+        "silhouette_by_k": {
+          "2": 0.6990000009536743,
+          "3": 0.3047618865966797,
+          "4": 0.20000000298023224
+        },
+        "medoid_rids": [
+          1930,
+          1865
+        ],
+        "top2_medoid_dist": 0.9523809552192688,
+        "cluster_sizes": [
+          4,
+          1
+        ],
+        "entropy": 0.5004024235361879,
+        "effective_k": 1.649384888462819
+      },
+      "title_extra": "(KM:K=2|sil=0.70|LCS:K=3|DP:K=3)"
+    },
+    {
+      "od_bin": [
+        -4159,
+        2124,
+        -4158,
+        2123
+      ],
+      "n_routes": 7,
+      "n_clusters": 4,
+      "cluster_sizes": [
+        3,
+        2,
+        1,
+        1
+      ],
+      "route_ids": [
+        199,
+        509,
+        750,
+        1058,
+        1107,
+        1114,
+        1911
+      ],
+      "cluster_ids": [
+        2,
+        3,
+        0,
+        1,
+        0,
+        0,
+        1
+      ],
+      "decision_points": [
+        220683287,
+        421884782
+      ],
+      "decision_points_all": [
+        220683287,
+        421884782
+      ],
+      "dp_tier_keep": [],
+      "dp_next_min_keep": 2,
+      "decision_points_tier": {},
+      "decision_points_tier_all": {},
+      "decision_points_xy": {
+        "220683287": [
+          336.0,
+          76.0
+        ],
+        "421884782": [
+          349.0,
+          94.0
+        ]
+      },
+      "kmedoids": {
+        "best_k": 4,
+        "best_silhouette": 0.4716794490814209,
+        "silhouette_by_k": {
+          "2": 0.2810649275779724,
+          "3": 0.36131978034973145,
+          "4": 0.4716794490814209
+        },
+        "medoid_rids": [
+          750,
+          1911,
+          199,
+          509
+        ],
+        "top2_medoid_dist": 0.3617021143436432,
+        "cluster_sizes": [
+          3,
+          2,
+          1,
+          1
+        ],
+        "entropy": 1.2770342594621393,
+        "effective_k": 3.585988827042611
+      },
+      "title_extra": "(KM:K=4|sil=0.47|LCS:K=5|DP:K=3)"
+    },
+    {
+      "od_bin": [
+        -4160,
+        2121,
+        -4162,
+        2120
+      ],
+      "n_routes": 6,
+      "n_clusters": 2,
+      "cluster_sizes": [
+        5,
+        1
+      ],
+      "route_ids": [
+        237,
+        316,
+        464,
+        470,
+        1857,
+        1985
+      ],
+      "cluster_ids": [
+        0,
+        0,
+        1,
+        0,
+        0,
+        0
+      ],
+      "decision_points": [
+        501699901,
+        510404339
+      ],
+      "decision_points_all": [
+        501699901,
+        510404339
+      ],
+      "dp_tier_keep": [],
+      "dp_next_min_keep": 2,
+      "decision_points_tier": {},
+      "decision_points_tier_all": {},
+      "decision_points_xy": {
+        "501699901": [
+          62.0,
+          335.0
+        ],
+        "510404339": [
+          187.0,
+          284.0
+        ]
+      },
+      "kmedoids": {
+        "best_k": 2,
+        "best_silhouette": 0.5178031325340271,
+        "silhouette_by_k": {
+          "2": 0.5178031325340271,
+          "3": 0.4186839163303375,
+          "4": 0.24938273429870605
+        },
+        "medoid_rids": [
+          470,
+          464
+        ],
+        "top2_medoid_dist": 0.5925925970077515,
+        "cluster_sizes": [
+          5,
+          1
+        ],
+        "entropy": 0.4505612088643047,
+        "effective_k": 1.5691925832110583
+      },
+      "title_extra": "(KM:K=2|sil=0.52|LCS:K=4|DP:K=5)"
+    },
+    {
+      "od_bin": [
+        -4158,
+        2124,
+        -4159,
+        2124
+      ],
+      "n_routes": 5,
+      "n_clusters": 2,
+      "cluster_sizes": [
+        4,
+        1
+      ],
+      "route_ids": [
+        1032,
+        1395,
+        1450,
+        1460,
+        1623
+      ],
+      "cluster_ids": [
+        0,
+        0,
+        1,
+        0,
+        0
+      ],
+      "decision_points": [
+        256890567,
+        502812809
+      ],
+      "decision_points_all": [
+        256890567,
+        502812809
+      ],
+      "dp_tier_keep": [],
+      "dp_next_min_keep": 2,
+      "decision_points_tier": {},
+      "decision_points_tier_all": {},
+      "decision_points_xy": {
+        "256890567": [
+          309.0,
+          40.0
+        ],
+        "502812809": [
+          294.0,
+          21.0
+        ]
+      },
+      "kmedoids": {
+        "best_k": 2,
+        "best_silhouette": 0.37066760659217834,
+        "silhouette_by_k": {
+          "2": 0.37066760659217834,
+          "3": 0.09366782009601593,
+          "4": 0.15148809552192688
+        },
+        "medoid_rids": [
+          1395,
+          1450
+        ],
+        "top2_medoid_dist": 0.59375,
+        "cluster_sizes": [
+          4,
+          1
+        ],
+        "entropy": 0.5004024235361879,
+        "effective_k": 1.649384888462819
+      },
+      "title_extra": "(KM:K=2|sil=0.37|LCS:K=5|DP:K=4)"
+    },
+    {
+      "od_bin": [
+        -4155,
+        2124,
+        -4155,
+        2123
+      ],
+      "n_routes": 5,
+      "n_clusters": 2,
+      "cluster_sizes": [
+        4,
+        1
+      ],
+      "route_ids": [
+        633,
+        683,
+        1124,
+        1626,
+        1918
+      ],
+      "cluster_ids": [
+        1,
+        0,
+        0,
+        0,
+        0
+      ],
+      "decision_points": [],
+      "decision_points_all": [],
+      "dp_tier_keep": [],
+      "dp_next_min_keep": 2,
+      "decision_points_tier": {},
+      "decision_points_tier_all": {},
+      "decision_points_xy": {},
+      "kmedoids": {
+        "best_k": 2,
+        "best_silhouette": 0.46400532126426697,
+        "silhouette_by_k": {
+          "2": 0.46400532126426697,
+          "3": 0.08020568639039993,
+          "4": 0.17846152186393738
+        },
+        "medoid_rids": [
+          683,
+          633
+        ],
+        "top2_medoid_dist": 0.4166666567325592,
+        "cluster_sizes": [
+          4,
+          1
+        ],
+        "entropy": 0.5004024235361879,
+        "effective_k": 1.649384888462819
+      },
+      "title_extra": "(KM:K=2|sil=0.46|LCS:K=4|DP:K=1)"
+    },
+    {
+      "od_bin": [
+        -4156,
+        2123,
+        -4156,
+        2123
+      ],
+      "n_routes": 7,
+      "n_clusters": 4,
+      "cluster_sizes": [
+        3,
+        2,
+        1,
+        1
+      ],
+      "route_ids": [
+        566,
+        641,
+        1352,
+        1475,
+        1685,
+        1747,
+        1794
+      ],
+      "cluster_ids": [
+        2,
+        1,
+        0,
+        0,
+        3,
+        0,
+        1
+      ],
+      "decision_points": [
+        422038859,
+        422038860,
+        422038862,
+        422103497,
+        503514648,
+        505602745
+      ],
+      "decision_points_all": [
+        422038859,
+        422038860,
+        422038862,
+        422103497,
+        503514648,
+        505602745
+      ],
+      "dp_tier_keep": [],
+      "dp_next_min_keep": 2,
+      "decision_points_tier": {},
+      "decision_points_tier_all": {},
+      "decision_points_xy": {
+        "422038859": [
+          497.5,
+          138.0
+        ],
+        "422038860": [
+          497.0,
+          128.5
+        ],
+        "422038862": [
+          497.0,
+          126.5
+        ],
+        "422103497": [
+          497.0,
+          125.5
+        ],
+        "503514648": [
+          497.0,
+          121.5
+        ],
+        "505602745": [
+          497.0,
+          130.0
+        ]
+      },
+      "kmedoids": {
+        "best_k": 4,
+        "best_silhouette": 0.14560484886169434,
+        "silhouette_by_k": {
+          "2": 0.12529335916042328,
+          "3": 0.12979616224765778,
+          "4": 0.14560484886169434
+        },
+        "medoid_rids": [
+          1747,
+          641,
+          566,
+          1685
+        ],
+        "top2_medoid_dist": 0.9599999785423279,
+        "cluster_sizes": [
+          3,
+          2,
+          1,
+          1
+        ],
+        "entropy": 1.2770342594621393,
+        "effective_k": 3.585988827042611
+      },
+      "title_extra": "(KM:K=4|sil=0.15|LCS:K=7|DP:K=6)"
+    },
+    {
+      "od_bin": [
+        -4151,
+        2124,
+        -4161,
+        2123
+      ],
+      "n_routes": 6,
+      "n_clusters": 2,
+      "cluster_sizes": [
+        5,
+        1
+      ],
+      "route_ids": [
+        429,
+        1126,
+        1453,
+        1491,
+        1498,
+        1633
+      ],
+      "cluster_ids": [
+        0,
+        0,
+        0,
+        0,
+        1,
+        0
+      ],
+      "decision_points": [
+        8681935,
+        28714607,
+        486358186
+      ],
+      "decision_points_all": [
+        8681935,
+        28714607,
+        486358186
+      ],
+      "dp_tier_keep": [],
+      "dp_next_min_keep": 2,
+      "decision_points_tier": {},
+      "decision_points_tier_all": {},
+      "decision_points_xy": {
+        "8681935": [
+          187.0,
+          92.0
+        ],
+        "28714607": [
+          193.0,
+          94.0
+        ],
+        "486358186": [
+          817.0,
+          31.5
+        ]
+      },
+      "kmedoids": {
+        "best_k": 2,
+        "best_silhouette": 0.20150180160999298,
+        "silhouette_by_k": {
+          "2": 0.20150180160999298,
+          "3": 0.140705868601799,
+          "4": 0.16926293075084686
+        },
+        "medoid_rids": [
+          429,
+          1498
+        ],
+        "top2_medoid_dist": 0.2199999988079071,
+        "cluster_sizes": [
+          5,
+          1
+        ],
+        "entropy": 0.4505612088643047,
+        "effective_k": 1.5691925832110583
+      },
+      "title_extra": "(KM:K=2|sil=0.20|LCS:K=3|DP:K=6)"
+    },
+    {
+      "od_bin": [
+        -4152,
+        2117,
+        -4156,
+        2118
+      ],
+      "n_routes": 10,
+      "n_clusters": 2,
+      "cluster_sizes": [
+        9,
+        1
+      ],
+      "route_ids": [
+        76,
+        766,
+        1184,
+        1373,
+        1588,
+        1772,
+        1811,
+        1841,
+        1964,
+        2056
+      ],
+      "cluster_ids": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0
+      ],
+      "decision_points": [
+        8767854,
+        220163474,
+        442765265
+      ],
+      "decision_points_all": [
+        8767854,
+        220163474,
+        442765265
+      ],
+      "dp_tier_keep": [],
+      "dp_next_min_keep": 2,
+      "decision_points_tier": {},
+      "decision_points_tier_all": {},
+      "decision_points_xy": {
+        "8767854": [
+          700.0,
+          642.0
+        ],
+        "220163474": [
+          623.0,
+          647.0
+        ],
+        "442765265": [
+          539.0,
+          484.0
+        ]
+      },
+      "kmedoids": {
+        "best_k": 2,
+        "best_silhouette": 0.6945431232452393,
+        "silhouette_by_k": {
+          "2": 0.6945431232452393,
+          "3": 0.48612141609191895,
+          "4": 0.46339958906173706
+        },
+        "medoid_rids": [
+          1184,
+          1964
+        ],
+        "top2_medoid_dist": 0.7627118825912476,
+        "cluster_sizes": [
+          9,
+          1
+        ],
+        "entropy": 0.32508297338944825,
+        "effective_k": 1.3841454884589177
+      },
+      "title_extra": "(KM:K=2|sil=0.69|LCS:K=4|DP:K=4)"
+    },
+    {
+      "od_bin": [
+        -4159,
+        2115,
+        -4163,
+        2113
+      ],
+      "n_routes": 5,
+      "n_clusters": 2,
+      "cluster_sizes": [
+        4,
+        1
+      ],
+      "route_ids": [
+        32,
+        193,
+        486,
+        1041,
+        1139
+      ],
+      "cluster_ids": [
+        0,
+        1,
+        0,
+        0,
+        0
+      ],
+      "decision_points": [
+        39800556
+      ],
+      "decision_points_all": [
+        39800556
+      ],
+      "dp_tier_keep": [],
+      "dp_next_min_keep": 2,
+      "decision_points_tier": {},
+      "decision_points_tier_all": {},
+      "decision_points_xy": {
+        "39800556": [
+          155.5,
+          917.0
+        ]
+      },
+      "kmedoids": {
+        "best_k": 2,
+        "best_silhouette": 0.7164303660392761,
+        "silhouette_by_k": {
+          "2": 0.7164303660392761,
+          "3": 0.052593015134334564,
+          "4": 0.09736841917037964
+        },
+        "medoid_rids": [
+          32,
+          193
+        ],
+        "top2_medoid_dist": 0.9607843160629272,
+        "cluster_sizes": [
+          4,
+          1
+        ],
+        "entropy": 0.5004024235361879,
+        "effective_k": 1.649384888462819
+      },
+      "title_extra": "(KM:K=2|sil=0.72|LCS:K=2|DP:K=3)"
+    },
+    {
+      "od_bin": [
+        -4156,
+        2124,
+        -4157,
+        2123
+      ],
+      "n_routes": 5,
+      "n_clusters": 3,
+      "cluster_sizes": [
+        2,
+        2,
+        1
+      ],
+      "route_ids": [
+        889,
+        1278,
+        1376,
+        1494,
+        1627
+      ],
+      "cluster_ids": [
+        1,
+        0,
+        1,
+        2,
+        0
+      ],
+      "decision_points": [],
+      "decision_points_all": [],
+      "dp_tier_keep": [],
+      "dp_next_min_keep": 2,
+      "decision_points_tier": {},
+      "decision_points_tier_all": {},
+      "decision_points_xy": {},
+      "kmedoids": {
+        "best_k": 3,
+        "best_silhouette": 0.26823219656944275,
+        "silhouette_by_k": {
+          "2": 0.1861715018749237,
+          "3": 0.26823219656944275,
+          "4": 0.135294109582901
+        },
+        "medoid_rids": [
+          1627,
+          1376,
+          1494
+        ],
+        "top2_medoid_dist": 1.0,
+        "cluster_sizes": [
+          2,
+          2,
+          1
+        ],
+        "entropy": 1.0549201679831441,
+        "effective_k": 2.8717458874839723
+      },
+      "title_extra": "(KM:K=3|sil=0.27|LCS:K=5|DP:K=1)"
+    },
+    {
+      "od_bin": [
+        -4156,
+        2123,
+        -4156,
+        2124
+      ],
+      "n_routes": 45,
+      "n_clusters": 2,
+      "cluster_sizes": [
+        25,
+        20
+      ],
+      "route_ids": [
+        52,
+        185,
+        186,
+        239,
+        268,
+        372,
+        462,
+        514,
+        541,
+        563,
+        565,
+        622,
+        687,
+        778,
+        782,
+        810,
+        841,
+        853,
+        895,
+        952,
+        995,
+        1034,
+        1054,
+        1078,
+        1119,
+        1130,
+        1151,
+        1255,
+        1259,
+        1354,
+        1524,
+        1528,
+        1567,
+        1729,
+        1754,
+        1759,
+        1766,
+        1773,
+        1803,
+        1823,
+        1856,
+        1928,
+        2033,
+        2035,
+        2062
+      ],
+      "cluster_ids": [
+        0,
+        0,
+        1,
+        0,
+        1,
+        1,
+        1,
+        1,
+        0,
+        0,
+        1,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        1,
+        0,
+        1,
+        0,
+        1,
+        1,
+        1,
+        1,
+        0,
+        0,
+        1,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        1,
+        1,
+        0,
+        1,
+        1,
+        0,
+        0
+      ],
+      "decision_points": [
+        8695790,
+        38726624,
+        421886348,
+        422038859,
+        422038860,
+        422038862,
+        422103497,
+        487239944,
+        503514648,
+        505602745,
+        505602756,
+        505852644,
+        505852651,
+        969733898
+      ],
+      "decision_points_all": [
+        8695790,
+        38726624,
+        421886348,
+        422038859,
+        422038860,
+        422038862,
+        422103497,
+        487239944,
+        503514648,
+        505602745,
+        505602756,
+        505852644,
+        505852651,
+        969733898
+      ],
+      "dp_tier_keep": [],
+      "dp_next_min_keep": 2,
+      "decision_points_tier": {},
+      "decision_points_tier_all": {},
+      "decision_points_xy": {
+        "8695790": [
+          493.0,
+          33.0
+        ],
+        "38726624": [
+          495.0,
+          94.0
+        ],
+        "421886348": [
+          494.0,
+          67.0
+        ],
+        "422038859": [
+          497.0,
+          131.0
+        ],
+        "422038860": [
+          497.0,
+          128.0
+        ],
+        "422038862": [
+          497.0,
+          126.0
+        ],
+        "422103497": [
+          497.0,
+          125.0
+        ],
+        "487239944": [
+          492.0,
+          7.0
+        ],
+        "503514648": [
+          497.0,
+          121.0
+        ],
+        "505602745": [
+          497.0,
+          130.0
+        ],
+        "505602756": [
+          498.0,
+          149.0
+        ],
+        "505852644": [
+          495.0,
+          89.0
+        ],
+        "505852651": [
+          495.0,
+          79.0
+        ],
+        "969733898": [
+          477.0,
+          115.0
+        ]
+      },
+      "kmedoids": {
+        "best_k": 2,
+        "best_silhouette": 0.6643393635749817,
+        "silhouette_by_k": {
+          "2": 0.6643393635749817,
+          "3": 0.5897271633148193,
+          "4": 0.6075860857963562
+        },
+        "medoid_rids": [
+          1773,
+          462
+        ],
+        "top2_medoid_dist": 0.9428571462631226,
+        "cluster_sizes": [
+          25,
+          20
+        ],
+        "entropy": 0.6869615765953234,
+        "effective_k": 1.9876669749984421
+      },
+      "title_extra": "(KM:K=2|sil=0.66|LCS:K=18|DP:K=30)"
+    },
+    {
+      "od_bin": [
+        -4156,
+        2124,
+        -4158,
+        2124
+      ],
+      "n_routes": 6,
+      "n_clusters": 3,
+      "cluster_sizes": [
+        3,
+        2,
+        1
+      ],
+      "route_ids": [
+        148,
+        525,
+        825,
+        1397,
+        1670,
+        1825
+      ],
+      "cluster_ids": [
+        0,
+        0,
+        1,
+        0,
+        2,
+        1
+      ],
+      "decision_points": [],
+      "decision_points_all": [],
+      "dp_tier_keep": [],
+      "dp_next_min_keep": 2,
+      "decision_points_tier": {},
+      "decision_points_tier_all": {},
+      "decision_points_xy": {},
+      "kmedoids": {
+        "best_k": 3,
+        "best_silhouette": 0.5440397262573242,
+        "silhouette_by_k": {
+          "2": 0.40344953536987305,
+          "3": 0.5440397262573242,
+          "4": 0.3487013280391693
+        },
+        "medoid_rids": [
+          148,
+          1825,
+          1670
+        ],
+        "top2_medoid_dist": 1.0,
+        "cluster_sizes": [
+          3,
+          2,
+          1
+        ],
+        "entropy": 1.0114042647043517,
+        "effective_k": 2.7494592739889567
+      },
+      "title_extra": "(KM:K=3|sil=0.54|LCS:K=6|DP:K=1)"
+    },
+    {
+      "od_bin": [
+        -4154,
+        2116,
+        -4155,
+        2122
+      ],
+      "n_routes": 15,
+      "n_clusters": 2,
+      "cluster_sizes": [
+        8,
+        7
+      ],
+      "route_ids": [
+        28,
+        189,
+        226,
+        242,
+        272,
+        443,
+        518,
+        817,
+        885,
+        950,
+        1504,
+        1560,
+        1726,
+        1859,
+        1866
+      ],
+      "cluster_ids": [
+        1,
+        0,
+        1,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        1,
+        1,
+        1,
+        1,
+        0
+      ],
+      "decision_points": [
+        8731349,
+        8731829,
+        39364592,
+        220163474,
+        458623307,
+        490871430,
+        613434461,
+        1014010644
+      ],
+      "decision_points_all": [
+        8731349,
+        8731829,
+        39364592,
+        220163474,
+        458623307,
+        490871430,
+        613434461,
+        1014010644
+      ],
+      "dp_tier_keep": [],
+      "dp_next_min_keep": 2,
+      "decision_points_tier": {},
+      "decision_points_tier_all": {},
+      "decision_points_xy": {
+        "8731349": [
+          600.0,
+          593.0
+        ],
+        "8731829": [
+          548.0,
+          386.0
+        ],
+        "39364592": [
+          581.0,
+          371.0
+        ],
+        "220163474": [
+          623.0,
+          647.0
+        ],
+        "458623307": [
+          627.0,
+          658.0
+        ],
+        "490871430": [
+          601.0,
+          388.0
+        ],
+        "613434461": [
+          603.0,
+          599.0
+        ],
+        "1014010644": [
+          529.0,
+          256.0
+        ]
+      },
+      "kmedoids": {
+        "best_k": 2,
+        "best_silhouette": 0.8731595873832703,
+        "silhouette_by_k": {
+          "2": 0.8731595873832703,
+          "3": 0.6140860915184021,
+          "4": 0.3772304952144623
+        },
+        "medoid_rids": [
+          817,
+          1504
+        ],
+        "top2_medoid_dist": 0.5806451439857483,
+        "cluster_sizes": [
+          8,
+          7
+        ],
+        "entropy": 0.6909233093118181,
+        "effective_k": 1.9955571994429828
+      },
+      "title_extra": "(KM:K=2|sil=0.87|LCS:K=2|DP:K=12)"
+    },
+    {
+      "od_bin": [
+        -4148,
+        2124,
+        -4151,
+        2124
+      ],
+      "n_routes": 6,
+      "n_clusters": 2,
+      "cluster_sizes": [
+        5,
+        1
+      ],
+      "route_ids": [
+        581,
+        695,
+        824,
+        1317,
+        1692,
+        1709
+      ],
+      "cluster_ids": [
+        0,
+        0,
+        0,
+        0,
+        1,
+        0
+      ],
+      "decision_points": [],
+      "decision_points_all": [],
+      "dp_tier_keep": [],
+      "dp_next_min_keep": 2,
+      "decision_points_tier": {},
+      "decision_points_tier_all": {},
+      "decision_points_xy": {},
+      "kmedoids": {
+        "best_k": 2,
+        "best_silhouette": 0.8333333134651184,
+        "silhouette_by_k": {
+          "2": 0.8333333134651184,
+          "3": 0.8333333134651184,
+          "4": 0.8333333134651184
+        },
+        "medoid_rids": [
+          1709,
+          1692
+        ],
+        "top2_medoid_dist": 0.75,
+        "cluster_sizes": [
+          5,
+          1
+        ],
+        "entropy": 0.4505612088643047,
+        "effective_k": 1.5691925832110583
+      },
+      "title_extra": "(KM:K=2|sil=0.83|LCS:K=2|DP:K=1)"
+    },
+    {
+      "od_bin": [
+        -4155,
+        2119,
+        -4152,
+        2117
+      ],
+      "n_routes": 7,
+      "n_clusters": 3,
+      "cluster_sizes": [
+        4,
+        2,
+        1
+      ],
+      "route_ids": [
+        485,
+        1144,
+        1649,
+        1673,
+        1681,
+        1939,
+        2021
+      ],
+      "cluster_ids": [
+        0,
+        0,
+        1,
+        2,
+        0,
+        0,
+        1
+      ],
+      "decision_points": [
+        25887456,
+        39364670,
+        491303388
+      ],
+      "decision_points_all": [
+        25887456,
+        39364670,
+        491303388
+      ],
+      "dp_tier_keep": [],
+      "dp_next_min_keep": 2,
+      "decision_points_tier": {},
+      "decision_points_tier_all": {},
+      "decision_points_xy": {
+        "25887456": [
+          594.0,
+          583.0
+        ],
+        "39364670": [
+          708.0,
+          639.0
+        ],
+        "491303388": [
+          597.0,
+          589.0
+        ]
+      },
+      "kmedoids": {
+        "best_k": 3,
+        "best_silhouette": 0.6351447701454163,
+        "silhouette_by_k": {
+          "2": 0.6351267695426941,
+          "3": 0.6351447701454163,
+          "4": 0.5266448855400085
+        },
+        "medoid_rids": [
+          485,
+          2021,
+          1673
+        ],
+        "top2_medoid_dist": 0.22641509771347046,
+        "cluster_sizes": [
+          4,
+          2,
+          1
+        ],
+        "entropy": 0.9556998911095345,
+        "effective_k": 2.6004900059818588
+      },
+      "title_extra": "(KM:K=3|sil=0.64|LCS:K=3|DP:K=5)"
+    },
+    {
+      "od_bin": [
+        -4163,
+        2113,
+        -4161,
+        2118
+      ],
+      "n_routes": 5,
+      "n_clusters": 2,
+      "cluster_sizes": [
+        4,
+        1
+      ],
+      "route_ids": [
+        787,
+        828,
+        868,
+        932,
+        998
+      ],
+      "cluster_ids": [
+        1,
+        0,
+        0,
+        0,
+        0
+      ],
+      "decision_points": [],
+      "decision_points_all": [],
+      "dp_tier_keep": [],
+      "dp_next_min_keep": 2,
+      "decision_points_tier": {},
+      "decision_points_tier_all": {},
+      "decision_points_xy": {},
+      "kmedoids": {
+        "best_k": 2,
+        "best_silhouette": 0.6411110758781433,
+        "silhouette_by_k": {
+          "2": 0.6411110758781433,
+          "3": 0.6000000238418579,
+          "4": 0.6000000238418579
+        },
+        "medoid_rids": [
+          998,
+          787
+        ],
+        "top2_medoid_dist": 0.11538461595773697,
+        "cluster_sizes": [
+          4,
+          1
+        ],
+        "entropy": 0.5004024235361879,
+        "effective_k": 1.649384888462819
+      },
+      "title_extra": "(KM:K=2|sil=0.64|LCS:K=1|DP:K=1)"
+    },
+    {
+      "od_bin": [
+        -4155,
+        2122,
+        -4156,
+        2124
+      ],
+      "n_routes": 16,
+      "n_clusters": 2,
+      "cluster_sizes": [
+        14,
+        2
+      ],
+      "route_ids": [
+        155,
+        221,
+        259,
+        385,
+        603,
+        1134,
+        1210,
+        1248,
+        1280,
+        1371,
+        1411,
+        1530,
+        1606,
+        1730,
+        1864,
+        1867
+      ],
+      "cluster_ids": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0
+      ],
+      "decision_points": [
+        489758578,
+        969733898
+      ],
+      "decision_points_all": [
+        489758578,
+        969733898
+      ],
+      "dp_tier_keep": [],
+      "dp_next_min_keep": 2,
+      "decision_points_tier": {},
+      "decision_points_tier_all": {},
+      "decision_points_xy": {
+        "489758578": [
+          528.0,
+          186.0
+        ],
+        "969733898": [
+          477.0,
+          115.0
+        ]
+      },
+      "kmedoids": {
+        "best_k": 2,
+        "best_silhouette": 0.744281530380249,
+        "silhouette_by_k": {
+          "2": 0.744281530380249,
+          "3": 0.7103235721588135,
+          "4": 0.579836368560791
+        },
+        "medoid_rids": [
+          259,
+          1730
+        ],
+        "top2_medoid_dist": 0.9444444179534912,
+        "cluster_sizes": [
+          14,
+          2
+        ],
+        "entropy": 0.3767701612544368,
+        "effective_k": 1.4575692649781753
+      },
+      "title_extra": "(KM:K=2|sil=0.74|LCS:K=5|DP:K=3)"
+    }
+  ],
+  "kmedoids_summary": {
+    "enabled": true,
+    "km_min_routes": 5,
+    "n_od_bins_eval": 66,
+    "n_routes_eval": 512,
+    "best_k_hist": {
+      "2": 41,
+      "3": 12,
+      "4": 13
+    },
+    "gate_sil05_second02": {
+      "n_od_bins": 33,
+      "n_routes": 292
+    },
+    "gate_sil07_second02": {
+      "n_od_bins": 12,
+      "n_routes": 99
+    },
+    "gate_sil05_second01": {
+      "n_od_bins": 45,
+      "n_routes": 388
+    }
+  }
+}

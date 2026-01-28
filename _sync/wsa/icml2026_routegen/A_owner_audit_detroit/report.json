@@ -1,0 +1,112 @@
+{
+  "ok": true,
+  "task": "worldtrace_owner_audit",
+  "created_at": "2026-01-17T10:56:52.713354+08:00",
+  "inputs": {
+    "meta_zip": "/home/jinlin/data/geoexplicit_data/worldtrace/OpenTrace_WorldTrace/Meta.zip",
+    "segments_parquet": [
+      "/home/jinlin/data/geoexplicit_data/worldtrace/detroit_core_v1/segments_with_wayid.parquet"
+    ],
+    "segments_label": null
+  },
+  "cfg": {
+    "od_bin_deg": [
+      0.01,
+      0.02
+    ],
+    "min_od_dist_km": 1.0,
+    "max_rows_per_segments": 0,
+    "dump_top_owner_n": 20
+  },
+  "join": {
+    "traj_key": "Path(traj_csv).name",
+    "meta_key": "Path(Meta.Filename).name",
+    "meta_json_read": 2451298,
+    "trips_total": 2070,
+    "trips_kept_after_od_filter": 2070,
+    "trips_with_owner": 0,
+    "owner_found_ratio": 0.0
+  },
+  "owner": {
+    "unique_owner_count": 0,
+    "trips_per_owner": {
+      "p10": NaN,
+      "p50": NaN,
+      "p90": NaN,
+      "max": 0
+    },
+    "time_span_hours_per_owner": {
+      "p10": NaN,
+      "p50": NaN,
+      "p90": NaN,
+      "max": 0.0
+    },
+    "n_owner_trips_gt_1000": 0,
+    "n_owner_span_lt_1day": 0,
+    "topk": [],
+    "concentration": {
+      "top10_share": NaN,
+      "top10_n_owners": 0
+    }
+  },
+  "od_coverage": [
+    {
+      "od_bin_deg": 0.01,
+      "n_od_bins": 0,
+      "n_trips_in_od_bins": 0,
+      "n_od_bins_1trip": 0,
+      "n_od_bins_ge2owners": 0,
+      "n_od_bins_1owner_ge2trips": 0,
+      "trips_per_od": {
+        "p10": NaN,
+        "p50": NaN,
+        "p90": NaN,
+        "max": 0
+      },
+      "owners_per_od": {
+        "p10": NaN,
+        "p50": NaN,
+        "p90": NaN,
+        "max": 0
+      }
+    },
+    {
+      "od_bin_deg": 0.02,
+      "n_od_bins": 0,
+      "n_trips_in_od_bins": 0,
+      "n_od_bins_1trip": 0,
+      "n_od_bins_ge2owners": 0,
+      "n_od_bins_1owner_ge2trips": 0,
+      "trips_per_od": {
+        "p10": NaN,
+        "p50": NaN,
+        "p90": NaN,
+        "max": 0
+      },
+      "owners_per_od": {
+        "p10": NaN,
+        "p50": NaN,
+        "p90": NaN,
+        "max": 0
+      }
+    }
+  ],
+  "go_no_go": {
+    "od_multi_owner_gate": [
+      {
+        "od_bin_deg": 0.01,
+        "rule": "n_od_bins_ge2owners >= 100",
+        "value": 0,
+        "pass": false
+      },
+      {
+        "od_bin_deg": 0.02,
+        "rule": "n_od_bins_ge2owners >= 100",
+        "value": 0,
+        "pass": false
+      }
+    ],
+    "owner_concentration_rule": "top10_share < 0.95",
+    "owner_concentration_pass": true
+  }
+}

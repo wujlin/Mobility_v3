@@ -1,0 +1,20 @@
+{
+  "inputs": {
+    "checkpoint": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E1seg_e2e_diffusion_detroit_segF256_epoch_seed0/last.pt",
+    "case_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E0s_gt_baseline_detroit_segF256_epoch_seed0_od128_min10_sep2_uni2/case_03/gt_case.npz"
+  },
+  "config": {
+    "K": 20,
+    "seed": 0,
+    "cfg_scale": 0.0,
+    "cfg_uncond_dest_mode": "origin"
+  },
+  "stats": {
+    "N": 14,
+    "F": 256
+  },
+  "outputs": {
+    "samples_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E4s_seg_viz_detroit_segF256_epoch_K20_res0p1_seed0/case_03/e2e_diff/samples.npz",
+    "summary_json": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E4s_seg_viz_detroit_segF256_epoch_K20_res0p1_seed0/case_03/e2e_diff/sample_summary.json"
+  }
+}

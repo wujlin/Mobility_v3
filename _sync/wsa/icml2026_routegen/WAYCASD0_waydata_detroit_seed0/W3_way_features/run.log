@@ -1,0 +1,8 @@
+{
+  "ok": true,
+  "out_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD0_waydata_detroit_seed0/W3_way_features/way_features.npz",
+  "n_way_vocab": 10804,
+  "missing_frac": 0.14864864864864866,
+  "way_len_p50_m": 73.971,
+  "way_len_p90_m": 414.1380000000001
+}

@@ -1,0 +1,3 @@
+[way_graph] /home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD2_waydata_rustbelt_seed0_d2dest/W3_way_graph/way_graph.npz
+[ways] 19551 edges_directed=26995
+[out_deg] p50=1.0 p90=2.0 max=13

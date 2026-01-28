@@ -1,0 +1,106 @@
+{
+  "ok": true,
+  "task": "way_casd_exec_eval",
+  "created_at": "2026-01-18T11:49:45.593065+08:00",
+  "cfg": {
+    "seed": 0,
+    "device": "cuda",
+    "tz_offset_hours": -5.0,
+    "traj_len": 256,
+    "n_routes": 1024,
+    "n_samples_per_route": 4,
+    "max_way_len": 128,
+    "min_way_len": 2,
+    "prefer_matched": true,
+    "fix_ends": true,
+    "coord_scale": 1024.0,
+    "batch_routes": 32,
+    "frechet_points": 64,
+    "onroad_prob_thr": 0.5,
+    "spatial_stride": 4,
+    "speed_bins": 120,
+    "accel_bins": 120,
+    "turn_bins": 60,
+    "turn_min_speed": 0.001
+  },
+  "inputs": {
+    "segments_parquet": [
+      "/home/jinlin/data/geoexplicit_data/worldtrace/detroit_core_v1/segments_with_wayid.parquet",
+      "/home/jinlin/data/geoexplicit_data/worldtrace/columbus_core_v1/segments_with_wayid.parquet"
+    ],
+    "route_city": [
+      0,
+      1
+    ],
+    "semantic_dir": [
+      "/home/jinlin/data/geoexplicit_data/worldtrace/detroit_core_v1",
+      "/home/jinlin/data/geoexplicit_data/worldtrace/columbus_core_v1"
+    ],
+    "way_graph_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD1_waydata_rustbelt_seed0/W3_way_graph/way_graph.npz",
+    "way_features_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD1_waydata_rustbelt_seed0/W4_way_features/way_features.npz",
+    "ae_ckpt": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD3_xattn_nL64_rustbelt_seed0_e1000/W6_train_ae/ckpt_best.pt",
+    "exec_ckpt": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD3_xattn_nL64_rustbelt_seed0_e1000/W9_train_exec/ckpt_best.pt"
+  },
+  "per_city": [
+    {
+      "inputs": {
+        "segments_parquet": "/home/jinlin/data/geoexplicit_data/worldtrace/detroit_core_v1/segments_with_wayid.parquet",
+        "route_city": 0,
+        "semantic_dir": "/home/jinlin/data/geoexplicit_data/worldtrace/detroit_core_v1"
+      },
+      "n_used": 1024,
+      "micro": {
+        "ADE_best": 14.78542335727252,
+        "ADE_mean": 21.251202523941174,
+        "FDE_best": 0.0,
+        "FDE_mean": 0.0,
+        "Frechet_best": 23.377770113758743,
+        "Frechet_mean": 33.27588865021244,
+        "frechet_points": 64
+      },
+      "onroad": {
+        "road_prob_mean": 0.9033528914261977,
+        "onroad_rate": 0.921966552734375,
+        "prob_thr": 0.5
+      },
+      "distribution": {
+        "JSD_Speed": 0.025732818864670905,
+        "JSD_Accel": 0.3542012210080346,
+        "JSD_TurnAngle": 0.23711112107594037
+      },
+      "length_jsd": 0.06909521126173654,
+      "spatial_jsd": 0.8417295497163596,
+      "spatial_stride": 4
+    },
+    {
+      "inputs": {
+        "segments_parquet": "/home/jinlin/data/geoexplicit_data/worldtrace/columbus_core_v1/segments_with_wayid.parquet",
+        "route_city": 1,
+        "semantic_dir": "/home/jinlin/data/geoexplicit_data/worldtrace/columbus_core_v1"
+      },
+      "n_used": 1024,
+      "micro": {
+        "ADE_best": 12.05308152618818,
+        "ADE_mean": 17.330677716992795,
+        "FDE_best": 0.0,
+        "FDE_mean": 0.0,
+        "Frechet_best": 18.53203109651804,
+        "Frechet_mean": 26.463223258964717,
+        "frechet_points": 64
+      },
+      "onroad": {
+        "road_prob_mean": 0.42780610936461017,
+        "onroad_rate": 0.2743644714355469,
+        "prob_thr": 0.5
+      },
+      "distribution": {
+        "JSD_Speed": 0.02291668207244292,
+        "JSD_Accel": 0.3874443518911247,
+        "JSD_TurnAngle": 0.2839265345947754
+      },
+      "length_jsd": 0.11690123985787704,
+      "spatial_jsd": 0.8180709954123756,
+      "spatial_stride": 4
+    }
+  ]
+}

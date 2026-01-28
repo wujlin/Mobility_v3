@@ -1,0 +1,50 @@
+{
+  "inputs": {
+    "train_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/gt_windows/columbus_segments_F256_n200k_seed0.npz"
+  },
+  "config": {
+    "pos_max": 1023,
+    "max_train_n": null,
+    "hidden_dim": 128,
+    "diff_steps": 100,
+    "pred_type": "eps",
+    "cfg_drop_dest_prob": 0.0,
+    "cfg_uncond_dest_mode": "origin",
+    "batch_size": 64,
+    "epochs": 30,
+    "lr": 0.001,
+    "num_workers": 24,
+    "max_batches": null,
+    "seed": 0
+  },
+  "stats": {
+    "N": 5228,
+    "F": 256,
+    "pos_min": [
+      0.0,
+      0.0
+    ],
+    "pos_max": [
+      1023.0,
+      1023.0
+    ],
+    "vel_mean": [
+      0.004772230051457882,
+      -0.008162926882505417
+    ],
+    "vel_std": [
+      1.113499641418457,
+      0.9592388272285461
+    ],
+    "dest_pos_present": true
+  },
+  "timing": {
+    "wall_s": 60.322959661483765,
+    "steps": 2460
+  },
+  "outputs": {
+    "out_dir": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E13_fullscale_columbus_F256_K20_seed0/e2e_diffusion",
+    "checkpoint": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E13_fullscale_columbus_F256_K20_seed0/e2e_diffusion/last.pt",
+    "summary_json": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E13_fullscale_columbus_F256_K20_seed0/e2e_diffusion/train_summary.json"
+  }
+}

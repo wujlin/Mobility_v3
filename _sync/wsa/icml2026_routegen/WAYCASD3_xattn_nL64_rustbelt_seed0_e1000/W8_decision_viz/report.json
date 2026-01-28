@@ -1,0 +1,318 @@
+{
+  "ok": true,
+  "task": "way_casd_sample_viz",
+  "created_at": "2026-01-18T03:21:26.537846+08:00",
+  "cfg": {
+    "seed": 0,
+    "device": "cuda",
+    "tz_offset_hours": -5.0,
+    "n_routes": 8,
+    "n_samples_per_route": 4,
+    "max_way_len": 160,
+    "decode": "greedy",
+    "beam_size": 5,
+    "max_decode_len": 160,
+    "solver_steps": null,
+    "plot_all_ways": false
+  },
+  "inputs": {
+    "way_routes_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD1_waydata_rustbelt_seed0/W5_way_routes_labeled/way_routes_labeled.npz",
+    "way_graph_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD1_waydata_rustbelt_seed0/W3_way_graph/way_graph.npz",
+    "way_features_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD1_waydata_rustbelt_seed0/W4_way_features/way_features.npz",
+    "ae_ckpt": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD3_xattn_nL64_rustbelt_seed0_e1000/W6_train_ae/ckpt_best.pt",
+    "flow_ckpt": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD3_xattn_nL64_rustbelt_seed0_e1000/W7_train_flow/ckpt_best.pt",
+    "latent_source": "flow"
+  },
+  "picked_routes": [
+    123,
+    307,
+    564,
+    2022,
+    2308,
+    3831,
+    4774,
+    6375
+  ],
+  "per_route": [
+    {
+      "route_id": 123,
+      "route_city": 0,
+      "hour": 6,
+      "dow": 2,
+      "gt": {
+        "len": 19
+      },
+      "pred": [
+        {
+          "len": 161,
+          "success": false,
+          "valid": true,
+          "jaccard": 0.2727272727272727
+        },
+        {
+          "len": 161,
+          "success": false,
+          "valid": true,
+          "jaccard": 0.08695652173913043
+        },
+        {
+          "len": 161,
+          "success": false,
+          "valid": true,
+          "jaccard": 0.08695652173913043
+        },
+        {
+          "len": 161,
+          "success": false,
+          "valid": true,
+          "jaccard": 0.041666666666666664
+        }
+      ]
+    },
+    {
+      "route_id": 307,
+      "route_city": 0,
+      "hour": 16,
+      "dow": 1,
+      "gt": {
+        "len": 3
+      },
+      "pred": [
+        {
+          "len": 161,
+          "success": false,
+          "valid": true,
+          "jaccard": 0.1
+        },
+        {
+          "len": 161,
+          "success": false,
+          "valid": true,
+          "jaccard": 0.16666666666666666
+        },
+        {
+          "len": 161,
+          "success": false,
+          "valid": true,
+          "jaccard": 0.1
+        },
+        {
+          "len": 161,
+          "success": false,
+          "valid": true,
+          "jaccard": 0.03636363636363636
+        }
+      ]
+    },
+    {
+      "route_id": 564,
+      "route_city": 0,
+      "hour": 11,
+      "dow": 5,
+      "gt": {
+        "len": 84
+      },
+      "pred": [
+        {
+          "len": 161,
+          "success": false,
+          "valid": true,
+          "jaccard": 0.030927835051546393
+        },
+        {
+          "len": 161,
+          "success": false,
+          "valid": true,
+          "jaccard": 0.012578616352201259
+        },
+        {
+          "len": 161,
+          "success": false,
+          "valid": true,
+          "jaccard": 0.017543859649122806
+        },
+        {
+          "len": 161,
+          "success": false,
+          "valid": true,
+          "jaccard": 0.0196078431372549
+        }
+      ]
+    },
+    {
+      "route_id": 2022,
+      "route_city": 0,
+      "hour": 14,
+      "dow": 4,
+      "gt": {
+        "len": 23
+      },
+      "pred": [
+        {
+          "len": 23,
+          "success": true,
+          "valid": true,
+          "jaccard": 1.0
+        },
+        {
+          "len": 23,
+          "success": true,
+          "valid": true,
+          "jaccard": 1.0
+        },
+        {
+          "len": 23,
+          "success": true,
+          "valid": true,
+          "jaccard": 1.0
+        },
+        {
+          "len": 23,
+          "success": true,
+          "valid": true,
+          "jaccard": 1.0
+        }
+      ]
+    },
+    {
+      "route_id": 2308,
+      "route_city": 1,
+      "hour": 15,
+      "dow": 1,
+      "gt": {
+        "len": 65
+      },
+      "pred": [
+        {
+          "len": 16,
+          "success": false,
+          "valid": true,
+          "jaccard": 0.19117647058823528
+        },
+        {
+          "len": 16,
+          "success": false,
+          "valid": true,
+          "jaccard": 0.19117647058823528
+        },
+        {
+          "len": 16,
+          "success": false,
+          "valid": true,
+          "jaccard": 0.19117647058823528
+        },
+        {
+          "len": 16,
+          "success": false,
+          "valid": true,
+          "jaccard": 0.19117647058823528
+        }
+      ]
+    },
+    {
+      "route_id": 3831,
+      "route_city": 1,
+      "hour": 7,
+      "dow": 2,
+      "gt": {
+        "len": 57
+      },
+      "pred": [
+        {
+          "len": 161,
+          "success": false,
+          "valid": true,
+          "jaccard": 0.034482758620689655
+        },
+        {
+          "len": 161,
+          "success": false,
+          "valid": true,
+          "jaccard": 0.024
+        },
+        {
+          "len": 161,
+          "success": false,
+          "valid": true,
+          "jaccard": 0.034482758620689655
+        },
+        {
+          "len": 161,
+          "success": false,
+          "valid": true,
+          "jaccard": 0.03260869565217391
+        }
+      ]
+    },
+    {
+      "route_id": 4774,
+      "route_city": 1,
+      "hour": 9,
+      "dow": 6,
+      "gt": {
+        "len": 20
+      },
+      "pred": [
+        {
+          "len": 161,
+          "success": false,
+          "valid": true,
+          "jaccard": 0.35
+        },
+        {
+          "len": 161,
+          "success": false,
+          "valid": true,
+          "jaccard": 0.041666666666666664
+        },
+        {
+          "len": 161,
+          "success": false,
+          "valid": true,
+          "jaccard": 0.043478260869565216
+        },
+        {
+          "len": 161,
+          "success": false,
+          "valid": true,
+          "jaccard": 0.3
+        }
+      ]
+    },
+    {
+      "route_id": 6375,
+      "route_city": 1,
+      "hour": 12,
+      "dow": 5,
+      "gt": {
+        "len": 4
+      },
+      "pred": [
+        {
+          "len": 4,
+          "success": true,
+          "valid": true,
+          "jaccard": 1.0
+        },
+        {
+          "len": 4,
+          "success": true,
+          "valid": true,
+          "jaccard": 1.0
+        },
+        {
+          "len": 4,
+          "success": true,
+          "valid": true,
+          "jaccard": 1.0
+        },
+        {
+          "len": 4,
+          "success": true,
+          "valid": true,
+          "jaccard": 1.0
+        }
+      ]
+    }
+  ]
+}

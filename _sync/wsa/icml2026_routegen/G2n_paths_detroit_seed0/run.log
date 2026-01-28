@@ -1,0 +1,9 @@
+{"task": "dump_graph_paths_from_routes_npz", "done_routes": 1092, "N": 1092, "kept": 755, "fail_empty": 7, "fail_bridge": 330, "elapsed_s": 83.85738015174866, "rate_rps": 13.022109658373685}
+{
+  "ok": true,
+  "out_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/G2n_paths_detroit_seed0/paths_graph.npz",
+  "N_kept": 755,
+  "seq_len_p50": 4060.0,
+  "snap_p90": 1.7193043286990803,
+  "snap_sample_n": 4368
+}

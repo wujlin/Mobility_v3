@@ -1,0 +1,39 @@
+{
+  "ok": true,
+  "task": "train_graph_ar_decision",
+  "config": {
+    "paths_graph_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/T3_combo_detroit_columbus_seed0/paths_graph_combo.npz",
+    "road_graph_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/T3_combo_detroit_columbus_seed0/road_graph_combo.npz",
+    "out_dir": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/T3_combo_detroit_columbus_seed0/T3_train_ar_markov_seed0",
+    "tz_offset_hours": -5.0,
+    "max_steps_per_route": 128,
+    "val_frac": 0.1,
+    "hidden_dim": 256,
+    "edge_tier_emb_dim": 8,
+    "batch_size": 2048,
+    "epochs": 20,
+    "lr": 0.001,
+    "l2": 0.0001,
+    "num_workers": 0,
+    "seed": 0
+  },
+  "stats": {
+    "n_nodes": 718099,
+    "n_routes": 3385,
+    "train_routes": 3047,
+    "val_routes": 338,
+    "train_transitions": 387140,
+    "val_transitions": 43030,
+    "best_val_acc": 0.7576342086999216,
+    "best_epoch": 12,
+    "elapsed_s": 48.55835223197937
+  },
+  "outputs": {
+    "checkpoint": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/T3_combo_detroit_columbus_seed0/T3_train_ar_markov_seed0/last.pt",
+    "train_log": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/T3_combo_detroit_columbus_seed0/T3_train_ar_markov_seed0/train.log",
+    "train_summary_json": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/T3_combo_detroit_columbus_seed0/T3_train_ar_markov_seed0/train_summary.json"
+  },
+  "meta": {
+    "created_at": "2026-01-13T23:25:22.282031+08:00"
+  }
+}

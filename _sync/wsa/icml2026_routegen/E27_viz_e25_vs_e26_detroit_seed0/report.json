@@ -1,0 +1,289 @@
+{
+  "gate": "E27_viz_e25_vs_e26_metric_conflict",
+  "inputs": {
+    "gt_windows_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/gt_windows/detroit_segments_F256_n200k_seed0.npz",
+    "e25_samples_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E25_fullscale_detroit_decTierRoad_execPriorDist_K20_res0p1_seed0/refined_dist_step1p0_it10.npz",
+    "e26_samples_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E26_fullscale_detroit_decOD_execPriorDist_K20_res0p1_seed0/refined_dist_step1p0_it10.npz",
+    "semantic_dir": "/home/jinlin/data/geoexplicit_data/worldtrace/detroit_core_v1"
+  },
+  "stats": {
+    "N_matched": 2295,
+    "K": 20,
+    "F": 256,
+    "num_cases": 8
+  },
+  "selection": {
+    "strategy": "auto_by_distance_and_conflict",
+    "notes": {
+      "short_mid_long": "2 windows per chord-length tercile",
+      "choice_points": "2 windows with high GT turn score (prefer conflict if possible)",
+      "conflict_pref": "prefer windows where E25 has higher Jaccard but worse ADE (heuristic thresholds)"
+    }
+  },
+  "cases": [
+    {
+      "case_id": 1,
+      "window": {
+        "traj_idx": 1920,
+        "start_t": 0,
+        "key64": 8246337208320
+      },
+      "gt": {
+        "chord_len": 122.00409698486328,
+        "detour_ratio": 1.0578701496124268,
+        "turn_score_mean": 0.0896446630358696
+      },
+      "E25": {
+        "ADE_best": 11.555850982666016,
+        "jaccard": 0.8780398964881897,
+        "best_k": 2
+      },
+      "E26": {
+        "ADE_best": 5.164394378662109,
+        "jaccard": 0.5944251418113708,
+        "best_k": 19
+      },
+      "diff": {
+        "ADE_best_E25_minus_E26": 6.391456604003906,
+        "jaccard_E25_minus_E26": 0.28361475467681885
+      },
+      "outputs": {
+        "traj_pdf": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E27_viz_e25_vs_e26_detroit_seed0/case_01/traj_compare.pdf",
+        "traj_png": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E27_viz_e25_vs_e26_detroit_seed0/case_01/traj_compare.png",
+        "wp_pdf": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E27_viz_e25_vs_e26_detroit_seed0/case_01/waypoints_compare.pdf",
+        "wp_png": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E27_viz_e25_vs_e26_detroit_seed0/case_01/waypoints_compare.png"
+      }
+    },
+    {
+      "case_id": 2,
+      "window": {
+        "traj_idx": 1694,
+        "start_t": 0,
+        "key64": 7275674599424
+      },
+      "gt": {
+        "chord_len": 137.05838012695312,
+        "detour_ratio": 1.0159367322921753,
+        "turn_score_mean": 0.02268233709037304
+      },
+      "E25": {
+        "ADE_best": 14.004091262817383,
+        "jaccard": 0.9019473195075989,
+        "best_k": 16
+      },
+      "E26": {
+        "ADE_best": 3.471501350402832,
+        "jaccard": 0.7442993521690369,
+        "best_k": 3
+      },
+      "diff": {
+        "ADE_best_E25_minus_E26": 10.53258991241455,
+        "jaccard_E25_minus_E26": 0.157647967338562
+      },
+      "outputs": {
+        "traj_pdf": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E27_viz_e25_vs_e26_detroit_seed0/case_02/traj_compare.pdf",
+        "traj_png": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E27_viz_e25_vs_e26_detroit_seed0/case_02/traj_compare.png",
+        "wp_pdf": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E27_viz_e25_vs_e26_detroit_seed0/case_02/waypoints_compare.pdf",
+        "wp_png": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E27_viz_e25_vs_e26_detroit_seed0/case_02/waypoints_compare.png"
+      }
+    },
+    {
+      "case_id": 3,
+      "window": {
+        "traj_idx": 1312,
+        "start_t": 0,
+        "key64": 5634997092352
+      },
+      "gt": {
+        "chord_len": 190.43634033203125,
+        "detour_ratio": 1.0926952362060547,
+        "turn_score_mean": 0.2192438840866089
+      },
+      "E25": {
+        "ADE_best": 19.605134963989258,
+        "jaccard": 0.9180919528007507,
+        "best_k": 5
+      },
+      "E26": {
+        "ADE_best": 3.3420491218566895,
+        "jaccard": 0.6408147811889648,
+        "best_k": 2
+      },
+      "diff": {
+        "ADE_best_E25_minus_E26": 16.263086318969727,
+        "jaccard_E25_minus_E26": 0.2772771716117859
+      },
+      "outputs": {
+        "traj_pdf": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E27_viz_e25_vs_e26_detroit_seed0/case_03/traj_compare.pdf",
+        "traj_png": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E27_viz_e25_vs_e26_detroit_seed0/case_03/traj_compare.png",
+        "wp_pdf": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E27_viz_e25_vs_e26_detroit_seed0/case_03/waypoints_compare.pdf",
+        "wp_png": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E27_viz_e25_vs_e26_detroit_seed0/case_03/waypoints_compare.png"
+      }
+    },
+    {
+      "case_id": 4,
+      "window": {
+        "traj_idx": 991,
+        "start_t": 0,
+        "key64": 4256312590336
+      },
+      "gt": {
+        "chord_len": 251.87298583984375,
+        "detour_ratio": 1.093531608581543,
+        "turn_score_mean": 0.22189104557037354
+      },
+      "E25": {
+        "ADE_best": 15.876490592956543,
+        "jaccard": 0.9315271377563477,
+        "best_k": 3
+      },
+      "E26": {
+        "ADE_best": 3.823591709136963,
+        "jaccard": 0.6622307300567627,
+        "best_k": 17
+      },
+      "diff": {
+        "ADE_best_E25_minus_E26": 12.052898406982422,
+        "jaccard_E25_minus_E26": 0.26929640769958496
+      },
+      "outputs": {
+        "traj_pdf": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E27_viz_e25_vs_e26_detroit_seed0/case_04/traj_compare.pdf",
+        "traj_png": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E27_viz_e25_vs_e26_detroit_seed0/case_04/traj_compare.png",
+        "wp_pdf": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E27_viz_e25_vs_e26_detroit_seed0/case_04/waypoints_compare.pdf",
+        "wp_png": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E27_viz_e25_vs_e26_detroit_seed0/case_04/waypoints_compare.png"
+      }
+    },
+    {
+      "case_id": 5,
+      "window": {
+        "traj_idx": 1109,
+        "start_t": 0,
+        "key64": 4763118731264
+      },
+      "gt": {
+        "chord_len": 428.88226318359375,
+        "detour_ratio": 1.0550501346588135,
+        "turn_score_mean": 0.1200827956199646
+      },
+      "E25": {
+        "ADE_best": 31.357646942138672,
+        "jaccard": 0.9664354920387268,
+        "best_k": 5
+      },
+      "E26": {
+        "ADE_best": 3.4460911750793457,
+        "jaccard": 0.7850541472434998,
+        "best_k": 5
+      },
+      "diff": {
+        "ADE_best_E25_minus_E26": 27.911556243896484,
+        "jaccard_E25_minus_E26": 0.18138134479522705
+      },
+      "outputs": {
+        "traj_pdf": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E27_viz_e25_vs_e26_detroit_seed0/case_05/traj_compare.pdf",
+        "traj_png": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E27_viz_e25_vs_e26_detroit_seed0/case_05/traj_compare.png",
+        "wp_pdf": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E27_viz_e25_vs_e26_detroit_seed0/case_05/waypoints_compare.pdf",
+        "wp_png": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E27_viz_e25_vs_e26_detroit_seed0/case_05/waypoints_compare.png"
+      }
+    },
+    {
+      "case_id": 6,
+      "window": {
+        "traj_idx": 943,
+        "start_t": 0,
+        "key64": 4050154160128
+      },
+      "gt": {
+        "chord_len": 399.8462219238281,
+        "detour_ratio": 1.059507966041565,
+        "turn_score_mean": 0.1409258395433426
+      },
+      "E25": {
+        "ADE_best": 35.687217712402344,
+        "jaccard": 0.9545354843139648,
+        "best_k": 14
+      },
+      "E26": {
+        "ADE_best": 7.141531944274902,
+        "jaccard": 0.7882134318351746,
+        "best_k": 5
+      },
+      "diff": {
+        "ADE_best_E25_minus_E26": 28.545684814453125,
+        "jaccard_E25_minus_E26": 0.16632205247879028
+      },
+      "outputs": {
+        "traj_pdf": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E27_viz_e25_vs_e26_detroit_seed0/case_06/traj_compare.pdf",
+        "traj_png": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E27_viz_e25_vs_e26_detroit_seed0/case_06/traj_compare.png",
+        "wp_pdf": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E27_viz_e25_vs_e26_detroit_seed0/case_06/waypoints_compare.pdf",
+        "wp_png": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E27_viz_e25_vs_e26_detroit_seed0/case_06/waypoints_compare.png"
+      }
+    },
+    {
+      "case_id": 7,
+      "window": {
+        "traj_idx": 1079,
+        "start_t": 0,
+        "key64": 4634269712384
+      },
+      "gt": {
+        "chord_len": 9.999999974752427e-07,
+        "detour_ratio": 6000000.0,
+        "turn_score_mean": 2.0
+      },
+      "E25": {
+        "ADE_best": 0.9832208752632141,
+        "jaccard": 0.24473683536052704,
+        "best_k": 1
+      },
+      "E26": {
+        "ADE_best": 0.9832208752632141,
+        "jaccard": 0.24473683536052704,
+        "best_k": 1
+      },
+      "diff": {
+        "ADE_best_E25_minus_E26": 0.0,
+        "jaccard_E25_minus_E26": 0.0
+      },
+      "outputs": {
+        "traj_pdf": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E27_viz_e25_vs_e26_detroit_seed0/case_07/traj_compare.pdf",
+        "traj_png": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E27_viz_e25_vs_e26_detroit_seed0/case_07/traj_compare.png",
+        "wp_pdf": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E27_viz_e25_vs_e26_detroit_seed0/case_07/waypoints_compare.pdf",
+        "wp_png": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E27_viz_e25_vs_e26_detroit_seed0/case_07/waypoints_compare.png"
+      }
+    },
+    {
+      "case_id": 8,
+      "window": {
+        "traj_idx": 698,
+        "start_t": 0,
+        "key64": 2997887172608
+      },
+      "gt": {
+        "chord_len": 2.2360689640045166,
+        "detour_ratio": 12.969188690185547,
+        "turn_score_mean": 1.5
+      },
+      "E25": {
+        "ADE_best": 2.16623592376709,
+        "jaccard": 0.30614036321640015,
+        "best_k": 15
+      },
+      "E26": {
+        "ADE_best": 2.112473726272583,
+        "jaccard": 0.29605263471603394,
+        "best_k": 15
+      },
+      "diff": {
+        "ADE_best_E25_minus_E26": 0.053762197494506836,
+        "jaccard_E25_minus_E26": 0.010087728500366211
+      },
+      "outputs": {
+        "traj_pdf": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E27_viz_e25_vs_e26_detroit_seed0/case_08/traj_compare.pdf",
+        "traj_png": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E27_viz_e25_vs_e26_detroit_seed0/case_08/traj_compare.png",
+        "wp_pdf": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E27_viz_e25_vs_e26_detroit_seed0/case_08/waypoints_compare.pdf",
+        "wp_png": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E27_viz_e25_vs_e26_detroit_seed0/case_08/waypoints_compare.png"
+      }
+    }
+  ]
+}

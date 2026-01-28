@@ -1,0 +1,93 @@
+{
+  "ok": true,
+  "tool": "aggregate_cluster_gate_reports",
+  "inputs": {
+    "gate_dirs": [
+      "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/G3_argraph_detroit_seed0/T2_cluster_gate",
+      "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/G3_argraph_columbus_seed0/T2_cluster_gate_ob128_mt10_t0p5_seed0"
+    ]
+  },
+  "stats": {
+    "used_groups_total": 22,
+    "auc": {
+      "time_only": {
+        "mean": 0.781549652030404,
+        "p50": 0.7895353793691389,
+        "p90": 1.0,
+        "n": 22
+      },
+      "tier_od": {
+        "mean": 0.8572526997387011,
+        "p50": 0.9418767507002801,
+        "p90": 1.0,
+        "n": 22
+      },
+      "time_tier": {
+        "mean": 0.8022876806386983,
+        "p50": 0.8823529411764706,
+        "p90": 1.0,
+        "n": 22
+      }
+    }
+  },
+  "per_city": [
+    {
+      "gate_dir": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/G3_argraph_detroit_seed0/T2_cluster_gate",
+      "city": "detroit_core_v1",
+      "decision": {
+        "auc_used_mean_time_tier": 0.6126984126984127,
+        "label": "GO"
+      },
+      "used_groups": 4,
+      "auc": {
+        "time_only": {
+          "mean": 0.9,
+          "p50": 1.0,
+          "p90": 1.0,
+          "n": 4
+        },
+        "tier_od": {
+          "mean": 0.7432539682539682,
+          "p50": 0.7222222222222222,
+          "p90": 0.9333333333333333,
+          "n": 4
+        },
+        "time_tier": {
+          "mean": 0.6126984126984127,
+          "p50": 0.5444444444444445,
+          "p90": 0.7500000000000001,
+          "n": 4
+        }
+      }
+    },
+    {
+      "gate_dir": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/G3_argraph_columbus_seed0/T2_cluster_gate_ob128_mt10_t0p5_seed0",
+      "city": "columbus_core_v1",
+      "decision": {
+        "auc_used_mean_time_tier": 0.8444186290698729,
+        "label": "STRONG_GO"
+      },
+      "used_groups": 18,
+      "auc": {
+        "time_only": {
+          "mean": 0.7552273524816049,
+          "p50": 0.7779411764705881,
+          "p90": 1.0,
+          "n": 18
+        },
+        "tier_od": {
+          "mean": 0.8825857511797529,
+          "p50": 0.9558711728523048,
+          "p90": 1.0,
+          "n": 18
+        },
+        "time_tier": {
+          "mean": 0.8444186290698729,
+          "p50": 0.9476720647773279,
+          "p90": 1.0,
+          "n": 18
+        }
+      }
+    }
+  ]
+}

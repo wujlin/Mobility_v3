@@ -1,0 +1,29 @@
+{"task": "sample_graph_ar_waypoints_astar", "done": 1, "total": 200, "pct": 0.005, "elapsed_s": 0.5388014316558838, "best_j_mean_sofar": 0.10258780036968576, "succ_rate_mean_sofar": 1.0}
+{"task": "sample_graph_ar_waypoints_astar", "done": 11, "total": 200, "pct": 0.055, "elapsed_s": 3.097249746322632, "best_j_mean_sofar": 0.18748028392903357, "succ_rate_mean_sofar": 1.0}
+{"task": "sample_graph_ar_waypoints_astar", "done": 21, "total": 200, "pct": 0.105, "elapsed_s": 4.075011253356934, "best_j_mean_sofar": 0.18808129404263646, "succ_rate_mean_sofar": 1.0}
+{"task": "sample_graph_ar_waypoints_astar", "done": 31, "total": 200, "pct": 0.155, "elapsed_s": 5.098447322845459, "best_j_mean_sofar": 0.18826074717533994, "succ_rate_mean_sofar": 1.0}
+{"task": "sample_graph_ar_waypoints_astar", "done": 41, "total": 200, "pct": 0.205, "elapsed_s": 5.899260997772217, "best_j_mean_sofar": 0.21413403661444094, "succ_rate_mean_sofar": 1.0}
+{"task": "sample_graph_ar_waypoints_astar", "done": 51, "total": 200, "pct": 0.255, "elapsed_s": 6.648134469985962, "best_j_mean_sofar": 0.22241063923276091, "succ_rate_mean_sofar": 1.0}
+{"task": "sample_graph_ar_waypoints_astar", "done": 61, "total": 200, "pct": 0.305, "elapsed_s": 7.487854480743408, "best_j_mean_sofar": 0.2279331445005173, "succ_rate_mean_sofar": 1.0}
+{"task": "sample_graph_ar_waypoints_astar", "done": 71, "total": 200, "pct": 0.355, "elapsed_s": 8.34528398513794, "best_j_mean_sofar": 0.23022880325583764, "succ_rate_mean_sofar": 1.0}
+{"task": "sample_graph_ar_waypoints_astar", "done": 81, "total": 200, "pct": 0.405, "elapsed_s": 9.095091819763184, "best_j_mean_sofar": 0.24527071867715253, "succ_rate_mean_sofar": 1.0}
+{"task": "sample_graph_ar_waypoints_astar", "done": 91, "total": 200, "pct": 0.455, "elapsed_s": 9.959941864013672, "best_j_mean_sofar": 0.24674502543154, "succ_rate_mean_sofar": 1.0}
+{"task": "sample_graph_ar_waypoints_astar", "done": 101, "total": 200, "pct": 0.505, "elapsed_s": 10.741014957427979, "best_j_mean_sofar": 0.2519806341928262, "succ_rate_mean_sofar": 1.0}
+{"task": "sample_graph_ar_waypoints_astar", "done": 111, "total": 200, "pct": 0.555, "elapsed_s": 11.591531038284302, "best_j_mean_sofar": 0.25350173687870253, "succ_rate_mean_sofar": 1.0}
+{"task": "sample_graph_ar_waypoints_astar", "done": 121, "total": 200, "pct": 0.605, "elapsed_s": 12.377418041229248, "best_j_mean_sofar": 0.24865707128529088, "succ_rate_mean_sofar": 1.0}
+{"task": "sample_graph_ar_waypoints_astar", "done": 131, "total": 200, "pct": 0.655, "elapsed_s": 13.210195779800415, "best_j_mean_sofar": 0.25717716773471505, "succ_rate_mean_sofar": 1.0}
+{"task": "sample_graph_ar_waypoints_astar", "done": 141, "total": 200, "pct": 0.705, "elapsed_s": 13.935365438461304, "best_j_mean_sofar": 0.2631895509205656, "succ_rate_mean_sofar": 1.0}
+{"task": "sample_graph_ar_waypoints_astar", "done": 151, "total": 200, "pct": 0.755, "elapsed_s": 14.724946737289429, "best_j_mean_sofar": 0.2717370794524558, "succ_rate_mean_sofar": 1.0}
+{"task": "sample_graph_ar_waypoints_astar", "done": 161, "total": 200, "pct": 0.805, "elapsed_s": 15.58755087852478, "best_j_mean_sofar": 0.2714792621376142, "succ_rate_mean_sofar": 1.0}
+{"task": "sample_graph_ar_waypoints_astar", "done": 171, "total": 200, "pct": 0.855, "elapsed_s": 16.49697518348694, "best_j_mean_sofar": 0.268774510249099, "succ_rate_mean_sofar": 1.0}
+{"task": "sample_graph_ar_waypoints_astar", "done": 181, "total": 200, "pct": 0.905, "elapsed_s": 17.35559105873108, "best_j_mean_sofar": 0.26898795542048415, "succ_rate_mean_sofar": 1.0}
+{"task": "sample_graph_ar_waypoints_astar", "done": 191, "total": 200, "pct": 0.955, "elapsed_s": 18.08364772796631, "best_j_mean_sofar": 0.27122989736804365, "succ_rate_mean_sofar": 1.0}
+{"task": "sample_graph_ar_waypoints_astar", "done": 200, "total": 200, "pct": 1.0, "elapsed_s": 18.773663759231567, "best_j_mean_sofar": 0.2695983824279388, "succ_rate_mean_sofar": 1.0}
+{
+  "ok": true,
+  "out_dir": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/T4_wp_ar_astar_combo_seed0/T3_eval_wp_ar_astar_K20_seed0_v2",
+  "num_routes_sampled": 200,
+  "best_jaccard_mean": 0.2695983824279388,
+  "success_rate_mean": 1.0,
+  "report_json": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/T4_wp_ar_astar_combo_seed0/T3_eval_wp_ar_astar_K20_seed0_v2/report.json"
+}

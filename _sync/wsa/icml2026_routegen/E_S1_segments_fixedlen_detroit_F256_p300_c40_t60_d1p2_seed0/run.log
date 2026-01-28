@@ -1,0 +1,10 @@
+{
+  "ok": true,
+  "out_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E_S1_segments_fixedlen_detroit_F256_p300_c40_t60_d1p2_seed0/detroit_segments_route_F256_epoch_seed0.npz",
+  "N": 1092,
+  "F": 256,
+  "n_seg_total": 2295,
+  "n_seg_candidates": 1092,
+  "chord_p50": 265.96990966796875,
+  "detour_p50": 1.3880088329315186
+}

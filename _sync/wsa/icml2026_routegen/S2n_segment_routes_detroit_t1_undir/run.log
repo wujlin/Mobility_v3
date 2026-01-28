@@ -1,0 +1,8 @@
+dump_seg_seq:   0%|          | 0/755 [00:00<?, ?it/s]dump_seg_seq:  31%|███▏      | 237/755 [00:00<00:00, 2363.94it/s]dump_seg_seq:  64%|██████▍   | 483/755 [00:00<00:00, 2417.67it/s]dump_seg_seq:  97%|█████████▋| 734/755 [00:00<00:00, 2453.05it/s]dump_seg_seq: 100%|██████████| 755/755 [00:00<00:00, 2423.45it/s]
+{
+  "ok": true,
+  "out_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/S2n_segment_routes_detroit_t1_undir/segments_graph_routes.npz",
+  "n_routes": 755,
+  "seg_len_p50": 1607.0,
+  "missing_edge_frac": 0.0
+}

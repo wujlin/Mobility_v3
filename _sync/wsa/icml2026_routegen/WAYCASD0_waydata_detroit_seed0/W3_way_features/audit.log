@@ -1,0 +1,4 @@
+[way_features] /home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD0_waydata_detroit_seed0/W3_way_features/way_features.npz
+[ways] 10804 missing_frac=0.149
+[way_len_m] p50=74.0 p90=414.1 max=3705.6
+[tier_counts] 0:8137 1:1839 2:828 3:0

@@ -1,0 +1,4 @@
+[INFO] owner_lookup chunks=10/11 found=1870 elapsed_s=18.9 chunks_ps=0.53
+[INFO] owner_lookup chunks=11/11 found=2070 elapsed_s=18.9 chunks_ps=0.58
+[saved] /home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/A_owner_audit_detroit_v2/report.json
+[saved] /home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/A_owner_audit_detroit_v2/report.md

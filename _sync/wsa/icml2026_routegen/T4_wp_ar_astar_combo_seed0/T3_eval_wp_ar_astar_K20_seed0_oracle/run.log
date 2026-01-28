@@ -1,0 +1,29 @@
+{"task": "sample_graph_ar_waypoints_astar", "done": 1, "total": 200, "pct": 0.005, "elapsed_s": 2.8559441566467285, "best_j_mean_sofar": 0.03972868217054264, "succ_rate_mean_sofar": 0.05}
+{"task": "sample_graph_ar_waypoints_astar", "done": 11, "total": 200, "pct": 0.055, "elapsed_s": 24.754353761672974, "best_j_mean_sofar": 0.14207793292643658, "succ_rate_mean_sofar": 0.12727272727272726}
+{"task": "sample_graph_ar_waypoints_astar", "done": 21, "total": 200, "pct": 0.105, "elapsed_s": 45.18118166923523, "best_j_mean_sofar": 0.13453410531956905, "succ_rate_mean_sofar": 0.10952380952380954}
+{"task": "sample_graph_ar_waypoints_astar", "done": 31, "total": 200, "pct": 0.155, "elapsed_s": 64.56631779670715, "best_j_mean_sofar": 0.15638745269609558, "succ_rate_mean_sofar": 0.12419354838709677}
+{"task": "sample_graph_ar_waypoints_astar", "done": 41, "total": 200, "pct": 0.205, "elapsed_s": 82.92731642723083, "best_j_mean_sofar": 0.18268174724813802, "succ_rate_mean_sofar": 0.13780487804878047}
+{"task": "sample_graph_ar_waypoints_astar", "done": 51, "total": 200, "pct": 0.255, "elapsed_s": 102.8399772644043, "best_j_mean_sofar": 0.1825315293516532, "succ_rate_mean_sofar": 0.13039215686274508}
+{"task": "sample_graph_ar_waypoints_astar", "done": 61, "total": 200, "pct": 0.305, "elapsed_s": 123.8961923122406, "best_j_mean_sofar": 0.17902442666542606, "succ_rate_mean_sofar": 0.12131147540983606}
+{"task": "sample_graph_ar_waypoints_astar", "done": 71, "total": 200, "pct": 0.355, "elapsed_s": 142.67384934425354, "best_j_mean_sofar": 0.17819824107112137, "succ_rate_mean_sofar": 0.11267605633802816}
+{"task": "sample_graph_ar_waypoints_astar", "done": 81, "total": 200, "pct": 0.405, "elapsed_s": 160.54556369781494, "best_j_mean_sofar": 0.18391094768322563, "succ_rate_mean_sofar": 0.10987654320987657}
+{"task": "sample_graph_ar_waypoints_astar", "done": 91, "total": 200, "pct": 0.455, "elapsed_s": 181.96871519088745, "best_j_mean_sofar": 0.18313855876172833, "succ_rate_mean_sofar": 0.10274725274725276}
+{"task": "sample_graph_ar_waypoints_astar", "done": 101, "total": 200, "pct": 0.505, "elapsed_s": 201.26207423210144, "best_j_mean_sofar": 0.18446228921371588, "succ_rate_mean_sofar": 0.10148514851485149}
+{"task": "sample_graph_ar_waypoints_astar", "done": 111, "total": 200, "pct": 0.555, "elapsed_s": 222.82101392745972, "best_j_mean_sofar": 0.18326998893249566, "succ_rate_mean_sofar": 0.10450450450450453}
+{"task": "sample_graph_ar_waypoints_astar", "done": 121, "total": 200, "pct": 0.605, "elapsed_s": 242.05247807502747, "best_j_mean_sofar": 0.17972934596034293, "succ_rate_mean_sofar": 0.10867768595041324}
+{"task": "sample_graph_ar_waypoints_astar", "done": 131, "total": 200, "pct": 0.655, "elapsed_s": 258.75572443008423, "best_j_mean_sofar": 0.1861369758334863, "succ_rate_mean_sofar": 0.12519083969465647}
+{"task": "sample_graph_ar_waypoints_astar", "done": 141, "total": 200, "pct": 0.705, "elapsed_s": 274.0714190006256, "best_j_mean_sofar": 0.19475967325254787, "succ_rate_mean_sofar": 0.13333333333333333}
+{"task": "sample_graph_ar_waypoints_astar", "done": 151, "total": 200, "pct": 0.755, "elapsed_s": 296.3677136898041, "best_j_mean_sofar": 0.19965757834328046, "succ_rate_mean_sofar": 0.13079470198675497}
+{"task": "sample_graph_ar_waypoints_astar", "done": 161, "total": 200, "pct": 0.805, "elapsed_s": 317.5250220298767, "best_j_mean_sofar": 0.20038054787776946, "succ_rate_mean_sofar": 0.12391304347826089}
+{"task": "sample_graph_ar_waypoints_astar", "done": 171, "total": 200, "pct": 0.855, "elapsed_s": 337.2023332118988, "best_j_mean_sofar": 0.19772058377690813, "succ_rate_mean_sofar": 0.11900584795321638}
+{"task": "sample_graph_ar_waypoints_astar", "done": 181, "total": 200, "pct": 0.905, "elapsed_s": 359.13299345970154, "best_j_mean_sofar": 0.1960350732755048, "succ_rate_mean_sofar": 0.11464088397790055}
+{"task": "sample_graph_ar_waypoints_astar", "done": 191, "total": 200, "pct": 0.955, "elapsed_s": 376.61598324775696, "best_j_mean_sofar": 0.195119985731517, "succ_rate_mean_sofar": 0.11780104712041885}
+{"task": "sample_graph_ar_waypoints_astar", "done": 200, "total": 200, "pct": 1.0, "elapsed_s": 394.8229284286499, "best_j_mean_sofar": 0.19393058174271333, "succ_rate_mean_sofar": 0.11825}
+{
+  "ok": true,
+  "out_dir": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/T4_wp_ar_astar_combo_seed0/T3_eval_wp_ar_astar_K20_seed0_oracle",
+  "num_routes_sampled": 200,
+  "best_jaccard_mean": 0.19393058174271333,
+  "success_rate_mean": 0.11825,
+  "report_json": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/T4_wp_ar_astar_combo_seed0/T3_eval_wp_ar_astar_K20_seed0_oracle/report.json"
+}

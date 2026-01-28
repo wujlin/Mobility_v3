@@ -1,0 +1,43 @@
+Found E25 report at /home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E25_fullscale_detroit_decTierRoad_execPriorDist_K20_res0p1_seed0
+{
+  "gate": "E26_fullscale_decOD_execPriorDist",
+  "inputs": {
+    "gt_windows_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/gt_windows/detroit_segments_F256_n200k_seed0.npz",
+    "semantic_dir": "/home/jinlin/data/geoexplicit_data/worldtrace/detroit_core_v1",
+    "K": 20,
+    "res_scale": 0.1
+  },
+  "E26": {
+    "desc": "Decision: OD-Only (E3) + Exec: Prior Refine",
+    "baseline": {
+      "ADE_best": 23.784603118896484,
+      "onroad": 0.9117929339408875,
+      "road_prob_mean": 0.8935967087745667,
+      "jaccard": 0.7817878723144531,
+      "num_windows": 2295
+    },
+    "refine_dist_step1p0_it10": {
+      "ADE_best": 23.776670455932617,
+      "onroad": 0.9640418291091919,
+      "road_prob_mean": 0.9583536982536316,
+      "jaccard": 0.7741305828094482,
+      "num_windows": 2295
+    }
+  },
+  "E25_vs_E26_comparison": {
+    "E25_TierRoad_Refined": {
+      "ADE_best": 27.062808990478516,
+      "onroad": 0.9586127996444702,
+      "road_prob_mean": 0.9528833031654358,
+      "jaccard": 0.8625863194465637,
+      "num_windows": 2295
+    },
+    "E26_ODOnly_Refined": {
+      "ADE_best": 23.776670455932617,
+      "onroad": 0.9640418291091919,
+      "road_prob_mean": 0.9583536982536316,
+      "jaccard": 0.7741305828094482,
+      "num_windows": 2295
+    }
+  }
+}

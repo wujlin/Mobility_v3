@@ -1,0 +1,91 @@
+sample[none]:   0%|          | 0/50 [00:00<?, ?it/s]sample[none]:   2%|▏         | 1/50 [00:00<00:34,  1.41it/s]sample[none]:   4%|▍         | 2/50 [00:01<00:24,  1.95it/s]sample[none]:   6%|▌         | 3/50 [00:01<00:21,  2.21it/s]sample[none]:   8%|▊         | 4/50 [00:01<00:19,  2.37it/s]sample[none]:  10%|█         | 5/50 [00:02<00:18,  2.48it/s]sample[none]:  12%|█▏        | 6/50 [00:02<00:17,  2.55it/s]sample[none]:  14%|█▍        | 7/50 [00:02<00:15,  2.72it/s]sample[none]:  16%|█▌        | 8/50 [00:03<00:14,  2.85it/s]sample[none]:  18%|█▊        | 9/50 [00:03<00:13,  2.94it/s]sample[none]:  20%|██        | 10/50 [00:03<00:13,  3.01it/s]sample[none]:  22%|██▏       | 11/50 [00:04<00:12,  3.07it/s]sample[none]:  24%|██▍       | 12/50 [00:04<00:12,  3.09it/s]sample[none]:  26%|██▌       | 13/50 [00:04<00:11,  3.12it/s]sample[none]:  28%|██▊       | 14/50 [00:05<00:11,  3.13it/s]sample[none]:  30%|███       | 15/50 [00:05<00:11,  3.14it/s]sample[none]:  32%|███▏      | 16/50 [00:05<00:10,  3.16it/s]sample[none]:  34%|███▍      | 17/50 [00:06<00:10,  3.17it/s]sample[none]:  36%|███▌      | 18/50 [00:06<00:10,  3.17it/s]sample[none]:  38%|███▊      | 19/50 [00:06<00:09,  3.16it/s]sample[none]:  40%|████      | 20/50 [00:06<00:09,  3.16it/s]sample[none]:  42%|████▏     | 21/50 [00:07<00:09,  3.15it/s]sample[none]:  44%|████▍     | 22/50 [00:07<00:08,  3.16it/s]sample[none]:  46%|████▌     | 23/50 [00:07<00:08,  3.17it/s]sample[none]:  48%|████▊     | 24/50 [00:08<00:08,  3.17it/s]sample[none]:  50%|█████     | 25/50 [00:08<00:07,  3.17it/s]sample[none]:  52%|█████▏    | 26/50 [00:08<00:07,  3.18it/s]sample[none]:  54%|█████▍    | 27/50 [00:09<00:07,  3.18it/s]sample[none]:  56%|█████▌    | 28/50 [00:09<00:06,  3.16it/s]sample[none]:  58%|█████▊    | 29/50 [00:09<00:06,  3.17it/s]sample[none]:  60%|██████    | 30/50 [00:10<00:06,  3.17it/s]sample[none]:  62%|██████▏   | 31/50 [00:10<00:05,  3.18it/s]sample[none]:  64%|██████▍   | 32/50 [00:10<00:05,  3.17it/s]sample[none]:  66%|██████▌   | 33/50 [00:11<00:05,  3.17it/s]sample[none]:  68%|██████▊   | 34/50 [00:11<00:05,  3.16it/s]sample[none]:  70%|███████   | 35/50 [00:11<00:04,  3.17it/s]sample[none]:  72%|███████▏  | 36/50 [00:12<00:04,  3.17it/s]sample[none]:  74%|███████▍  | 37/50 [00:12<00:04,  3.16it/s]sample[none]:  76%|███████▌  | 38/50 [00:12<00:03,  3.11it/s]sample[none]:  78%|███████▊  | 39/50 [00:13<00:03,  3.12it/s]sample[none]:  80%|████████  | 40/50 [00:13<00:03,  3.08it/s]sample[none]:  82%|████████▏ | 41/50 [00:13<00:02,  3.12it/s]sample[none]:  84%|████████▍ | 42/50 [00:13<00:02,  3.11it/s]sample[none]:  86%|████████▌ | 43/50 [00:14<00:02,  3.09it/s]sample[none]:  88%|████████▊ | 44/50 [00:14<00:01,  3.12it/s]sample[none]:  90%|█████████ | 45/50 [00:14<00:01,  3.14it/s]sample[none]:  92%|█████████▏| 46/50 [00:15<00:01,  3.16it/s]sample[none]:  94%|█████████▍| 47/50 [00:15<00:00,  3.14it/s]sample[none]:  96%|█████████▌| 48/50 [00:15<00:00,  3.16it/s]sample[none]:  98%|█████████▊| 49/50 [00:16<00:00,  3.17it/s]sample[none]: 100%|██████████| 50/50 [00:16<00:00,  3.17it/s]sample[none]: 100%|██████████| 50/50 [00:16<00:00,  3.03it/s]
+sample[zeros]:   0%|          | 0/50 [00:00<?, ?it/s]sample[zeros]:   2%|▏         | 1/50 [00:00<00:15,  3.16it/s]sample[zeros]:   4%|▍         | 2/50 [00:00<00:15,  3.15it/s]sample[zeros]:   6%|▌         | 3/50 [00:00<00:14,  3.14it/s]sample[zeros]:   8%|▊         | 4/50 [00:01<00:14,  3.14it/s]sample[zeros]:  10%|█         | 5/50 [00:01<00:14,  3.14it/s]sample[zeros]:  12%|█▏        | 6/50 [00:01<00:14,  3.14it/s]sample[zeros]:  14%|█▍        | 7/50 [00:02<00:13,  3.14it/s]sample[zeros]:  16%|█▌        | 8/50 [00:02<00:13,  3.12it/s]sample[zeros]:  18%|█▊        | 9/50 [00:02<00:13,  3.14it/s]sample[zeros]:  20%|██        | 10/50 [00:03<00:12,  3.15it/s]sample[zeros]:  22%|██▏       | 11/50 [00:03<00:12,  3.15it/s]sample[zeros]:  24%|██▍       | 12/50 [00:03<00:12,  3.13it/s]sample[zeros]:  26%|██▌       | 13/50 [00:04<00:11,  3.12it/s]sample[zeros]:  28%|██▊       | 14/50 [00:04<00:11,  3.12it/s]sample[zeros]:  30%|███       | 15/50 [00:04<00:11,  3.11it/s]sample[zeros]:  32%|███▏      | 16/50 [00:05<00:10,  3.13it/s]sample[zeros]:  34%|███▍      | 17/50 [00:05<00:10,  3.13it/s]sample[zeros]:  36%|███▌      | 18/50 [00:05<00:10,  3.14it/s]sample[zeros]:  38%|███▊      | 19/50 [00:06<00:09,  3.15it/s]sample[zeros]:  40%|████      | 20/50 [00:06<00:09,  3.15it/s]sample[zeros]:  42%|████▏     | 21/50 [00:06<00:09,  3.16it/s]sample[zeros]:  44%|████▍     | 22/50 [00:07<00:08,  3.16it/s]sample[zeros]:  46%|████▌     | 23/50 [00:07<00:08,  3.17it/s]sample[zeros]:  48%|████▊     | 24/50 [00:07<00:08,  3.17it/s]sample[zeros]:  50%|█████     | 25/50 [00:07<00:07,  3.17it/s]sample[zeros]:  52%|█████▏    | 26/50 [00:08<00:07,  3.16it/s]sample[zeros]:  54%|█████▍    | 27/50 [00:08<00:07,  3.14it/s]sample[zeros]:  56%|█████▌    | 28/50 [00:08<00:07,  3.13it/s]sample[zeros]:  58%|█████▊    | 29/50 [00:09<00:06,  3.13it/s]sample[zeros]:  60%|██████    | 30/50 [00:09<00:06,  3.13it/s]sample[zeros]:  62%|██████▏   | 31/50 [00:09<00:06,  3.14it/s]sample[zeros]:  64%|██████▍   | 32/50 [00:10<00:05,  3.15it/s]sample[zeros]:  66%|██████▌   | 33/50 [00:10<00:05,  3.15it/s]sample[zeros]:  68%|██████▊   | 34/50 [00:10<00:05,  3.16it/s]sample[zeros]:  70%|███████   | 35/50 [00:11<00:04,  3.16it/s]sample[zeros]:  72%|███████▏  | 36/50 [00:11<00:04,  3.16it/s]sample[zeros]:  74%|███████▍  | 37/50 [00:11<00:04,  3.17it/s]sample[zeros]:  76%|███████▌  | 38/50 [00:12<00:03,  3.17it/s]sample[zeros]:  78%|███████▊  | 39/50 [00:12<00:03,  3.17it/s]sample[zeros]:  80%|████████  | 40/50 [00:12<00:03,  3.15it/s]sample[zeros]:  82%|████████▏ | 41/50 [00:13<00:02,  3.15it/s]sample[zeros]:  84%|████████▍ | 42/50 [00:13<00:02,  3.16it/s]sample[zeros]:  86%|████████▌ | 43/50 [00:13<00:02,  3.15it/s]sample[zeros]:  88%|████████▊ | 44/50 [00:13<00:01,  3.15it/s]sample[zeros]:  90%|█████████ | 45/50 [00:14<00:01,  3.15it/s]sample[zeros]:  92%|█████████▏| 46/50 [00:14<00:01,  3.16it/s]sample[zeros]:  94%|█████████▍| 47/50 [00:14<00:00,  3.16it/s]sample[zeros]:  96%|█████████▌| 48/50 [00:15<00:00,  3.16it/s]sample[zeros]:  98%|█████████▊| 49/50 [00:15<00:00,  3.15it/s]sample[zeros]: 100%|██████████| 50/50 [00:15<00:00,  3.16it/s]sample[zeros]: 100%|██████████| 50/50 [00:15<00:00,  3.15it/s]
+sample[shuffle]:   0%|          | 0/50 [00:00<?, ?it/s]sample[shuffle]:   2%|▏         | 1/50 [00:00<00:15,  3.15it/s]sample[shuffle]:   4%|▍         | 2/50 [00:00<00:15,  3.13it/s]sample[shuffle]:   6%|▌         | 3/50 [00:00<00:15,  3.12it/s]sample[shuffle]:   8%|▊         | 4/50 [00:01<00:14,  3.13it/s]sample[shuffle]:  10%|█         | 5/50 [00:01<00:14,  3.14it/s]sample[shuffle]:  12%|█▏        | 6/50 [00:01<00:13,  3.16it/s]sample[shuffle]:  14%|█▍        | 7/50 [00:02<00:13,  3.18it/s]sample[shuffle]:  16%|█▌        | 8/50 [00:02<00:13,  3.19it/s]sample[shuffle]:  18%|█▊        | 9/50 [00:02<00:12,  3.20it/s]sample[shuffle]:  20%|██        | 10/50 [00:03<00:12,  3.19it/s]sample[shuffle]:  22%|██▏       | 11/50 [00:03<00:12,  3.19it/s]sample[shuffle]:  24%|██▍       | 12/50 [00:03<00:11,  3.21it/s]sample[shuffle]:  26%|██▌       | 13/50 [00:04<00:11,  3.21it/s]sample[shuffle]:  28%|██▊       | 14/50 [00:04<00:11,  3.21it/s]sample[shuffle]:  30%|███       | 15/50 [00:04<00:10,  3.21it/s]sample[shuffle]:  32%|███▏      | 16/50 [00:05<00:10,  3.20it/s]sample[shuffle]:  34%|███▍      | 17/50 [00:05<00:10,  3.21it/s]sample[shuffle]:  36%|███▌      | 18/50 [00:05<00:10,  3.20it/s]sample[shuffle]:  38%|███▊      | 19/50 [00:05<00:09,  3.16it/s]sample[shuffle]:  40%|████      | 20/50 [00:06<00:09,  3.18it/s]sample[shuffle]:  42%|████▏     | 21/50 [00:06<00:09,  3.18it/s]sample[shuffle]:  44%|████▍     | 22/50 [00:06<00:08,  3.19it/s]sample[shuffle]:  46%|████▌     | 23/50 [00:07<00:08,  3.19it/s]sample[shuffle]:  48%|████▊     | 24/50 [00:07<00:08,  3.19it/s]sample[shuffle]:  50%|█████     | 25/50 [00:07<00:07,  3.20it/s]sample[shuffle]:  52%|█████▏    | 26/50 [00:08<00:07,  3.19it/s]sample[shuffle]:  54%|█████▍    | 27/50 [00:08<00:07,  3.17it/s]sample[shuffle]:  56%|█████▌    | 28/50 [00:08<00:06,  3.16it/s]sample[shuffle]:  58%|█████▊    | 29/50 [00:09<00:06,  3.18it/s]sample[shuffle]:  60%|██████    | 30/50 [00:09<00:06,  3.15it/s]sample[shuffle]:  62%|██████▏   | 31/50 [00:09<00:06,  3.16it/s]sample[shuffle]:  64%|██████▍   | 32/50 [00:10<00:05,  3.15it/s]sample[shuffle]:  66%|██████▌   | 33/50 [00:10<00:05,  3.16it/s]sample[shuffle]:  68%|██████▊   | 34/50 [00:10<00:05,  3.18it/s]sample[shuffle]:  70%|███████   | 35/50 [00:11<00:04,  3.18it/s]sample[shuffle]:  72%|███████▏  | 36/50 [00:11<00:04,  3.17it/s]sample[shuffle]:  74%|███████▍  | 37/50 [00:11<00:04,  3.14it/s]sample[shuffle]:  76%|███████▌  | 38/50 [00:11<00:03,  3.13it/s]sample[shuffle]:  78%|███████▊  | 39/50 [00:12<00:03,  3.11it/s]sample[shuffle]:  80%|████████  | 40/50 [00:12<00:03,  3.14it/s]sample[shuffle]:  82%|████████▏ | 41/50 [00:12<00:02,  3.16it/s]sample[shuffle]:  84%|████████▍ | 42/50 [00:13<00:02,  3.16it/s]sample[shuffle]:  86%|████████▌ | 43/50 [00:13<00:02,  3.17it/s]sample[shuffle]:  88%|████████▊ | 44/50 [00:13<00:01,  3.18it/s]sample[shuffle]:  90%|█████████ | 45/50 [00:14<00:01,  3.18it/s]sample[shuffle]:  92%|█████████▏| 46/50 [00:14<00:01,  3.18it/s]sample[shuffle]:  94%|█████████▍| 47/50 [00:14<00:00,  3.18it/s]sample[shuffle]:  96%|█████████▌| 48/50 [00:15<00:00,  3.16it/s]sample[shuffle]:  98%|█████████▊| 49/50 [00:15<00:00,  3.13it/s]sample[shuffle]: 100%|██████████| 50/50 [00:15<00:00,  3.15it/s]sample[shuffle]: 100%|██████████| 50/50 [00:15<00:00,  3.17it/s]
+sample[flip_lr]:   0%|          | 0/50 [00:00<?, ?it/s]sample[flip_lr]:   2%|▏         | 1/50 [00:00<00:15,  3.15it/s]sample[flip_lr]:   4%|▍         | 2/50 [00:00<00:15,  3.11it/s]sample[flip_lr]:   6%|▌         | 3/50 [00:00<00:15,  3.11it/s]sample[flip_lr]:   8%|▊         | 4/50 [00:01<00:14,  3.12it/s]sample[flip_lr]:  10%|█         | 5/50 [00:01<00:14,  3.13it/s]sample[flip_lr]:  12%|█▏        | 6/50 [00:01<00:13,  3.15it/s]sample[flip_lr]:  14%|█▍        | 7/50 [00:02<00:13,  3.17it/s]sample[flip_lr]:  16%|█▌        | 8/50 [00:02<00:13,  3.14it/s]sample[flip_lr]:  18%|█▊        | 9/50 [00:02<00:13,  3.12it/s]sample[flip_lr]:  20%|██        | 10/50 [00:03<00:12,  3.12it/s]sample[flip_lr]:  22%|██▏       | 11/50 [00:03<00:12,  3.12it/s]sample[flip_lr]:  24%|██▍       | 12/50 [00:03<00:12,  3.14it/s]sample[flip_lr]:  26%|██▌       | 13/50 [00:04<00:11,  3.15it/s]sample[flip_lr]:  28%|██▊       | 14/50 [00:04<00:11,  3.16it/s]sample[flip_lr]:  30%|███       | 15/50 [00:04<00:11,  3.16it/s]sample[flip_lr]:  32%|███▏      | 16/50 [00:05<00:10,  3.17it/s]sample[flip_lr]:  34%|███▍      | 17/50 [00:05<00:10,  3.16it/s]sample[flip_lr]:  36%|███▌      | 18/50 [00:05<00:10,  3.15it/s]sample[flip_lr]:  38%|███▊      | 19/50 [00:06<00:09,  3.13it/s]sample[flip_lr]:  40%|████      | 20/50 [00:06<00:09,  3.12it/s]sample[flip_lr]:  42%|████▏     | 21/50 [00:06<00:09,  3.12it/s]sample[flip_lr]:  44%|████▍     | 22/50 [00:07<00:08,  3.12it/s]sample[flip_lr]:  46%|████▌     | 23/50 [00:07<00:08,  3.13it/s]sample[flip_lr]:  48%|████▊     | 24/50 [00:07<00:08,  3.14it/s]sample[flip_lr]:  50%|█████     | 25/50 [00:07<00:07,  3.14it/s]sample[flip_lr]:  52%|█████▏    | 26/50 [00:08<00:07,  3.15it/s]sample[flip_lr]:  54%|█████▍    | 27/50 [00:08<00:07,  3.16it/s]sample[flip_lr]:  56%|█████▌    | 28/50 [00:08<00:06,  3.16it/s]sample[flip_lr]:  58%|█████▊    | 29/50 [00:09<00:06,  3.16it/s]sample[flip_lr]:  60%|██████    | 30/50 [00:09<00:06,  3.17it/s]sample[flip_lr]:  62%|██████▏   | 31/50 [00:09<00:05,  3.17it/s]sample[flip_lr]:  64%|██████▍   | 32/50 [00:10<00:05,  3.17it/s]sample[flip_lr]:  66%|██████▌   | 33/50 [00:10<00:05,  3.18it/s]sample[flip_lr]:  68%|██████▊   | 34/50 [00:10<00:05,  3.18it/s]sample[flip_lr]:  70%|███████   | 35/50 [00:11<00:04,  3.18it/s]sample[flip_lr]:  72%|███████▏  | 36/50 [00:11<00:04,  3.18it/s]sample[flip_lr]:  74%|███████▍  | 37/50 [00:11<00:04,  3.18it/s]sample[flip_lr]:  76%|███████▌  | 38/50 [00:12<00:03,  3.18it/s]sample[flip_lr]:  78%|███████▊  | 39/50 [00:12<00:03,  3.17it/s]sample[flip_lr]:  80%|████████  | 40/50 [00:12<00:03,  3.16it/s]sample[flip_lr]:  82%|████████▏ | 41/50 [00:13<00:02,  3.13it/s]sample[flip_lr]:  84%|████████▍ | 42/50 [00:13<00:02,  3.13it/s]sample[flip_lr]:  86%|████████▌ | 43/50 [00:13<00:02,  3.14it/s]sample[flip_lr]:  88%|████████▊ | 44/50 [00:13<00:01,  3.12it/s]sample[flip_lr]:  90%|█████████ | 45/50 [00:14<00:01,  3.11it/s]sample[flip_lr]:  92%|█████████▏| 46/50 [00:14<00:01,  3.06it/s]sample[flip_lr]:  94%|█████████▍| 47/50 [00:14<00:00,  3.07it/s]sample[flip_lr]:  96%|█████████▌| 48/50 [00:15<00:00,  3.09it/s]sample[flip_lr]:  98%|█████████▊| 49/50 [00:15<00:00,  3.12it/s]sample[flip_lr]: 100%|██████████| 50/50 [00:15<00:00,  3.12it/s]sample[flip_lr]: 100%|██████████| 50/50 [00:15<00:00,  3.14it/s]
+{
+  "inputs": {
+    "checkpoint": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E20_gridpos_sc_poi_entropy_detroit_F256_od128_seed0/last.pt",
+    "gt_report_json": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E0_gt_baseline_detroit_F256_n200k_seed0_od128_n10_sep2/report.json",
+    "case_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E0_gt_baseline_detroit_F256_n200k_seed0_od128_n10_sep2/case_04/gt_case.npz",
+    "semantic_dir": "/home/jinlin/data/geoexplicit_data/worldtrace/detroit_core_v1"
+  },
+  "config": {
+    "interventions": [
+      "none",
+      "zeros",
+      "shuffle",
+      "flip_lr"
+    ],
+    "num_samples_per_condition": 50,
+    "collapse_ratio": 0.5,
+    "jacc_cell": 8.0,
+    "seed": 0
+  },
+  "checkpoint_semantic_mode": "gridpos",
+  "runs": [
+    {
+      "intervention": "none",
+      "paths": {
+        "dir": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E20a_audit_gridpos_sc_case04_seed0/intervention_none",
+        "samples_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E20a_audit_gridpos_sc_case04_seed0/intervention_none/samples.npz",
+        "metrics_json": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E20a_audit_gridpos_sc_case04_seed0/intervention_none/mode_collapse_metrics.json"
+      },
+      "metrics_overall": {
+        "num_cases_evaluated": 1,
+        "model_div_mean": 0.9273268728543064,
+        "model_cov_mean": 1.0,
+        "collapse_rate_mean": 0.0,
+        "mixture_jsd_mean": 0.026485812658478665,
+        "mixture_l1_mean": 0.4211764705882449
+      }
+    },
+    {
+      "intervention": "zeros",
+      "paths": {
+        "dir": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E20a_audit_gridpos_sc_case04_seed0/intervention_zeros",
+        "samples_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E20a_audit_gridpos_sc_case04_seed0/intervention_zeros/samples.npz",
+        "metrics_json": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E20a_audit_gridpos_sc_case04_seed0/intervention_zeros/mode_collapse_metrics.json"
+      },
+      "metrics_overall": {
+        "num_cases_evaluated": 1,
+        "model_div_mean": 0.9269419479840392,
+        "model_cov_mean": 1.0,
+        "collapse_rate_mean": 0.0,
+        "mixture_jsd_mean": 0.026485812658478665,
+        "mixture_l1_mean": 0.4211764705882449
+      }
+    },
+    {
+      "intervention": "shuffle",
+      "paths": {
+        "dir": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E20a_audit_gridpos_sc_case04_seed0/intervention_shuffle",
+        "samples_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E20a_audit_gridpos_sc_case04_seed0/intervention_shuffle/samples.npz",
+        "metrics_json": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E20a_audit_gridpos_sc_case04_seed0/intervention_shuffle/mode_collapse_metrics.json"
+      },
+      "metrics_overall": {
+        "num_cases_evaluated": 1,
+        "model_div_mean": 0.9273720067578717,
+        "model_cov_mean": 1.0,
+        "collapse_rate_mean": 0.0,
+        "mixture_jsd_mean": 0.02518403406922725,
+        "mixture_l1_mean": 0.4117647058823626
+      }
+    },
+    {
+      "intervention": "flip_lr",
+      "paths": {
+        "dir": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E20a_audit_gridpos_sc_case04_seed0/intervention_flip_lr",
+        "samples_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E20a_audit_gridpos_sc_case04_seed0/intervention_flip_lr/samples.npz",
+        "metrics_json": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E20a_audit_gridpos_sc_case04_seed0/intervention_flip_lr/mode_collapse_metrics.json"
+      },
+      "metrics_overall": {
+        "num_cases_evaluated": 1,
+        "model_div_mean": 0.9274068972671312,
+        "model_cov_mean": 1.0,
+        "collapse_rate_mean": 0.0,
+        "mixture_jsd_mean": 0.025829634053291313,
+        "mixture_l1_mean": 0.41647058823530375
+      }
+    }
+  ]
+}

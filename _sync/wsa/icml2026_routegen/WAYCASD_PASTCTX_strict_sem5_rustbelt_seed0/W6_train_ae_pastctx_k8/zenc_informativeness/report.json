@@ -1,0 +1,89 @@
+{
+  "ok": true,
+  "task": "way_casd_zenc_informativeness",
+  "created_at": "2026-01-27T11:13:39.133445+08:00",
+  "cfg": {
+    "seed": 0,
+    "device": "cuda",
+    "tz_offset_hours": -5.0,
+    "n_routes": 100,
+    "max_way_len": 160,
+    "max_decode_len": 160,
+    "decode_max_candidates": 0,
+    "decode_candidate_policy": "first",
+    "decode_include_dest_if_successor": false,
+    "decode_guided_dest_alpha": 0.0
+  },
+  "inputs": {
+    "way_routes_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD1_waydata_rustbelt_seed0_strict_v1/W5_way_routes_strict/way_routes_strict_masklen0.npz",
+    "way_graph_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD1_waydata_rustbelt_seed0_strict_v1/W3_way_graph_strict/way_graph.npz",
+    "way_features_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD1_waydata_rustbelt_seed0_strict_v1/W4_way_features_sem/way_features.npz",
+    "ae_ckpt": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD_PASTCTX_strict_sem5_rustbelt_seed0/W6_train_ae_pastctx_k8/ckpt_best.pt"
+  },
+  "ckpt_strict_load_ok": true,
+  "ckpt_decoder_cfg_inferred": {
+    "decoder_use_dest_dist": true,
+    "decoder_use_cross_attn": true,
+    "decoder_use_step_emb": false,
+    "decoder_use_dest_query": false,
+    "decoder_use_past_context": true,
+    "decoder_past_k": 8
+  },
+  "n_routes_total": 200,
+  "summary": {
+    "true": {
+      "n": 200,
+      "success_rate": 0.58,
+      "jaccard_mean": 0.6603038289666592
+    },
+    "shuffle": {
+      "n": 200,
+      "success_rate": 0.17,
+      "jaccard_mean": 0.26728268282004886
+    },
+    "zero": {
+      "n": 200,
+      "success_rate": 0.185,
+      "jaccard_mean": 0.28038549853749833
+    }
+  },
+  "summary_by_city": {
+    "city0": {
+      "true": {
+        "n": 100,
+        "success_rate": 0.47,
+        "jaccard_mean": 0.56803975689726
+      },
+      "shuffle": {
+        "n": 100,
+        "success_rate": 0.14,
+        "jaccard_mean": 0.23481704401598028
+      },
+      "zero": {
+        "n": 100,
+        "success_rate": 0.17,
+        "jaccard_mean": 0.2606986736994375
+      }
+    },
+    "city1": {
+      "true": {
+        "n": 100,
+        "success_rate": 0.69,
+        "jaccard_mean": 0.7525679010360578
+      },
+      "shuffle": {
+        "n": 100,
+        "success_rate": 0.2,
+        "jaccard_mean": 0.29974832162411713
+      },
+      "zero": {
+        "n": 100,
+        "success_rate": 0.2,
+        "jaccard_mean": 0.3000723233755589
+      }
+    }
+  },
+  "interpretation": [
+    "true > shuffle (+41.00%): z_enc 携带可用路径信息，问题在解码策略"
+  ]
+}

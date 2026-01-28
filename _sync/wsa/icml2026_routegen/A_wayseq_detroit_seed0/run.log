@@ -1,0 +1,6 @@
+[segments] /home/jinlin/data/geoexplicit_data/worldtrace/detroit_core_v1/segments_with_wayid.parquet
+[N] 2295 with_any_way=2295
+[uniq_way_seq_len_valid] p50=35.0 p90=61.0 max=132
+[uniq_way_seq_len_all] p50=35.0 p90=61.0 max=132
+[way_id_missing_ratio] p50=0.000 p90=0.000
+[saved] /home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/A_wayseq_detroit_seed0/report.json

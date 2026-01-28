@@ -1,0 +1,156 @@
+======================================
+Way-CASD Multi-City Prep (Rust Belt)
+======================================
+OUT_BASE=/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD2_waydata_rustbelt_seed0_d2dest
+WAY_GRAPH_UNDIR=0
+[SKIP] Columbus segments_with_wayid.parquet already exists: /home/jinlin/data/geoexplicit_data/worldtrace/columbus_core_v1/segments_with_wayid.parquet
+
+======================================
+Step 0b: Way-seq stats (Detroit / Columbus)
+======================================
+[segments] /home/jinlin/data/geoexplicit_data/worldtrace/detroit_core_v1/segments_with_wayid.parquet
+[N] 2295 with_any_way=2295
+[uniq_way_seq_len_valid] p50=35.0 p90=61.0 max=132
+[uniq_way_seq_len_all] p50=35.0 p90=61.0 max=132
+[way_id_missing_ratio] p50=0.000 p90=0.000
+[saved] /home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD2_waydata_rustbelt_seed0_d2dest/A1_wayseq_detroit/report.json
+[segments] /home/jinlin/data/geoexplicit_data/worldtrace/columbus_core_v1/segments_with_wayid.parquet
+[N] 5228 with_any_way=5228
+[uniq_way_seq_len_valid] p50=22.0 p90=54.0 max=186
+[uniq_way_seq_len_all] p50=22.0 p90=54.0 max=186
+[way_id_missing_ratio] p50=0.000 p90=0.000
+[saved] /home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD2_waydata_rustbelt_seed0_d2dest/A2_wayseq_columbus/report.json
+
+======================================
+Step 1a: Build Detroit way_routes.npz
+======================================
+{
+  "ok": true,
+  "out_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD2_waydata_rustbelt_seed0_d2dest/W1a_detroit_routes/way_routes.npz",
+  "n_routes": 2279,
+  "n_way_vocab": 10804,
+  "way_seq_len_p50": 35.0,
+  "way_seq_len_p90": 61.0,
+  "way_seq_len_max": 132
+}
+
+======================================
+Step 1b: Build Columbus way_routes.npz
+======================================
+{
+  "ok": true,
+  "out_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD2_waydata_rustbelt_seed0_d2dest/W1b_columbus_routes/way_routes.npz",
+  "n_routes": 5223,
+  "n_way_vocab": 8747,
+  "way_seq_len_p50": 22.0,
+  "way_seq_len_p90": 54.0,
+  "way_seq_len_max": 186
+}
+
+======================================
+Step 2: Merge way_routes (Detroit + Columbus)
+======================================
+{
+  "ok": true,
+  "out_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD2_waydata_rustbelt_seed0_d2dest/W2_merged_routes/way_routes.npz",
+  "n_routes": 7502,
+  "n_way_vocab": 19551,
+  "way_seq_len_p50": 26.0,
+  "way_seq_len_p90": 57.0,
+  "per_city": {
+    "0": 2279,
+    "1": 5223
+  }
+}
+[way_routes] /home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD2_waydata_rustbelt_seed0_d2dest/W2_merged_routes/way_routes.npz
+[N] 7502 vocab=19551
+[way_seq_len] p50=26.0 p90=57.0 max=186 mean=28.8
+[corridor_type] 0:7502 1:0 2:0 3:0
+
+======================================
+Step 3: Build unified way_graph.npz
+======================================
+{
+  "ok": true,
+  "out_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD2_waydata_rustbelt_seed0_d2dest/W3_way_graph/way_graph.npz",
+  "n_ways": 19551,
+  "n_edges_directed": 26995,
+  "out_deg_p50": 1.0,
+  "out_deg_p90": 2.0
+}
+[way_graph] /home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD2_waydata_rustbelt_seed0_d2dest/W3_way_graph/way_graph.npz
+[ways] 19551 edges_directed=26995
+[out_deg] p50=1.0 p90=2.0 max=13
+
+======================================
+Step 4a: Build Detroit way_features
+======================================
+{
+  "ok": true,
+  "out_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD2_waydata_rustbelt_seed0_d2dest/W4a_detroit_features/way_features.npz",
+  "n_way_vocab": 19551,
+  "missing_frac": 0.5295381310418904,
+  "way_len_p50_m": 73.971,
+  "way_len_p90_m": 414.1380000000001
+}
+
+======================================
+Step 4b: Build Columbus way_features
+======================================
+{
+  "ok": true,
+  "out_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD2_waydata_rustbelt_seed0_d2dest/W4b_columbus_features/way_features.npz",
+  "n_way_vocab": 19551,
+  "missing_frac": 0.6014014628407754,
+  "way_len_p50_m": 117.02199999999999,
+  "way_len_p90_m": 519.3926000000001
+}
+
+======================================
+Step 4c: Merge way_features (Detroit + Columbus)
+======================================
+{
+  "ok": true,
+  "out_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD2_waydata_rustbelt_seed0_d2dest/W4_way_features/way_features.npz",
+  "n_way_vocab": 19551,
+  "n_filled": 16991,
+  "missing_frac": 0.13093959388266585,
+  "way_len_p50_m": 92.28600311279297,
+  "way_len_p90_m": 466.2049865722656
+}
+[way_features] /home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD2_waydata_rustbelt_seed0_d2dest/W4_way_features/way_features.npz
+[ways] 19551 missing_frac=0.131
+[way_len_m] p50=92.3 p90=466.2 max=3705.6
+[tier_counts] 0:10822 1:3631 2:2538 3:2560
+
+======================================
+Step 5: Label corridor_type
+======================================
+{
+  "ok": true,
+  "out_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD2_waydata_rustbelt_seed0_d2dest/W5_way_routes_labeled/way_routes_labeled.npz",
+  "corridor_type_counts": [
+    6464,
+    557,
+    190,
+    291
+  ]
+}
+[way_routes] /home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD2_waydata_rustbelt_seed0_d2dest/W5_way_routes_labeled/way_routes_labeled.npz
+[N] 7502 vocab=19551
+[way_seq_len] p50=26.0 p90=57.0 max=186 mean=28.8
+[corridor_type] 0:6464 1:557 2:190 3:291
+
+======================================
+Way-CASD Multi-City Prep Complete!
+======================================
+OUT_BASE=/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD2_waydata_rustbelt_seed0_d2dest
+
+Next steps:
+  # Train AE:
+  python -m src.training.train_way_casd_autoencoder \
+    --way_routes_npz "$OUT_BASE/W5_way_routes_labeled/way_routes_labeled.npz" \
+    --way_graph_npz "$OUT_BASE/W3_way_graph/way_graph.npz" \
+    --way_features_npz "$OUT_BASE/W4_way_features/way_features.npz" \
+    --out_dir "$OUT_BASE/W6_train_ae" \
+    --batch_size 512 --num_workers 24 --n_epochs 30 --d_model 256 --n_latent 32 --max_candidates 64

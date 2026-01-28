@@ -1,0 +1,130 @@
+{
+  "ok": true,
+  "task": "worldtrace_owner_audit",
+  "created_at": "2026-01-17T11:20:41.785055+08:00",
+  "inputs": {
+    "meta_zip": "/home/jinlin/data/geoexplicit_data/worldtrace/OpenTrace_WorldTrace/Meta.zip",
+    "segments_parquet": [
+      "/home/jinlin/data/geoexplicit_data/worldtrace/detroit_core_v1/segments_with_wayid.parquet"
+    ],
+    "segments_label": null
+  },
+  "cfg": {
+    "od_bin_deg": [
+      0.01,
+      0.02
+    ],
+    "min_od_dist_km": 1.0,
+    "max_rows_per_segments": 0,
+    "dump_top_owner_n": 20,
+    "num_workers": 48,
+    "mp_start": "fork",
+    "log_every": 2000
+  },
+  "join": {
+    "traj_key": "Path(traj_csv).stem",
+    "meta_key": "Path(Meta.Filename).stem OR Path(meta_json_path).stem",
+    "meta_json_read": 2070,
+    "meta_found": 2070,
+    "meta_found_ratio": 1.0,
+    "match_mode": {
+      "by_meta_id": 0,
+      "by_filename_stem": 0
+    },
+    "trips_total": 2070,
+    "trips_kept_after_od_filter": 2070,
+    "trips_with_owner": 2070,
+    "owner_found_ratio": 1.0
+  },
+  "owner": {
+    "unique_owner_count": 2,
+    "trips_per_owner": {
+      "p10": 271.0,
+      "p50": 1035.0,
+      "p90": 1799.0,
+      "max": 1990
+    },
+    "time_span_hours_per_owner": {
+      "p10": 7299.573666666666,
+      "p50": 10296.035,
+      "p90": 13292.496333333333,
+      "max": 14041.611666666666
+    },
+    "n_owner_trips_gt_1000": 1,
+    "n_owner_span_lt_1day": 0,
+    "topk": [
+      {
+        "owner_hash": "a4b047d6",
+        "n_trips": 1990
+      },
+      {
+        "owner_hash": "4618cc6d",
+        "n_trips": 80
+      }
+    ],
+    "concentration": {
+      "top10_share": 1.0,
+      "top10_n_owners": 2
+    }
+  },
+  "od_coverage": [
+    {
+      "od_bin_deg": 0.01,
+      "n_od_bins": 1492,
+      "n_trips_in_od_bins": 2070,
+      "n_od_bins_1trip": 1172,
+      "n_od_bins_ge2owners": 20,
+      "n_od_bins_1owner_ge2trips": 300,
+      "trips_per_od": {
+        "p10": 1.0,
+        "p50": 1.0,
+        "p90": 2.0,
+        "max": 22
+      },
+      "owners_per_od": {
+        "p10": 1.0,
+        "p50": 1.0,
+        "p90": 1.0,
+        "max": 2
+      }
+    },
+    {
+      "od_bin_deg": 0.02,
+      "n_od_bins": 1110,
+      "n_trips_in_od_bins": 2070,
+      "n_od_bins_1trip": 721,
+      "n_od_bins_ge2owners": 36,
+      "n_od_bins_1owner_ge2trips": 353,
+      "trips_per_od": {
+        "p10": 1.0,
+        "p50": 1.0,
+        "p90": 4.0,
+        "max": 45
+      },
+      "owners_per_od": {
+        "p10": 1.0,
+        "p50": 1.0,
+        "p90": 1.0,
+        "max": 2
+      }
+    }
+  ],
+  "go_no_go": {
+    "od_multi_owner_gate": [
+      {
+        "od_bin_deg": 0.01,
+        "rule": "n_od_bins_ge2owners >= 100",
+        "value": 20,
+        "pass": false
+      },
+      {
+        "od_bin_deg": 0.02,
+        "rule": "n_od_bins_ge2owners >= 100",
+        "value": 36,
+        "pass": false
+      }
+    ],
+    "owner_concentration_rule": "top10_share < 0.95",
+    "owner_concentration_pass": false
+  }
+}

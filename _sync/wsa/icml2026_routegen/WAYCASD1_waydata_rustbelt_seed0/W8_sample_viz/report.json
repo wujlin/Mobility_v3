@@ -1,0 +1,558 @@
+{
+  "ok": true,
+  "task": "way_casd_sample_viz",
+  "created_at": "2026-01-16T08:46:43.022495+08:00",
+  "cfg": {
+    "seed": 0,
+    "device": "cuda",
+    "tz_offset_hours": -5.0,
+    "n_routes": 12,
+    "n_samples_per_route": 4,
+    "max_way_len": 160,
+    "beam_size": 5,
+    "max_decode_len": 160,
+    "cfg_scale": 1.5,
+    "solver_steps": null,
+    "corridor_type_override": null,
+    "plot_all_ways": true
+  },
+  "inputs": {
+    "way_routes_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD1_waydata_rustbelt_seed0/W5_way_routes_labeled/way_routes_labeled.npz",
+    "way_graph_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD1_waydata_rustbelt_seed0/W3_way_graph/way_graph.npz",
+    "way_features_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD1_waydata_rustbelt_seed0/W4_way_features/way_features.npz",
+    "ae_ckpt": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD1_waydata_rustbelt_seed0/W6_train_ae_ep60/ckpt_best.pt",
+    "flow_ckpt": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD1_waydata_rustbelt_seed0/W7_train_flow_ep60/ckpt_best.pt"
+  },
+  "picked_routes": [
+    123,
+    307,
+    564,
+    1314,
+    2021,
+    2306,
+    3829,
+    4771,
+    4871,
+    6099,
+    6372,
+    6847
+  ],
+  "per_route": [
+    {
+      "route_id": 123,
+      "route_city": 0,
+      "hour": 6,
+      "dow": 2,
+      "gt": {
+        "len": 19,
+        "corridor_type": 0
+      },
+      "cond": {
+        "corridor_type": 0
+      },
+      "pred": [
+        {
+          "len": 161,
+          "success": false,
+          "valid": true,
+          "jaccard": 0.022727272727272728,
+          "corridor_type": 1
+        },
+        {
+          "len": 161,
+          "success": false,
+          "valid": true,
+          "jaccard": 0.043478260869565216,
+          "corridor_type": 0
+        },
+        {
+          "len": 161,
+          "success": false,
+          "valid": true,
+          "jaccard": 0.043478260869565216,
+          "corridor_type": 0
+        },
+        {
+          "len": 161,
+          "success": false,
+          "valid": true,
+          "jaccard": 0.043478260869565216,
+          "corridor_type": 0
+        }
+      ]
+    },
+    {
+      "route_id": 307,
+      "route_city": 0,
+      "hour": 16,
+      "dow": 1,
+      "gt": {
+        "len": 3,
+        "corridor_type": 3
+      },
+      "cond": {
+        "corridor_type": 3
+      },
+      "pred": [
+        {
+          "len": 161,
+          "success": false,
+          "valid": true,
+          "jaccard": 0.012345679012345678,
+          "corridor_type": 0
+        },
+        {
+          "len": 161,
+          "success": false,
+          "valid": true,
+          "jaccard": 0.012345679012345678,
+          "corridor_type": 0
+        },
+        {
+          "len": 161,
+          "success": false,
+          "valid": true,
+          "jaccard": 0.014285714285714285,
+          "corridor_type": 0
+        },
+        {
+          "len": 161,
+          "success": false,
+          "valid": true,
+          "jaccard": 0.014285714285714285,
+          "corridor_type": 0
+        }
+      ]
+    },
+    {
+      "route_id": 564,
+      "route_city": 0,
+      "hour": 11,
+      "dow": 5,
+      "gt": {
+        "len": 84,
+        "corridor_type": 0
+      },
+      "cond": {
+        "corridor_type": 0
+      },
+      "pred": [
+        {
+          "len": 31,
+          "success": true,
+          "valid": true,
+          "jaccard": 0.21052631578947367,
+          "corridor_type": 0
+        },
+        {
+          "len": 161,
+          "success": false,
+          "valid": true,
+          "jaccard": 0.01282051282051282,
+          "corridor_type": 0
+        },
+        {
+          "len": 161,
+          "success": false,
+          "valid": true,
+          "jaccard": 0.008583690987124463,
+          "corridor_type": 0
+        },
+        {
+          "len": 161,
+          "success": false,
+          "valid": true,
+          "jaccard": 0.01282051282051282,
+          "corridor_type": 0
+        }
+      ]
+    },
+    {
+      "route_id": 1314,
+      "route_city": 0,
+      "hour": 12,
+      "dow": 4,
+      "gt": {
+        "len": 6,
+        "corridor_type": 2
+      },
+      "cond": {
+        "corridor_type": 2
+      },
+      "pred": [
+        {
+          "len": 161,
+          "success": false,
+          "valid": true,
+          "jaccard": 0.020618556701030927,
+          "corridor_type": 3
+        },
+        {
+          "len": 161,
+          "success": false,
+          "valid": true,
+          "jaccard": 0.016260162601626018,
+          "corridor_type": 0
+        },
+        {
+          "len": 161,
+          "success": false,
+          "valid": true,
+          "jaccard": 0.016260162601626018,
+          "corridor_type": 0
+        },
+        {
+          "len": 161,
+          "success": false,
+          "valid": true,
+          "jaccard": 0.016260162601626018,
+          "corridor_type": 0
+        }
+      ]
+    },
+    {
+      "route_id": 2021,
+      "route_city": 0,
+      "hour": 14,
+      "dow": 4,
+      "gt": {
+        "len": 6,
+        "corridor_type": 3
+      },
+      "cond": {
+        "corridor_type": 3
+      },
+      "pred": [
+        {
+          "len": 161,
+          "success": false,
+          "valid": true,
+          "jaccard": 0.14285714285714285,
+          "corridor_type": 3
+        },
+        {
+          "len": 161,
+          "success": false,
+          "valid": true,
+          "jaccard": 0.14285714285714285,
+          "corridor_type": 3
+        },
+        {
+          "len": 161,
+          "success": false,
+          "valid": true,
+          "jaccard": 0.14285714285714285,
+          "corridor_type": 3
+        },
+        {
+          "len": 161,
+          "success": false,
+          "valid": true,
+          "jaccard": 0.14285714285714285,
+          "corridor_type": 3
+        }
+      ]
+    },
+    {
+      "route_id": 2306,
+      "route_city": 1,
+      "hour": 11,
+      "dow": 3,
+      "gt": {
+        "len": 8,
+        "corridor_type": 0
+      },
+      "cond": {
+        "corridor_type": 0
+      },
+      "pred": [
+        {
+          "len": 161,
+          "success": false,
+          "valid": true,
+          "jaccard": 0.14285714285714285,
+          "corridor_type": 0
+        },
+        {
+          "len": 161,
+          "success": false,
+          "valid": true,
+          "jaccard": 0.15384615384615385,
+          "corridor_type": 0
+        },
+        {
+          "len": 161,
+          "success": false,
+          "valid": true,
+          "jaccard": 0.875,
+          "corridor_type": 2
+        },
+        {
+          "len": 161,
+          "success": false,
+          "valid": true,
+          "jaccard": 0.15384615384615385,
+          "corridor_type": 0
+        }
+      ]
+    },
+    {
+      "route_id": 3829,
+      "route_city": 1,
+      "hour": 18,
+      "dow": 2,
+      "gt": {
+        "len": 31,
+        "corridor_type": 0
+      },
+      "cond": {
+        "corridor_type": 0
+      },
+      "pred": [
+        {
+          "len": 161,
+          "success": false,
+          "valid": true,
+          "jaccard": 0.11363636363636363,
+          "corridor_type": 0
+        },
+        {
+          "len": 161,
+          "success": false,
+          "valid": true,
+          "jaccard": 0.10869565217391304,
+          "corridor_type": 1
+        },
+        {
+          "len": 31,
+          "success": true,
+          "valid": true,
+          "jaccard": 1.0,
+          "corridor_type": 0
+        },
+        {
+          "len": 161,
+          "success": false,
+          "valid": true,
+          "jaccard": 0.11627906976744186,
+          "corridor_type": 0
+        }
+      ]
+    },
+    {
+      "route_id": 4771,
+      "route_city": 1,
+      "hour": 8,
+      "dow": 3,
+      "gt": {
+        "len": 9,
+        "corridor_type": 0
+      },
+      "cond": {
+        "corridor_type": 0
+      },
+      "pred": [
+        {
+          "len": 161,
+          "success": false,
+          "valid": true,
+          "jaccard": 0.01818181818181818,
+          "corridor_type": 0
+        },
+        {
+          "len": 161,
+          "success": false,
+          "valid": true,
+          "jaccard": 0.0425531914893617,
+          "corridor_type": 0
+        },
+        {
+          "len": 161,
+          "success": false,
+          "valid": true,
+          "jaccard": 0.03125,
+          "corridor_type": 2
+        },
+        {
+          "len": 161,
+          "success": false,
+          "valid": true,
+          "jaccard": 0.043478260869565216,
+          "corridor_type": 0
+        }
+      ]
+    },
+    {
+      "route_id": 4871,
+      "route_city": 1,
+      "hour": 7,
+      "dow": 0,
+      "gt": {
+        "len": 22,
+        "corridor_type": 0
+      },
+      "cond": {
+        "corridor_type": 0
+      },
+      "pred": [
+        {
+          "len": 161,
+          "success": false,
+          "valid": true,
+          "jaccard": 0.022222222222222223,
+          "corridor_type": 3
+        },
+        {
+          "len": 161,
+          "success": false,
+          "valid": true,
+          "jaccard": 0.03571428571428571,
+          "corridor_type": 2
+        },
+        {
+          "len": 161,
+          "success": false,
+          "valid": true,
+          "jaccard": 0.022222222222222223,
+          "corridor_type": 3
+        },
+        {
+          "len": 161,
+          "success": false,
+          "valid": true,
+          "jaccard": 0.03571428571428571,
+          "corridor_type": 2
+        }
+      ]
+    },
+    {
+      "route_id": 6099,
+      "route_city": 1,
+      "hour": 16,
+      "dow": 0,
+      "gt": {
+        "len": 7,
+        "corridor_type": 0
+      },
+      "cond": {
+        "corridor_type": 0
+      },
+      "pred": [
+        {
+          "len": 7,
+          "success": true,
+          "valid": true,
+          "jaccard": 1.0,
+          "corridor_type": 0
+        },
+        {
+          "len": 7,
+          "success": true,
+          "valid": true,
+          "jaccard": 1.0,
+          "corridor_type": 0
+        },
+        {
+          "len": 7,
+          "success": true,
+          "valid": true,
+          "jaccard": 1.0,
+          "corridor_type": 0
+        },
+        {
+          "len": 7,
+          "success": true,
+          "valid": true,
+          "jaccard": 1.0,
+          "corridor_type": 0
+        }
+      ]
+    },
+    {
+      "route_id": 6372,
+      "route_city": 1,
+      "hour": 10,
+      "dow": 2,
+      "gt": {
+        "len": 34,
+        "corridor_type": 0
+      },
+      "cond": {
+        "corridor_type": 0
+      },
+      "pred": [
+        {
+          "len": 161,
+          "success": false,
+          "valid": true,
+          "jaccard": 0.05555555555555555,
+          "corridor_type": 1
+        },
+        {
+          "len": 161,
+          "success": false,
+          "valid": true,
+          "jaccard": 0.05555555555555555,
+          "corridor_type": 1
+        },
+        {
+          "len": 161,
+          "success": false,
+          "valid": true,
+          "jaccard": 0.05555555555555555,
+          "corridor_type": 1
+        },
+        {
+          "len": 161,
+          "success": false,
+          "valid": true,
+          "jaccard": 0.05555555555555555,
+          "corridor_type": 1
+        }
+      ]
+    },
+    {
+      "route_id": 6847,
+      "route_city": 1,
+      "hour": 15,
+      "dow": 5,
+      "gt": {
+        "len": 28,
+        "corridor_type": 0
+      },
+      "cond": {
+        "corridor_type": 0
+      },
+      "pred": [
+        {
+          "len": 28,
+          "success": true,
+          "valid": true,
+          "jaccard": 1.0,
+          "corridor_type": 0
+        },
+        {
+          "len": 28,
+          "success": true,
+          "valid": true,
+          "jaccard": 1.0,
+          "corridor_type": 0
+        },
+        {
+          "len": 28,
+          "success": true,
+          "valid": true,
+          "jaccard": 1.0,
+          "corridor_type": 0
+        },
+        {
+          "len": 28,
+          "success": true,
+          "valid": true,
+          "jaccard": 1.0,
+          "corridor_type": 0
+        }
+      ]
+    }
+  ]
+}

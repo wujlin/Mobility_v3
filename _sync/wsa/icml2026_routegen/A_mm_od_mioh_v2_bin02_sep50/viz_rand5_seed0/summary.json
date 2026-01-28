@@ -1,0 +1,173 @@
+{
+  "ok": true,
+  "created_at": "2026-01-16T13:28:00.203221+08:00",
+  "inputs": {
+    "scan_report_json": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/A_mm_od_mioh_v2_bin02_sep50/report.json",
+    "trajectory_zip": "/home/jinlin/data/geoexplicit_data/worldtrace/OpenTrace_WorldTrace/Trajectory.zip",
+    "osm_pbf_michigan": "/home/jinlin/data/geoexplicit_data/osm/michigan-latest.osm.pbf",
+    "osm_pbf_ohio": "/home/jinlin/data/geoexplicit_data/osm/ohio-latest.osm.pbf"
+  },
+  "config": {
+    "od_bin_deg": 0.02,
+    "route_bin_deg": 0.05,
+    "top_k": 30,
+    "max_files_per_cluster": 2,
+    "prefer_matched": true,
+    "downsample_step": 10
+  },
+  "plotted": [
+    {
+      "rank": 0,
+      "od_bin": [
+        -4148,
+        1971,
+        -4144,
+        1975
+      ],
+      "n_routes": 25,
+      "cluster_sizes": [
+        11,
+        9,
+        4,
+        1
+      ],
+      "top2_dist": 0.5,
+      "top2_dist_name": "lcs",
+      "used_files": [
+        [
+          "data/yuanshao/OpenTrace/Trajectory/6683826.csv",
+          "data/yuanshao/OpenTrace/Trajectory/6221590.csv"
+        ],
+        [
+          "data/yuanshao/OpenTrace/Trajectory/6856124.csv",
+          "data/yuanshao/OpenTrace/Trajectory/4322602.csv"
+        ]
+      ],
+      "out_png": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/A_mm_od_mioh_v2_bin02_sep50/viz_rand5_seed0/od_000_n25_-4148_1971_-4144_1975.png"
+    },
+    {
+      "rank": 1,
+      "od_bin": [
+        -4366,
+        1972,
+        -4367,
+        1972
+      ],
+      "n_routes": 10,
+      "cluster_sizes": [
+        3,
+        2,
+        1,
+        1,
+        1,
+        1,
+        1
+      ],
+      "top2_dist": 0.7142857142857143,
+      "top2_dist_name": "lcs",
+      "used_files": [
+        [
+          "data/yuanshao/OpenTrace/Trajectory/10805245.csv",
+          "data/yuanshao/OpenTrace/Trajectory/6966384.csv"
+        ],
+        [
+          "data/yuanshao/OpenTrace/Trajectory/6801911.csv",
+          "data/yuanshao/OpenTrace/Trajectory/6891951.csv"
+        ]
+      ],
+      "out_png": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/A_mm_od_mioh_v2_bin02_sep50/viz_rand5_seed0/od_001_n10_-4366_1972_-4367_1972.png"
+    },
+    {
+      "rank": 2,
+      "od_bin": [
+        -4471,
+        2159,
+        -4470,
+        2159
+      ],
+      "n_routes": 9,
+      "cluster_sizes": [
+        2,
+        2,
+        1,
+        1,
+        1,
+        1,
+        1
+      ],
+      "top2_dist": 0.75,
+      "top2_dist_name": "lcs",
+      "used_files": [
+        [
+          "data/yuanshao/OpenTrace/Trajectory/7675087.csv",
+          "data/yuanshao/OpenTrace/Trajectory/7744667.csv"
+        ],
+        [
+          "data/yuanshao/OpenTrace/Trajectory/7784868.csv",
+          "data/yuanshao/OpenTrace/Trajectory/11076852.csv"
+        ]
+      ],
+      "out_png": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/A_mm_od_mioh_v2_bin02_sep50/viz_rand5_seed0/od_002_n9_-4471_2159_-4470_2159.png"
+    },
+    {
+      "rank": 3,
+      "od_bin": [
+        -4423,
+        2337,
+        -4423,
+        2338
+      ],
+      "n_routes": 9,
+      "cluster_sizes": [
+        2,
+        2,
+        1,
+        1,
+        1,
+        1,
+        1
+      ],
+      "top2_dist": 0.5,
+      "top2_dist_name": "lcs",
+      "used_files": [
+        [
+          "data/yuanshao/OpenTrace/Trajectory/11105795.csv",
+          "data/yuanshao/OpenTrace/Trajectory/10993550.csv"
+        ],
+        [
+          "data/yuanshao/OpenTrace/Trajectory/7712436.csv",
+          "data/yuanshao/OpenTrace/Trajectory/10737197.csv"
+        ]
+      ],
+      "out_png": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/A_mm_od_mioh_v2_bin02_sep50/viz_rand5_seed0/od_003_n9_-4423_2337_-4423_2338.png"
+    },
+    {
+      "rank": 4,
+      "od_bin": [
+        -4480,
+        2036,
+        -4480,
+        2035
+      ],
+      "n_routes": 6,
+      "cluster_sizes": [
+        2,
+        2,
+        2
+      ],
+      "top2_dist": 0.875,
+      "top2_dist_name": "lcs",
+      "used_files": [
+        [
+          "data/yuanshao/OpenTrace/Trajectory/5224248.csv",
+          "data/yuanshao/OpenTrace/Trajectory/5613040.csv"
+        ],
+        [
+          "data/yuanshao/OpenTrace/Trajectory/5970348.csv",
+          "data/yuanshao/OpenTrace/Trajectory/6378691.csv"
+        ]
+      ],
+      "out_png": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/A_mm_od_mioh_v2_bin02_sep50/viz_rand5_seed0/od_004_n6_-4480_2036_-4480_2035.png"
+    }
+  ]
+}

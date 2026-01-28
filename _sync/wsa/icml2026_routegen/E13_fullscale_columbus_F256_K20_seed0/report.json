@@ -1,0 +1,79 @@
+{
+  "gate": "E15 Full-scale (Columbus)",
+  "gt_windows_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/gt_windows/columbus_segments_F256_n200k_seed0.npz",
+  "semantic_dir": "/home/jinlin/data/geoexplicit_data/worldtrace/columbus_core_v1",
+  "models": {
+    "e2e_diffusion": {
+      "inputs": {
+        "gt_windows_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/gt_windows/columbus_segments_F256_n200k_seed0.npz",
+        "model_samples_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E13_fullscale_columbus_F256_K20_seed0/e2e_diffusion/samples.npz"
+      },
+      "config": {
+        "K": 20,
+        "max_n": null,
+        "jacc_cell": 8.0,
+        "road_prob_thr": 0.5,
+        "semantic_dir": "/home/jinlin/data/geoexplicit_data/worldtrace/columbus_core_v1",
+        "seed": 0
+      },
+      "stats": {
+        "num_windows_matched": 5228,
+        "F": 256
+      },
+      "micro": {
+        "ADE_mean": 119.1307144165039,
+        "ADE_std": 14.775233268737793,
+        "ADE_best": 91.76333618164062,
+        "FDE_mean": 229.01644897460938,
+        "FDE_std": 28.410587310791016,
+        "FDE_best": 175.27008056640625
+      },
+      "diversity": {
+        "jaccard_mean": 0.8548588752746582,
+        "jaccard_p50": 0.8565295934677124
+      },
+      "feasibility": {
+        "pred_road_prob_mean": 0.35723432898521423,
+        "pred_onroad_rate": 0.21586017310619354,
+        "gt_road_prob_mean": 0.8777284026145935,
+        "gt_onroad_rate": 0.8326483964920044
+      }
+    },
+    "cascade_res0p1": {
+      "inputs": {
+        "gt_windows_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/gt_windows/columbus_segments_F256_n200k_seed0.npz",
+        "model_samples_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E13_fullscale_columbus_F256_K20_seed0/cascade_res0p1/samples.npz"
+      },
+      "config": {
+        "K": 20,
+        "max_n": null,
+        "jacc_cell": 8.0,
+        "road_prob_thr": 0.5,
+        "semantic_dir": "/home/jinlin/data/geoexplicit_data/worldtrace/columbus_core_v1",
+        "seed": 0
+      },
+      "stats": {
+        "num_windows_matched": 5228,
+        "F": 256
+      },
+      "micro": {
+        "ADE_mean": 66.74272918701172,
+        "ADE_std": 27.383554458618164,
+        "ADE_best": 25.630062103271484,
+        "FDE_mean": 6.839180423412472e-05,
+        "FDE_std": 4.8383164539700374e-05,
+        "FDE_best": 5.379258709581336e-06
+      },
+      "diversity": {
+        "jaccard_mean": 0.866766631603241,
+        "jaccard_p50": 0.9300909042358398
+      },
+      "feasibility": {
+        "pred_road_prob_mean": 0.30800315737724304,
+        "pred_onroad_rate": 0.1552267074584961,
+        "gt_road_prob_mean": 0.8777284026145935,
+        "gt_onroad_rate": 0.8326483964920044
+      }
+    }
+  }
+}

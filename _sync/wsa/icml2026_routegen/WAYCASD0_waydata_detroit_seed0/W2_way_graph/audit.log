@@ -1,0 +1,3 @@
+[way_graph] /home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD0_waydata_detroit_seed0/W2_way_graph/way_graph.npz
+[ways] 10804 edges_directed=14491
+[out_deg] p50=1.0 p90=2.0 max=11

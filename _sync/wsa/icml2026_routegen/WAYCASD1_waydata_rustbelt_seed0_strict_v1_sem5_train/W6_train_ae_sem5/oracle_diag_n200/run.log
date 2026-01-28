@@ -1,0 +1,20 @@
+usage: way_casd_oracle_decode_diagnose.py [-h] --way_routes_npz WAY_ROUTES_NPZ
+                                          --way_graph_npz WAY_GRAPH_NPZ
+                                          --way_features_npz WAY_FEATURES_NPZ
+                                          --ae_ckpt AE_CKPT --out_json
+                                          OUT_JSON [--seed SEED]
+                                          [--device DEVICE]
+                                          [--tz_offset_hours TZ_OFFSET_HOURS]
+                                          [--n_routes N_ROUTES]
+                                          [--max_way_len MAX_WAY_LEN]
+                                          [--max_decode_len MAX_DECODE_LEN]
+                                          [--decode {greedy,beam}]
+                                          [--beam_size BEAM_SIZE]
+                                          [--decode_max_candidates DECODE_MAX_CANDIDATES]
+                                          [--decode_candidate_policy {first,destdist}]
+                                          [--decode_include_dest_if_successor]
+                                          [--decode_guided_dest_alpha DECODE_GUIDED_DEST_ALPHA]
+                                          [--last_k_steps LAST_K_STEPS]
+                                          [--reachability_max_visits REACHABILITY_MAX_VISITS]
+                                          [--progress_every PROGRESS_EVERY]
+way_casd_oracle_decode_diagnose.py: error: the following arguments are required: --out_json

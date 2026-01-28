@@ -1,0 +1,26 @@
+{
+  "ok": true,
+  "task": "plot_worldtrace_segments_spatial_layers",
+  "created_at": "2026-01-17T13:03:52.736774+08:00",
+  "inputs": {
+    "segments_parquet": "/home/jinlin/data/geoexplicit_data/worldtrace/detroit_core_v1/segments_with_wayid.parquet",
+    "road_prob_npy": "/home/jinlin/data/geoexplicit_data/worldtrace/detroit_core_v1/osm_road_prob.npy"
+  },
+  "cfg": {
+    "H": 1024,
+    "W": 1024,
+    "min_od_dist_km": 1.0,
+    "max_segments": 0,
+    "vmax_pct": 99.0
+  },
+  "stats": {
+    "scanned": 2295,
+    "kept_after_filters": 2070,
+    "dropped_short_od": 225,
+    "dropped_no_way_id": 0
+  },
+  "artifacts": {
+    "trajectory_heatmap_png": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/A_spatial_detroit_layers12/detroit_trajectory_heatmap.png",
+    "od_scatter_png": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/A_spatial_detroit_layers12/detroit_od_scatter.png"
+  }
+}

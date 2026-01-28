@@ -1,0 +1,2 @@
+{"od_key": [4, 3, 8, 10], "n_total": 8, "n_clusters": 2, "cluster_sizes": {"1": 3, "2": 5}, "selected_top2": 8, "auc": {"time_only": 1.0, "tier_od": 0.5333333333333333, "time_tier": 0.8666666666666667}}
+{"od_key": [10, 9, 3, 8], "n_total": 15, "n_clusters": 2, "cluster_sizes": {"1": 9, "2": 6}, "selected_top2": 15, "auc": {"time_only": 0.5925925925925926, "tier_od": 0.7037037037037037, "time_tier": 0.6111111111111112}}

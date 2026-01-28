@@ -1,0 +1,134 @@
+{
+  "gate": "E16 (Figure4 realism validation)",
+  "inputs": {
+    "gt_windows_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/gt_windows/detroit_segments_F256_n200k_seed0.npz",
+    "ours_samples_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E12_exec_road_prior_detroit_F256_K20_seed0/refined_dist_step1p0_it10.npz",
+    "e2e_samples_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E13_fullscale_detroit_F256_K20_seed0/e2e_diffusion/samples.npz",
+    "semantic_dir": "/home/jinlin/data/geoexplicit_data/worldtrace/detroit_core_v1"
+  },
+  "config": {
+    "road_prob_thr": 0.5,
+    "k_plot": 20,
+    "crop_margin": 40,
+    "smooth_sigma_bins": 1.2,
+    "seed": 0,
+    "detour_definition": "length / straight_line_distance (both in meters from osm bbox resolution)"
+  },
+  "stats": {
+    "num_windows_matched": 2295,
+    "K_ours": 20,
+    "K_e2e": 20,
+    "F": 256
+  },
+  "units": {
+    "res_y_m": 27.147236385140253,
+    "res_x_m": 24.113839327378
+  },
+  "distributions": {
+    "length_km": {
+      "jsd": {
+        "ours": 0.01886695993528781,
+        "e2e": 0.44974959582594615
+      },
+      "gt": {
+        "mean": 7.942457516732144,
+        "p50": 6.8625380859375,
+        "p90": 15.328401171875
+      },
+      "ours": {
+        "mean": 7.634696921075558,
+        "p50": 6.6559619140625,
+        "p90": 14.4239009765625
+      },
+      "e2e": {
+        "mean": 3.6285306704279754,
+        "p50": 3.6149700927734374,
+        "p90": 4.819678320312501
+      }
+    },
+    "detour_factor": {
+      "jsd": {
+        "ours": 0.005745186465681899,
+        "e2e": 0.14577316753072245
+      },
+      "gt": {
+        "mean": 1653704.5477323304,
+        "p50": 1.243968464808101,
+        "p90": 1.744858137875911
+      },
+      "ours": {
+        "mean": 9356961.827585274,
+        "p50": 1.206681171766339,
+        "p90": 2.1323410805684344
+      },
+      "e2e": {
+        "mean": 14547615.824026765,
+        "p50": 0.6406232109809424,
+        "p90": 3.53398625220088
+      }
+    },
+    "onroad_rate": {
+      "jsd": {
+        "ours": 0.006348542831008678,
+        "e2e": 0.1916742974831114
+      },
+      "gt": {
+        "mean": 0.9593681917211329,
+        "p50": 1.0,
+        "p90": 1.0
+      },
+      "ours": {
+        "mean": 0.9640418198529411,
+        "p50": 1.0,
+        "p90": 1.0
+      },
+      "e2e": {
+        "mean": 0.8292970452069717,
+        "p50": 0.984375,
+        "p90": 1.0
+      }
+    }
+  },
+  "figure": {
+    "pdf": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E16_realism_detroit_seed0/fig_realism_validation.pdf",
+    "png": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E16_realism_detroit_seed0/fig_realism_validation.png"
+  },
+  "cases": [
+    {
+      "crop": {
+        "y0": 0,
+        "y1": 141,
+        "x0": 409,
+        "x1": 576
+      },
+      "k_plot": 20,
+      "case_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E0_gt_baseline_detroit_F256_n200k_seed0_od128_n10_sep2/case_01/gt_case.npz",
+      "traj_idx": 65,
+      "start_t": 0
+    },
+    {
+      "crop": {
+        "y0": 271,
+        "y1": 700,
+        "x0": 438,
+        "x1": 729
+      },
+      "k_plot": 20,
+      "case_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E0_gt_baseline_detroit_F256_n200k_seed0_od128_n10_sep2/case_02/gt_case.npz",
+      "traj_idx": 6,
+      "start_t": 0
+    },
+    {
+      "crop": {
+        "y0": 370,
+        "y1": 714,
+        "x0": 434,
+        "x1": 713
+      },
+      "k_plot": 20,
+      "case_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E0_gt_baseline_detroit_F256_n200k_seed0_od128_n10_sep2/case_03/gt_case.npz",
+      "traj_idx": 78,
+      "start_t": 0
+    }
+  ]
+}

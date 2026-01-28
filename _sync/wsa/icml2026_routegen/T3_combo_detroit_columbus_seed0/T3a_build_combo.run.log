@@ -1,0 +1,9 @@
+{
+  "ok": true,
+  "out_dir": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/T3_combo_detroit_columbus_seed0",
+  "road_graph_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/T3_combo_detroit_columbus_seed0/road_graph_combo.npz",
+  "paths_graph_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/T3_combo_detroit_columbus_seed0/paths_graph_combo.npz",
+  "report_json": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/T3_combo_detroit_columbus_seed0/combo_report.json",
+  "N_paths": 3385,
+  "N_nodes": 718099
+}

@@ -1,0 +1,84 @@
+{
+  "inputs": {
+    "gt_case_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E0s_gt_baseline_detroit_segF256_epoch_seed0_od128_min10_sep2_uni2/case_02/gt_case.npz",
+    "models": [
+      {
+        "label": "L2",
+        "samples_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E4s_seg_viz_detroit_segF256_epoch_K20_res0p1_seed0/case_02/l2/samples.npz"
+      },
+      {
+        "label": "E2E-Diff",
+        "samples_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E4s_seg_viz_detroit_segF256_epoch_K20_res0p1_seed0/case_02/e2e_diff/samples.npz"
+      },
+      {
+        "label": "Cascade(res0p1)",
+        "samples_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E4s_seg_viz_detroit_segF256_epoch_K20_res0p1_seed0/case_02/cascade_res0p1/samples.npz"
+      }
+    ]
+  },
+  "config": {
+    "od_end": "dest_pos",
+    "max_k": 20,
+    "max_gt": 80,
+    "max_paths": 400,
+    "seed": 0,
+    "jacc_cell": 8.0
+  },
+  "gt": {
+    "N_windows": 15,
+    "F": 256,
+    "gt_plotted": 15,
+    "gt_cluster_counts_plotted": {
+      "c0": 7,
+      "c1": 8
+    }
+  },
+  "models": [
+    {
+      "label": "L2",
+      "samples_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E4s_seg_viz_detroit_segF256_epoch_K20_res0p1_seed0/case_02/l2/samples.npz",
+      "aligned_to_gt": true,
+      "N_windows_in_file": 15,
+      "K_in_file": 20,
+      "K_used": 20,
+      "paths_total": 300,
+      "paths_plotted": 300,
+      "cluster_counts_plotted": {
+        "c0": 300,
+        "c1": 0
+      }
+    },
+    {
+      "label": "E2E-Diff",
+      "samples_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E4s_seg_viz_detroit_segF256_epoch_K20_res0p1_seed0/case_02/e2e_diff/samples.npz",
+      "aligned_to_gt": true,
+      "N_windows_in_file": 15,
+      "K_in_file": 20,
+      "K_used": 20,
+      "paths_total": 300,
+      "paths_plotted": 300,
+      "cluster_counts_plotted": {
+        "c0": 260,
+        "c1": 40
+      }
+    },
+    {
+      "label": "Cascade(res0p1)",
+      "samples_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E4s_seg_viz_detroit_segF256_epoch_K20_res0p1_seed0/case_02/cascade_res0p1/samples.npz",
+      "aligned_to_gt": true,
+      "N_windows_in_file": 15,
+      "K_in_file": 20,
+      "K_used": 20,
+      "paths_total": 300,
+      "paths_plotted": 300,
+      "cluster_counts_plotted": {
+        "c0": 195,
+        "c1": 105
+      }
+    }
+  ],
+  "outputs": {
+    "figure_pdf": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E4s_seg_viz_detroit_segF256_epoch_K20_res0p1_seed0/case_02/fig_mode_collapse.pdf",
+    "figure_png": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E4s_seg_viz_detroit_segF256_epoch_K20_res0p1_seed0/case_02/fig_mode_collapse.png"
+  }
+}

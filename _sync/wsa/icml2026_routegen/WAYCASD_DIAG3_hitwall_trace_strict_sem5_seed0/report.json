@@ -1,0 +1,417 @@
+{
+  "ok": true,
+  "task": "way_casd_hit_wall_trace",
+  "created_at": "2026-01-28T18:23:16.106925+08:00",
+  "cfg": {
+    "seed": 0,
+    "device": "cuda",
+    "tz_offset_hours": -5.0,
+    "n_routes": 200,
+    "max_way_len": 160,
+    "max_decode_len": 160,
+    "decode_max_candidates": 0,
+    "decode_candidate_policy": "first",
+    "decode_include_dest_if_successor": false,
+    "last_k_steps": 5,
+    "topk_logits": 5,
+    "n_cases": 3
+  },
+  "inputs": {
+    "way_routes_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD1_waydata_rustbelt_seed0_strict_v1/W5_way_routes_strict/way_routes_strict_masklen0.npz",
+    "way_graph_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD1_waydata_rustbelt_seed0_strict_v1/W3_way_graph_strict/way_graph.npz",
+    "way_features_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD1_waydata_rustbelt_seed0_strict_v1/W4_way_features_sem/way_features.npz",
+    "ae_ckpt": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD_PASTCTX_strict_sem5_rustbelt_seed0/W6_train_ae_pastctx_k8/ckpt_best.pt"
+  },
+  "ckpt_decoder_cfg_inferred": {
+    "decoder_use_dest_dist": true,
+    "decoder_use_cross_attn": true,
+    "decoder_use_step_emb": false,
+    "decoder_use_dest_query": false,
+    "decoder_use_past_context": true,
+    "decoder_past_k": 8
+  },
+  "scan_stats": {
+    "n_cities": 2,
+    "n_scanned": 400,
+    "n_success": 239,
+    "n_hit_wall": 72,
+    "success_rate": 0.5975,
+    "hit_wall_rate": 0.18,
+    "elapsed_s": 55.17315912246704
+  },
+  "hit_wall_cases": [
+    {
+      "route_id": 363,
+      "city": 0,
+      "gt_len": 57,
+      "pred_len": 161,
+      "success": false,
+      "hit_wall": true,
+      "last_k_steps": 5,
+      "steps": [
+        {
+          "step": 155,
+          "cur_way": 10338,
+          "chosen_next": 12411,
+          "chosen_logit": 6.815757751464844,
+          "topk": [
+            {
+              "way": 12411,
+              "logit": 6.815757751464844
+            }
+          ],
+          "dest_in_cands": false,
+          "dest_rank": null,
+          "gt_prefix_ok": false,
+          "gt_next": null,
+          "gt_next_in_cands": false,
+          "gt_next_rank": null,
+          "gt_next_logit": null,
+          "chosen_minus_gt_next": null
+        },
+        {
+          "step": 156,
+          "cur_way": 12411,
+          "chosen_next": 9223,
+          "chosen_logit": 0.158191978931427,
+          "topk": [
+            {
+              "way": 9223,
+              "logit": 0.158191978931427
+            }
+          ],
+          "dest_in_cands": false,
+          "dest_rank": null,
+          "gt_prefix_ok": false,
+          "gt_next": null,
+          "gt_next_in_cands": false,
+          "gt_next_rank": null,
+          "gt_next_logit": null,
+          "chosen_minus_gt_next": null
+        },
+        {
+          "step": 157,
+          "cur_way": 9223,
+          "chosen_next": 5487,
+          "chosen_logit": 0.5467910766601562,
+          "topk": [
+            {
+              "way": 5487,
+              "logit": 0.5467910766601562
+            },
+            {
+              "way": 9224,
+              "logit": -1.1473199129104614
+            }
+          ],
+          "dest_in_cands": false,
+          "dest_rank": null,
+          "gt_prefix_ok": false,
+          "gt_next": null,
+          "gt_next_in_cands": false,
+          "gt_next_rank": null,
+          "gt_next_logit": null,
+          "chosen_minus_gt_next": null
+        },
+        {
+          "step": 158,
+          "cur_way": 5487,
+          "chosen_next": 10679,
+          "chosen_logit": 2.463733196258545,
+          "topk": [
+            {
+              "way": 10679,
+              "logit": 2.463733196258545
+            }
+          ],
+          "dest_in_cands": false,
+          "dest_rank": null,
+          "gt_prefix_ok": false,
+          "gt_next": null,
+          "gt_next_in_cands": false,
+          "gt_next_rank": null,
+          "gt_next_logit": null,
+          "chosen_minus_gt_next": null
+        },
+        {
+          "step": 159,
+          "cur_way": 10679,
+          "chosen_next": 9910,
+          "chosen_logit": 2.765104293823242,
+          "topk": [
+            {
+              "way": 9910,
+              "logit": 2.765104293823242
+            },
+            {
+              "way": 2914,
+              "logit": 2.151289463043213
+            }
+          ],
+          "dest_in_cands": false,
+          "dest_rank": null,
+          "gt_prefix_ok": false,
+          "gt_next": null,
+          "gt_next_in_cands": false,
+          "gt_next_rank": null,
+          "gt_next_logit": null,
+          "chosen_minus_gt_next": null
+        }
+      ]
+    },
+    {
+      "route_id": 1009,
+      "city": 0,
+      "gt_len": 7,
+      "pred_len": 161,
+      "success": false,
+      "hit_wall": true,
+      "last_k_steps": 5,
+      "steps": [
+        {
+          "step": 155,
+          "cur_way": 12216,
+          "chosen_next": 12215,
+          "chosen_logit": -1.7253345251083374,
+          "topk": [
+            {
+              "way": 12215,
+              "logit": -1.7253345251083374
+            }
+          ],
+          "dest_in_cands": false,
+          "dest_rank": null,
+          "gt_prefix_ok": false,
+          "gt_next": null,
+          "gt_next_in_cands": false,
+          "gt_next_rank": null,
+          "gt_next_logit": null,
+          "chosen_minus_gt_next": null
+        },
+        {
+          "step": 156,
+          "cur_way": 12215,
+          "chosen_next": 10114,
+          "chosen_logit": -2.867007255554199,
+          "topk": [
+            {
+              "way": 10114,
+              "logit": -2.867007255554199
+            }
+          ],
+          "dest_in_cands": false,
+          "dest_rank": null,
+          "gt_prefix_ok": false,
+          "gt_next": null,
+          "gt_next_in_cands": false,
+          "gt_next_rank": null,
+          "gt_next_logit": null,
+          "chosen_minus_gt_next": null
+        },
+        {
+          "step": 157,
+          "cur_way": 10114,
+          "chosen_next": 10116,
+          "chosen_logit": -4.507563591003418,
+          "topk": [
+            {
+              "way": 10116,
+              "logit": -4.507563591003418
+            }
+          ],
+          "dest_in_cands": false,
+          "dest_rank": null,
+          "gt_prefix_ok": false,
+          "gt_next": null,
+          "gt_next_in_cands": false,
+          "gt_next_rank": null,
+          "gt_next_logit": null,
+          "chosen_minus_gt_next": null
+        },
+        {
+          "step": 158,
+          "cur_way": 10116,
+          "chosen_next": 479,
+          "chosen_logit": -0.7457334399223328,
+          "topk": [
+            {
+              "way": 479,
+              "logit": -0.7457334399223328
+            },
+            {
+              "way": 10118,
+              "logit": -4.267031192779541
+            }
+          ],
+          "dest_in_cands": false,
+          "dest_rank": null,
+          "gt_prefix_ok": false,
+          "gt_next": null,
+          "gt_next_in_cands": false,
+          "gt_next_rank": null,
+          "gt_next_logit": null,
+          "chosen_minus_gt_next": null
+        },
+        {
+          "step": 159,
+          "cur_way": 479,
+          "chosen_next": 4791,
+          "chosen_logit": 2.0807790756225586,
+          "topk": [
+            {
+              "way": 4791,
+              "logit": 2.0807790756225586
+            }
+          ],
+          "dest_in_cands": false,
+          "dest_rank": null,
+          "gt_prefix_ok": false,
+          "gt_next": null,
+          "gt_next_in_cands": false,
+          "gt_next_rank": null,
+          "gt_next_logit": null,
+          "chosen_minus_gt_next": null
+        }
+      ]
+    },
+    {
+      "route_id": 390,
+      "city": 0,
+      "gt_len": 54,
+      "pred_len": 161,
+      "success": false,
+      "hit_wall": true,
+      "last_k_steps": 5,
+      "steps": [
+        {
+          "step": 155,
+          "cur_way": 11739,
+          "chosen_next": 18099,
+          "chosen_logit": 0.6702290177345276,
+          "topk": [
+            {
+              "way": 18099,
+              "logit": 0.6702290177345276
+            },
+            {
+              "way": 17507,
+              "logit": -1.191633939743042
+            },
+            {
+              "way": 5504,
+              "logit": -1.6775263547897339
+            }
+          ],
+          "dest_in_cands": false,
+          "dest_rank": null,
+          "gt_prefix_ok": false,
+          "gt_next": null,
+          "gt_next_in_cands": false,
+          "gt_next_rank": null,
+          "gt_next_logit": null,
+          "chosen_minus_gt_next": null
+        },
+        {
+          "step": 156,
+          "cur_way": 18099,
+          "chosen_next": 6144,
+          "chosen_logit": -0.40771764516830444,
+          "topk": [
+            {
+              "way": 6144,
+              "logit": -0.40771764516830444
+            },
+            {
+              "way": 11739,
+              "logit": -0.8057048320770264
+            }
+          ],
+          "dest_in_cands": false,
+          "dest_rank": null,
+          "gt_prefix_ok": false,
+          "gt_next": null,
+          "gt_next_in_cands": false,
+          "gt_next_rank": null,
+          "gt_next_logit": null,
+          "chosen_minus_gt_next": null
+        },
+        {
+          "step": 157,
+          "cur_way": 6144,
+          "chosen_next": 6155,
+          "chosen_logit": -0.9114242792129517,
+          "topk": [
+            {
+              "way": 6155,
+              "logit": -0.9114242792129517
+            },
+            {
+              "way": 18099,
+              "logit": -1.2661306858062744
+            }
+          ],
+          "dest_in_cands": false,
+          "dest_rank": null,
+          "gt_prefix_ok": false,
+          "gt_next": null,
+          "gt_next_in_cands": false,
+          "gt_next_rank": null,
+          "gt_next_logit": null,
+          "chosen_minus_gt_next": null
+        },
+        {
+          "step": 158,
+          "cur_way": 6155,
+          "chosen_next": 7124,
+          "chosen_logit": 3.820013999938965,
+          "topk": [
+            {
+              "way": 7124,
+              "logit": 3.820013999938965
+            },
+            {
+              "way": 10341,
+              "logit": 2.335660934448242
+            }
+          ],
+          "dest_in_cands": false,
+          "dest_rank": null,
+          "gt_prefix_ok": false,
+          "gt_next": null,
+          "gt_next_in_cands": false,
+          "gt_next_rank": null,
+          "gt_next_logit": null,
+          "chosen_minus_gt_next": null
+        },
+        {
+          "step": 159,
+          "cur_way": 7124,
+          "chosen_next": 10343,
+          "chosen_logit": 0.7404230237007141,
+          "topk": [
+            {
+              "way": 10343,
+              "logit": 0.7404230237007141
+            },
+            {
+              "way": 6155,
+              "logit": 0.3569304347038269
+            },
+            {
+              "way": 6144,
+              "logit": -2.1486053466796875
+            }
+          ],
+          "dest_in_cands": false,
+          "dest_rank": null,
+          "gt_prefix_ok": false,
+          "gt_next": null,
+          "gt_next_in_cands": false,
+          "gt_next_rank": null,
+          "gt_next_logit": null,
+          "chosen_minus_gt_next": null
+        }
+      ]
+    }
+  ]
+}

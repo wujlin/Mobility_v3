@@ -1,0 +1,13 @@
+/home/jinlin/projects/Mobility_v3/src/data/road_graph/gate_semantic_informativeness_by_clustering.py:232: DeprecationWarning: Conversion of an array with ndim > 0 to a scalar is deprecated, and will error in future. Ensure you extract a single element from your array before performing this operation. (Deprecated NumPy 1.25.)
+  score[i] = float(x_i @ w + float(b))
+{
+  "ok": true,
+  "gate": "G3b_cluster_semantic_informativeness",
+  "decision": {
+    "auc_used_mean_time_tier": 0.6126984126984127,
+    "label": "GO"
+  },
+  "used_groups": 4,
+  "auc_time_tier_mean": 0.6126984126984127,
+  "report_json": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/G3_argraph_detroit_seed0/T2_cluster_gate/report.json"
+}

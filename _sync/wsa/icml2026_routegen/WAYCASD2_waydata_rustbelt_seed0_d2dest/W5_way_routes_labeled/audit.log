@@ -1,0 +1,4 @@
+[way_routes] /home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD2_waydata_rustbelt_seed0_d2dest/W5_way_routes_labeled/way_routes_labeled.npz
+[N] 7502 vocab=19551
+[way_seq_len] p50=26.0 p90=57.0 max=186 mean=28.8
+[corridor_type] 0:6464 1:557 2:190 3:291

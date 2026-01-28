@@ -1,0 +1,76 @@
+{
+  "ok": true,
+  "gate": "G3b_cluster_semantic_informativeness",
+  "inputs": {
+    "paths_graph_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/G3_argraph_columbus_seed0/T1_dump_paths/paths_graph.npz",
+    "road_graph_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/G1_roadgraph_columbus/road_graph.npz",
+    "semantic_dir": "/home/jinlin/data/geoexplicit_data/worldtrace/columbus_core_v1"
+  },
+  "config": {
+    "od_bin": 128,
+    "min_traj_per_od": 10,
+    "cluster_dist_thr": 0.5,
+    "min_cluster_size": 3,
+    "tz_offset_hours": -5.0,
+    "l2": 0.01,
+    "lr": 0.5,
+    "steps": 300,
+    "seed": 0,
+    "max_od_groups": 0
+  },
+  "stats": {
+    "N_routes": 2328,
+    "od_groups": {
+      "raw": 618,
+      "min_traj": 38,
+      "used": 18,
+      "skipped_single_cluster": 5,
+      "skipped_small": 15
+    },
+    "n_clusters": {
+      "hist": {
+        "5": 5,
+        "2": 12,
+        "3": 6,
+        "7": 2,
+        "9": 1,
+        "4": 4,
+        "8": 1,
+        "17": 1,
+        "12": 1,
+        "1": 5
+      }
+    },
+    "auc": {
+      "time_only": {
+        "mean": 0.7552273524816049,
+        "p50": 0.7779411764705881,
+        "p90": 1.0,
+        "n": 18
+      },
+      "tier_od": {
+        "mean": 0.8825857511797529,
+        "p50": 0.9558711728523048,
+        "p90": 1.0,
+        "n": 18
+      },
+      "time_tier": {
+        "mean": 0.8444186290698729,
+        "p50": 0.9476720647773279,
+        "p90": 1.0,
+        "n": 18
+      }
+    }
+  },
+  "decision": {
+    "auc_used_mean_time_tier": 0.8444186290698729,
+    "label": "STRONG_GO"
+  },
+  "outputs": {
+    "report_json": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/G3_argraph_columbus_seed0/T2_cluster_gate_ob128_mt10_t0p5_seed0/report.json",
+    "events_jsonl": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/G3_argraph_columbus_seed0/T2_cluster_gate_ob128_mt10_t0p5_seed0/events.jsonl"
+  },
+  "meta": {
+    "created_at": "2026-01-13T21:57:43.641646+08:00"
+  }
+}

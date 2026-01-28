@@ -1,0 +1,12 @@
+{
+  "ok": true,
+  "out_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD1_waydata_rustbelt_seed0/W2_merged_routes/way_routes.npz",
+  "n_routes": 7502,
+  "n_way_vocab": 19551,
+  "way_seq_len_p50": 26.0,
+  "way_seq_len_p90": 57.0,
+  "per_city": {
+    "0": 2279,
+    "1": 5223
+  }
+}

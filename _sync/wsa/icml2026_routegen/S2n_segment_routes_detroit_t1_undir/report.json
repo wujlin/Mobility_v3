@@ -1,0 +1,23 @@
+{
+  "ok": true,
+  "out_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/S2n_segment_routes_detroit_t1_undir/segments_graph_routes.npz",
+  "report_json": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/S2n_segment_routes_detroit_t1_undir/report.json",
+  "stats": {
+    "n_routes": 755,
+    "total_steps": 2852561,
+    "missing_edges": 0,
+    "missing_edge_frac": 0.0,
+    "seg_len_p50": 1607.0,
+    "seg_len_p90": 2688.8,
+    "mean_seg_len": 1497.7046357615893,
+    "corridor_type_counts": [
+      342,
+      30,
+      61,
+      322
+    ]
+  },
+  "timing": {
+    "elapsed_s": 0.609807014465332
+  }
+}

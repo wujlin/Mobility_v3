@@ -1,0 +1,30 @@
+{
+  "inputs": {
+    "train_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/gt_windows/columbus_segments_F256_n200k_seed0.npz"
+  },
+  "config": {
+    "pos_max": 1023,
+    "max_train_n": null,
+    "waypoint_mode": "rdp_dev",
+    "num_waypoints": 2,
+    "precompute_device": "cuda",
+    "hidden_dim": 128,
+    "diff_steps": 100,
+    "pred_type": "eps",
+    "batch_size": 64,
+    "epochs": 30,
+    "lr": 0.001,
+    "num_workers": 24,
+    "max_batches": null,
+    "seed": 0
+  },
+  "stats": {
+    "N": 5228,
+    "F": 256,
+    "steps": 2460,
+    "elapsed_s": 61.6732976436615
+  },
+  "outputs": {
+    "checkpoint": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E13_fullscale_columbus_F256_K20_seed0/exec_residual/last.pt"
+  }
+}

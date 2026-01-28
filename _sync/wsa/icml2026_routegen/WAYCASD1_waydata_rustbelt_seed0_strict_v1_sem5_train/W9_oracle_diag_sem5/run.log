@@ -1,0 +1,9 @@
+[city0] done=25/100 rps=5.87 succ=6/25
+[city0] done=50/100 rps=5.79 succ=11/50
+[city0] done=75/100 rps=5.98 succ=17/75
+[city0] done=100/100 rps=6.17 succ=23/100
+[city1] done=25/100 rps=6.85 succ=10/25
+[city1] done=50/100 rps=6.68 succ=19/50
+[city1] done=75/100 rps=6.81 succ=30/75
+[city1] done=100/100 rps=7.41 succ=47/100
+[saved] /home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD1_waydata_rustbelt_seed0_strict_v1/W9_oracle_diag_sem5/report.json cities=2

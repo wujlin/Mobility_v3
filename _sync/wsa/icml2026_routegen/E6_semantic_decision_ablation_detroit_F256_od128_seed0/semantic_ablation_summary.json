@@ -1,0 +1,90 @@
+{
+  "gate": "E6 (semantic decision ablation)",
+  "cases": [
+    "case_00",
+    "case_01",
+    "case_02",
+    "case_03",
+    "case_04"
+  ],
+  "models": {
+    "nosem": {
+      "per_case": [
+        {
+          "case": "case_00",
+          "num_cases_evaluated": 1,
+          "model_div_mean": 0.7249952260668526,
+          "model_cov_mean": 1.0,
+          "collapse_rate_mean": 0.0
+        },
+        {
+          "case": "case_01",
+          "num_cases_evaluated": 1,
+          "model_div_mean": 0.7153886961574699,
+          "model_cov_mean": 1.0,
+          "collapse_rate_mean": 0.0
+        },
+        {
+          "case": "case_02",
+          "num_cases_evaluated": 1,
+          "model_div_mean": 0.8608301869549642,
+          "model_cov_mean": 1.0,
+          "collapse_rate_mean": 0.0
+        },
+        {
+          "case": "case_03",
+          "num_cases_evaluated": 1,
+          "model_div_mean": 0.8959397716866239,
+          "model_cov_mean": 0.95,
+          "collapse_rate_mean": 0.0
+        },
+        {
+          "case": "case_04",
+          "num_cases_evaluated": 1,
+          "model_div_mean": 0.8984214509892097,
+          "model_cov_mean": 1.0,
+          "collapse_rate_mean": 0.0
+        }
+      ]
+    },
+    "sem": {
+      "per_case": [
+        {
+          "case": "case_00",
+          "num_cases_evaluated": 1,
+          "model_div_mean": 0.8957582739744646,
+          "model_cov_mean": 1.0,
+          "collapse_rate_mean": 0.0
+        },
+        {
+          "case": "case_01",
+          "num_cases_evaluated": 1,
+          "model_div_mean": 0.8833733953592512,
+          "model_cov_mean": 1.0,
+          "collapse_rate_mean": 0.0
+        },
+        {
+          "case": "case_02",
+          "num_cases_evaluated": 1,
+          "model_div_mean": 0.9603244509341023,
+          "model_cov_mean": 1.0,
+          "collapse_rate_mean": 0.0
+        },
+        {
+          "case": "case_03",
+          "num_cases_evaluated": 1,
+          "model_div_mean": 0.9451956069280308,
+          "model_cov_mean": 1.0,
+          "collapse_rate_mean": 0.0
+        },
+        {
+          "case": "case_04",
+          "num_cases_evaluated": 1,
+          "model_div_mean": 0.9564135874918581,
+          "model_cov_mean": 1.0,
+          "collapse_rate_mean": 0.0
+        }
+      ]
+    }
+  }
+}

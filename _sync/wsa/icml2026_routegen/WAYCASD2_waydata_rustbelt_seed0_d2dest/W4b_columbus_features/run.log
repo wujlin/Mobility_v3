@@ -1,0 +1,8 @@
+{
+  "ok": true,
+  "out_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD2_waydata_rustbelt_seed0_d2dest/W4b_columbus_features/way_features.npz",
+  "n_way_vocab": 19551,
+  "missing_frac": 0.6014014628407754,
+  "way_len_p50_m": 117.02199999999999,
+  "way_len_p90_m": 519.3926000000001
+}

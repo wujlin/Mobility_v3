@@ -1,0 +1,7 @@
+/home/jinlin/miniconda3/envs/dpl/lib/python3.11/site-packages/torch/nn/modules/transformer.py:392: UserWarning: enable_nested_tensor is True, but self.use_nested_tensor is False because encoder_layer.norm_first was True
+  warnings.warn(
+[city0] gt:greedy done=200/200
+[city0] gt:beam done=200/200
+[city1] gt:greedy done=200/200
+[city1] gt:beam done=200/200
+[saved] /home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD_DIAG_beam_gt_pastctxfix_seed0_n200pc/bs10.report.json

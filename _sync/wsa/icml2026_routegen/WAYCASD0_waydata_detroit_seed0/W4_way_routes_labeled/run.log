@@ -1,0 +1,10 @@
+{
+  "ok": true,
+  "out_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD0_waydata_detroit_seed0/W4_way_routes_labeled/way_routes_labeled.npz",
+  "corridor_type_counts": [
+    2051,
+    173,
+    33,
+    22
+  ]
+}

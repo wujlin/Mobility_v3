@@ -1,0 +1,52 @@
+{
+  "inputs": {
+    "train_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E_S1_segments_fixedlen_detroit_F256_p300_c40_t60_d1p2_seed0/detroit_segments_route_F256_epoch_seed0.npz"
+  },
+  "config": {
+    "pos_max": 1023,
+    "max_train_n": null,
+    "temporal_mode": "auto",
+    "temporal_tz_offset_hours": -5.0,
+    "hidden_dim": 128,
+    "diff_steps": 100,
+    "pred_type": "eps",
+    "cfg_drop_dest_prob": 0.0,
+    "cfg_uncond_dest_mode": "origin",
+    "batch_size": 256,
+    "epochs": 200,
+    "lr": 0.001,
+    "num_workers": 24,
+    "max_batches": null,
+    "seed": 0
+  },
+  "stats": {
+    "N": 1092,
+    "F": 256,
+    "pos_min": [
+      0.0,
+      0.0
+    ],
+    "pos_max": [
+      1023.0,
+      1023.0
+    ],
+    "vel_mean": [
+      -0.01442665420472622,
+      -0.02443552576005459
+    ],
+    "vel_std": [
+      1.1072781085968018,
+      1.1698698997497559
+    ],
+    "dest_pos_present": true
+  },
+  "timing": {
+    "wall_s": 114.18185377120972,
+    "steps": 1000
+  },
+  "outputs": {
+    "out_dir": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E1seg_e2e_diffusion_detroit_segF256_seed0",
+    "checkpoint": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E1seg_e2e_diffusion_detroit_segF256_seed0/last.pt",
+    "summary_json": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E1seg_e2e_diffusion_detroit_segF256_seed0/train_summary.json"
+  }
+}

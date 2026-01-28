@@ -1,0 +1,36 @@
+{
+  "inputs": {
+    "checkpoint": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E19b_gridattn_poi_entropy_detroit_F256_od128_seed0/last.pt",
+    "case_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E0_gt_baseline_detroit_F256_n200k_seed0_od128_n10_sep2/case_04/gt_case.npz",
+    "semantic_dir": "/home/jinlin/data/geoexplicit_data/worldtrace/detroit_core_v1"
+  },
+  "config": {
+    "semantic_mode": "gridattn",
+    "index": 0,
+    "grid_patch_size": 16,
+    "grid_extent": 128.0,
+    "grid_channels": "poi,entropy",
+    "attn_heads": 4,
+    "attn_weight": 1.0,
+    "seed": 0
+  },
+  "outputs": {
+    "attn_heatmap_npy": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E19c_attn_viz_gridattn_case04_idx0_seed0/attn_heatmap.npy",
+    "attn_heatmap_png": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E19c_attn_viz_gridattn_case04_idx0_seed0/attn_heatmap.png",
+    "attn_heatmap_pdf": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E19c_attn_viz_gridattn_case04_idx0_seed0/attn_heatmap.pdf"
+  },
+  "stats": {
+    "heat_min": 0.0,
+    "heat_max": 0.875,
+    "heat_mean": 0.00390625,
+    "heat_sum": 1.0,
+    "entropy_nats": 0.4276658986873927,
+    "entropy_norm_0to1": 0.07712393389920291,
+    "l1_to_uniform": 1.9765625,
+    "max_prob": 0.875,
+    "top1_mass": 0.875,
+    "top4_mass": 1.0,
+    "top16_mass": 1.0,
+    "top32_mass": 1.0
+  }
+}

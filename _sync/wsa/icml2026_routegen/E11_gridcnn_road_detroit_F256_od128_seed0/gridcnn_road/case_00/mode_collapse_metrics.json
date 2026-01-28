@@ -1,0 +1,60 @@
+{
+  "inputs": {
+    "gt_report_json": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E0_gt_baseline_detroit_F256_n200k_seed0_od128_n10_sep2/report.json",
+    "gt_windows_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/gt_windows/detroit_segments_F256_n200k_seed0.npz",
+    "model_samples_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E11_gridcnn_road_detroit_F256_od128_seed0/gridcnn_road/case_00/samples.npz"
+  },
+  "config": {
+    "od_end": "dest_pos",
+    "jacc_cell": 8.0,
+    "collapse_ratio": 0.5,
+    "seed": 0
+  },
+  "overall": {
+    "num_cases_evaluated": 1,
+    "model_div_mean": 0.662753690873078,
+    "model_cov_mean": 0.940677966101695,
+    "collapse_rate_mean": 0.0,
+    "mixture_jsd_mean": 0.007490145878441372,
+    "mixture_l1_mean": 0.17796610169492474
+  },
+  "per_case": [
+    {
+      "case_id": 0,
+      "n_model_matched": 59,
+      "gt_div_mean": 0.6136704683979685,
+      "collapse_threshold": 0.30683523419898423,
+      "gt_corridor_mix": {
+        "frac": [
+          0.7966101694915119,
+          0.20338983050847112
+        ],
+        "counts": [
+          47,
+          12
+        ]
+      },
+      "model_corridor_mix": {
+        "frac": [
+          0.8855932203389824,
+          0.11440677966101687
+        ],
+        "counts": [
+          1045,
+          135
+        ]
+      },
+      "mixture_jsd": 0.007490145878441372,
+      "mixture_l1": 0.17796610169492474,
+      "model_div": {
+        "mean": 0.662753690873078,
+        "p50": 0.6839095896187104
+      },
+      "model_coverage": {
+        "mean": 0.940677966101695,
+        "p50": 1.0
+      },
+      "collapse_rate": 0.0
+    }
+  ]
+}

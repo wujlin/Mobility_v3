@@ -1,0 +1,21 @@
+{
+  "gate": "E12 (Execution-stage road prior)",
+  "baseline_cascade": {
+    "ADE_best": 23.784603118896484,
+    "onroad": 0.9117929339408875,
+    "road_prob_mean": 0.8935967087745667,
+    "jaccard": 0.7817878723144531
+  },
+  "exec_road": {
+    "ADE_best": 23.758071899414062,
+    "onroad": 0.9522228240966797,
+    "road_prob_mean": 0.9425258636474609,
+    "jaccard": 0.7761030197143555
+  },
+  "exec_road_strong": {
+    "ADE_best": 23.776670455932617,
+    "onroad": 0.9640418291091919,
+    "road_prob_mean": 0.9583536982536316,
+    "jaccard": 0.7741305828094482
+  }
+}

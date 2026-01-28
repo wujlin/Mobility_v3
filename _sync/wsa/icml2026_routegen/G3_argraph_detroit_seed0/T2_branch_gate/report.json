@@ -1,0 +1,71 @@
+{
+  "ok": true,
+  "gate": "G3_branch_semantic_informativeness",
+  "inputs": {
+    "paths_graph_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/G3_argraph_detroit_seed0/T1_dump_paths/paths_graph.npz",
+    "road_graph_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/G1_roadgraph_detroit/road_graph.npz",
+    "semantic_dir": "/home/jinlin/data/geoexplicit_data/worldtrace/detroit_core_v1"
+  },
+  "config": {
+    "od_bin": 128,
+    "min_traj_per_od": 10,
+    "min_multimodal_dist": 0.3,
+    "tier_hops": 32,
+    "tz_offset_hours": -5.0,
+    "test_frac": 0.2,
+    "l2": 0.01,
+    "lr": 0.5,
+    "steps": 500,
+    "seed": 0,
+    "max_od_groups": 0
+  },
+  "stats": {
+    "N_routes": 1057,
+    "od_groups": {
+      "raw": 435,
+      "min_traj": 10,
+      "multimodal": 10,
+      "used": 1,
+      "skipped_no_branch": 0,
+      "skipped_one_class": 3
+    },
+    "samples": {
+      "n": 10,
+      "pos": 3,
+      "pos_frac": 0.30000001192092896
+    },
+    "branch_depth": {
+      "p50": 1.0,
+      "p90": 1.0
+    },
+    "split": {
+      "n_groups_train": 1,
+      "n_groups_test": 0
+    }
+  },
+  "auc": {
+    "time_only": {
+      "auc": null,
+      "n_train": 10,
+      "n_test": 0
+    },
+    "tier_only": {
+      "auc": null,
+      "n_train": 10,
+      "n_test": 0
+    },
+    "time_tier": {
+      "auc": null,
+      "n_train": 10,
+      "n_test": 0
+    }
+  },
+  "decision": {
+    "auc_used": null,
+    "label": "NO_DATA"
+  },
+  "outputs": {
+    "report_json": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/G3_argraph_detroit_seed0/T2_branch_gate/report.json",
+    "events_jsonl": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/G3_argraph_detroit_seed0/T2_branch_gate/events.jsonl"
+  }
+}

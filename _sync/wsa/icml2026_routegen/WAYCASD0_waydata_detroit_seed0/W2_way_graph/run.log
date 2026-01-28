@@ -1,0 +1,8 @@
+{
+  "ok": true,
+  "out_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD0_waydata_detroit_seed0/W2_way_graph/way_graph.npz",
+  "n_ways": 10804,
+  "n_edges_directed": 14491,
+  "out_deg_p50": 1.0,
+  "out_deg_p90": 2.0
+}

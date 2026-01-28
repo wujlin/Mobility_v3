@@ -1,0 +1,6 @@
+2026-01-24 23:41:08,439 - INFO - device=cuda
+eval:   0%|          | 0/1 [00:00<?, ?it/s]eval: 100%|██████████| 1/1 [00:00<00:00,  1.43it/s]eval: 100%|██████████| 1/1 [00:00<00:00,  1.43it/s]
+eval:   0%|          | 0/1 [00:00<?, ?it/s]eval: 100%|██████████| 1/1 [00:00<00:00,  2.27it/s]eval: 100%|██████████| 1/1 [00:00<00:00,  2.27it/s]
+eval:   0%|          | 0/1 [00:00<?, ?it/s]eval: 100%|██████████| 1/1 [00:00<00:00,  2.31it/s]eval: 100%|██████████| 1/1 [00:00<00:00,  2.31it/s]
+eval:   0%|          | 0/1 [00:00<?, ?it/s]eval: 100%|██████████| 1/1 [00:00<00:00,  2.26it/s]eval: 100%|██████████| 1/1 [00:00<00:00,  2.25it/s]
+2026-01-24 23:41:10,706 - INFO - saved: /home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD_STRICT_stepdest_nL64_rustbelt_seed0_e1000/W6_train_ae/route_difficulty.json

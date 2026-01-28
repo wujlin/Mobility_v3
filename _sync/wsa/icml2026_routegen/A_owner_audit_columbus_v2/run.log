@@ -1,0 +1,5 @@
+[INFO] owner_lookup chunks=10/24 found=1834 elapsed_s=26.7 chunks_ps=0.37
+[INFO] owner_lookup chunks=20/24 found=3834 elapsed_s=26.8 chunks_ps=0.75
+[INFO] owner_lookup chunks=24/24 found=4634 elapsed_s=26.8 chunks_ps=0.89
+[saved] /home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/A_owner_audit_columbus_v2/report.json
+[saved] /home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/A_owner_audit_columbus_v2/report.md

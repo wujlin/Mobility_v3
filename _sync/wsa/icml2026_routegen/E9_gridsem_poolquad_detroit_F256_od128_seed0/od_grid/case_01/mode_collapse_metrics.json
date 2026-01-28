@@ -1,0 +1,60 @@
+{
+  "inputs": {
+    "gt_report_json": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E0_gt_baseline_detroit_F256_n200k_seed0_od128_n10_sep2/report.json",
+    "gt_windows_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E0_gt_baseline_detroit_F256_n200k_seed0_od128_n10_sep2/case_01/gt_case.npz",
+    "model_samples_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E9_gridsem_poolquad_detroit_F256_od128_seed0/od_grid/case_01/samples.npz"
+  },
+  "config": {
+    "od_end": "dest_pos",
+    "jacc_cell": 8.0,
+    "collapse_ratio": 0.5,
+    "seed": 0
+  },
+  "overall": {
+    "num_cases_evaluated": 1,
+    "model_div_mean": 0.7134819510945256,
+    "model_cov_mean": 0.9512195121951219,
+    "collapse_rate_mean": 0.0,
+    "mixture_jsd_mean": 0.025028639676401974,
+    "mixture_l1_mean": 0.3926829268292741
+  },
+  "per_case": [
+    {
+      "case_id": 1,
+      "n_model_matched": 41,
+      "gt_div_mean": 0.7904424662648591,
+      "collapse_threshold": 0.3952212331324296,
+      "gt_corridor_mix": {
+        "frac": [
+          0.6341463414633991,
+          0.3658536585365764
+        ],
+        "counts": [
+          26,
+          15
+        ]
+      },
+      "model_corridor_mix": {
+        "frac": [
+          0.8304878048780477,
+          0.169512195121951
+        ],
+        "counts": [
+          681,
+          139
+        ]
+      },
+      "mixture_jsd": 0.025028639676401974,
+      "mixture_l1": 0.3926829268292741,
+      "model_div": {
+        "mean": 0.7134819510945256,
+        "p50": 0.7161804996135026
+      },
+      "model_coverage": {
+        "mean": 0.9512195121951219,
+        "p50": 1.0
+      },
+      "collapse_rate": 0.0
+    }
+  ]
+}

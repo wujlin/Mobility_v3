@@ -1,0 +1,33 @@
+2026-01-16 00:53:57,896 - INFO - device=cuda
+2026-01-16 00:53:57,903 - INFO - routes: total=2277 train=2049 val=228 max_way_len=128
+2026-01-16 00:54:01,517 - INFO - epoch=1 train_loss=0.3562 train_acc=0.771 val_loss=0.3224 val_acc=0.786
+2026-01-16 00:54:03,433 - INFO - epoch=2 train_loss=0.3536 train_acc=0.773 val_loss=0.3223 val_acc=0.796
+2026-01-16 00:54:05,262 - INFO - epoch=3 train_loss=0.3532 train_acc=0.774 val_loss=0.3223 val_acc=0.797
+2026-01-16 00:54:07,072 - INFO - epoch=4 train_loss=0.3528 train_acc=0.774 val_loss=0.3212 val_acc=0.795
+2026-01-16 00:54:08,867 - INFO - epoch=5 train_loss=0.3517 train_acc=0.777 val_loss=0.3201 val_acc=0.790
+2026-01-16 00:54:10,685 - INFO - epoch=6 train_loss=0.3508 train_acc=0.776 val_loss=0.3183 val_acc=0.790
+2026-01-16 00:54:12,475 - INFO - epoch=7 train_loss=0.3500 train_acc=0.775 val_loss=0.3177 val_acc=0.790
+2026-01-16 00:54:14,229 - INFO - epoch=8 train_loss=0.3497 train_acc=0.777 val_loss=0.3173 val_acc=0.789
+2026-01-16 00:54:16,011 - INFO - epoch=9 train_loss=0.3512 train_acc=0.775 val_loss=0.3198 val_acc=0.789
+2026-01-16 00:54:17,824 - INFO - epoch=10 train_loss=0.3502 train_acc=0.775 val_loss=0.3177 val_acc=0.793
+2026-01-16 00:54:19,654 - INFO - epoch=11 train_loss=0.3504 train_acc=0.773 val_loss=0.3172 val_acc=0.794
+2026-01-16 00:54:21,507 - INFO - epoch=12 train_loss=0.3492 train_acc=0.777 val_loss=0.3167 val_acc=0.794
+2026-01-16 00:54:23,352 - INFO - epoch=13 train_loss=0.3491 train_acc=0.776 val_loss=0.3164 val_acc=0.795
+2026-01-16 00:54:25,191 - INFO - epoch=14 train_loss=0.3486 train_acc=0.776 val_loss=0.3162 val_acc=0.793
+2026-01-16 00:54:27,004 - INFO - epoch=15 train_loss=0.3488 train_acc=0.776 val_loss=0.3161 val_acc=0.791
+2026-01-16 00:54:28,837 - INFO - epoch=16 train_loss=0.3478 train_acc=0.777 val_loss=0.3159 val_acc=0.790
+2026-01-16 00:54:30,644 - INFO - epoch=17 train_loss=0.3481 train_acc=0.776 val_loss=0.3157 val_acc=0.794
+2026-01-16 00:54:32,419 - INFO - epoch=18 train_loss=0.3473 train_acc=0.778 val_loss=0.3159 val_acc=0.793
+2026-01-16 00:54:34,199 - INFO - epoch=19 train_loss=0.3495 train_acc=0.776 val_loss=0.3170 val_acc=0.789
+2026-01-16 00:54:36,006 - INFO - epoch=20 train_loss=0.3496 train_acc=0.776 val_loss=0.3177 val_acc=0.793
+2026-01-16 00:54:37,769 - INFO - epoch=21 train_loss=0.3510 train_acc=0.773 val_loss=0.3169 val_acc=0.798
+2026-01-16 00:54:39,627 - INFO - epoch=22 train_loss=0.3483 train_acc=0.775 val_loss=0.3161 val_acc=0.799
+2026-01-16 00:54:41,481 - INFO - epoch=23 train_loss=0.3476 train_acc=0.775 val_loss=0.3156 val_acc=0.795
+2026-01-16 00:54:43,376 - INFO - epoch=24 train_loss=0.3467 train_acc=0.778 val_loss=0.3148 val_acc=0.791
+2026-01-16 00:54:45,199 - INFO - epoch=25 train_loss=0.3466 train_acc=0.778 val_loss=0.3146 val_acc=0.788
+2026-01-16 00:54:46,991 - INFO - epoch=26 train_loss=0.3463 train_acc=0.776 val_loss=0.3145 val_acc=0.788
+2026-01-16 00:54:48,840 - INFO - epoch=27 train_loss=0.3461 train_acc=0.777 val_loss=0.3143 val_acc=0.791
+2026-01-16 00:54:50,787 - INFO - epoch=28 train_loss=0.3456 train_acc=0.778 val_loss=0.3144 val_acc=0.792
+2026-01-16 00:54:52,671 - INFO - epoch=29 train_loss=0.3460 train_acc=0.776 val_loss=0.3155 val_acc=0.795
+2026-01-16 00:54:54,537 - INFO - epoch=30 train_loss=0.3460 train_acc=0.778 val_loss=0.3144 val_acc=0.790
+2026-01-16 00:54:54,537 - INFO - saved: /home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD0_waydata_detroit_seed0/W5_train_ae/report.json

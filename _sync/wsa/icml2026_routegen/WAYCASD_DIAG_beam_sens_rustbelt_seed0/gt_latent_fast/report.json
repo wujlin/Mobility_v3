@@ -1,0 +1,885 @@
+{
+  "ok": true,
+  "task": "way_casd_beam_sensitivity",
+  "created_at": "2026-01-16T20:55:45.662814+08:00",
+  "cfg": {
+    "seed": 0,
+    "device": "cuda",
+    "tz_offset_hours": -5.0,
+    "latent_source": "gt",
+    "n_samples_per_route": 4,
+    "max_way_len": 160,
+    "max_decode_len": 160,
+    "beam_sizes": [
+      10,
+      50
+    ],
+    "cfg_scale": 1.5,
+    "solver_steps": null,
+    "corridor_type_override": null,
+    "n_per_bucket": 10,
+    "decode_len_mode": "relative",
+    "rel_decode_k": 2.0,
+    "rel_decode_b": 20,
+    "log_every_routes": 2
+  },
+  "inputs": {
+    "way_routes_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD1_waydata_rustbelt_seed0/W5_way_routes_labeled/way_routes_labeled.npz",
+    "way_graph_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD1_waydata_rustbelt_seed0/W3_way_graph/way_graph.npz",
+    "way_features_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD1_waydata_rustbelt_seed0/W4_way_features/way_features.npz",
+    "ae_ckpt": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD1_waydata_rustbelt_seed0/W6_train_ae/ckpt_best.pt",
+    "flow_ckpt": null
+  },
+  "picked_routes": [
+    18,
+    32,
+    45,
+    192,
+    213,
+    238,
+    567,
+    707,
+    709,
+    1113,
+    2052,
+    2112,
+    2220,
+    2303,
+    2383,
+    2704,
+    2958,
+    3107,
+    3129,
+    3229,
+    3773,
+    4248,
+    4267,
+    4276,
+    4485,
+    4486,
+    4550,
+    4568,
+    4770,
+    5094,
+    5234,
+    5764,
+    5955,
+    6115,
+    6340,
+    6419,
+    6464,
+    6552,
+    6995,
+    7011
+  ],
+  "ae_ckpt_cfg": {
+    "batch_size": 512,
+    "num_workers": 24,
+    "n_epochs": 30,
+    "lr": 0.0002,
+    "weight_decay": 0.0001,
+    "val_ratio": 0.1,
+    "seed": 0,
+    "device": "cuda",
+    "tz_offset_hours": -5.0,
+    "max_way_len": 160,
+    "max_candidates": 64,
+    "max_routes": null,
+    "d_model": 256,
+    "n_latent": 32,
+    "n_heads": 8,
+    "dropout": 0.1,
+    "max_len": 160
+  },
+  "flow_ckpt_cfg": {},
+  "results": [
+    {
+      "summary": {
+        "beam_size": 10,
+        "overall": {
+          "n_routes": 40,
+          "gt_valid_rate": 1.0,
+          "success_rate": 0.525
+        },
+        "by_bucket": {
+          "lt15": {
+            "n_routes": 10,
+            "gt_valid_rate": 1.0,
+            "success_rate": 0.5
+          },
+          "15_30": {
+            "n_routes": 10,
+            "gt_valid_rate": 1.0,
+            "success_rate": 0.7
+          },
+          "31_60": {
+            "n_routes": 10,
+            "gt_valid_rate": 1.0,
+            "success_rate": 0.6
+          },
+          "gt60": {
+            "n_routes": 10,
+            "gt_valid_rate": 1.0,
+            "success_rate": 0.3
+          }
+        }
+      },
+      "per_route": [
+        {
+          "route_id": 18,
+          "gt_len": 21,
+          "bucket": "15_30",
+          "gt_valid": true,
+          "n_samples": 1,
+          "success_rate": 1.0,
+          "jaccard_mean": 0.9545454545454546
+        },
+        {
+          "route_id": 32,
+          "gt_len": 35,
+          "bucket": "31_60",
+          "gt_valid": true,
+          "n_samples": 1,
+          "success_rate": 1.0,
+          "jaccard_mean": 0.9722222222222222
+        },
+        {
+          "route_id": 45,
+          "gt_len": 38,
+          "bucket": "31_60",
+          "gt_valid": true,
+          "n_samples": 1,
+          "success_rate": 0.0,
+          "jaccard_mean": 0.024390243902439025
+        },
+        {
+          "route_id": 192,
+          "gt_len": 35,
+          "bucket": "31_60",
+          "gt_valid": true,
+          "n_samples": 1,
+          "success_rate": 0.0,
+          "jaccard_mean": 0.058823529411764705
+        },
+        {
+          "route_id": 213,
+          "gt_len": 7,
+          "bucket": "lt15",
+          "gt_valid": true,
+          "n_samples": 1,
+          "success_rate": 0.0,
+          "jaccard_mean": 0.05
+        },
+        {
+          "route_id": 238,
+          "gt_len": 17,
+          "bucket": "15_30",
+          "gt_valid": true,
+          "n_samples": 1,
+          "success_rate": 1.0,
+          "jaccard_mean": 0.9411764705882353
+        },
+        {
+          "route_id": 567,
+          "gt_len": 14,
+          "bucket": "lt15",
+          "gt_valid": true,
+          "n_samples": 1,
+          "success_rate": 1.0,
+          "jaccard_mean": 1.0
+        },
+        {
+          "route_id": 707,
+          "gt_len": 80,
+          "bucket": "gt60",
+          "gt_valid": true,
+          "n_samples": 1,
+          "success_rate": 0.0,
+          "jaccard_mean": 0.38311688311688313
+        },
+        {
+          "route_id": 709,
+          "gt_len": 33,
+          "bucket": "31_60",
+          "gt_valid": true,
+          "n_samples": 1,
+          "success_rate": 1.0,
+          "jaccard_mean": 0.9393939393939394
+        },
+        {
+          "route_id": 1113,
+          "gt_len": 6,
+          "bucket": "lt15",
+          "gt_valid": true,
+          "n_samples": 1,
+          "success_rate": 1.0,
+          "jaccard_mean": 1.0
+        },
+        {
+          "route_id": 2052,
+          "gt_len": 61,
+          "bucket": "gt60",
+          "gt_valid": true,
+          "n_samples": 1,
+          "success_rate": 0.0,
+          "jaccard_mean": 0.0625
+        },
+        {
+          "route_id": 2112,
+          "gt_len": 31,
+          "bucket": "31_60",
+          "gt_valid": true,
+          "n_samples": 1,
+          "success_rate": 0.0,
+          "jaccard_mean": 0.0967741935483871
+        },
+        {
+          "route_id": 2220,
+          "gt_len": 36,
+          "bucket": "31_60",
+          "gt_valid": true,
+          "n_samples": 1,
+          "success_rate": 0.0,
+          "jaccard_mean": 0.10256410256410256
+        },
+        {
+          "route_id": 2303,
+          "gt_len": 24,
+          "bucket": "15_30",
+          "gt_valid": true,
+          "n_samples": 1,
+          "success_rate": 0.0,
+          "jaccard_mean": 0.03571428571428571
+        },
+        {
+          "route_id": 2383,
+          "gt_len": 9,
+          "bucket": "lt15",
+          "gt_valid": true,
+          "n_samples": 1,
+          "success_rate": 0.0,
+          "jaccard_mean": 0.09090909090909091
+        },
+        {
+          "route_id": 2704,
+          "gt_len": 59,
+          "bucket": "31_60",
+          "gt_valid": true,
+          "n_samples": 1,
+          "success_rate": 1.0,
+          "jaccard_mean": 0.9833333333333333
+        },
+        {
+          "route_id": 2958,
+          "gt_len": 7,
+          "bucket": "lt15",
+          "gt_valid": true,
+          "n_samples": 1,
+          "success_rate": 1.0,
+          "jaccard_mean": 1.0
+        },
+        {
+          "route_id": 3107,
+          "gt_len": 26,
+          "bucket": "15_30",
+          "gt_valid": true,
+          "n_samples": 1,
+          "success_rate": 1.0,
+          "jaccard_mean": 1.0
+        },
+        {
+          "route_id": 3129,
+          "gt_len": 37,
+          "bucket": "31_60",
+          "gt_valid": true,
+          "n_samples": 1,
+          "success_rate": 1.0,
+          "jaccard_mean": 1.0
+        },
+        {
+          "route_id": 3229,
+          "gt_len": 14,
+          "bucket": "lt15",
+          "gt_valid": true,
+          "n_samples": 1,
+          "success_rate": 1.0,
+          "jaccard_mean": 1.0
+        },
+        {
+          "route_id": 3773,
+          "gt_len": 61,
+          "bucket": "gt60",
+          "gt_valid": true,
+          "n_samples": 1,
+          "success_rate": 0.0,
+          "jaccard_mean": 0.09
+        },
+        {
+          "route_id": 4248,
+          "gt_len": 65,
+          "bucket": "gt60",
+          "gt_valid": true,
+          "n_samples": 1,
+          "success_rate": 1.0,
+          "jaccard_mean": 0.09230769230769231
+        },
+        {
+          "route_id": 4267,
+          "gt_len": 45,
+          "bucket": "31_60",
+          "gt_valid": true,
+          "n_samples": 1,
+          "success_rate": 1.0,
+          "jaccard_mean": 1.0
+        },
+        {
+          "route_id": 4276,
+          "gt_len": 22,
+          "bucket": "15_30",
+          "gt_valid": true,
+          "n_samples": 1,
+          "success_rate": 1.0,
+          "jaccard_mean": 0.9545454545454546
+        },
+        {
+          "route_id": 4485,
+          "gt_len": 35,
+          "bucket": "31_60",
+          "gt_valid": true,
+          "n_samples": 1,
+          "success_rate": 1.0,
+          "jaccard_mean": 0.9714285714285714
+        },
+        {
+          "route_id": 4486,
+          "gt_len": 8,
+          "bucket": "lt15",
+          "gt_valid": true,
+          "n_samples": 1,
+          "success_rate": 1.0,
+          "jaccard_mean": 1.0
+        },
+        {
+          "route_id": 4550,
+          "gt_len": 73,
+          "bucket": "gt60",
+          "gt_valid": true,
+          "n_samples": 1,
+          "success_rate": 0.0,
+          "jaccard_mean": 0.06153846153846154
+        },
+        {
+          "route_id": 4568,
+          "gt_len": 63,
+          "bucket": "gt60",
+          "gt_valid": true,
+          "n_samples": 1,
+          "success_rate": 1.0,
+          "jaccard_mean": 0.8636363636363636
+        },
+        {
+          "route_id": 4770,
+          "gt_len": 69,
+          "bucket": "gt60",
+          "gt_valid": true,
+          "n_samples": 1,
+          "success_rate": 0.0,
+          "jaccard_mean": 0.18681318681318682
+        },
+        {
+          "route_id": 5094,
+          "gt_len": 24,
+          "bucket": "15_30",
+          "gt_valid": true,
+          "n_samples": 1,
+          "success_rate": 1.0,
+          "jaccard_mean": 0.96
+        },
+        {
+          "route_id": 5234,
+          "gt_len": 8,
+          "bucket": "lt15",
+          "gt_valid": true,
+          "n_samples": 1,
+          "success_rate": 0.0,
+          "jaccard_mean": 0.125
+        },
+        {
+          "route_id": 5764,
+          "gt_len": 26,
+          "bucket": "15_30",
+          "gt_valid": true,
+          "n_samples": 1,
+          "success_rate": 1.0,
+          "jaccard_mean": 1.0
+        },
+        {
+          "route_id": 5955,
+          "gt_len": 65,
+          "bucket": "gt60",
+          "gt_valid": true,
+          "n_samples": 1,
+          "success_rate": 0.0,
+          "jaccard_mean": 0.09644670050761421
+        },
+        {
+          "route_id": 6115,
+          "gt_len": 20,
+          "bucket": "15_30",
+          "gt_valid": true,
+          "n_samples": 1,
+          "success_rate": 0.0,
+          "jaccard_mean": 0.09090909090909091
+        },
+        {
+          "route_id": 6340,
+          "gt_len": 13,
+          "bucket": "lt15",
+          "gt_valid": true,
+          "n_samples": 1,
+          "success_rate": 0.0,
+          "jaccard_mean": 0.03125
+        },
+        {
+          "route_id": 6419,
+          "gt_len": 63,
+          "bucket": "gt60",
+          "gt_valid": true,
+          "n_samples": 1,
+          "success_rate": 1.0,
+          "jaccard_mean": 0.8636363636363636
+        },
+        {
+          "route_id": 6464,
+          "gt_len": 22,
+          "bucket": "15_30",
+          "gt_valid": true,
+          "n_samples": 1,
+          "success_rate": 0.0,
+          "jaccard_mean": 0.06097560975609756
+        },
+        {
+          "route_id": 6552,
+          "gt_len": 10,
+          "bucket": "lt15",
+          "gt_valid": true,
+          "n_samples": 1,
+          "success_rate": 0.0,
+          "jaccard_mean": 0.09090909090909091
+        },
+        {
+          "route_id": 6995,
+          "gt_len": 15,
+          "bucket": "15_30",
+          "gt_valid": true,
+          "n_samples": 1,
+          "success_rate": 1.0,
+          "jaccard_mean": 1.0
+        },
+        {
+          "route_id": 7011,
+          "gt_len": 61,
+          "bucket": "gt60",
+          "gt_valid": true,
+          "n_samples": 1,
+          "success_rate": 0.0,
+          "jaccard_mean": 0.04411764705882353
+        }
+      ]
+    },
+    {
+      "summary": {
+        "beam_size": 50,
+        "overall": {
+          "n_routes": 40,
+          "gt_valid_rate": 1.0,
+          "success_rate": 0.6
+        },
+        "by_bucket": {
+          "lt15": {
+            "n_routes": 10,
+            "gt_valid_rate": 1.0,
+            "success_rate": 0.5
+          },
+          "15_30": {
+            "n_routes": 10,
+            "gt_valid_rate": 1.0,
+            "success_rate": 0.8
+          },
+          "31_60": {
+            "n_routes": 10,
+            "gt_valid_rate": 1.0,
+            "success_rate": 0.7
+          },
+          "gt60": {
+            "n_routes": 10,
+            "gt_valid_rate": 1.0,
+            "success_rate": 0.4
+          }
+        }
+      },
+      "per_route": [
+        {
+          "route_id": 18,
+          "gt_len": 21,
+          "bucket": "15_30",
+          "gt_valid": true,
+          "n_samples": 1,
+          "success_rate": 1.0,
+          "jaccard_mean": 0.9545454545454546
+        },
+        {
+          "route_id": 32,
+          "gt_len": 35,
+          "bucket": "31_60",
+          "gt_valid": true,
+          "n_samples": 1,
+          "success_rate": 1.0,
+          "jaccard_mean": 0.9722222222222222
+        },
+        {
+          "route_id": 45,
+          "gt_len": 38,
+          "bucket": "31_60",
+          "gt_valid": true,
+          "n_samples": 1,
+          "success_rate": 1.0,
+          "jaccard_mean": 0.9736842105263158
+        },
+        {
+          "route_id": 192,
+          "gt_len": 35,
+          "bucket": "31_60",
+          "gt_valid": true,
+          "n_samples": 1,
+          "success_rate": 0.0,
+          "jaccard_mean": 0.058823529411764705
+        },
+        {
+          "route_id": 213,
+          "gt_len": 7,
+          "bucket": "lt15",
+          "gt_valid": true,
+          "n_samples": 1,
+          "success_rate": 0.0,
+          "jaccard_mean": 0.05
+        },
+        {
+          "route_id": 238,
+          "gt_len": 17,
+          "bucket": "15_30",
+          "gt_valid": true,
+          "n_samples": 1,
+          "success_rate": 1.0,
+          "jaccard_mean": 0.9411764705882353
+        },
+        {
+          "route_id": 567,
+          "gt_len": 14,
+          "bucket": "lt15",
+          "gt_valid": true,
+          "n_samples": 1,
+          "success_rate": 1.0,
+          "jaccard_mean": 1.0
+        },
+        {
+          "route_id": 707,
+          "gt_len": 80,
+          "bucket": "gt60",
+          "gt_valid": true,
+          "n_samples": 1,
+          "success_rate": 0.0,
+          "jaccard_mean": 0.3027027027027027
+        },
+        {
+          "route_id": 709,
+          "gt_len": 33,
+          "bucket": "31_60",
+          "gt_valid": true,
+          "n_samples": 1,
+          "success_rate": 1.0,
+          "jaccard_mean": 0.9393939393939394
+        },
+        {
+          "route_id": 1113,
+          "gt_len": 6,
+          "bucket": "lt15",
+          "gt_valid": true,
+          "n_samples": 1,
+          "success_rate": 1.0,
+          "jaccard_mean": 1.0
+        },
+        {
+          "route_id": 2052,
+          "gt_len": 61,
+          "bucket": "gt60",
+          "gt_valid": true,
+          "n_samples": 1,
+          "success_rate": 0.0,
+          "jaccard_mean": 0.0625
+        },
+        {
+          "route_id": 2112,
+          "gt_len": 31,
+          "bucket": "31_60",
+          "gt_valid": true,
+          "n_samples": 1,
+          "success_rate": 0.0,
+          "jaccard_mean": 0.0967741935483871
+        },
+        {
+          "route_id": 2220,
+          "gt_len": 36,
+          "bucket": "31_60",
+          "gt_valid": true,
+          "n_samples": 1,
+          "success_rate": 0.0,
+          "jaccard_mean": 0.10256410256410256
+        },
+        {
+          "route_id": 2303,
+          "gt_len": 24,
+          "bucket": "15_30",
+          "gt_valid": true,
+          "n_samples": 1,
+          "success_rate": 0.0,
+          "jaccard_mean": 0.02197802197802198
+        },
+        {
+          "route_id": 2383,
+          "gt_len": 9,
+          "bucket": "lt15",
+          "gt_valid": true,
+          "n_samples": 1,
+          "success_rate": 0.0,
+          "jaccard_mean": 0.043478260869565216
+        },
+        {
+          "route_id": 2704,
+          "gt_len": 59,
+          "bucket": "31_60",
+          "gt_valid": true,
+          "n_samples": 1,
+          "success_rate": 1.0,
+          "jaccard_mean": 0.9833333333333333
+        },
+        {
+          "route_id": 2958,
+          "gt_len": 7,
+          "bucket": "lt15",
+          "gt_valid": true,
+          "n_samples": 1,
+          "success_rate": 1.0,
+          "jaccard_mean": 1.0
+        },
+        {
+          "route_id": 3107,
+          "gt_len": 26,
+          "bucket": "15_30",
+          "gt_valid": true,
+          "n_samples": 1,
+          "success_rate": 1.0,
+          "jaccard_mean": 1.0
+        },
+        {
+          "route_id": 3129,
+          "gt_len": 37,
+          "bucket": "31_60",
+          "gt_valid": true,
+          "n_samples": 1,
+          "success_rate": 1.0,
+          "jaccard_mean": 1.0
+        },
+        {
+          "route_id": 3229,
+          "gt_len": 14,
+          "bucket": "lt15",
+          "gt_valid": true,
+          "n_samples": 1,
+          "success_rate": 1.0,
+          "jaccard_mean": 1.0
+        },
+        {
+          "route_id": 3773,
+          "gt_len": 61,
+          "bucket": "gt60",
+          "gt_valid": true,
+          "n_samples": 1,
+          "success_rate": 0.0,
+          "jaccard_mean": 0.08163265306122448
+        },
+        {
+          "route_id": 4248,
+          "gt_len": 65,
+          "bucket": "gt60",
+          "gt_valid": true,
+          "n_samples": 1,
+          "success_rate": 1.0,
+          "jaccard_mean": 0.09230769230769231
+        },
+        {
+          "route_id": 4267,
+          "gt_len": 45,
+          "bucket": "31_60",
+          "gt_valid": true,
+          "n_samples": 1,
+          "success_rate": 1.0,
+          "jaccard_mean": 1.0
+        },
+        {
+          "route_id": 4276,
+          "gt_len": 22,
+          "bucket": "15_30",
+          "gt_valid": true,
+          "n_samples": 1,
+          "success_rate": 1.0,
+          "jaccard_mean": 0.9545454545454546
+        },
+        {
+          "route_id": 4485,
+          "gt_len": 35,
+          "bucket": "31_60",
+          "gt_valid": true,
+          "n_samples": 1,
+          "success_rate": 1.0,
+          "jaccard_mean": 0.9714285714285714
+        },
+        {
+          "route_id": 4486,
+          "gt_len": 8,
+          "bucket": "lt15",
+          "gt_valid": true,
+          "n_samples": 1,
+          "success_rate": 1.0,
+          "jaccard_mean": 1.0
+        },
+        {
+          "route_id": 4550,
+          "gt_len": 73,
+          "bucket": "gt60",
+          "gt_valid": true,
+          "n_samples": 1,
+          "success_rate": 1.0,
+          "jaccard_mean": 0.21348314606741572
+        },
+        {
+          "route_id": 4568,
+          "gt_len": 63,
+          "bucket": "gt60",
+          "gt_valid": true,
+          "n_samples": 1,
+          "success_rate": 1.0,
+          "jaccard_mean": 0.8636363636363636
+        },
+        {
+          "route_id": 4770,
+          "gt_len": 69,
+          "bucket": "gt60",
+          "gt_valid": true,
+          "n_samples": 1,
+          "success_rate": 0.0,
+          "jaccard_mean": 0.17525773195876287
+        },
+        {
+          "route_id": 5094,
+          "gt_len": 24,
+          "bucket": "15_30",
+          "gt_valid": true,
+          "n_samples": 1,
+          "success_rate": 1.0,
+          "jaccard_mean": 0.96
+        },
+        {
+          "route_id": 5234,
+          "gt_len": 8,
+          "bucket": "lt15",
+          "gt_valid": true,
+          "n_samples": 1,
+          "success_rate": 0.0,
+          "jaccard_mean": 0.125
+        },
+        {
+          "route_id": 5764,
+          "gt_len": 26,
+          "bucket": "15_30",
+          "gt_valid": true,
+          "n_samples": 1,
+          "success_rate": 1.0,
+          "jaccard_mean": 1.0
+        },
+        {
+          "route_id": 5955,
+          "gt_len": 65,
+          "bucket": "gt60",
+          "gt_valid": true,
+          "n_samples": 1,
+          "success_rate": 0.0,
+          "jaccard_mean": 0.09644670050761421
+        },
+        {
+          "route_id": 6115,
+          "gt_len": 20,
+          "bucket": "15_30",
+          "gt_valid": true,
+          "n_samples": 1,
+          "success_rate": 0.0,
+          "jaccard_mean": 0.0125
+        },
+        {
+          "route_id": 6340,
+          "gt_len": 13,
+          "bucket": "lt15",
+          "gt_valid": true,
+          "n_samples": 1,
+          "success_rate": 0.0,
+          "jaccard_mean": 0.05
+        },
+        {
+          "route_id": 6419,
+          "gt_len": 63,
+          "bucket": "gt60",
+          "gt_valid": true,
+          "n_samples": 1,
+          "success_rate": 1.0,
+          "jaccard_mean": 0.8636363636363636
+        },
+        {
+          "route_id": 6464,
+          "gt_len": 22,
+          "bucket": "15_30",
+          "gt_valid": true,
+          "n_samples": 1,
+          "success_rate": 1.0,
+          "jaccard_mean": 0.6086956521739131
+        },
+        {
+          "route_id": 6552,
+          "gt_len": 10,
+          "bucket": "lt15",
+          "gt_valid": true,
+          "n_samples": 1,
+          "success_rate": 0.0,
+          "jaccard_mean": 0.05
+        },
+        {
+          "route_id": 6995,
+          "gt_len": 15,
+          "bucket": "15_30",
+          "gt_valid": true,
+          "n_samples": 1,
+          "success_rate": 1.0,
+          "jaccard_mean": 1.0
+        },
+        {
+          "route_id": 7011,
+          "gt_len": 61,
+          "bucket": "gt60",
+          "gt_valid": true,
+          "n_samples": 1,
+          "success_rate": 0.0,
+          "jaccard_mean": 0.04411764705882353
+        }
+      ]
+    }
+  ]
+}

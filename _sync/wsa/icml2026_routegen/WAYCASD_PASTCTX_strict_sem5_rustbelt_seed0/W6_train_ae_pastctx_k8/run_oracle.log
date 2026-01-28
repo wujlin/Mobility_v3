@@ -1,0 +1,9 @@
+[city0] done=25/100 rps=5.13 succ=2/25
+[city0] done=50/100 rps=5.32 succ=7/50
+[city0] done=75/100 rps=5.45 succ=12/75
+[city0] done=100/100 rps=5.51 succ=17/100
+[city1] done=25/100 rps=5.68 succ=5/25
+[city1] done=50/100 rps=5.74 succ=8/50
+[city1] done=75/100 rps=5.87 succ=14/75
+[city1] done=100/100 rps=6.18 succ=22/100
+[saved] /home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD_PASTCTX_strict_sem5_rustbelt_seed0/W6_train_ae_pastctx_k8/oracle_decode_n200.json cities=2

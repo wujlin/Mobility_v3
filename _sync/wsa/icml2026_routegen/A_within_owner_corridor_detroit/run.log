@@ -1,0 +1,575 @@
+{
+  "ok": true,
+  "task": "within_owner_corridor_diversity",
+  "created_at": "2026-01-17T13:13:35.811364+08:00",
+  "inputs": {
+    "segments_parquet": "/home/jinlin/data/geoexplicit_data/worldtrace/detroit_core_v1/segments_with_wayid.parquet",
+    "meta_zip": "/home/jinlin/data/geoexplicit_data/worldtrace/OpenTrace_WorldTrace/Meta.zip",
+    "road_prob_npy": "/home/jinlin/data/geoexplicit_data/worldtrace/detroit_core_v1/osm_road_prob.npy"
+  },
+  "cfg": {
+    "od_bin_deg": 0.02,
+    "min_od_dist_km": 1.0,
+    "max_way_seq_len": 128,
+    "merge_dist_thr": 0.15,
+    "top2_sep_thr": 0.0,
+    "top_k_od": 10,
+    "tz_offset_hours": -5.0,
+    "owner": ""
+  },
+  "owner": {
+    "owner_hash": "a4b047d6",
+    "n_trips": 1989,
+    "unique_owner_count": 2
+  },
+  "stats": {
+    "scanned": 2295,
+    "kept": 2069,
+    "n_od_bins_owner": 1073,
+    "n_od_bins_owner_ge2trips": 375
+  },
+  "outputs": {
+    "out_parquet": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/A_within_owner_corridor_detroit/corridor_diversity_within_owner.parquet",
+    "out_viz_dir": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/A_within_owner_corridor_detroit/top_od_viz"
+  },
+  "top_od_bins": [
+    {
+      "od_bin": [
+        -4156,
+        2123,
+        -4156,
+        2124
+      ],
+      "n_routes": 45,
+      "n_clusters": 18,
+      "cluster_sizes": [
+        18,
+        7,
+        2,
+        2,
+        2,
+        2,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1
+      ],
+      "route_ids": [
+        52,
+        185,
+        186,
+        239,
+        268,
+        372,
+        462,
+        514,
+        541,
+        563,
+        565,
+        622,
+        687,
+        778,
+        782,
+        810,
+        841,
+        853,
+        895,
+        952,
+        995,
+        1034,
+        1054,
+        1078,
+        1119,
+        1130,
+        1151,
+        1255,
+        1259,
+        1354,
+        1524,
+        1528,
+        1567,
+        1729,
+        1754,
+        1759,
+        1766,
+        1773,
+        1803,
+        1823,
+        1856,
+        1928,
+        2033,
+        2035,
+        2062
+      ],
+      "cluster_ids": [
+        6,
+        7,
+        8,
+        0,
+        1,
+        2,
+        1,
+        1,
+        0,
+        0,
+        9,
+        10,
+        3,
+        11,
+        0,
+        12,
+        3,
+        0,
+        13,
+        0,
+        0,
+        1,
+        0,
+        13,
+        0,
+        14,
+        4,
+        1,
+        15,
+        0,
+        0,
+        5,
+        0,
+        0,
+        5,
+        0,
+        0,
+        0,
+        1,
+        4,
+        0,
+        2,
+        16,
+        17,
+        0
+      ]
+    },
+    {
+      "od_bin": [
+        -4156,
+        2124,
+        -4156,
+        2123
+      ],
+      "n_routes": 18,
+      "n_clusters": 8,
+      "cluster_sizes": [
+        6,
+        3,
+        2,
+        2,
+        2,
+        1,
+        1,
+        1
+      ],
+      "route_ids": [
+        49,
+        68,
+        276,
+        277,
+        417,
+        461,
+        567,
+        654,
+        696,
+        728,
+        751,
+        852,
+        911,
+        933,
+        1018,
+        1085,
+        1507,
+        1965
+      ],
+      "cluster_ids": [
+        3,
+        5,
+        2,
+        0,
+        6,
+        7,
+        0,
+        0,
+        1,
+        1,
+        3,
+        4,
+        0,
+        0,
+        0,
+        4,
+        1,
+        2
+      ]
+    },
+    {
+      "od_bin": [
+        -4155,
+        2122,
+        -4156,
+        2124
+      ],
+      "n_routes": 16,
+      "n_clusters": 5,
+      "cluster_sizes": [
+        7,
+        3,
+        3,
+        2,
+        1
+      ],
+      "route_ids": [
+        155,
+        221,
+        259,
+        385,
+        603,
+        1134,
+        1210,
+        1248,
+        1280,
+        1371,
+        1411,
+        1530,
+        1606,
+        1730,
+        1864,
+        1867
+      ],
+      "cluster_ids": [
+        0,
+        0,
+        0,
+        1,
+        1,
+        3,
+        0,
+        4,
+        2,
+        0,
+        2,
+        2,
+        0,
+        3,
+        1,
+        0
+      ]
+    },
+    {
+      "od_bin": [
+        -4154,
+        2116,
+        -4155,
+        2122
+      ],
+      "n_routes": 15,
+      "n_clusters": 2,
+      "cluster_sizes": [
+        8,
+        7
+      ],
+      "route_ids": [
+        28,
+        189,
+        226,
+        242,
+        272,
+        443,
+        518,
+        817,
+        885,
+        950,
+        1504,
+        1560,
+        1726,
+        1859,
+        1866
+      ],
+      "cluster_ids": [
+        1,
+        0,
+        1,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        1,
+        1,
+        1,
+        1,
+        0
+      ]
+    },
+    {
+      "od_bin": [
+        -4156,
+        2122,
+        -4156,
+        2124
+      ],
+      "n_routes": 13,
+      "n_clusters": 6,
+      "cluster_sizes": [
+        7,
+        2,
+        1,
+        1,
+        1,
+        1
+      ],
+      "route_ids": [
+        56,
+        111,
+        261,
+        291,
+        304,
+        574,
+        655,
+        759,
+        783,
+        1616,
+        1686,
+        1693,
+        2036
+      ],
+      "cluster_ids": [
+        2,
+        0,
+        0,
+        0,
+        3,
+        1,
+        4,
+        0,
+        1,
+        0,
+        5,
+        0,
+        0
+      ]
+    },
+    {
+      "od_bin": [
+        -4160,
+        2121,
+        -4154,
+        2118
+      ],
+      "n_routes": 12,
+      "n_clusters": 5,
+      "cluster_sizes": [
+        6,
+        2,
+        2,
+        1,
+        1
+      ],
+      "route_ids": [
+        200,
+        203,
+        274,
+        326,
+        826,
+        877,
+        884,
+        1187,
+        1328,
+        1715,
+        2006,
+        2015
+      ],
+      "cluster_ids": [
+        1,
+        0,
+        0,
+        2,
+        0,
+        2,
+        3,
+        0,
+        1,
+        0,
+        0,
+        4
+      ]
+    },
+    {
+      "od_bin": [
+        -4156,
+        2124,
+        -4155,
+        2120
+      ],
+      "n_routes": 11,
+      "n_clusters": 2,
+      "cluster_sizes": [
+        7,
+        4
+      ],
+      "route_ids": [
+        22,
+        93,
+        285,
+        570,
+        719,
+        888,
+        1243,
+        1486,
+        1545,
+        1769,
+        1777
+      ],
+      "cluster_ids": [
+        0,
+        1,
+        0,
+        1,
+        1,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "od_bin": [
+        -4154,
+        2116,
+        -4155,
+        2121
+      ],
+      "n_routes": 10,
+      "n_clusters": 4,
+      "cluster_sizes": [
+        5,
+        3,
+        1,
+        1
+      ],
+      "route_ids": [
+        6,
+        172,
+        520,
+        532,
+        906,
+        1066,
+        1229,
+        1299,
+        1412,
+        1725
+      ],
+      "cluster_ids": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        2,
+        1,
+        1,
+        3,
+        1
+      ]
+    },
+    {
+      "od_bin": [
+        -4148,
+        2120,
+        -4153,
+        2118
+      ],
+      "n_routes": 10,
+      "n_clusters": 4,
+      "cluster_sizes": [
+        6,
+        2,
+        1,
+        1
+      ],
+      "route_ids": [
+        66,
+        257,
+        812,
+        922,
+        972,
+        1173,
+        1542,
+        1934,
+        1993,
+        2046
+      ],
+      "cluster_ids": [
+        0,
+        0,
+        1,
+        0,
+        1,
+        2,
+        3,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "od_bin": [
+        -4152,
+        2117,
+        -4156,
+        2118
+      ],
+      "n_routes": 10,
+      "n_clusters": 4,
+      "cluster_sizes": [
+        7,
+        1,
+        1,
+        1
+      ],
+      "route_ids": [
+        76,
+        766,
+        1184,
+        1373,
+        1588,
+        1772,
+        1811,
+        1841,
+        1964,
+        2056
+      ],
+      "cluster_ids": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        2,
+        3
+      ]
+    }
+  ]
+}

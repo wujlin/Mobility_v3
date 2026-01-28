@@ -1,0 +1,29 @@
+{
+  "inputs": {
+    "decision_checkpoint": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E3seg_wp_diffusion_rel_detroit_segF256_epoch_seed0_od128_wpK2_gridpos_tierroad/last.pt",
+    "exec_checkpoint": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E2seg_exec_residual_detroit_segF256_epoch_seed0_wpK2/last.pt",
+    "case_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E0s_gt_baseline_detroit_segF256_seed0_od128_min10_sep2_uni2_png/case_00/gt_case.npz",
+    "seed": 0,
+    "k_samples": 20,
+    "res_scale": 0.1,
+    "od_bin": 128.0,
+    "o_clip": 2.0,
+    "decision_model": {
+      "hidden_dim": 128,
+      "diff_steps": 50,
+      "pred_type": "eps"
+    },
+    "exec_model": {
+      "hidden_dim": 128,
+      "diff_steps": 100,
+      "pred_type": "eps"
+    }
+  },
+  "stats": {
+    "N": 22,
+    "F": 256
+  },
+  "outputs": {
+    "samples_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E3seg_tierroad_case00_sample_K20_res0p1_seed0/cascade_res0p1/samples.npz"
+  }
+}

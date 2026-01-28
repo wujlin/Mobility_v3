@@ -1,0 +1,12 @@
+{
+  "ok": true,
+  "task": "train_way_casd_gps_diffusion",
+  "created_at": "2026-01-18T03:20:35.184045+08:00",
+  "epoch": 300,
+  "train_loss": 0.00209060576656517,
+  "val_loss": 0.0025798434702058635,
+  "best_val_loss": 0.002204558482238402,
+  "best_epoch": 200,
+  "save_every": 50,
+  "early_stop_patience": 100
+}

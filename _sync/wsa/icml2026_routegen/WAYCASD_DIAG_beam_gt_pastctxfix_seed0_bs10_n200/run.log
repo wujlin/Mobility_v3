@@ -1,0 +1,5 @@
+[city0] gt:greedy done=100/100
+[city0] gt:beam done=100/100
+[city1] gt:greedy done=100/100
+[city1] gt:beam done=100/100
+[saved] /home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD_DIAG_beam_gt_pastctxfix_seed0_bs10_n200/report.json

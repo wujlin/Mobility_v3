@@ -1,0 +1,40 @@
+{
+  "ok": true,
+  "task": "train_graph_ar_waypoint_bins",
+  "config": {
+    "waypoints_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/T4_wp_ar_astar_combo_seed0/T1_dump_waypoints/waypoints_graph.npz",
+    "road_graph_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/T3_combo_detroit_columbus_seed0/road_graph_combo.npz",
+    "out_dir": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/T4_wp_ar_astar_combo_seed0/T2_train_wp_ar_bin_wp16_tz_seed0",
+    "wp_bin": 16,
+    "tz_offset_hours": -5.0,
+    "val_frac": 0.1,
+    "hidden_dim": 256,
+    "batch_size": 256,
+    "epochs": 200,
+    "lr": 0.001,
+    "l2": 0.0001,
+    "num_workers": 24,
+    "seed": 0
+  },
+  "stats": {
+    "n_nodes": 718099,
+    "n_routes": 3385,
+    "num_steps": 4,
+    "n_classes": 4096,
+    "n_bins_y": 64,
+    "n_bins_x": 64,
+    "train_samples": 12188,
+    "val_samples": 1352,
+    "best_val_acc": 0.23150887573964496,
+    "best_epoch": 71,
+    "elapsed_s": 120.63972854614258
+  },
+  "outputs": {
+    "checkpoint": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/T4_wp_ar_astar_combo_seed0/T2_train_wp_ar_bin_wp16_tz_seed0/last.pt",
+    "train_log": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/T4_wp_ar_astar_combo_seed0/T2_train_wp_ar_bin_wp16_tz_seed0/train.log",
+    "train_summary_json": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/T4_wp_ar_astar_combo_seed0/T2_train_wp_ar_bin_wp16_tz_seed0/train_summary.json"
+  },
+  "meta": {
+    "created_at": "2026-01-15T08:06:17.555783+08:00"
+  }
+}

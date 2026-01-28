@@ -1,0 +1,89 @@
+{
+  "ok": true,
+  "task": "worldtrace_owner_profile",
+  "created_at": "2026-01-17T13:04:08.976132+08:00",
+  "inputs": {
+    "segments_parquet": "/home/jinlin/data/geoexplicit_data/worldtrace/detroit_core_v1/segments_with_wayid.parquet",
+    "meta_zip": "/home/jinlin/data/geoexplicit_data/worldtrace/OpenTrace_WorldTrace/Meta.zip"
+  },
+  "cfg": {
+    "tz_offset_hours": -5.0,
+    "min_od_dist_km": 1.0,
+    "max_rows": 0,
+    "owner": "",
+    "include_owner_raw": false
+  },
+  "subset": {
+    "scanned": 2295,
+    "kept": 2070,
+    "min_od_dist_km": 1.0,
+    "unique_owner_count": 2
+  },
+  "owner": {
+    "owner_hash": "a4b047d6",
+    "n_trips": 1990,
+    "topk_owner_hash": [
+      {
+        "owner_hash": "a4b047d6",
+        "n_trips": 1990
+      },
+      {
+        "owner_hash": "4618cc6d",
+        "n_trips": 80
+      }
+    ]
+  },
+  "time": {
+    "tz_offset_hours": -5.0,
+    "hour_counts": {
+      "00": 48,
+      "01": 23,
+      "02": 19,
+      "03": 16,
+      "04": 12,
+      "05": 9,
+      "06": 27,
+      "07": 54,
+      "08": 103,
+      "09": 62,
+      "10": 96,
+      "11": 122,
+      "12": 127,
+      "13": 133,
+      "14": 146,
+      "15": 155,
+      "16": 159,
+      "17": 142,
+      "18": 117,
+      "19": 100,
+      "20": 125,
+      "21": 85,
+      "22": 54,
+      "23": 56
+    },
+    "dow_counts": {
+      "Mon": 251,
+      "Tue": 265,
+      "Wed": 213,
+      "Thu": 263,
+      "Fri": 324,
+      "Sat": 346,
+      "Sun": 328
+    }
+  },
+  "distance_km": {
+    "p10": 1.9825744453667746,
+    "p50": 6.115659589645796,
+    "p90": 13.027582213960956,
+    "max": 18.431110249107036,
+    "mean": 6.953853539585732
+  },
+  "duration_min": {
+    "p10": 3.4650000000000003,
+    "p50": 9.216666666666667,
+    "p90": 10.216666666666667,
+    "max": 32.06666666666667,
+    "mean": 7.906909547738692
+  },
+  "time_span_hours": 14041.715555555556
+}

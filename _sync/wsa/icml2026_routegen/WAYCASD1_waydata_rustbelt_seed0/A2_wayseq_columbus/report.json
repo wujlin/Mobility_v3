@@ -1,0 +1,29 @@
+{
+  "inputs": {
+    "segments_parquet": "/home/jinlin/data/geoexplicit_data/worldtrace/columbus_core_v1/segments_with_wayid.parquet"
+  },
+  "config": {
+    "limit_rows": 0
+  },
+  "stats": {
+    "n_segments": 5228,
+    "n_segments_with_any_way": 5228,
+    "uniq_way_seq_len_valid": {
+      "p50": 22.0,
+      "p90": 54.0,
+      "max": 186
+    },
+    "uniq_way_seq_len_all": {
+      "p50": 22.0,
+      "p90": 54.0,
+      "max": 186
+    },
+    "way_id_missing_ratio": {
+      "p50": 0.0,
+      "p90": 0.0
+    }
+  },
+  "meta": {
+    "created_at": "2026-01-16T08:10:20.358005+08:00"
+  }
+}

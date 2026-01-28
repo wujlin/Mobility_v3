@@ -1,0 +1,33 @@
+{
+  "case_id": 8,
+  "window": {
+    "traj_idx": 698,
+    "start_t": 0,
+    "key64": 2997887172608
+  },
+  "gt": {
+    "chord_len": 2.2360689640045166,
+    "detour_ratio": 12.969188690185547,
+    "turn_score_mean": 1.5
+  },
+  "E25": {
+    "ADE_best": 2.16623592376709,
+    "jaccard": 0.30614036321640015,
+    "best_k": 15
+  },
+  "E26": {
+    "ADE_best": 2.112473726272583,
+    "jaccard": 0.29605263471603394,
+    "best_k": 15
+  },
+  "diff": {
+    "ADE_best_E25_minus_E26": 0.053762197494506836,
+    "jaccard_E25_minus_E26": 0.010087728500366211
+  },
+  "outputs": {
+    "traj_pdf": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E27_viz_e25_vs_e26_detroit_seed0/case_08/traj_compare.pdf",
+    "traj_png": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E27_viz_e25_vs_e26_detroit_seed0/case_08/traj_compare.png",
+    "wp_pdf": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E27_viz_e25_vs_e26_detroit_seed0/case_08/waypoints_compare.pdf",
+    "wp_png": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E27_viz_e25_vs_e26_detroit_seed0/case_08/waypoints_compare.png"
+  }
+}

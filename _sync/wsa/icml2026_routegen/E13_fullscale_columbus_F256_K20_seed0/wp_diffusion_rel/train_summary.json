@@ -1,0 +1,49 @@
+{
+  "inputs": {
+    "train_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/gt_windows/columbus_segments_F256_n200k_seed0.npz"
+  },
+  "config": {
+    "pos_max": 1023,
+    "max_train_n": null,
+    "num_waypoints": 2,
+    "od_bin": 128.0,
+    "o_clip": 2.0,
+    "semantic_dir": null,
+    "semantic_mode": null,
+    "semantic_use_bins": false,
+    "profile_num_steps": 16,
+    "profile_offsets": "-32,0,32",
+    "grid_patch_size": 16,
+    "grid_extent": 128.0,
+    "grid_pool": "quad",
+    "grid_channels": "poi,entropy",
+    "grid_emb_dim": 64,
+    "hidden_dim": 128,
+    "diff_steps": 50,
+    "pred_type": "eps",
+    "batch_size": 256,
+    "epochs": 200,
+    "lr": 0.001,
+    "num_workers": 24,
+    "max_batches": null,
+    "seed": 0
+  },
+  "stats": {
+    "N": 5228,
+    "F": 256,
+    "rel_mean": [
+      0.4842919111251831,
+      0.01204166654497385
+    ],
+    "rel_std": [
+      0.32291939854621887,
+      0.27195996046066284
+    ]
+  },
+  "outputs": {
+    "checkpoint": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E13_fullscale_columbus_F256_K20_seed0/wp_diffusion_rel/last.pt"
+  },
+  "timing": {
+    "elapsed_s": 195.32409524917603
+  }
+}

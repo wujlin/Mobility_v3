@@ -1,0 +1,159 @@
+{
+  "gate": "E8 (Semantic Mixture Match)",
+  "E8_dir": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E8_semantic_strength_mixture_detroit_F256_od128_seed0",
+  "models": {
+    "nosem": {
+      "mean": {
+        "mixture_jsd": 0.03509626742148706,
+        "mixture_l1": 0.42312893133960305,
+        "model_cov_mean": 0.99,
+        "model_div_mean": 0.819115066371024,
+        "collapse_rate_mean": 0.0
+      },
+      "per_case": {
+        "case_00": {
+          "num_cases_evaluated": 1,
+          "model_div_mean": 0.7249952260668526,
+          "model_cov_mean": 1.0,
+          "collapse_rate_mean": 0.0,
+          "mixture_jsd_mean": 3.591061857438648e-05,
+          "mixture_l1_mean": 0.013559322033908
+        },
+        "case_01": {
+          "num_cases_evaluated": 1,
+          "model_div_mean": 0.7153886961574699,
+          "model_cov_mean": 1.0,
+          "collapse_rate_mean": 0.0,
+          "mixture_jsd_mean": 0.024675036391864295,
+          "mixture_l1_mean": 0.3902439024390302
+        },
+        "case_02": {
+          "num_cases_evaluated": 1,
+          "model_div_mean": 0.8608301869549642,
+          "model_cov_mean": 1.0,
+          "collapse_rate_mean": 0.0,
+          "mixture_jsd_mean": 0.05586285774633566,
+          "mixture_l1_mean": 0.634782608695649
+        },
+        "case_03": {
+          "num_cases_evaluated": 1,
+          "model_div_mean": 0.8959397716866239,
+          "model_cov_mean": 0.95,
+          "collapse_rate_mean": 0.0,
+          "mixture_jsd_mean": 0.04635948408130908,
+          "mixture_l1_mean": 0.5300000000000081
+        },
+        "case_04": {
+          "num_cases_evaluated": 1,
+          "model_div_mean": 0.8984214509892097,
+          "model_cov_mean": 1.0,
+          "collapse_rate_mean": 0.0,
+          "mixture_jsd_mean": 0.048548048269351884,
+          "mixture_l1_mean": 0.5470588235294199
+        }
+      }
+    },
+    "weaksem": {
+      "mean": {
+        "mixture_jsd": 0.014225552983661169,
+        "mixture_l1": 0.30787921918231853,
+        "model_cov_mean": 1.0,
+        "model_div_mean": 0.9282130629375415,
+        "collapse_rate_mean": 0.0
+      },
+      "per_case": {
+        "case_00": {
+          "num_cases_evaluated": 1,
+          "model_div_mean": 0.8957582739744646,
+          "model_cov_mean": 1.0,
+          "collapse_rate_mean": 0.0,
+          "mixture_jsd_mean": 0.03587794062736633,
+          "mixture_l1_mean": 0.49830508474575264
+        },
+        "case_01": {
+          "num_cases_evaluated": 1,
+          "model_div_mean": 0.8833733953592512,
+          "model_cov_mean": 1.0,
+          "collapse_rate_mean": 0.0,
+          "mixture_jsd_mean": 0.006466414643956333,
+          "mixture_l1_mean": 0.2243902439024325
+        },
+        "case_02": {
+          "num_cases_evaluated": 1,
+          "model_div_mean": 0.9603244509341023,
+          "model_cov_mean": 1.0,
+          "collapse_rate_mean": 0.0,
+          "mixture_jsd_mean": 0.012096031670630177,
+          "mixture_l1_mean": 0.3043478260869577
+        },
+        "case_03": {
+          "num_cases_evaluated": 1,
+          "model_div_mean": 0.9451956069280308,
+          "model_cov_mean": 1.0,
+          "collapse_rate_mean": 0.0,
+          "mixture_jsd_mean": 0.006675927864880873,
+          "mixture_l1_mean": 0.22999999999998988
+        },
+        "case_04": {
+          "num_cases_evaluated": 1,
+          "model_div_mean": 0.9564135874918581,
+          "model_cov_mean": 1.0,
+          "collapse_rate_mean": 0.0,
+          "mixture_jsd_mean": 0.010011450111472135,
+          "mixture_l1_mean": 0.28235294117646
+        }
+      }
+    },
+    "strongsem": {
+      "mean": {
+        "mixture_jsd": 0.04066250280250002,
+        "mixture_l1": 0.45778877682964014,
+        "model_cov_mean": 0.956074168797954,
+        "model_div_mean": 0.856014133392768,
+        "collapse_rate_mean": 0.0
+      },
+      "per_case": {
+        "case_00": {
+          "num_cases_evaluated": 1,
+          "model_div_mean": 0.8125506191462599,
+          "model_cov_mean": 1.0,
+          "collapse_rate_mean": 0.0,
+          "mixture_jsd_mean": 0.010015068379959826,
+          "mixture_l1_mean": 0.24915254237287157
+        },
+        "case_01": {
+          "num_cases_evaluated": 1,
+          "model_div_mean": 0.800471164864798,
+          "model_cov_mean": 1.0,
+          "collapse_rate_mean": 0.0,
+          "mixture_jsd_mean": 0.004424991464110038,
+          "mixture_l1_mean": 0.17560975609756702
+        },
+        "case_02": {
+          "num_cases_evaluated": 1,
+          "model_div_mean": 0.8763294445161695,
+          "model_cov_mean": 0.9347826086956522,
+          "collapse_rate_mean": 0.0,
+          "mixture_jsd_mean": 0.09555569371386602,
+          "mixture_l1_mean": 0.7956521739130399
+        },
+        "case_03": {
+          "num_cases_evaluated": 1,
+          "model_div_mean": 0.8880162880513108,
+          "model_cov_mean": 0.875,
+          "collapse_rate_mean": 0.0,
+          "mixture_jsd_mean": 0.049633770338449824,
+          "mixture_l1_mean": 0.5450000000000081
+        },
+        "case_04": {
+          "num_cases_evaluated": 1,
+          "model_div_mean": 0.9027031503853016,
+          "model_cov_mean": 0.9705882352941176,
+          "collapse_rate_mean": 0.0,
+          "mixture_jsd_mean": 0.043682990116114415,
+          "mixture_l1_mean": 0.5235294117647141
+        }
+      }
+    }
+  }
+}

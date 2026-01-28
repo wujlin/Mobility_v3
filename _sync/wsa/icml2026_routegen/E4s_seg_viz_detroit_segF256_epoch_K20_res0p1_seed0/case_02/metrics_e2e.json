@@ -1,0 +1,36 @@
+{
+  "inputs": {
+    "gt_windows_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E_S1_segments_fixedlen_detroit_F256_p300_c40_t60_d1p2_seed0/detroit_segments_route_F256_epoch_seed0.npz",
+    "model_samples_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E4s_seg_viz_detroit_segF256_epoch_K20_res0p1_seed0/case_02/e2e_diff/samples.npz"
+  },
+  "config": {
+    "K": 20,
+    "max_n": null,
+    "jacc_cell": 8.0,
+    "road_prob_thr": 0.5,
+    "semantic_dir": "/home/jinlin/data/geoexplicit_data/worldtrace/detroit_core_v1",
+    "seed": 0
+  },
+  "stats": {
+    "num_windows_matched": 15,
+    "F": 256
+  },
+  "micro": {
+    "ADE_mean": 58.65217208862305,
+    "ADE_std": 13.224385261535645,
+    "ADE_best": 35.461021423339844,
+    "FDE_mean": 128.7347869873047,
+    "FDE_std": 27.722124099731445,
+    "FDE_best": 80.13207244873047
+  },
+  "diversity": {
+    "jaccard_mean": 0.8664163947105408,
+    "jaccard_p50": 0.8722102046012878
+  },
+  "feasibility": {
+    "pred_road_prob_mean": 0.9703599810600281,
+    "pred_onroad_rate": 0.988476574420929,
+    "gt_road_prob_mean": 1.0,
+    "gt_onroad_rate": 1.0
+  }
+}

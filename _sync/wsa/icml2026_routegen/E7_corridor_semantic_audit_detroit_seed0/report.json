@@ -1,0 +1,244 @@
+{
+  "gate": "E7 (corridor semantic audit, GT)",
+  "semantic_dir": "/home/jinlin/data/geoexplicit_data/worldtrace/detroit_core_v1",
+  "gt_root": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E0_gt_baseline_detroit_F256_n200k_seed0_od128_n10_sep2",
+  "poi_categories": [
+    "education",
+    "food",
+    "industrial",
+    "leisure",
+    "medical",
+    "office",
+    "other",
+    "public",
+    "retail",
+    "transport"
+  ],
+  "cases": [
+    {
+      "case": "case_00",
+      "N": 59,
+      "cluster_sizes": {
+        "c0": 47,
+        "c1": 12
+      },
+      "od_only": {
+        "jsd_poi_cat": 0.004129801337198747,
+        "mean_entropy": {
+          "c0": 0.0,
+          "c1": 0.0
+        }
+      },
+      "along_route": {
+        "jsd_poi_cat": 0.03804588887152102,
+        "mean_entropy": {
+          "c0": 0.001225190593841228,
+          "c1": 0.0012524053454399109
+        }
+      },
+      "top_cat_diff_along": [
+        {
+          "cat": "office",
+          "diff": -0.1360259126216573
+        },
+        {
+          "cat": "food",
+          "diff": 0.09376642860685407
+        },
+        {
+          "cat": "transport",
+          "diff": -0.05535233088424585
+        },
+        {
+          "cat": "medical",
+          "diff": 0.055012555411491595
+        },
+        {
+          "cat": "other",
+          "diff": 0.04724702011936058
+        }
+      ]
+    },
+    {
+      "case": "case_01",
+      "N": 41,
+      "cluster_sizes": {
+        "c0": 26,
+        "c1": 15
+      },
+      "od_only": {
+        "jsd_poi_cat": 0.13635856143613673,
+        "mean_entropy": {
+          "c0": 0.0,
+          "c1": 0.0
+        }
+      },
+      "along_route": {
+        "jsd_poi_cat": 0.05526091666187265,
+        "mean_entropy": {
+          "c0": 0.0019593669925458156,
+          "c1": 0.0
+        }
+      },
+      "top_cat_diff_along": [
+        {
+          "cat": "transport",
+          "diff": -0.27800126888362187
+        },
+        {
+          "cat": "food",
+          "diff": 0.08107304460245639
+        },
+        {
+          "cat": "medical",
+          "diff": 0.0565578539107951
+        },
+        {
+          "cat": "education",
+          "diff": 0.027948717948717942
+        },
+        {
+          "cat": "industrial",
+          "diff": 0.027948717948717942
+        }
+      ]
+    },
+    {
+      "case": "case_02",
+      "N": 23,
+      "cluster_sizes": {
+        "c0": 11,
+        "c1": 12
+      },
+      "od_only": {
+        "jsd_poi_cat": 0.00699917955811895,
+        "mean_entropy": {
+          "c0": 0.0,
+          "c1": 0.0
+        }
+      },
+      "along_route": {
+        "jsd_poi_cat": 0.06159009758847012,
+        "mean_entropy": {
+          "c0": 0.0015464872968467798,
+          "c1": 0.0
+        }
+      },
+      "top_cat_diff_along": [
+        {
+          "cat": "transport",
+          "diff": -0.2363636363636364
+        },
+        {
+          "cat": "retail",
+          "diff": 0.09166666666666665
+        },
+        {
+          "cat": "food",
+          "diff": 0.09090909090909094
+        },
+        {
+          "cat": "leisure",
+          "diff": 0.08560606060606057
+        },
+        {
+          "cat": "public",
+          "diff": -0.0053030303030303025
+        }
+      ]
+    },
+    {
+      "case": "case_03",
+      "N": 20,
+      "cluster_sizes": {
+        "c0": 8,
+        "c1": 12
+      },
+      "od_only": {
+        "jsd_poi_cat": 0.0009896514185980445,
+        "mean_entropy": {
+          "c0": 0.0,
+          "c1": 0.0
+        }
+      },
+      "along_route": {
+        "jsd_poi_cat": 0.08957566938350567,
+        "mean_entropy": {
+          "c0": 0.0,
+          "c1": 0.0011966037563979626
+        }
+      },
+      "top_cat_diff_along": [
+        {
+          "cat": "medical",
+          "diff": 0.2547619047619048
+        },
+        {
+          "cat": "food",
+          "diff": -0.15132275132275136
+        },
+        {
+          "cat": "transport",
+          "diff": -0.14464285714285702
+        },
+        {
+          "cat": "retail",
+          "diff": 0.02083333333333333
+        },
+        {
+          "cat": "office",
+          "diff": -0.020370370370370358
+        }
+      ]
+    },
+    {
+      "case": "case_04",
+      "N": 17,
+      "cluster_sizes": {
+        "c0": 10,
+        "c1": 7
+      },
+      "od_only": {
+        "jsd_poi_cat": 0.0,
+        "mean_entropy": {
+          "c0": 0.0,
+          "c1": 0.0
+        }
+      },
+      "along_route": {
+        "jsd_poi_cat": 0.030937497948626512,
+        "mean_entropy": {
+          "c0": 0.0,
+          "c1": 0.0006075485476425716
+        }
+      },
+      "top_cat_diff_along": [
+        {
+          "cat": "transport",
+          "diff": -0.17551020408163273
+        },
+        {
+          "cat": "food",
+          "diff": -0.0326530612244898
+        },
+        {
+          "cat": "retail",
+          "diff": 0.02857142857142858
+        },
+        {
+          "cat": "public",
+          "diff": 0.02857142857142858
+        },
+        {
+          "cat": "medical",
+          "diff": 0.02857142857142858
+        }
+      ]
+    }
+  ],
+  "summary": {
+    "mean_jsd_od_only": 0.0296954387500105,
+    "mean_jsd_along": 0.05508201409079919,
+    "num_cases_along_gt_od": 4
+  }
+}

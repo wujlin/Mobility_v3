@@ -1,0 +1,51 @@
+{
+  "ok": true,
+  "out_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/G2n_paths_detroit_seed0/paths_graph.npz",
+  "meta": {
+    "created_at": "2026-01-15T21:24:42.779306+08:00",
+    "task": "dump_graph_paths_from_routes_npz",
+    "inputs": {
+      "routes_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E_S1_segments_fixedlen_detroit_F256_p300_c40_t60_d1p2_seed0/detroit_segments_route_F256_epoch_seed0.npz",
+      "road_graph_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/G1n_roadgraph_detroit_native/road_graph.npz"
+    },
+    "config": {
+      "subsample_step": 2,
+      "debounce": true,
+      "max_bridge_steps": 2048,
+      "max_total_steps": 8192,
+      "max_routes": null,
+      "seed": 0,
+      "progress": "auto",
+      "log_every": 2000,
+      "num_workers": 24,
+      "mp_start": "fork",
+      "chunk_size": 256,
+      "snap_sample_k": 4
+    },
+    "stats": {
+      "N_in": 1092,
+      "N_pick": 1092,
+      "N_kept": 755,
+      "F": 256,
+      "seq_len": {
+        "p50": 4060.0,
+        "p90": 7233.6,
+        "max": 8178
+      },
+      "bridged_jumps_per_route": {
+        "mean": 97.3788070678711,
+        "p50": 106.0,
+        "p90": 123.0
+      },
+      "snap_dist_grid": {
+        "p50": 0.619152711455013,
+        "p90": 1.7193043286990803,
+        "sample_n": 4368
+      },
+      "failures": {
+        "empty_seq": 7,
+        "bridge_fail": 330
+      }
+    }
+  }
+}

@@ -1,0 +1,84 @@
+{
+  "gate": "E27_viz_e25_vs_e26_metric_conflict",
+  "stats": {
+    "N_matched": 2295,
+    "K": 20,
+    "F": 256,
+    "num_cases": 8
+  },
+  "cases": [
+    {
+      "case_id": 1,
+      "traj_idx": 1920,
+      "start_t": 0,
+      "ADE_best_E25": 11.555850982666016,
+      "ADE_best_E26": 5.164394378662109,
+      "jaccard_E25": 0.8780398964881897,
+      "jaccard_E26": 0.5944251418113708
+    },
+    {
+      "case_id": 2,
+      "traj_idx": 1694,
+      "start_t": 0,
+      "ADE_best_E25": 14.004091262817383,
+      "ADE_best_E26": 3.471501350402832,
+      "jaccard_E25": 0.9019473195075989,
+      "jaccard_E26": 0.7442993521690369
+    },
+    {
+      "case_id": 3,
+      "traj_idx": 1312,
+      "start_t": 0,
+      "ADE_best_E25": 19.605134963989258,
+      "ADE_best_E26": 3.3420491218566895,
+      "jaccard_E25": 0.9180919528007507,
+      "jaccard_E26": 0.6408147811889648
+    },
+    {
+      "case_id": 4,
+      "traj_idx": 991,
+      "start_t": 0,
+      "ADE_best_E25": 15.876490592956543,
+      "ADE_best_E26": 3.823591709136963,
+      "jaccard_E25": 0.9315271377563477,
+      "jaccard_E26": 0.6622307300567627
+    },
+    {
+      "case_id": 5,
+      "traj_idx": 1109,
+      "start_t": 0,
+      "ADE_best_E25": 31.357646942138672,
+      "ADE_best_E26": 3.4460911750793457,
+      "jaccard_E25": 0.9664354920387268,
+      "jaccard_E26": 0.7850541472434998
+    },
+    {
+      "case_id": 6,
+      "traj_idx": 943,
+      "start_t": 0,
+      "ADE_best_E25": 35.687217712402344,
+      "ADE_best_E26": 7.141531944274902,
+      "jaccard_E25": 0.9545354843139648,
+      "jaccard_E26": 0.7882134318351746
+    },
+    {
+      "case_id": 7,
+      "traj_idx": 1079,
+      "start_t": 0,
+      "ADE_best_E25": 0.9832208752632141,
+      "ADE_best_E26": 0.9832208752632141,
+      "jaccard_E25": 0.24473683536052704,
+      "jaccard_E26": 0.24473683536052704
+    },
+    {
+      "case_id": 8,
+      "traj_idx": 698,
+      "start_t": 0,
+      "ADE_best_E25": 2.16623592376709,
+      "ADE_best_E26": 2.112473726272583,
+      "jaccard_E25": 0.30614036321640015,
+      "jaccard_E26": 0.29605263471603394
+    }
+  ],
+  "out_dir": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E27_viz_e25_vs_e26_detroit_seed0"
+}

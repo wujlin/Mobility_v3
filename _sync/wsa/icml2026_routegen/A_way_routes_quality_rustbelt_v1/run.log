@@ -1,0 +1,10 @@
+[way_routes] /home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD1_waydata_rustbelt_seed0/W5_way_routes_labeled/way_routes_labeled.npz
+[N] 7462 (len in [3,160])
+[way_seq_len] p50=26.0 p90=57.0 max=146
+[loop_ratio] p50=0.000 p90=0.000 p99=0.200
+[missing_frac] p50=0.000 p90=0.077 p99=1.000
+[valid_trans_ratio] p50=1.000 p90=1.000 min=1.000
+[dead_end_frac] p50=0.000 p90=0.000 max=0.000
+[max_step_m] p50=1076.5 p95=26541.7 p99=29442.8 max=32416.0
+[saved] /home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/A_way_routes_quality_rustbelt_v1/report.json
+[saved] /home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/A_way_routes_quality_rustbelt_v1/bad_routes_default.json

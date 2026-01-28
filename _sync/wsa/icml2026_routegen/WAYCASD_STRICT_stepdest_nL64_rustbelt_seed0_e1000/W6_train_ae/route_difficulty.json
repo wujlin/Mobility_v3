@@ -1,0 +1,1336 @@
+{
+  "ok": true,
+  "task": "way_casd_route_difficulty_breakdown",
+  "created_at": "2026-01-24T23:41:08.577628+08:00",
+  "inputs": {
+    "way_routes_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD1_waydata_rustbelt_seed0_strict_v1/W5_way_routes_strict/way_routes_strict_masklen0.npz",
+    "way_graph_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD1_waydata_rustbelt_seed0_strict_v1/W3_way_graph_strict/way_graph.npz",
+    "way_features_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD1_waydata_rustbelt_seed0/W4_way_features/way_features.npz",
+    "ae_ckpt": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD_STRICT_stepdest_nL64_rustbelt_seed0_e1000/W6_train_ae/ckpt_best.pt"
+  },
+  "config": {
+    "seed": 0,
+    "device": "cuda",
+    "batch_size": 256,
+    "num_workers": 48,
+    "n_routes_per_city": 200,
+    "tz_offset_hours": -5.0,
+    "val_ratio": 0.1,
+    "max_way_len": 160,
+    "max_candidates": 32,
+    "top_k_hard": 20
+  },
+  "ckpt_meta": {
+    "epoch": 51,
+    "best_epoch": 51,
+    "best_val_loss": 0.2718605169702808
+  },
+  "splits": {
+    "train": {
+      "by_city": {
+        "0": {
+          "n_routes": 200,
+          "n_routes_scored": 200,
+          "route_acc": {
+            "mean": 0.821672145745259,
+            "min": 0.25,
+            "max": 1.0,
+            "p10": 0.5827777777777778,
+            "p50": 0.8867924528301887,
+            "p90": 1.0,
+            "p99": 1.0
+          },
+          "hard_routes": [
+            {
+              "route_id": 1213.0,
+              "route_acc": 0.25,
+              "n_trans": 4.0,
+              "len": 5.0,
+              "branch_points": 4.0,
+              "avg_out_deg": 2.5,
+              "max_out_deg": 3.0,
+              "city": 0.0
+            },
+            {
+              "route_id": 1642.0,
+              "route_acc": 0.3333333333333333,
+              "n_trans": 3.0,
+              "len": 4.0,
+              "branch_points": 3.0,
+              "avg_out_deg": 2.0,
+              "max_out_deg": 2.0,
+              "city": 0.0
+            },
+            {
+              "route_id": 1697.0,
+              "route_acc": 0.35294117647058826,
+              "n_trans": 17.0,
+              "len": 18.0,
+              "branch_points": 17.0,
+              "avg_out_deg": 3.1176470588235294,
+              "max_out_deg": 8.0,
+              "city": 0.0
+            },
+            {
+              "route_id": 337.0,
+              "route_acc": 0.4,
+              "n_trans": 15.0,
+              "len": 16.0,
+              "branch_points": 15.0,
+              "avg_out_deg": 2.6,
+              "max_out_deg": 5.0,
+              "city": 0.0
+            },
+            {
+              "route_id": 275.0,
+              "route_acc": 0.41379310344827586,
+              "n_trans": 29.0,
+              "len": 30.0,
+              "branch_points": 26.0,
+              "avg_out_deg": 2.206896551724138,
+              "max_out_deg": 3.0,
+              "city": 0.0
+            },
+            {
+              "route_id": 1924.0,
+              "route_acc": 0.4166666666666667,
+              "n_trans": 12.0,
+              "len": 13.0,
+              "branch_points": 12.0,
+              "avg_out_deg": 2.5,
+              "max_out_deg": 5.0,
+              "city": 0.0
+            },
+            {
+              "route_id": 1932.0,
+              "route_acc": 0.42857142857142855,
+              "n_trans": 7.0,
+              "len": 8.0,
+              "branch_points": 5.0,
+              "avg_out_deg": 3.857142857142857,
+              "max_out_deg": 10.0,
+              "city": 0.0
+            },
+            {
+              "route_id": 505.0,
+              "route_acc": 0.42857142857142855,
+              "n_trans": 7.0,
+              "len": 8.0,
+              "branch_points": 7.0,
+              "avg_out_deg": 2.2857142857142856,
+              "max_out_deg": 3.0,
+              "city": 0.0
+            },
+            {
+              "route_id": 1043.0,
+              "route_acc": 0.4375,
+              "n_trans": 32.0,
+              "len": 33.0,
+              "branch_points": 32.0,
+              "avg_out_deg": 2.75,
+              "max_out_deg": 4.0,
+              "city": 0.0
+            },
+            {
+              "route_id": 1117.0,
+              "route_acc": 0.48484848484848486,
+              "n_trans": 33.0,
+              "len": 34.0,
+              "branch_points": 33.0,
+              "avg_out_deg": 2.6363636363636362,
+              "max_out_deg": 4.0,
+              "city": 0.0
+            },
+            {
+              "route_id": 1748.0,
+              "route_acc": 0.48484848484848486,
+              "n_trans": 33.0,
+              "len": 34.0,
+              "branch_points": 29.0,
+              "avg_out_deg": 2.757575757575758,
+              "max_out_deg": 5.0,
+              "city": 0.0
+            },
+            {
+              "route_id": 1227.0,
+              "route_acc": 0.48484848484848486,
+              "n_trans": 33.0,
+              "len": 34.0,
+              "branch_points": 33.0,
+              "avg_out_deg": 2.727272727272727,
+              "max_out_deg": 4.0,
+              "city": 0.0
+            },
+            {
+              "route_id": 1410.0,
+              "route_acc": 0.5,
+              "n_trans": 4.0,
+              "len": 5.0,
+              "branch_points": 4.0,
+              "avg_out_deg": 2.5,
+              "max_out_deg": 3.0,
+              "city": 0.0
+            },
+            {
+              "route_id": 1061.0,
+              "route_acc": 0.5,
+              "n_trans": 14.0,
+              "len": 15.0,
+              "branch_points": 10.0,
+              "avg_out_deg": 2.0714285714285716,
+              "max_out_deg": 4.0,
+              "city": 0.0
+            },
+            {
+              "route_id": 1279.0,
+              "route_acc": 0.5217391304347826,
+              "n_trans": 23.0,
+              "len": 24.0,
+              "branch_points": 20.0,
+              "avg_out_deg": 2.3043478260869565,
+              "max_out_deg": 4.0,
+              "city": 0.0
+            },
+            {
+              "route_id": 1483.0,
+              "route_acc": 0.5588235294117647,
+              "n_trans": 34.0,
+              "len": 35.0,
+              "branch_points": 34.0,
+              "avg_out_deg": 2.7058823529411766,
+              "max_out_deg": 4.0,
+              "city": 0.0
+            },
+            {
+              "route_id": 1945.0,
+              "route_acc": 0.5714285714285714,
+              "n_trans": 35.0,
+              "len": 36.0,
+              "branch_points": 35.0,
+              "avg_out_deg": 2.6857142857142855,
+              "max_out_deg": 4.0,
+              "city": 0.0
+            },
+            {
+              "route_id": 1293.0,
+              "route_acc": 0.5714285714285714,
+              "n_trans": 7.0,
+              "len": 8.0,
+              "branch_points": 5.0,
+              "avg_out_deg": 1.8571428571428572,
+              "max_out_deg": 3.0,
+              "city": 0.0
+            },
+            {
+              "route_id": 594.0,
+              "route_acc": 0.5714285714285714,
+              "n_trans": 35.0,
+              "len": 36.0,
+              "branch_points": 35.0,
+              "avg_out_deg": 2.6857142857142855,
+              "max_out_deg": 4.0,
+              "city": 0.0
+            },
+            {
+              "route_id": 1662.0,
+              "route_acc": 0.5777777777777777,
+              "n_trans": 45.0,
+              "len": 46.0,
+              "branch_points": 40.0,
+              "avg_out_deg": 2.088888888888889,
+              "max_out_deg": 3.0,
+              "city": 0.0
+            }
+          ]
+        },
+        "1": {
+          "n_routes": 200,
+          "n_routes_scored": 200,
+          "route_acc": {
+            "mean": 0.8699892727748321,
+            "min": 0.25,
+            "max": 1.0,
+            "p10": 0.6236111111111111,
+            "p50": 0.9371044303797469,
+            "p90": 1.0,
+            "p99": 1.0
+          },
+          "hard_routes": [
+            {
+              "route_id": 7296.0,
+              "route_acc": 0.25,
+              "n_trans": 8.0,
+              "len": 9.0,
+              "branch_points": 8.0,
+              "avg_out_deg": 3.0,
+              "max_out_deg": 7.0,
+              "city": 1.0
+            },
+            {
+              "route_id": 7476.0,
+              "route_acc": 0.3333333333333333,
+              "n_trans": 6.0,
+              "len": 7.0,
+              "branch_points": 6.0,
+              "avg_out_deg": 2.5,
+              "max_out_deg": 4.0,
+              "city": 1.0
+            },
+            {
+              "route_id": 5332.0,
+              "route_acc": 0.3333333333333333,
+              "n_trans": 6.0,
+              "len": 7.0,
+              "branch_points": 6.0,
+              "avg_out_deg": 4.0,
+              "max_out_deg": 5.0,
+              "city": 1.0
+            },
+            {
+              "route_id": 5531.0,
+              "route_acc": 0.42857142857142855,
+              "n_trans": 14.0,
+              "len": 15.0,
+              "branch_points": 14.0,
+              "avg_out_deg": 2.642857142857143,
+              "max_out_deg": 6.0,
+              "city": 1.0
+            },
+            {
+              "route_id": 5177.0,
+              "route_acc": 0.4375,
+              "n_trans": 16.0,
+              "len": 17.0,
+              "branch_points": 16.0,
+              "avg_out_deg": 3.4375,
+              "max_out_deg": 13.0,
+              "city": 1.0
+            },
+            {
+              "route_id": 2480.0,
+              "route_acc": 0.5,
+              "n_trans": 4.0,
+              "len": 5.0,
+              "branch_points": 2.0,
+              "avg_out_deg": 2.0,
+              "max_out_deg": 3.0,
+              "city": 1.0
+            },
+            {
+              "route_id": 4714.0,
+              "route_acc": 0.5,
+              "n_trans": 8.0,
+              "len": 9.0,
+              "branch_points": 4.0,
+              "avg_out_deg": 1.75,
+              "max_out_deg": 3.0,
+              "city": 1.0
+            },
+            {
+              "route_id": 6578.0,
+              "route_acc": 0.5,
+              "n_trans": 4.0,
+              "len": 5.0,
+              "branch_points": 4.0,
+              "avg_out_deg": 3.25,
+              "max_out_deg": 4.0,
+              "city": 1.0
+            },
+            {
+              "route_id": 6158.0,
+              "route_acc": 0.5,
+              "n_trans": 2.0,
+              "len": 3.0,
+              "branch_points": 1.0,
+              "avg_out_deg": 2.5,
+              "max_out_deg": 4.0,
+              "city": 1.0
+            },
+            {
+              "route_id": 2879.0,
+              "route_acc": 0.5,
+              "n_trans": 8.0,
+              "len": 9.0,
+              "branch_points": 5.0,
+              "avg_out_deg": 2.0,
+              "max_out_deg": 4.0,
+              "city": 1.0
+            },
+            {
+              "route_id": 7457.0,
+              "route_acc": 0.52,
+              "n_trans": 25.0,
+              "len": 26.0,
+              "branch_points": 22.0,
+              "avg_out_deg": 2.12,
+              "max_out_deg": 4.0,
+              "city": 1.0
+            },
+            {
+              "route_id": 6305.0,
+              "route_acc": 0.5217391304347826,
+              "n_trans": 23.0,
+              "len": 24.0,
+              "branch_points": 20.0,
+              "avg_out_deg": 2.130434782608696,
+              "max_out_deg": 4.0,
+              "city": 1.0
+            },
+            {
+              "route_id": 4328.0,
+              "route_acc": 0.5454545454545454,
+              "n_trans": 11.0,
+              "len": 12.0,
+              "branch_points": 11.0,
+              "avg_out_deg": 2.8181818181818183,
+              "max_out_deg": 4.0,
+              "city": 1.0
+            },
+            {
+              "route_id": 3612.0,
+              "route_acc": 0.5454545454545454,
+              "n_trans": 11.0,
+              "len": 12.0,
+              "branch_points": 10.0,
+              "avg_out_deg": 1.9090909090909092,
+              "max_out_deg": 2.0,
+              "city": 1.0
+            },
+            {
+              "route_id": 5095.0,
+              "route_acc": 0.5714285714285714,
+              "n_trans": 7.0,
+              "len": 8.0,
+              "branch_points": 6.0,
+              "avg_out_deg": 2.5714285714285716,
+              "max_out_deg": 5.0,
+              "city": 1.0
+            },
+            {
+              "route_id": 2418.0,
+              "route_acc": 0.5833333333333334,
+              "n_trans": 12.0,
+              "len": 13.0,
+              "branch_points": 12.0,
+              "avg_out_deg": 3.6666666666666665,
+              "max_out_deg": 13.0,
+              "city": 1.0
+            },
+            {
+              "route_id": 4046.0,
+              "route_acc": 0.5833333333333334,
+              "n_trans": 12.0,
+              "len": 13.0,
+              "branch_points": 11.0,
+              "avg_out_deg": 2.6666666666666665,
+              "max_out_deg": 6.0,
+              "city": 1.0
+            },
+            {
+              "route_id": 6232.0,
+              "route_acc": 0.6,
+              "n_trans": 20.0,
+              "len": 21.0,
+              "branch_points": 19.0,
+              "avg_out_deg": 2.5,
+              "max_out_deg": 6.0,
+              "city": 1.0
+            },
+            {
+              "route_id": 2608.0,
+              "route_acc": 0.6,
+              "n_trans": 20.0,
+              "len": 21.0,
+              "branch_points": 19.0,
+              "avg_out_deg": 2.25,
+              "max_out_deg": 3.0,
+              "city": 1.0
+            },
+            {
+              "route_id": 6258.0,
+              "route_acc": 0.6111111111111112,
+              "n_trans": 18.0,
+              "len": 19.0,
+              "branch_points": 18.0,
+              "avg_out_deg": 3.1666666666666665,
+              "max_out_deg": 8.0,
+              "city": 1.0
+            }
+          ]
+        }
+      },
+      "overall": {
+        "n_routes": 400,
+        "n_routes_scored": 400,
+        "route_acc": {
+          "mean": 0.8458307092600456,
+          "min": 0.25,
+          "max": 1.0,
+          "p10": 0.5939586645468999,
+          "p50": 0.914769975786925,
+          "p90": 1.0,
+          "p99": 1.0
+        },
+        "hard_routes": [
+          {
+            "route_id": 1213.0,
+            "route_acc": 0.25,
+            "n_trans": 4.0,
+            "len": 5.0,
+            "branch_points": 4.0,
+            "avg_out_deg": 2.5,
+            "max_out_deg": 3.0,
+            "city": 0.0
+          },
+          {
+            "route_id": 7296.0,
+            "route_acc": 0.25,
+            "n_trans": 8.0,
+            "len": 9.0,
+            "branch_points": 8.0,
+            "avg_out_deg": 3.0,
+            "max_out_deg": 7.0,
+            "city": 1.0
+          },
+          {
+            "route_id": 1642.0,
+            "route_acc": 0.3333333333333333,
+            "n_trans": 3.0,
+            "len": 4.0,
+            "branch_points": 3.0,
+            "avg_out_deg": 2.0,
+            "max_out_deg": 2.0,
+            "city": 0.0
+          },
+          {
+            "route_id": 7476.0,
+            "route_acc": 0.3333333333333333,
+            "n_trans": 6.0,
+            "len": 7.0,
+            "branch_points": 6.0,
+            "avg_out_deg": 2.5,
+            "max_out_deg": 4.0,
+            "city": 1.0
+          },
+          {
+            "route_id": 5332.0,
+            "route_acc": 0.3333333333333333,
+            "n_trans": 6.0,
+            "len": 7.0,
+            "branch_points": 6.0,
+            "avg_out_deg": 4.0,
+            "max_out_deg": 5.0,
+            "city": 1.0
+          },
+          {
+            "route_id": 1697.0,
+            "route_acc": 0.35294117647058826,
+            "n_trans": 17.0,
+            "len": 18.0,
+            "branch_points": 17.0,
+            "avg_out_deg": 3.1176470588235294,
+            "max_out_deg": 8.0,
+            "city": 0.0
+          },
+          {
+            "route_id": 337.0,
+            "route_acc": 0.4,
+            "n_trans": 15.0,
+            "len": 16.0,
+            "branch_points": 15.0,
+            "avg_out_deg": 2.6,
+            "max_out_deg": 5.0,
+            "city": 0.0
+          },
+          {
+            "route_id": 275.0,
+            "route_acc": 0.41379310344827586,
+            "n_trans": 29.0,
+            "len": 30.0,
+            "branch_points": 26.0,
+            "avg_out_deg": 2.206896551724138,
+            "max_out_deg": 3.0,
+            "city": 0.0
+          },
+          {
+            "route_id": 1924.0,
+            "route_acc": 0.4166666666666667,
+            "n_trans": 12.0,
+            "len": 13.0,
+            "branch_points": 12.0,
+            "avg_out_deg": 2.5,
+            "max_out_deg": 5.0,
+            "city": 0.0
+          },
+          {
+            "route_id": 1932.0,
+            "route_acc": 0.42857142857142855,
+            "n_trans": 7.0,
+            "len": 8.0,
+            "branch_points": 5.0,
+            "avg_out_deg": 3.857142857142857,
+            "max_out_deg": 10.0,
+            "city": 0.0
+          },
+          {
+            "route_id": 505.0,
+            "route_acc": 0.42857142857142855,
+            "n_trans": 7.0,
+            "len": 8.0,
+            "branch_points": 7.0,
+            "avg_out_deg": 2.2857142857142856,
+            "max_out_deg": 3.0,
+            "city": 0.0
+          },
+          {
+            "route_id": 5531.0,
+            "route_acc": 0.42857142857142855,
+            "n_trans": 14.0,
+            "len": 15.0,
+            "branch_points": 14.0,
+            "avg_out_deg": 2.642857142857143,
+            "max_out_deg": 6.0,
+            "city": 1.0
+          },
+          {
+            "route_id": 1043.0,
+            "route_acc": 0.4375,
+            "n_trans": 32.0,
+            "len": 33.0,
+            "branch_points": 32.0,
+            "avg_out_deg": 2.75,
+            "max_out_deg": 4.0,
+            "city": 0.0
+          },
+          {
+            "route_id": 5177.0,
+            "route_acc": 0.4375,
+            "n_trans": 16.0,
+            "len": 17.0,
+            "branch_points": 16.0,
+            "avg_out_deg": 3.4375,
+            "max_out_deg": 13.0,
+            "city": 1.0
+          },
+          {
+            "route_id": 1117.0,
+            "route_acc": 0.48484848484848486,
+            "n_trans": 33.0,
+            "len": 34.0,
+            "branch_points": 33.0,
+            "avg_out_deg": 2.6363636363636362,
+            "max_out_deg": 4.0,
+            "city": 0.0
+          },
+          {
+            "route_id": 1748.0,
+            "route_acc": 0.48484848484848486,
+            "n_trans": 33.0,
+            "len": 34.0,
+            "branch_points": 29.0,
+            "avg_out_deg": 2.757575757575758,
+            "max_out_deg": 5.0,
+            "city": 0.0
+          },
+          {
+            "route_id": 1227.0,
+            "route_acc": 0.48484848484848486,
+            "n_trans": 33.0,
+            "len": 34.0,
+            "branch_points": 33.0,
+            "avg_out_deg": 2.727272727272727,
+            "max_out_deg": 4.0,
+            "city": 0.0
+          },
+          {
+            "route_id": 1410.0,
+            "route_acc": 0.5,
+            "n_trans": 4.0,
+            "len": 5.0,
+            "branch_points": 4.0,
+            "avg_out_deg": 2.5,
+            "max_out_deg": 3.0,
+            "city": 0.0
+          },
+          {
+            "route_id": 1061.0,
+            "route_acc": 0.5,
+            "n_trans": 14.0,
+            "len": 15.0,
+            "branch_points": 10.0,
+            "avg_out_deg": 2.0714285714285716,
+            "max_out_deg": 4.0,
+            "city": 0.0
+          },
+          {
+            "route_id": 2480.0,
+            "route_acc": 0.5,
+            "n_trans": 4.0,
+            "len": 5.0,
+            "branch_points": 2.0,
+            "avg_out_deg": 2.0,
+            "max_out_deg": 3.0,
+            "city": 1.0
+          }
+        ]
+      },
+      "cities": [
+        0,
+        1
+      ]
+    },
+    "val": {
+      "by_city": {
+        "0": {
+          "n_routes": 132,
+          "n_routes_scored": 132,
+          "route_acc": {
+            "mean": 0.79952412313566,
+            "min": 0.25,
+            "max": 1.0,
+            "p10": 0.5,
+            "p50": 0.8878406708595388,
+            "p90": 1.0,
+            "p99": 1.0
+          },
+          "hard_routes": [
+            {
+              "route_id": 487.0,
+              "route_acc": 0.25,
+              "n_trans": 4.0,
+              "len": 5.0,
+              "branch_points": 4.0,
+              "avg_out_deg": 3.5,
+              "max_out_deg": 6.0,
+              "city": 0.0
+            },
+            {
+              "route_id": 394.0,
+              "route_acc": 0.2727272727272727,
+              "n_trans": 11.0,
+              "len": 12.0,
+              "branch_points": 11.0,
+              "avg_out_deg": 3.090909090909091,
+              "max_out_deg": 6.0,
+              "city": 0.0
+            },
+            {
+              "route_id": 2114.0,
+              "route_acc": 0.3023255813953488,
+              "n_trans": 43.0,
+              "len": 44.0,
+              "branch_points": 43.0,
+              "avg_out_deg": 2.3255813953488373,
+              "max_out_deg": 4.0,
+              "city": 0.0
+            },
+            {
+              "route_id": 433.0,
+              "route_acc": 0.4,
+              "n_trans": 15.0,
+              "len": 16.0,
+              "branch_points": 15.0,
+              "avg_out_deg": 2.6,
+              "max_out_deg": 5.0,
+              "city": 0.0
+            },
+            {
+              "route_id": 1997.0,
+              "route_acc": 0.4,
+              "n_trans": 20.0,
+              "len": 21.0,
+              "branch_points": 19.0,
+              "avg_out_deg": 2.25,
+              "max_out_deg": 4.0,
+              "city": 0.0
+            },
+            {
+              "route_id": 1740.0,
+              "route_acc": 0.4166666666666667,
+              "n_trans": 12.0,
+              "len": 13.0,
+              "branch_points": 12.0,
+              "avg_out_deg": 2.5,
+              "max_out_deg": 5.0,
+              "city": 0.0
+            },
+            {
+              "route_id": 977.0,
+              "route_acc": 0.42857142857142855,
+              "n_trans": 7.0,
+              "len": 8.0,
+              "branch_points": 5.0,
+              "avg_out_deg": 3.4285714285714284,
+              "max_out_deg": 8.0,
+              "city": 0.0
+            },
+            {
+              "route_id": 486.0,
+              "route_acc": 0.45454545454545453,
+              "n_trans": 11.0,
+              "len": 12.0,
+              "branch_points": 10.0,
+              "avg_out_deg": 2.3636363636363638,
+              "max_out_deg": 3.0,
+              "city": 0.0
+            },
+            {
+              "route_id": 618.0,
+              "route_acc": 0.46875,
+              "n_trans": 32.0,
+              "len": 33.0,
+              "branch_points": 32.0,
+              "avg_out_deg": 2.75,
+              "max_out_deg": 4.0,
+              "city": 0.0
+            },
+            {
+              "route_id": 256.0,
+              "route_acc": 0.48148148148148145,
+              "n_trans": 27.0,
+              "len": 28.0,
+              "branch_points": 27.0,
+              "avg_out_deg": 2.2962962962962963,
+              "max_out_deg": 4.0,
+              "city": 0.0
+            },
+            {
+              "route_id": 859.0,
+              "route_acc": 0.4838709677419355,
+              "n_trans": 31.0,
+              "len": 32.0,
+              "branch_points": 31.0,
+              "avg_out_deg": 2.6774193548387095,
+              "max_out_deg": 4.0,
+              "city": 0.0
+            },
+            {
+              "route_id": 1661.0,
+              "route_acc": 0.4864864864864865,
+              "n_trans": 37.0,
+              "len": 38.0,
+              "branch_points": 37.0,
+              "avg_out_deg": 2.7027027027027026,
+              "max_out_deg": 4.0,
+              "city": 0.0
+            },
+            {
+              "route_id": 1298.0,
+              "route_acc": 0.5,
+              "n_trans": 2.0,
+              "len": 3.0,
+              "branch_points": 1.0,
+              "avg_out_deg": 2.0,
+              "max_out_deg": 3.0,
+              "city": 0.0
+            },
+            {
+              "route_id": 735.0,
+              "route_acc": 0.5,
+              "n_trans": 42.0,
+              "len": 43.0,
+              "branch_points": 42.0,
+              "avg_out_deg": 2.3095238095238093,
+              "max_out_deg": 4.0,
+              "city": 0.0
+            },
+            {
+              "route_id": 64.0,
+              "route_acc": 0.5,
+              "n_trans": 12.0,
+              "len": 13.0,
+              "branch_points": 12.0,
+              "avg_out_deg": 2.5,
+              "max_out_deg": 5.0,
+              "city": 0.0
+            },
+            {
+              "route_id": 39.0,
+              "route_acc": 0.5,
+              "n_trans": 34.0,
+              "len": 35.0,
+              "branch_points": 32.0,
+              "avg_out_deg": 2.2058823529411766,
+              "max_out_deg": 4.0,
+              "city": 0.0
+            },
+            {
+              "route_id": 2051.0,
+              "route_acc": 0.5111111111111111,
+              "n_trans": 45.0,
+              "len": 46.0,
+              "branch_points": 45.0,
+              "avg_out_deg": 2.6222222222222222,
+              "max_out_deg": 5.0,
+              "city": 0.0
+            },
+            {
+              "route_id": 366.0,
+              "route_acc": 0.5135135135135135,
+              "n_trans": 37.0,
+              "len": 38.0,
+              "branch_points": 37.0,
+              "avg_out_deg": 2.3513513513513513,
+              "max_out_deg": 4.0,
+              "city": 0.0
+            },
+            {
+              "route_id": 260.0,
+              "route_acc": 0.5294117647058824,
+              "n_trans": 34.0,
+              "len": 35.0,
+              "branch_points": 34.0,
+              "avg_out_deg": 2.7058823529411766,
+              "max_out_deg": 4.0,
+              "city": 0.0
+            },
+            {
+              "route_id": 2187.0,
+              "route_acc": 0.5384615384615384,
+              "n_trans": 13.0,
+              "len": 14.0,
+              "branch_points": 8.0,
+              "avg_out_deg": 1.8461538461538463,
+              "max_out_deg": 3.0,
+              "city": 0.0
+            }
+          ]
+        },
+        "1": {
+          "n_routes": 200,
+          "n_routes_scored": 200,
+          "route_acc": {
+            "mean": 0.8294337053805103,
+            "min": 0.0,
+            "max": 1.0,
+            "p10": 0.5,
+            "p50": 0.9076704545454546,
+            "p90": 1.0,
+            "p99": 1.0
+          },
+          "hard_routes": [
+            {
+              "route_id": 6273.0,
+              "route_acc": 0.0,
+              "n_trans": 1.0,
+              "len": 2.0,
+              "branch_points": 1.0,
+              "avg_out_deg": 3.0,
+              "max_out_deg": 3.0,
+              "city": 1.0
+            },
+            {
+              "route_id": 6218.0,
+              "route_acc": 0.16666666666666666,
+              "n_trans": 6.0,
+              "len": 7.0,
+              "branch_points": 6.0,
+              "avg_out_deg": 5.0,
+              "max_out_deg": 8.0,
+              "city": 1.0
+            },
+            {
+              "route_id": 4150.0,
+              "route_acc": 0.2857142857142857,
+              "n_trans": 7.0,
+              "len": 8.0,
+              "branch_points": 6.0,
+              "avg_out_deg": 3.4285714285714284,
+              "max_out_deg": 5.0,
+              "city": 1.0
+            },
+            {
+              "route_id": 4834.0,
+              "route_acc": 0.3333333333333333,
+              "n_trans": 6.0,
+              "len": 7.0,
+              "branch_points": 6.0,
+              "avg_out_deg": 3.8333333333333335,
+              "max_out_deg": 6.0,
+              "city": 1.0
+            },
+            {
+              "route_id": 5902.0,
+              "route_acc": 0.3333333333333333,
+              "n_trans": 6.0,
+              "len": 7.0,
+              "branch_points": 6.0,
+              "avg_out_deg": 3.5,
+              "max_out_deg": 6.0,
+              "city": 1.0
+            },
+            {
+              "route_id": 4992.0,
+              "route_acc": 0.3333333333333333,
+              "n_trans": 3.0,
+              "len": 4.0,
+              "branch_points": 2.0,
+              "avg_out_deg": 2.3333333333333335,
+              "max_out_deg": 3.0,
+              "city": 1.0
+            },
+            {
+              "route_id": 2836.0,
+              "route_acc": 0.3333333333333333,
+              "n_trans": 3.0,
+              "len": 4.0,
+              "branch_points": 3.0,
+              "avg_out_deg": 3.6666666666666665,
+              "max_out_deg": 5.0,
+              "city": 1.0
+            },
+            {
+              "route_id": 5624.0,
+              "route_acc": 0.4,
+              "n_trans": 5.0,
+              "len": 6.0,
+              "branch_points": 4.0,
+              "avg_out_deg": 2.2,
+              "max_out_deg": 3.0,
+              "city": 1.0
+            },
+            {
+              "route_id": 3021.0,
+              "route_acc": 0.42105263157894735,
+              "n_trans": 19.0,
+              "len": 20.0,
+              "branch_points": 15.0,
+              "avg_out_deg": 3.0,
+              "max_out_deg": 6.0,
+              "city": 1.0
+            },
+            {
+              "route_id": 6262.0,
+              "route_acc": 0.4444444444444444,
+              "n_trans": 9.0,
+              "len": 10.0,
+              "branch_points": 9.0,
+              "avg_out_deg": 2.7777777777777777,
+              "max_out_deg": 6.0,
+              "city": 1.0
+            },
+            {
+              "route_id": 4317.0,
+              "route_acc": 0.47058823529411764,
+              "n_trans": 17.0,
+              "len": 18.0,
+              "branch_points": 13.0,
+              "avg_out_deg": 2.411764705882353,
+              "max_out_deg": 6.0,
+              "city": 1.0
+            },
+            {
+              "route_id": 2552.0,
+              "route_acc": 0.5,
+              "n_trans": 12.0,
+              "len": 13.0,
+              "branch_points": 9.0,
+              "avg_out_deg": 2.5,
+              "max_out_deg": 5.0,
+              "city": 1.0
+            },
+            {
+              "route_id": 5462.0,
+              "route_acc": 0.5,
+              "n_trans": 2.0,
+              "len": 3.0,
+              "branch_points": 2.0,
+              "avg_out_deg": 3.5,
+              "max_out_deg": 4.0,
+              "city": 1.0
+            },
+            {
+              "route_id": 2530.0,
+              "route_acc": 0.5,
+              "n_trans": 4.0,
+              "len": 5.0,
+              "branch_points": 2.0,
+              "avg_out_deg": 1.5,
+              "max_out_deg": 2.0,
+              "city": 1.0
+            },
+            {
+              "route_id": 5929.0,
+              "route_acc": 0.5,
+              "n_trans": 6.0,
+              "len": 7.0,
+              "branch_points": 5.0,
+              "avg_out_deg": 2.6666666666666665,
+              "max_out_deg": 7.0,
+              "city": 1.0
+            },
+            {
+              "route_id": 6129.0,
+              "route_acc": 0.5,
+              "n_trans": 4.0,
+              "len": 5.0,
+              "branch_points": 3.0,
+              "avg_out_deg": 1.75,
+              "max_out_deg": 2.0,
+              "city": 1.0
+            },
+            {
+              "route_id": 2845.0,
+              "route_acc": 0.5,
+              "n_trans": 24.0,
+              "len": 25.0,
+              "branch_points": 21.0,
+              "avg_out_deg": 2.25,
+              "max_out_deg": 4.0,
+              "city": 1.0
+            },
+            {
+              "route_id": 2502.0,
+              "route_acc": 0.5,
+              "n_trans": 12.0,
+              "len": 13.0,
+              "branch_points": 11.0,
+              "avg_out_deg": 2.75,
+              "max_out_deg": 6.0,
+              "city": 1.0
+            },
+            {
+              "route_id": 4115.0,
+              "route_acc": 0.5,
+              "n_trans": 4.0,
+              "len": 5.0,
+              "branch_points": 3.0,
+              "avg_out_deg": 3.25,
+              "max_out_deg": 6.0,
+              "city": 1.0
+            },
+            {
+              "route_id": 4350.0,
+              "route_acc": 0.5,
+              "n_trans": 10.0,
+              "len": 11.0,
+              "branch_points": 10.0,
+              "avg_out_deg": 2.2,
+              "max_out_deg": 4.0,
+              "city": 1.0
+            }
+          ]
+        }
+      },
+      "overall": {
+        "n_routes": 332,
+        "n_routes_scored": 332,
+        "route_acc": {
+          "mean": 0.8175419437650879,
+          "min": 0.0,
+          "max": 1.0,
+          "p10": 0.5,
+          "p50": 0.9,
+          "p90": 1.0,
+          "p99": 1.0
+        },
+        "hard_routes": [
+          {
+            "route_id": 6273.0,
+            "route_acc": 0.0,
+            "n_trans": 1.0,
+            "len": 2.0,
+            "branch_points": 1.0,
+            "avg_out_deg": 3.0,
+            "max_out_deg": 3.0,
+            "city": 1.0
+          },
+          {
+            "route_id": 6218.0,
+            "route_acc": 0.16666666666666666,
+            "n_trans": 6.0,
+            "len": 7.0,
+            "branch_points": 6.0,
+            "avg_out_deg": 5.0,
+            "max_out_deg": 8.0,
+            "city": 1.0
+          },
+          {
+            "route_id": 487.0,
+            "route_acc": 0.25,
+            "n_trans": 4.0,
+            "len": 5.0,
+            "branch_points": 4.0,
+            "avg_out_deg": 3.5,
+            "max_out_deg": 6.0,
+            "city": 0.0
+          },
+          {
+            "route_id": 394.0,
+            "route_acc": 0.2727272727272727,
+            "n_trans": 11.0,
+            "len": 12.0,
+            "branch_points": 11.0,
+            "avg_out_deg": 3.090909090909091,
+            "max_out_deg": 6.0,
+            "city": 0.0
+          },
+          {
+            "route_id": 4150.0,
+            "route_acc": 0.2857142857142857,
+            "n_trans": 7.0,
+            "len": 8.0,
+            "branch_points": 6.0,
+            "avg_out_deg": 3.4285714285714284,
+            "max_out_deg": 5.0,
+            "city": 1.0
+          },
+          {
+            "route_id": 2114.0,
+            "route_acc": 0.3023255813953488,
+            "n_trans": 43.0,
+            "len": 44.0,
+            "branch_points": 43.0,
+            "avg_out_deg": 2.3255813953488373,
+            "max_out_deg": 4.0,
+            "city": 0.0
+          },
+          {
+            "route_id": 4834.0,
+            "route_acc": 0.3333333333333333,
+            "n_trans": 6.0,
+            "len": 7.0,
+            "branch_points": 6.0,
+            "avg_out_deg": 3.8333333333333335,
+            "max_out_deg": 6.0,
+            "city": 1.0
+          },
+          {
+            "route_id": 5902.0,
+            "route_acc": 0.3333333333333333,
+            "n_trans": 6.0,
+            "len": 7.0,
+            "branch_points": 6.0,
+            "avg_out_deg": 3.5,
+            "max_out_deg": 6.0,
+            "city": 1.0
+          },
+          {
+            "route_id": 4992.0,
+            "route_acc": 0.3333333333333333,
+            "n_trans": 3.0,
+            "len": 4.0,
+            "branch_points": 2.0,
+            "avg_out_deg": 2.3333333333333335,
+            "max_out_deg": 3.0,
+            "city": 1.0
+          },
+          {
+            "route_id": 2836.0,
+            "route_acc": 0.3333333333333333,
+            "n_trans": 3.0,
+            "len": 4.0,
+            "branch_points": 3.0,
+            "avg_out_deg": 3.6666666666666665,
+            "max_out_deg": 5.0,
+            "city": 1.0
+          },
+          {
+            "route_id": 433.0,
+            "route_acc": 0.4,
+            "n_trans": 15.0,
+            "len": 16.0,
+            "branch_points": 15.0,
+            "avg_out_deg": 2.6,
+            "max_out_deg": 5.0,
+            "city": 0.0
+          },
+          {
+            "route_id": 1997.0,
+            "route_acc": 0.4,
+            "n_trans": 20.0,
+            "len": 21.0,
+            "branch_points": 19.0,
+            "avg_out_deg": 2.25,
+            "max_out_deg": 4.0,
+            "city": 0.0
+          },
+          {
+            "route_id": 5624.0,
+            "route_acc": 0.4,
+            "n_trans": 5.0,
+            "len": 6.0,
+            "branch_points": 4.0,
+            "avg_out_deg": 2.2,
+            "max_out_deg": 3.0,
+            "city": 1.0
+          },
+          {
+            "route_id": 1740.0,
+            "route_acc": 0.4166666666666667,
+            "n_trans": 12.0,
+            "len": 13.0,
+            "branch_points": 12.0,
+            "avg_out_deg": 2.5,
+            "max_out_deg": 5.0,
+            "city": 0.0
+          },
+          {
+            "route_id": 3021.0,
+            "route_acc": 0.42105263157894735,
+            "n_trans": 19.0,
+            "len": 20.0,
+            "branch_points": 15.0,
+            "avg_out_deg": 3.0,
+            "max_out_deg": 6.0,
+            "city": 1.0
+          },
+          {
+            "route_id": 977.0,
+            "route_acc": 0.42857142857142855,
+            "n_trans": 7.0,
+            "len": 8.0,
+            "branch_points": 5.0,
+            "avg_out_deg": 3.4285714285714284,
+            "max_out_deg": 8.0,
+            "city": 0.0
+          },
+          {
+            "route_id": 6262.0,
+            "route_acc": 0.4444444444444444,
+            "n_trans": 9.0,
+            "len": 10.0,
+            "branch_points": 9.0,
+            "avg_out_deg": 2.7777777777777777,
+            "max_out_deg": 6.0,
+            "city": 1.0
+          },
+          {
+            "route_id": 486.0,
+            "route_acc": 0.45454545454545453,
+            "n_trans": 11.0,
+            "len": 12.0,
+            "branch_points": 10.0,
+            "avg_out_deg": 2.3636363636363638,
+            "max_out_deg": 3.0,
+            "city": 0.0
+          },
+          {
+            "route_id": 618.0,
+            "route_acc": 0.46875,
+            "n_trans": 32.0,
+            "len": 33.0,
+            "branch_points": 32.0,
+            "avg_out_deg": 2.75,
+            "max_out_deg": 4.0,
+            "city": 0.0
+          },
+          {
+            "route_id": 4317.0,
+            "route_acc": 0.47058823529411764,
+            "n_trans": 17.0,
+            "len": 18.0,
+            "branch_points": 13.0,
+            "avg_out_deg": 2.411764705882353,
+            "max_out_deg": 6.0,
+            "city": 1.0
+          }
+        ]
+      },
+      "cities": [
+        0,
+        1
+      ]
+    }
+  }
+}

@@ -14,6 +14,8 @@ env/
 *.h5
 *.npy
 *.npz
+*.parquet
+*.pbf
 *.csv
 *.txt
 
@@ -22,7 +24,16 @@ logs/
 *.log
 experiments/
 backups/
-_sync/
+# Sync results: keep small artifacts (json/log/figures) for sharing, but ignore heavy blobs.
+_sync/**
+!_sync/**/
+!_sync/**/*.json
+!_sync/**/*.jsonl
+!_sync/**/*.log
+!_sync/**/*.md
+!_sync/**/*.png
+!_sync/**/*.pdf
+!_sync/**/*.svg
 *.pt
 *.pth
 *.ckpt

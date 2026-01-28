@@ -1,0 +1,60 @@
+{
+  "inputs": {
+    "train_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/gt_windows/detroit_segments_F256_n200k_seed0.npz"
+  },
+  "config": {
+    "pos_max": 1023,
+    "max_train_n": null,
+    "num_waypoints": 2,
+    "waypoint_mode": "rdp_turn",
+    "waypoint_turn_alpha": 1.0,
+    "od_bin": 128.0,
+    "o_clip": 2.0,
+    "temporal_mode": "auto",
+    "temporal_tz_offset_hours": -5.0,
+    "temporal_effective": "zeros",
+    "semantic_dir": "/home/jinlin/data/geoexplicit_data/worldtrace/detroit_core_v1",
+    "semantic_mode": "gridpos",
+    "semantic_use_bins": false,
+    "profile_num_steps": 16,
+    "profile_offsets": "-32,0,32",
+    "grid_patch_size": 16,
+    "grid_extent": 128.0,
+    "grid_pool": "quad",
+    "grid_channels": "road_prob_major,road_prob_minor,road_prob_service",
+    "grid_emb_dim": 64,
+    "semantic_posenc_hidden_dim": 256,
+    "semantic_posenc_weight": 1.0,
+    "semantic_attn_heads": 4,
+    "semantic_attn_weight": 1.0,
+    "semantic_loss_weight": 0.0,
+    "semantic_loss_samples_per_segment": 8,
+    "hidden_dim": 128,
+    "diff_steps": 50,
+    "pred_type": "eps",
+    "batch_size": 4096,
+    "epochs": 200,
+    "lr": 0.001,
+    "num_workers": 24,
+    "max_batches": null,
+    "seed": 0
+  },
+  "stats": {
+    "N": 2295,
+    "F": 256,
+    "rel_mean": [
+      0.479949414730072,
+      0.0012372371274977922
+    ],
+    "rel_std": [
+      0.32048964500427246,
+      0.2593027949333191
+    ]
+  },
+  "outputs": {
+    "checkpoint": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E22_gridpos_sc_tierroad_detroit_F256_od128_seed0/last.pt"
+  },
+  "timing": {
+    "elapsed_s": 137.59752249717712
+  }
+}

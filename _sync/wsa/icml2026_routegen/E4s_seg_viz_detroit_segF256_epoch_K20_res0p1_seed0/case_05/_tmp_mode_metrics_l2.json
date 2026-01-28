@@ -1,0 +1,60 @@
+{
+  "inputs": {
+    "gt_report_json": "_sync/wsA/icml2026_routegen/E0s_gt_baseline_detroit_segF256_seed0_od128_min10_sep2_uni2_png/report.json",
+    "gt_windows_npz": "_sync/wsA/icml2026_routegen/E_S1_segments_fixedlen_detroit_F256_p300_c40_t60_d1p2_seed0/detroit_segments_route_F256_epoch_seed0.npz",
+    "model_samples_npz": "_sync/wsA/icml2026_routegen/E4s_seg_viz_detroit_segF256_epoch_K20_res0p1_seed0/case_05/l2/samples.npz"
+  },
+  "config": {
+    "od_end": "dest_pos",
+    "jacc_cell": 8.0,
+    "collapse_ratio": 0.5,
+    "seed": 0
+  },
+  "overall": {
+    "num_cases_evaluated": 1,
+    "model_div_mean": 0.0,
+    "model_cov_mean": 0.5,
+    "collapse_rate_mean": 1.0,
+    "mixture_jsd_mean": 0.005059389928982541,
+    "mixture_l1_mean": 0.19999999999999896
+  },
+  "per_case": [
+    {
+      "case_id": 5,
+      "n_model_matched": 10,
+      "gt_div_mean": 0.8880912519281746,
+      "collapse_threshold": 0.4440456259640873,
+      "gt_corridor_mix": {
+        "frac": [
+          0.49999999999995,
+          0.49999999999995
+        ],
+        "counts": [
+          5,
+          5
+        ]
+      },
+      "model_corridor_mix": {
+        "frac": [
+          0.399999999999998,
+          0.599999999999997
+        ],
+        "counts": [
+          80,
+          120
+        ]
+      },
+      "mixture_jsd": 0.005059389928982541,
+      "mixture_l1": 0.19999999999999896,
+      "model_div": {
+        "mean": 0.0,
+        "p50": 0.0
+      },
+      "model_coverage": {
+        "mean": 0.5,
+        "p50": 0.5
+      },
+      "collapse_rate": 1.0
+    }
+  ]
+}

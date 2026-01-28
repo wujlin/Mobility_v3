@@ -1,0 +1,6 @@
+[segments] /home/jinlin/data/geoexplicit_data/worldtrace/columbus_core_v1/segments_with_wayid.parquet
+[N] 5228 with_any_way=5228
+[uniq_way_seq_len_valid] p50=22.0 p90=54.0 max=186
+[uniq_way_seq_len_all] p50=22.0 p90=54.0 max=186
+[way_id_missing_ratio] p50=0.000 p90=0.000
+[saved] /home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD2_waydata_rustbelt_seed0_d2dest/A2_wayseq_columbus/report.json

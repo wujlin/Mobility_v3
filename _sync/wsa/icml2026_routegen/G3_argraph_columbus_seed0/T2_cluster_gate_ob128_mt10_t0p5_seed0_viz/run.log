@@ -1,0 +1,6 @@
+{
+  "ok": true,
+  "out_dir": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/G3_argraph_columbus_seed0/T2_cluster_gate_ob128_mt10_t0p5_seed0_viz",
+  "num_plotted": 10,
+  "viz_report_json": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/G3_argraph_columbus_seed0/T2_cluster_gate_ob128_mt10_t0p5_seed0_viz/viz_report.json"
+}

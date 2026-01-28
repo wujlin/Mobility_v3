@@ -1,0 +1,35 @@
+2026-01-16 08:18:04,585 - INFO - device=cuda
+2026-01-16 08:18:04,597 - INFO - routes: total=7501 train=6751 val=750 max_way_len=160
+/home/jinlin/miniconda3/envs/dpl/lib/python3.11/site-packages/torch/nn/modules/transformer.py:392: UserWarning: enable_nested_tensor is True, but self.use_nested_tensor is False because encoder_layer.norm_first was True
+  warnings.warn(
+2026-01-16 08:18:06,945 - INFO - epoch=1 train_loss=4.8897 val_loss=3.9595
+2026-01-16 08:18:07,825 - INFO - epoch=2 train_loss=3.8083 val_loss=3.5028
+2026-01-16 08:18:08,747 - INFO - epoch=3 train_loss=3.5456 val_loss=3.3856
+2026-01-16 08:18:09,645 - INFO - epoch=4 train_loss=3.4379 val_loss=3.3011
+2026-01-16 08:18:10,503 - INFO - epoch=5 train_loss=3.3608 val_loss=3.2395
+2026-01-16 08:18:11,360 - INFO - epoch=6 train_loss=3.3344 val_loss=3.1746
+2026-01-16 08:18:12,247 - INFO - epoch=7 train_loss=3.3110 val_loss=3.2022
+2026-01-16 08:18:13,090 - INFO - epoch=8 train_loss=3.2804 val_loss=3.1629
+2026-01-16 08:18:13,983 - INFO - epoch=9 train_loss=3.2492 val_loss=3.1164
+2026-01-16 08:18:14,863 - INFO - epoch=10 train_loss=3.2195 val_loss=3.0875
+2026-01-16 08:18:15,738 - INFO - epoch=11 train_loss=3.2064 val_loss=3.0841
+2026-01-16 08:18:16,645 - INFO - epoch=12 train_loss=3.2033 val_loss=3.0666
+2026-01-16 08:18:17,540 - INFO - epoch=13 train_loss=3.1720 val_loss=3.0521
+2026-01-16 08:18:18,457 - INFO - epoch=14 train_loss=3.1862 val_loss=3.0307
+2026-01-16 08:18:19,327 - INFO - epoch=15 train_loss=3.1497 val_loss=3.0170
+2026-01-16 08:18:20,229 - INFO - epoch=16 train_loss=3.1435 val_loss=3.0236
+2026-01-16 08:18:21,089 - INFO - epoch=17 train_loss=3.1321 val_loss=3.0021
+2026-01-16 08:18:21,970 - INFO - epoch=18 train_loss=3.1138 val_loss=2.9669
+2026-01-16 08:18:22,863 - INFO - epoch=19 train_loss=3.1004 val_loss=2.9822
+2026-01-16 08:18:23,701 - INFO - epoch=20 train_loss=3.0837 val_loss=2.9737
+2026-01-16 08:18:24,590 - INFO - epoch=21 train_loss=3.0659 val_loss=2.9875
+2026-01-16 08:18:25,463 - INFO - epoch=22 train_loss=3.0513 val_loss=2.9527
+2026-01-16 08:18:26,344 - INFO - epoch=23 train_loss=3.0533 val_loss=2.9164
+2026-01-16 08:18:27,269 - INFO - epoch=24 train_loss=3.0398 val_loss=2.9296
+2026-01-16 08:18:28,176 - INFO - epoch=25 train_loss=3.0183 val_loss=2.9092
+2026-01-16 08:18:29,057 - INFO - epoch=26 train_loss=3.0141 val_loss=2.9019
+2026-01-16 08:18:29,980 - INFO - epoch=27 train_loss=3.0214 val_loss=2.8908
+2026-01-16 08:18:30,864 - INFO - epoch=28 train_loss=3.0096 val_loss=2.8974
+2026-01-16 08:18:31,731 - INFO - epoch=29 train_loss=2.9815 val_loss=2.8615
+2026-01-16 08:18:32,614 - INFO - epoch=30 train_loss=2.9651 val_loss=2.8528
+2026-01-16 08:18:32,642 - INFO - saved: /home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD1_waydata_rustbelt_seed0/W7_train_flow/report.json

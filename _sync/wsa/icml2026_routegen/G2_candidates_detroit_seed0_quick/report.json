@@ -1,0 +1,71 @@
+{
+  "ok": true,
+  "created_at": "2026-01-12T21:50:00.081740+08:00",
+  "gate": "candidate_paths_graph_gate",
+  "gate_passed": false,
+  "inputs": {
+    "routes_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E_S1_segments_fixedlen_detroit_F256_p300_c40_t60_d1p2_seed0/detroit_segments_route_F256_epoch_seed0.npz",
+    "road_graph_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/G1_roadgraph_detroit/road_graph.npz"
+  },
+  "config": {
+    "K": 5,
+    "min_jaccard": 0.5,
+    "coverage_threshold": 0.85,
+    "min_traj_per_od": 2,
+    "multimodal_thr": 0.3,
+    "max_od": 100
+  },
+  "stats": {
+    "N_total": 1092,
+    "N_eval": 105,
+    "num_unique_ods_raw_total": 1076,
+    "num_unique_ods_total": 1053,
+    "num_unique_ods_eval": 100,
+    "graph": {
+      "n_nodes": 378206,
+      "n_edges_directed": 869288,
+      "node_y_min": 0.0,
+      "node_y_max": 1023.0,
+      "node_x_min": 0.0,
+      "node_x_max": 1023.0,
+      "node_xy_finite_frac": 1.0
+    },
+    "snap_dist_grid": {
+      "start_p50": 0.0,
+      "start_p90": 1.0,
+      "dest_p50": 0.0,
+      "dest_p90": 1.0
+    },
+    "od_candidate_paths": {
+      "od_reachable_frac": 0.9900000095367432,
+      "num_paths_p50": 5.0
+    },
+    "traj_coverage": {
+      "covered_frac": 0.06666667014360428,
+      "best_jaccard_mean": 0.14339222013950348,
+      "best_jaccard_p50": 0.07816091924905777,
+      "best_jaccard_p90": 0.3697871267795563
+    },
+    "od_coverage": {
+      "od_any_frac": 0.07000000029802322,
+      "od_best_jaccard_mean_mean": 0.14172355830669403,
+      "od_best_jaccard_p50_mean": 0.07040011882781982,
+      "od_best_jaccard_p50_p50": 0.07040011882781982
+    },
+    "gt_od_diversity_dist": {
+      "num_ods": 3,
+      "mean": 0.5465815663337708,
+      "p50": 0.625668466091156,
+      "p90": 0.7123258113861084
+    },
+    "gt_multimodal_ods": {
+      "num_ods": 3,
+      "num_multimodal_ods": 2,
+      "multimodal_rate": 0.6666666865348816
+    }
+  },
+  "outputs": {
+    "report_json": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/G2_candidates_detroit_seed0_quick/report.json",
+    "candidates_jsonl": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/G2_candidates_detroit_seed0_quick/candidates.jsonl"
+  }
+}

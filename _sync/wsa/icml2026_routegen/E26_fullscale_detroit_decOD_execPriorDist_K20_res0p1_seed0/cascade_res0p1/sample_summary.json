@@ -1,0 +1,29 @@
+{
+  "inputs": {
+    "decision_checkpoint": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E3_wp_diffusion_rel_detroit_F256_od128_seed0/last.pt",
+    "exec_checkpoint": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E2_exec_diffusion_wp_residual_npz_detroit_F256_seed0/last.pt",
+    "case_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/gt_windows/detroit_segments_F256_n200k_seed0.npz",
+    "seed": 0,
+    "k_samples": 20,
+    "res_scale": 0.1,
+    "od_bin": 128.0,
+    "o_clip": 2.0,
+    "decision_model": {
+      "hidden_dim": 128,
+      "diff_steps": 50,
+      "pred_type": "eps"
+    },
+    "exec_model": {
+      "hidden_dim": 128,
+      "diff_steps": 100,
+      "pred_type": "eps"
+    }
+  },
+  "stats": {
+    "N": 2295,
+    "F": 256
+  },
+  "outputs": {
+    "samples_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E26_fullscale_detroit_decOD_execPriorDist_K20_res0p1_seed0/cascade_res0p1/samples.npz"
+  }
+}

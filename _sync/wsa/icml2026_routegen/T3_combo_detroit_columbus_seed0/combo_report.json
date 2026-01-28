@@ -1,0 +1,39 @@
+{
+  "ok": true,
+  "created_at": "2026-01-13T23:24:30.125344+08:00",
+  "task": "build_combo_graph_paths_dataset",
+  "inputs": {
+    "a_paths_graph_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/G3_argraph_detroit_seed0/T1_dump_paths/paths_graph.npz",
+    "b_paths_graph_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/G3_argraph_columbus_seed0/T1_dump_paths/paths_graph.npz",
+    "a_road_graph_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/G1_roadgraph_detroit/road_graph.npz",
+    "b_road_graph_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/G1_roadgraph_columbus/road_graph.npz",
+    "city_a": "detroit_core_v1",
+    "city_b": "columbus_core_v1"
+  },
+  "config": {
+    "b_traj_idx_offset": 1000000000,
+    "node_offset_b": 378206
+  },
+  "outputs": {
+    "out_dir": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/T3_combo_detroit_columbus_seed0",
+    "road_graph_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/T3_combo_detroit_columbus_seed0/road_graph_combo.npz",
+    "paths_graph_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/T3_combo_detroit_columbus_seed0/paths_graph_combo.npz",
+    "report_json": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/T3_combo_detroit_columbus_seed0/combo_report.json"
+  },
+  "stats": {
+    "nodes": {
+      "N_a": 378206,
+      "N_b": 339893,
+      "N_total": 718099
+    },
+    "edges": {
+      "E_a": 869288,
+      "E_b": 762522,
+      "E_total": 1631810
+    },
+    "paths": {
+      "N_total": 3385,
+      "Lmax": 1936
+    }
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "ok": true,
+  "out_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/CASD0_segdata_combo_seed0_term/S1_segment_graph/segment_graph.npz",
+  "report_json": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/CASD0_segdata_combo_seed0_term/S1_segment_graph/report.json",
+  "stats": {
+    "n_nodes": 718099,
+    "n_edges_directed": 1631810,
+    "n_segments": 1082943,
+    "n_terminal_nodes": 4058,
+    "seg_len_m_p50": 27.147235870361328,
+    "seg_len_m_p90": 72.34152221679688,
+    "seg_edges_per_seg_p50": 1.0,
+    "seg_edges_per_seg_p90": 2.0,
+    "deg_p50": 2.0,
+    "deg_p90": 3.0
+  },
+  "timing": {
+    "elapsed_s": 8.353374719619751
+  }
+}

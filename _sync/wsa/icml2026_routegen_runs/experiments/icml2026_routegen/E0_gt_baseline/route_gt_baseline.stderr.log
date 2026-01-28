@@ -1,0 +1,15 @@
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "/home/jinlin/projects/Mobility_v3/src/evaluation/route_gt_baseline.py", line 511, in <module>
+    main()
+  File "/home/jinlin/projects/Mobility_v3/src/evaluation/route_gt_baseline.py", line 506, in main
+    report = run_audit(samples_npz=Path(args.samples_npz), out_dir=Path(args.out_dir), cfg=cfg)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jinlin/projects/Mobility_v3/src/evaluation/route_gt_baseline.py", line 293, in run_audit
+    data = np.load(str(samples_npz), allow_pickle=True)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jinlin/miniconda3/envs/dpl/lib/python3.11/site-packages/numpy/lib/_npyio_impl.py", line 451, in load
+    fid = stack.enter_context(open(os.fspath(file), "rb"))
+                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+FileNotFoundError: [Errno 2] No such file or directory: '<PATH_TO_GT_WINDOWS_SAMPLES_NPZ>'

@@ -1,0 +1,461 @@
+{
+  "inputs": {
+    "samples_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E_S1_segments_fixedlen_detroit_F256_p300_c40_t60_d1p2_seed0/detroit_segments_route_F256_epoch_seed0.npz"
+  },
+  "config": {
+    "od_end": "dest_pos",
+    "od_bin": 128.0,
+    "min_bucket_n": 10,
+    "min_cluster_frac": 0.2,
+    "sep_thr": 2.0,
+    "max_buckets": 500,
+    "num_cases": 8,
+    "max_traj_per_case": 200,
+    "seed": 0,
+    "jacc_cell": 8.0,
+    "waypoint_mode": "rdp_dev",
+    "waypoint_turn_alpha": 1.0,
+    "num_waypoints": 2,
+    "save_case_npz": true
+  },
+  "stats": {
+    "N": 1092,
+    "F": 256,
+    "num_od_buckets_total": 473,
+    "num_buckets_reported": 9,
+    "num_buckets_multimodal": 4
+  },
+  "top_buckets": [
+    {
+      "multimodal": true,
+      "score": 2.837527151269453,
+      "sep": 2.491849354846331,
+      "scatter": 0.8781763916273109,
+      "n0": 10,
+      "n1": 12,
+      "frac0": 0.45454545454545453,
+      "frac1": 0.5454545454545454,
+      "key": [
+        5,
+        5,
+        2,
+        4
+      ],
+      "n": 22
+    },
+    {
+      "multimodal": true,
+      "score": 3.2223029490148005,
+      "sep": 2.428075384777754,
+      "scatter": 0.7535217585671524,
+      "n0": 8,
+      "n1": 9,
+      "frac0": 0.47058823529411764,
+      "frac1": 0.5294117647058824,
+      "key": [
+        3,
+        4,
+        5,
+        5
+      ],
+      "n": 17
+    },
+    {
+      "multimodal": true,
+      "score": 2.7345627217807316,
+      "sep": 2.4314579644223855,
+      "scatter": 0.8891578697595329,
+      "n0": 7,
+      "n1": 8,
+      "frac0": 0.4666666666666667,
+      "frac1": 0.5333333333333333,
+      "key": [
+        1,
+        4,
+        0,
+        4
+      ],
+      "n": 15
+    },
+    {
+      "multimodal": false,
+      "score": 1.5860378383902054,
+      "sep": 1.9579799605639434,
+      "scatter": 1.2345102450716128,
+      "n0": 5,
+      "n1": 9,
+      "frac0": 0.35714285714285715,
+      "frac1": 0.6428571428571429,
+      "key": [
+        0,
+        4,
+        1,
+        4
+      ],
+      "n": 14
+    },
+    {
+      "multimodal": true,
+      "score": 2.6374955501619715,
+      "sep": 2.5890298187088994,
+      "scatter": 0.981624336219223,
+      "n0": 5,
+      "n1": 9,
+      "frac0": 0.35714285714285715,
+      "frac1": 0.6428571428571429,
+      "key": [
+        2,
+        2,
+        4,
+        5
+      ],
+      "n": 14
+    },
+    {
+      "multimodal": false,
+      "reason": "cluster_too_small",
+      "n0": 13,
+      "n1": 1,
+      "frac0": 0.9285714285714286,
+      "frac1": 0.07142857142857142,
+      "key": [
+        4,
+        4,
+        5,
+        6
+      ],
+      "n": 14
+    },
+    {
+      "multimodal": false,
+      "reason": "cluster_too_small",
+      "n0": 1,
+      "n1": 12,
+      "frac0": 0.07692307692307693,
+      "frac1": 0.9230769230769231,
+      "key": [
+        5,
+        6,
+        4,
+        4
+      ],
+      "n": 13
+    },
+    {
+      "multimodal": false,
+      "score": 1.2585626469201558,
+      "sep": 1.641342168593918,
+      "scatter": 1.3041402210771682,
+      "n0": 3,
+      "n1": 7,
+      "frac0": 0.3,
+      "frac1": 0.7,
+      "key": [
+        0,
+        2,
+        1,
+        3
+      ],
+      "n": 10
+    },
+    {
+      "multimodal": false,
+      "score": 1.4676581940527673,
+      "sep": 1.8050488744013777,
+      "scatter": 1.2298836893465945,
+      "n0": 5,
+      "n1": 5,
+      "frac0": 0.5,
+      "frac1": 0.5,
+      "key": [
+        1,
+        4,
+        1,
+        4
+      ],
+      "n": 10
+    }
+  ],
+  "selected_cases": [
+    {
+      "case_id": 0,
+      "od_key": [
+        5,
+        5,
+        2,
+        4
+      ],
+      "od_end": "dest_pos",
+      "n_used": 22,
+      "cluster": {
+        "multimodal": true,
+        "score": 2.837527151269453,
+        "sep": 2.491849354846331,
+        "scatter": 0.8781763916273109,
+        "n0": 10,
+        "n1": 12,
+        "frac0": 0.45454545454545453,
+        "frac1": 0.5454545454545454
+      },
+      "gt_jaccard_distance": {
+        "mean": 0.47812362909276873,
+        "p50": 0.6935483870967742,
+        "p90": 0.792,
+        "n_pairs": 231
+      },
+      "paths": {
+        "gt_corridor_clusters_pdf": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E0s_gt_baseline_detroit_segF256_seed0_od128_min10_sep2/case_00/gt_corridor_clusters.pdf"
+      },
+      "window_ids": {
+        "traj_idx": [
+          6,
+          117,
+          179,
+          208,
+          243,
+          287,
+          310,
+          505,
+          574,
+          576,
+          905,
+          981,
+          996,
+          1177,
+          1357,
+          1433,
+          1558,
+          1667,
+          1719,
+          1903,
+          1905,
+          2078
+        ],
+        "start_t": [
+          1658086332,
+          1666315702,
+          1657232879,
+          1658370501,
+          1665711172,
+          1658690338,
+          1664857453,
+          1665024571,
+          1665174724,
+          1659236145,
+          1658649192,
+          1659066669,
+          1658887756,
+          1664695384,
+          1666134706,
+          1666197017,
+          1677950779,
+          1665107663,
+          1665780126,
+          1665540650,
+          1663480461,
+          1658974499
+        ]
+      }
+    },
+    {
+      "case_id": 1,
+      "od_key": [
+        3,
+        4,
+        5,
+        5
+      ],
+      "od_end": "dest_pos",
+      "n_used": 17,
+      "cluster": {
+        "multimodal": true,
+        "score": 3.2223029490148005,
+        "sep": 2.428075384777754,
+        "scatter": 0.7535217585671524,
+        "n0": 8,
+        "n1": 9,
+        "frac0": 0.47058823529411764,
+        "frac1": 0.5294117647058824
+      },
+      "gt_jaccard_distance": {
+        "mean": 0.6828123398451017,
+        "p50": 0.8583959899749374,
+        "p90": 1.0,
+        "n_pairs": 136
+      },
+      "paths": {
+        "gt_corridor_clusters_pdf": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E0s_gt_baseline_detroit_segF256_seed0_od128_min10_sep2/case_01/gt_corridor_clusters.pdf"
+      },
+      "window_ids": {
+        "traj_idx": [
+          231,
+          322,
+          491,
+          532,
+          676,
+          828,
+          1067,
+          1174,
+          1286,
+          1341,
+          1431,
+          1483,
+          1627,
+          1736,
+          1960,
+          2159,
+          2166
+        ],
+        "start_t": [
+          1658972900,
+          1665538551,
+          1697482326,
+          1663527069,
+          1666806840,
+          1664854596,
+          1658031491,
+          1658806919,
+          1664694063,
+          1686254290,
+          1659233475,
+          1696713080,
+          1678579301,
+          1665022940,
+          1686339949,
+          1658367938,
+          1675862288
+        ]
+      }
+    },
+    {
+      "case_id": 2,
+      "od_key": [
+        1,
+        4,
+        0,
+        4
+      ],
+      "od_end": "dest_pos",
+      "n_used": 15,
+      "cluster": {
+        "multimodal": true,
+        "score": 2.7345627217807316,
+        "sep": 2.4314579644223855,
+        "scatter": 0.8891578697595329,
+        "n0": 7,
+        "n1": 8,
+        "frac0": 0.4666666666666667,
+        "frac1": 0.5333333333333333
+      },
+      "gt_jaccard_distance": {
+        "mean": 0.39800109418427687,
+        "p50": 0.3421052631578947,
+        "p90": 0.8723404255319149,
+        "n_pairs": 105
+      },
+      "paths": {
+        "gt_corridor_clusters_pdf": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E0s_gt_baseline_detroit_segF256_seed0_od128_min10_sep2/case_02/gt_corridor_clusters.pdf"
+      },
+      "window_ids": {
+        "traj_idx": [
+          123,
+          279,
+          292,
+          296,
+          323,
+          478,
+          715,
+          832,
+          1143,
+          1191,
+          1389,
+          1392,
+          1803,
+          1998,
+          2257
+        ],
+        "start_t": [
+          1658466288,
+          1662763912,
+          1665127652,
+          1675255411,
+          1657272950,
+          1676661670,
+          1659069295,
+          1663032542,
+          1675342159,
+          1674220410,
+          1675860240,
+          1674859498,
+          1662787164,
+          1677081840,
+          1676473713
+        ]
+      }
+    },
+    {
+      "case_id": 3,
+      "od_key": [
+        2,
+        2,
+        4,
+        5
+      ],
+      "od_end": "dest_pos",
+      "n_used": 14,
+      "cluster": {
+        "multimodal": true,
+        "score": 2.6374955501619715,
+        "sep": 2.5890298187088994,
+        "scatter": 0.981624336219223,
+        "n0": 5,
+        "n1": 9,
+        "frac0": 0.35714285714285715,
+        "frac1": 0.6428571428571429
+      },
+      "gt_jaccard_distance": {
+        "mean": 0.3874104219775428,
+        "p50": 0.34513274336283184,
+        "p90": 0.6506849315068493,
+        "n_pairs": 91
+      },
+      "paths": {
+        "gt_corridor_clusters_pdf": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E0s_gt_baseline_detroit_segF256_seed0_od128_min10_sep2/case_03/gt_corridor_clusters.pdf"
+      },
+      "window_ids": {
+        "traj_idx": [
+          160,
+          356,
+          457,
+          598,
+          666,
+          720,
+          969,
+          980,
+          1472,
+          1699,
+          1935,
+          2047,
+          2101,
+          2222
+        ],
+        "start_t": [
+          1649338407,
+          1684356662,
+          1680522405,
+          1685409043,
+          1684791754,
+          1686085662,
+          1680874802,
+          1661114457,
+          1647371567,
+          1647305208,
+          1686276454,
+          1684883259,
+          1680719986,
+          1650461666
+        ]
+      }
+    }
+  ]
+}

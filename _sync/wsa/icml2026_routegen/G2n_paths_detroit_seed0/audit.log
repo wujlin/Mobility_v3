@@ -1,0 +1,15 @@
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "/home/jinlin/projects/Mobility_v3/src/data/road_graph/audit_paths_graph_npz.py", line 95, in <module>
+    main()
+  File "/home/jinlin/projects/Mobility_v3/src/data/road_graph/audit_paths_graph_npz.py", line 74, in main
+    report = audit(paths_graph_npz=Path(args.paths_graph_npz))
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jinlin/projects/Mobility_v3/src/data/road_graph/audit_paths_graph_npz.py", line 33, in audit
+    data = np.load(str(paths_graph_npz), allow_pickle=True)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jinlin/miniconda3/envs/dpl/lib/python3.11/site-packages/numpy/lib/_npyio_impl.py", line 451, in load
+    fid = stack.enter_context(open(os.fspath(file), "rb"))
+                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+FileNotFoundError: [Errno 2] No such file or directory: '/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/G2n_paths_detroit_seed0/paths_graph.npz'

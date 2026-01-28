@@ -1,0 +1,14 @@
+{
+  "ok": true,
+  "gate": "E4s_P1_decision_waypoint_audit",
+  "case": "case_00",
+  "dist_wp_to_gtpoly": {
+    "mean": 59.36894226074219,
+    "p50": 49.506675720214844,
+    "p90": 125.18988037109375
+  },
+  "outputs": {
+    "pdf": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E4s_seg_viz_detroit_segF256_epoch_K20_res0p1_seed0/case_00/wp_audit_decision_vs_gt.pdf",
+    "png": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E4s_seg_viz_detroit_segF256_epoch_K20_res0p1_seed0/case_00/wp_audit_decision_vs_gt.png"
+  }
+}

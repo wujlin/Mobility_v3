@@ -1,0 +1,2054 @@
+{
+  "ok": true,
+  "task": "sample_graph_ar_waypoints_astar",
+  "inputs": {
+    "checkpoint": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/T4_wp_ar_astar_combo_seed0/T2_train_wp_ar_bin_seed0/last.pt",
+    "road_graph_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/T3_combo_detroit_columbus_seed0/road_graph_combo.npz",
+    "paths_graph_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/T3_combo_detroit_columbus_seed0/paths_graph_combo.npz",
+    "waypoints_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/T4_wp_ar_astar_combo_seed0/T1_dump_waypoints/waypoints_graph.npz"
+  },
+  "config": {
+    "K": 20,
+    "temperature": 0.8,
+    "wp_bin": 32,
+    "num_waypoints": 4,
+    "num_routes": 200,
+    "baseline_k": 0,
+    "oracle": true,
+    "pick_strategy": "tier_dir",
+    "bin_filter_city": true,
+    "astar_workers": 46,
+    "seed": 0,
+    "tz_offset_hours": -5.0,
+    "progress": "json",
+    "log_every": 10
+  },
+  "stats": {
+    "num_routes_sampled": 200,
+    "success_rate": {
+      "mean": 1.0,
+      "p50": 1.0,
+      "p90": 1.0
+    },
+    "best_jaccard": {
+      "mean": 0.27586473236653225,
+      "p50": 0.26122081246289564,
+      "p90": 0.46430007733952045
+    },
+    "baseline_best_jaccard_kshortest": {
+      "mean": null,
+      "p50": null,
+      "p90": null,
+      "n": 0
+    }
+  },
+  "rows": [
+    {
+      "route_id": 8,
+      "city": 0,
+      "start": 277288,
+      "dest": 376756,
+      "gt_len": 610,
+      "best_jaccard": 0.03493013972055888,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 17,
+      "city": 0,
+      "start": 214836,
+      "dest": 149699,
+      "gt_len": 1056,
+      "best_jaccard": 0.3209090909090909,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 26,
+      "city": 0,
+      "start": 304441,
+      "dest": 46245,
+      "gt_len": 583,
+      "best_jaccard": 0.1160609613130129,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 49,
+      "city": 0,
+      "start": 229668,
+      "dest": 228872,
+      "gt_len": 887,
+      "best_jaccard": 0.22231337161607875,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 52,
+      "city": 0,
+      "start": 377397,
+      "dest": 1473,
+      "gt_len": 630,
+      "best_jaccard": 0.042662116040955635,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 54,
+      "city": 0,
+      "start": 337569,
+      "dest": 377427,
+      "gt_len": 317,
+      "best_jaccard": 0.17518248175182483,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 71,
+      "city": 0,
+      "start": 229046,
+      "dest": 45941,
+      "gt_len": 652,
+      "best_jaccard": 0.21910695742471442,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 91,
+      "city": 0,
+      "start": 215067,
+      "dest": 40000,
+      "gt_len": 84,
+      "best_jaccard": 0.6747967479674797,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 107,
+      "city": 0,
+      "start": 314695,
+      "dest": 99768,
+      "gt_len": 169,
+      "best_jaccard": 0.11981566820276497,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 130,
+      "city": 0,
+      "start": 156666,
+      "dest": 143659,
+      "gt_len": 470,
+      "best_jaccard": 0.027142857142857142,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 159,
+      "city": 0,
+      "start": 130983,
+      "dest": 66494,
+      "gt_len": 206,
+      "best_jaccard": 0.09513274336283185,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 161,
+      "city": 0,
+      "start": 149482,
+      "dest": 228799,
+      "gt_len": 605,
+      "best_jaccard": 0.19239904988123516,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 166,
+      "city": 0,
+      "start": 130983,
+      "dest": 149825,
+      "gt_len": 768,
+      "best_jaccard": 0.09067579127459367,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 171,
+      "city": 0,
+      "start": 138231,
+      "dest": 228153,
+      "gt_len": 778,
+      "best_jaccard": 0.3121951219512195,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 192,
+      "city": 0,
+      "start": 177353,
+      "dest": 269101,
+      "gt_len": 609,
+      "best_jaccard": 0.1447084233261339,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 237,
+      "city": 0,
+      "start": 155385,
+      "dest": 229726,
+      "gt_len": 666,
+      "best_jaccard": 0.20355731225296442,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 240,
+      "city": 0,
+      "start": 277288,
+      "dest": 376756,
+      "gt_len": 570,
+      "best_jaccard": 0.01440329218106996,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 259,
+      "city": 0,
+      "start": 28175,
+      "dest": 227252,
+      "gt_len": 338,
+      "best_jaccard": 0.06676783004552352,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 260,
+      "city": 0,
+      "start": 33169,
+      "dest": 23928,
+      "gt_len": 108,
+      "best_jaccard": 0.47435897435897434,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 261,
+      "city": 0,
+      "start": 227969,
+      "dest": 332958,
+      "gt_len": 776,
+      "best_jaccard": 0.17861635220125785,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 275,
+      "city": 0,
+      "start": 269707,
+      "dest": 331307,
+      "gt_len": 661,
+      "best_jaccard": 0.2505694760820046,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 277,
+      "city": 0,
+      "start": 155386,
+      "dest": 38388,
+      "gt_len": 592,
+      "best_jaccard": 0.12105263157894737,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 287,
+      "city": 0,
+      "start": 331447,
+      "dest": 212633,
+      "gt_len": 635,
+      "best_jaccard": 0.24217961654894046,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 300,
+      "city": 0,
+      "start": 173103,
+      "dest": 304468,
+      "gt_len": 514,
+      "best_jaccard": 0.36881559220389803,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 350,
+      "city": 0,
+      "start": 148572,
+      "dest": 45958,
+      "gt_len": 704,
+      "best_jaccard": 0.3256830601092896,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 386,
+      "city": 0,
+      "start": 202840,
+      "dest": 34746,
+      "gt_len": 476,
+      "best_jaccard": 0.3592896174863388,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 401,
+      "city": 0,
+      "start": 64528,
+      "dest": 227841,
+      "gt_len": 782,
+      "best_jaccard": 0.27927927927927926,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 402,
+      "city": 0,
+      "start": 155383,
+      "dest": 102988,
+      "gt_len": 590,
+      "best_jaccard": 0.1607795371498173,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 439,
+      "city": 0,
+      "start": 370655,
+      "dest": 236146,
+      "gt_len": 189,
+      "best_jaccard": 0.07017543859649122,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 445,
+      "city": 0,
+      "start": 178559,
+      "dest": 47954,
+      "gt_len": 866,
+      "best_jaccard": 0.09404388714733543,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 495,
+      "city": 0,
+      "start": 177860,
+      "dest": 377434,
+      "gt_len": 1267,
+      "best_jaccard": 0.16049382716049382,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 502,
+      "city": 0,
+      "start": 202840,
+      "dest": 27738,
+      "gt_len": 157,
+      "best_jaccard": 0.2542955326460481,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 559,
+      "city": 0,
+      "start": 165387,
+      "dest": 152353,
+      "gt_len": 129,
+      "best_jaccard": 0.7315436241610739,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 565,
+      "city": 0,
+      "start": 152594,
+      "dest": 151353,
+      "gt_len": 324,
+      "best_jaccard": 0.2504604051565378,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 620,
+      "city": 0,
+      "start": 314695,
+      "dest": 208837,
+      "gt_len": 331,
+      "best_jaccard": 0.3352601156069364,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 652,
+      "city": 0,
+      "start": 44820,
+      "dest": 239217,
+      "gt_len": 598,
+      "best_jaccard": 0.17671957671957672,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 656,
+      "city": 0,
+      "start": 202840,
+      "dest": 367996,
+      "gt_len": 210,
+      "best_jaccard": 0.47058823529411764,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 662,
+      "city": 0,
+      "start": 215694,
+      "dest": 39018,
+      "gt_len": 598,
+      "best_jaccard": 0.32987012987012987,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 744,
+      "city": 0,
+      "start": 228009,
+      "dest": 224507,
+      "gt_len": 593,
+      "best_jaccard": 0.262532981530343,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 761,
+      "city": 0,
+      "start": 249276,
+      "dest": 376758,
+      "gt_len": 698,
+      "best_jaccard": 0.15316901408450703,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 771,
+      "city": 0,
+      "start": 269103,
+      "dest": 366486,
+      "gt_len": 633,
+      "best_jaccard": 0.11731843575418995,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 787,
+      "city": 0,
+      "start": 16941,
+      "dest": 23931,
+      "gt_len": 72,
+      "best_jaccard": 0.3522727272727273,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 832,
+      "city": 0,
+      "start": 306092,
+      "dest": 228569,
+      "gt_len": 565,
+      "best_jaccard": 0.12907117008443908,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 860,
+      "city": 0,
+      "start": 154860,
+      "dest": 152119,
+      "gt_len": 706,
+      "best_jaccard": 0.07951070336391437,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 865,
+      "city": 0,
+      "start": 130983,
+      "dest": 80562,
+      "gt_len": 472,
+      "best_jaccard": 0.3270735524256651,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 889,
+      "city": 0,
+      "start": 149390,
+      "dest": 306092,
+      "gt_len": 428,
+      "best_jaccard": 0.24643584521384929,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 945,
+      "city": 0,
+      "start": 89021,
+      "dest": 148927,
+      "gt_len": 675,
+      "best_jaccard": 0.1403678606001936,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 965,
+      "city": 0,
+      "start": 37163,
+      "dest": 168412,
+      "gt_len": 166,
+      "best_jaccard": 0.2857142857142857,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 981,
+      "city": 0,
+      "start": 201665,
+      "dest": 201665,
+      "gt_len": 5,
+      "best_jaccard": 0.6666666666666666,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 990,
+      "city": 0,
+      "start": 169925,
+      "dest": 155863,
+      "gt_len": 263,
+      "best_jaccard": 0.06182795698924731,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 1010,
+      "city": 0,
+      "start": 56475,
+      "dest": 228601,
+      "gt_len": 589,
+      "best_jaccard": 0.3147208121827411,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 1040,
+      "city": 0,
+      "start": 139129,
+      "dest": 376105,
+      "gt_len": 763,
+      "best_jaccard": 0.13391304347826086,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 1052,
+      "city": 0,
+      "start": 138278,
+      "dest": 89219,
+      "gt_len": 739,
+      "best_jaccard": 0.057283142389525366,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 1075,
+      "city": 1,
+      "start": 382276,
+      "dest": 566726,
+      "gt_len": 471,
+      "best_jaccard": 0.1844888366627497,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 1105,
+      "city": 1,
+      "start": 676986,
+      "dest": 495602,
+      "gt_len": 521,
+      "best_jaccard": 0.20125,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 1107,
+      "city": 1,
+      "start": 503586,
+      "dest": 379695,
+      "gt_len": 963,
+      "best_jaccard": 0.26919431279620853,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 1167,
+      "city": 1,
+      "start": 537118,
+      "dest": 417103,
+      "gt_len": 165,
+      "best_jaccard": 0.40425531914893614,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 1168,
+      "city": 1,
+      "start": 474106,
+      "dest": 556080,
+      "gt_len": 654,
+      "best_jaccard": 0.15198451113262343,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 1213,
+      "city": 1,
+      "start": 596464,
+      "dest": 685858,
+      "gt_len": 698,
+      "best_jaccard": 0.16480793060718713,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 1217,
+      "city": 1,
+      "start": 495447,
+      "dest": 545619,
+      "gt_len": 1936,
+      "best_jaccard": 0.4059633027522936,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 1222,
+      "city": 1,
+      "start": 406394,
+      "dest": 619201,
+      "gt_len": 271,
+      "best_jaccard": 0.5447570332480819,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 1230,
+      "city": 1,
+      "start": 379694,
+      "dest": 503586,
+      "gt_len": 803,
+      "best_jaccard": 0.2,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 1238,
+      "city": 1,
+      "start": 687287,
+      "dest": 481915,
+      "gt_len": 537,
+      "best_jaccard": 0.21882640586797067,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 1241,
+      "city": 1,
+      "start": 588382,
+      "dest": 700270,
+      "gt_len": 791,
+      "best_jaccard": 0.29102167182662536,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 1263,
+      "city": 1,
+      "start": 503548,
+      "dest": 379695,
+      "gt_len": 733,
+      "best_jaccard": 0.29528795811518327,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 1265,
+      "city": 1,
+      "start": 554512,
+      "dest": 545619,
+      "gt_len": 760,
+      "best_jaccard": 0.4044213263979194,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 1282,
+      "city": 1,
+      "start": 380022,
+      "dest": 461143,
+      "gt_len": 791,
+      "best_jaccard": 0.3202247191011236,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 1298,
+      "city": 1,
+      "start": 555706,
+      "dest": 413021,
+      "gt_len": 1017,
+      "best_jaccard": 0.2676419965576592,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 1300,
+      "city": 1,
+      "start": 500841,
+      "dest": 501874,
+      "gt_len": 838,
+      "best_jaccard": 0.2764026402640264,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 1317,
+      "city": 1,
+      "start": 397975,
+      "dest": 592595,
+      "gt_len": 175,
+      "best_jaccard": 0.14215686274509803,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 1337,
+      "city": 1,
+      "start": 494150,
+      "dest": 494368,
+      "gt_len": 879,
+      "best_jaccard": 0.2910321489001692,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 1363,
+      "city": 1,
+      "start": 390816,
+      "dest": 693669,
+      "gt_len": 979,
+      "best_jaccard": 0.23777961888980945,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 1364,
+      "city": 1,
+      "start": 503657,
+      "dest": 570943,
+      "gt_len": 255,
+      "best_jaccard": 0.4080267558528428,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 1378,
+      "city": 1,
+      "start": 668311,
+      "dest": 545619,
+      "gt_len": 692,
+      "best_jaccard": 0.3645699614890886,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 1391,
+      "city": 1,
+      "start": 514892,
+      "dest": 503585,
+      "gt_len": 780,
+      "best_jaccard": 0.253227408142999,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 1407,
+      "city": 1,
+      "start": 628813,
+      "dest": 693669,
+      "gt_len": 724,
+      "best_jaccard": 0.27626459143968873,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 1418,
+      "city": 1,
+      "start": 379694,
+      "dest": 503585,
+      "gt_len": 812,
+      "best_jaccard": 0.37780040733197556,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 1466,
+      "city": 1,
+      "start": 548989,
+      "dest": 507597,
+      "gt_len": 609,
+      "best_jaccard": 0.35432098765432096,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 1485,
+      "city": 1,
+      "start": 382276,
+      "dest": 503585,
+      "gt_len": 724,
+      "best_jaccard": 0.2553846153846154,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 1492,
+      "city": 1,
+      "start": 693940,
+      "dest": 545619,
+      "gt_len": 912,
+      "best_jaccard": 0.37676609105180536,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 1538,
+      "city": 1,
+      "start": 503548,
+      "dest": 379695,
+      "gt_len": 742,
+      "best_jaccard": 0.2994871794871795,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 1550,
+      "city": 1,
+      "start": 548623,
+      "dest": 534578,
+      "gt_len": 1084,
+      "best_jaccard": 0.23814773980154355,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 1580,
+      "city": 1,
+      "start": 498839,
+      "dest": 433174,
+      "gt_len": 707,
+      "best_jaccard": 0.2614445574771109,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 1583,
+      "city": 1,
+      "start": 697832,
+      "dest": 552135,
+      "gt_len": 209,
+      "best_jaccard": 0.5666666666666667,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 1610,
+      "city": 1,
+      "start": 575721,
+      "dest": 573328,
+      "gt_len": 184,
+      "best_jaccard": 0.17582417582417584,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 1629,
+      "city": 1,
+      "start": 495078,
+      "dest": 553242,
+      "gt_len": 752,
+      "best_jaccard": 0.2710997442455243,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 1650,
+      "city": 1,
+      "start": 685134,
+      "dest": 496246,
+      "gt_len": 401,
+      "best_jaccard": 0.29118773946360155,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 1665,
+      "city": 1,
+      "start": 390813,
+      "dest": 693669,
+      "gt_len": 1020,
+      "best_jaccard": 0.26152556580050296,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 1667,
+      "city": 1,
+      "start": 677539,
+      "dest": 495526,
+      "gt_len": 261,
+      "best_jaccard": 0.3419811320754717,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 1696,
+      "city": 1,
+      "start": 494024,
+      "dest": 501075,
+      "gt_len": 272,
+      "best_jaccard": 0.29819277108433734,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 1698,
+      "city": 1,
+      "start": 499074,
+      "dest": 495035,
+      "gt_len": 482,
+      "best_jaccard": 0.22839506172839505,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 1710,
+      "city": 1,
+      "start": 681824,
+      "dest": 503585,
+      "gt_len": 734,
+      "best_jaccard": 0.23248730964467004,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 1734,
+      "city": 1,
+      "start": 385195,
+      "dest": 515064,
+      "gt_len": 458,
+      "best_jaccard": 0.2869822485207101,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 1741,
+      "city": 1,
+      "start": 552363,
+      "dest": 499069,
+      "gt_len": 288,
+      "best_jaccard": 0.19483568075117372,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 1744,
+      "city": 1,
+      "start": 573034,
+      "dest": 532943,
+      "gt_len": 300,
+      "best_jaccard": 0.4054726368159204,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 1747,
+      "city": 1,
+      "start": 506053,
+      "dest": 690630,
+      "gt_len": 310,
+      "best_jaccard": 0.5120481927710844,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 1773,
+      "city": 1,
+      "start": 574542,
+      "dest": 716501,
+      "gt_len": 117,
+      "best_jaccard": 0.22268907563025211,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 1780,
+      "city": 1,
+      "start": 503586,
+      "dest": 379695,
+      "gt_len": 783,
+      "best_jaccard": 0.24714828897338403,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 1793,
+      "city": 1,
+      "start": 658278,
+      "dest": 496378,
+      "gt_len": 524,
+      "best_jaccard": 0.058884297520661155,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 1867,
+      "city": 1,
+      "start": 603446,
+      "dest": 495931,
+      "gt_len": 741,
+      "best_jaccard": 0.3086232980332829,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 1882,
+      "city": 1,
+      "start": 429845,
+      "dest": 472076,
+      "gt_len": 683,
+      "best_jaccard": 0.2481827622014538,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 1884,
+      "city": 1,
+      "start": 680211,
+      "dest": 695747,
+      "gt_len": 851,
+      "best_jaccard": 0.22984174830444612,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 1890,
+      "city": 1,
+      "start": 449908,
+      "dest": 575508,
+      "gt_len": 911,
+      "best_jaccard": 0.286783042394015,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 1922,
+      "city": 1,
+      "start": 554694,
+      "dest": 483589,
+      "gt_len": 809,
+      "best_jaccard": 0.22882882882882882,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 1940,
+      "city": 1,
+      "start": 381794,
+      "dest": 693669,
+      "gt_len": 1028,
+      "best_jaccard": 0.2653910149750416,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 1943,
+      "city": 1,
+      "start": 449907,
+      "dest": 502499,
+      "gt_len": 761,
+      "best_jaccard": 0.23099703849950642,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 1990,
+      "city": 1,
+      "start": 449909,
+      "dest": 693669,
+      "gt_len": 1089,
+      "best_jaccard": 0.20419254658385094,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 2017,
+      "city": 1,
+      "start": 495561,
+      "dest": 497960,
+      "gt_len": 819,
+      "best_jaccard": 0.297790585975024,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 2024,
+      "city": 1,
+      "start": 499891,
+      "dest": 378771,
+      "gt_len": 436,
+      "best_jaccard": 0.1426470588235294,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 2029,
+      "city": 1,
+      "start": 504863,
+      "dest": 515046,
+      "gt_len": 897,
+      "best_jaccard": 0.26176024279210924,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 2044,
+      "city": 1,
+      "start": 536755,
+      "dest": 545619,
+      "gt_len": 892,
+      "best_jaccard": 0.3711340206185567,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 2063,
+      "city": 1,
+      "start": 578918,
+      "dest": 497085,
+      "gt_len": 548,
+      "best_jaccard": 0.23673997412677877,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 2070,
+      "city": 1,
+      "start": 499219,
+      "dest": 435699,
+      "gt_len": 412,
+      "best_jaccard": 0.17162162162162162,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 2075,
+      "city": 1,
+      "start": 499933,
+      "dest": 712096,
+      "gt_len": 654,
+      "best_jaccard": 0.1781609195402299,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 2092,
+      "city": 1,
+      "start": 503586,
+      "dest": 379695,
+      "gt_len": 975,
+      "best_jaccard": 0.19950535861500412,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 2093,
+      "city": 1,
+      "start": 648806,
+      "dest": 708028,
+      "gt_len": 461,
+      "best_jaccard": 0.16598079561042525,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 2110,
+      "city": 1,
+      "start": 522924,
+      "dest": 503586,
+      "gt_len": 489,
+      "best_jaccard": 0.30755395683453235,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 2115,
+      "city": 1,
+      "start": 503586,
+      "dest": 379695,
+      "gt_len": 752,
+      "best_jaccard": 0.2576808721506442,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 2152,
+      "city": 1,
+      "start": 449907,
+      "dest": 693669,
+      "gt_len": 1038,
+      "best_jaccard": 0.23285486443381181,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 2166,
+      "city": 1,
+      "start": 386164,
+      "dest": 379369,
+      "gt_len": 711,
+      "best_jaccard": 0.18497757847533633,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 2197,
+      "city": 1,
+      "start": 496605,
+      "dest": 502490,
+      "gt_len": 864,
+      "best_jaccard": 0.1833195706028076,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 2211,
+      "city": 1,
+      "start": 503586,
+      "dest": 472060,
+      "gt_len": 746,
+      "best_jaccard": 0.2100656455142232,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 2223,
+      "city": 1,
+      "start": 712059,
+      "dest": 555345,
+      "gt_len": 279,
+      "best_jaccard": 0.5135135135135135,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 2229,
+      "city": 1,
+      "start": 499933,
+      "dest": 711923,
+      "gt_len": 935,
+      "best_jaccard": 0.2331288343558282,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 2235,
+      "city": 1,
+      "start": 499933,
+      "dest": 711895,
+      "gt_len": 776,
+      "best_jaccard": 0.21140939597315436,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 2250,
+      "city": 1,
+      "start": 498301,
+      "dest": 449908,
+      "gt_len": 610,
+      "best_jaccard": 0.38688946015424164,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 2286,
+      "city": 1,
+      "start": 558530,
+      "dest": 545619,
+      "gt_len": 1222,
+      "best_jaccard": 0.37718277066356226,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 2329,
+      "city": 1,
+      "start": 537118,
+      "dest": 680355,
+      "gt_len": 277,
+      "best_jaccard": 0.26099706744868034,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 2335,
+      "city": 1,
+      "start": 501885,
+      "dest": 713936,
+      "gt_len": 627,
+      "best_jaccard": 0.3637440758293839,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 2342,
+      "city": 1,
+      "start": 632263,
+      "dest": 567836,
+      "gt_len": 366,
+      "best_jaccard": 0.4218106995884774,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 2343,
+      "city": 1,
+      "start": 390813,
+      "dest": 575839,
+      "gt_len": 772,
+      "best_jaccard": 0.28875968992248063,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 2345,
+      "city": 1,
+      "start": 526427,
+      "dest": 506984,
+      "gt_len": 201,
+      "best_jaccard": 0.8592233009708737,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 2347,
+      "city": 1,
+      "start": 385195,
+      "dest": 515068,
+      "gt_len": 488,
+      "best_jaccard": 0.2945205479452055,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 2352,
+      "city": 1,
+      "start": 504691,
+      "dest": 381799,
+      "gt_len": 764,
+      "best_jaccard": 0.3684759916492693,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 2388,
+      "city": 1,
+      "start": 654283,
+      "dest": 499934,
+      "gt_len": 515,
+      "best_jaccard": 0.4749536178107607,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 2453,
+      "city": 1,
+      "start": 512955,
+      "dest": 503571,
+      "gt_len": 521,
+      "best_jaccard": 0.34970238095238093,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 2458,
+      "city": 1,
+      "start": 495078,
+      "dest": 464793,
+      "gt_len": 731,
+      "best_jaccard": 0.20777479892761394,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 2465,
+      "city": 1,
+      "start": 619748,
+      "dest": 621033,
+      "gt_len": 214,
+      "best_jaccard": 0.4666666666666667,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 2472,
+      "city": 1,
+      "start": 704849,
+      "dest": 503505,
+      "gt_len": 1149,
+      "best_jaccard": 0.5215419501133787,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 2490,
+      "city": 1,
+      "start": 499294,
+      "dest": 501651,
+      "gt_len": 677,
+      "best_jaccard": 0.05925324675324675,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 2516,
+      "city": 1,
+      "start": 509855,
+      "dest": 573534,
+      "gt_len": 589,
+      "best_jaccard": 0.3189771197846568,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 2517,
+      "city": 1,
+      "start": 379694,
+      "dest": 555036,
+      "gt_len": 531,
+      "best_jaccard": 0.25673940949935814,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 2534,
+      "city": 1,
+      "start": 548835,
+      "dest": 442366,
+      "gt_len": 318,
+      "best_jaccard": 0.3907815631262525,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 2536,
+      "city": 1,
+      "start": 554787,
+      "dest": 574409,
+      "gt_len": 412,
+      "best_jaccard": 0.8123620309050773,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 2542,
+      "city": 1,
+      "start": 414432,
+      "dest": 618821,
+      "gt_len": 655,
+      "best_jaccard": 0.46740467404674046,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 2587,
+      "city": 1,
+      "start": 704400,
+      "dest": 677534,
+      "gt_len": 107,
+      "best_jaccard": 0.2871287128712871,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 2598,
+      "city": 1,
+      "start": 510701,
+      "dest": 502574,
+      "gt_len": 638,
+      "best_jaccard": 0.5218617771509168,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 2604,
+      "city": 1,
+      "start": 449907,
+      "dest": 693811,
+      "gt_len": 874,
+      "best_jaccard": 0.2909090909090909,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 2608,
+      "city": 1,
+      "start": 554273,
+      "dest": 381565,
+      "gt_len": 594,
+      "best_jaccard": 0.122334455667789,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 2616,
+      "city": 1,
+      "start": 603493,
+      "dest": 693738,
+      "gt_len": 502,
+      "best_jaccard": 0.3669849931787176,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 2628,
+      "city": 1,
+      "start": 708029,
+      "dest": 503571,
+      "gt_len": 697,
+      "best_jaccard": 0.20036429872495445,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 2634,
+      "city": 1,
+      "start": 404546,
+      "dest": 585686,
+      "gt_len": 275,
+      "best_jaccard": 0.313915857605178,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 2710,
+      "city": 1,
+      "start": 514722,
+      "dest": 712847,
+      "gt_len": 384,
+      "best_jaccard": 0.1695906432748538,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 2722,
+      "city": 1,
+      "start": 501012,
+      "dest": 716601,
+      "gt_len": 831,
+      "best_jaccard": 0.33014861995753714,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 2727,
+      "city": 1,
+      "start": 594810,
+      "dest": 574562,
+      "gt_len": 565,
+      "best_jaccard": 0.2602905569007264,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 2735,
+      "city": 1,
+      "start": 537118,
+      "dest": 592240,
+      "gt_len": 177,
+      "best_jaccard": 0.4671814671814672,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 2751,
+      "city": 1,
+      "start": 497259,
+      "dest": 431696,
+      "gt_len": 260,
+      "best_jaccard": 0.5494880546075085,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 2753,
+      "city": 1,
+      "start": 465521,
+      "dest": 500807,
+      "gt_len": 813,
+      "best_jaccard": 0.2233741753063148,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 2778,
+      "city": 1,
+      "start": 563280,
+      "dest": 513149,
+      "gt_len": 605,
+      "best_jaccard": 0.3492063492063492,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 2783,
+      "city": 1,
+      "start": 385195,
+      "dest": 637558,
+      "gt_len": 293,
+      "best_jaccard": 0.46403712296983757,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 2793,
+      "city": 1,
+      "start": 503586,
+      "dest": 472076,
+      "gt_len": 714,
+      "best_jaccard": 0.06768953068592058,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 2836,
+      "city": 1,
+      "start": 588934,
+      "dest": 545601,
+      "gt_len": 509,
+      "best_jaccard": 0.5109375,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 2844,
+      "city": 1,
+      "start": 638553,
+      "dest": 503005,
+      "gt_len": 685,
+      "best_jaccard": 0.13793103448275862,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 2884,
+      "city": 1,
+      "start": 556795,
+      "dest": 559920,
+      "gt_len": 315,
+      "best_jaccard": 0.20824295010845986,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 2900,
+      "city": 1,
+      "start": 379694,
+      "dest": 503586,
+      "gt_len": 913,
+      "best_jaccard": 0.37766497461928933,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 2913,
+      "city": 1,
+      "start": 494527,
+      "dest": 501222,
+      "gt_len": 909,
+      "best_jaccard": 0.0839112343966713,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 2917,
+      "city": 1,
+      "start": 680248,
+      "dest": 496375,
+      "gt_len": 561,
+      "best_jaccard": 0.0456754130223518,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 2918,
+      "city": 1,
+      "start": 513138,
+      "dest": 714473,
+      "gt_len": 829,
+      "best_jaccard": 0.30017301038062283,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 2936,
+      "city": 1,
+      "start": 417102,
+      "dest": 669631,
+      "gt_len": 653,
+      "best_jaccard": 0.22299168975069253,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 2953,
+      "city": 1,
+      "start": 390334,
+      "dest": 693736,
+      "gt_len": 738,
+      "best_jaccard": 0.17323556370302476,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 2954,
+      "city": 1,
+      "start": 449909,
+      "dest": 693669,
+      "gt_len": 1057,
+      "best_jaccard": 0.2214397496087637,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 2979,
+      "city": 1,
+      "start": 675061,
+      "dest": 678621,
+      "gt_len": 103,
+      "best_jaccard": 0.29107981220657275,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 2991,
+      "city": 1,
+      "start": 430562,
+      "dest": 514803,
+      "gt_len": 448,
+      "best_jaccard": 0.33170731707317075,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 2996,
+      "city": 1,
+      "start": 390813,
+      "dest": 693669,
+      "gt_len": 998,
+      "best_jaccard": 0.27333894028595457,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 3010,
+      "city": 1,
+      "start": 697050,
+      "dest": 509855,
+      "gt_len": 718,
+      "best_jaccard": 0.18874560375146543,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 3047,
+      "city": 1,
+      "start": 495453,
+      "dest": 494024,
+      "gt_len": 921,
+      "best_jaccard": 0.27327070879590093,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 3082,
+      "city": 1,
+      "start": 575708,
+      "dest": 515021,
+      "gt_len": 664,
+      "best_jaccard": 0.3939745075318656,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 3086,
+      "city": 1,
+      "start": 414432,
+      "dest": 668311,
+      "gt_len": 653,
+      "best_jaccard": 0.2731326644370123,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 3106,
+      "city": 1,
+      "start": 503586,
+      "dest": 555487,
+      "gt_len": 691,
+      "best_jaccard": 0.18514750762970497,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 3122,
+      "city": 1,
+      "start": 494189,
+      "dest": 495604,
+      "gt_len": 811,
+      "best_jaccard": 0.26194398682042835,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 3128,
+      "city": 1,
+      "start": 533669,
+      "dest": 503506,
+      "gt_len": 1267,
+      "best_jaccard": 0.43022295623451695,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 3132,
+      "city": 1,
+      "start": 449907,
+      "dest": 545934,
+      "gt_len": 619,
+      "best_jaccard": 0.28883495145631066,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 3155,
+      "city": 1,
+      "start": 499933,
+      "dest": 378774,
+      "gt_len": 510,
+      "best_jaccard": 0.2209106239460371,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 3172,
+      "city": 1,
+      "start": 500640,
+      "dest": 681391,
+      "gt_len": 1018,
+      "best_jaccard": 0.3256,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 3178,
+      "city": 1,
+      "start": 638717,
+      "dest": 502494,
+      "gt_len": 489,
+      "best_jaccard": 0.21575342465753425,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 3181,
+      "city": 1,
+      "start": 708461,
+      "dest": 556080,
+      "gt_len": 1012,
+      "best_jaccard": 0.24258970358814352,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 3229,
+      "city": 1,
+      "start": 392981,
+      "dest": 503909,
+      "gt_len": 601,
+      "best_jaccard": 0.31228861330326946,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 3232,
+      "city": 1,
+      "start": 495078,
+      "dest": 464770,
+      "gt_len": 256,
+      "best_jaccard": 0.696165191740413,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 3260,
+      "city": 1,
+      "start": 585626,
+      "dest": 514463,
+      "gt_len": 668,
+      "best_jaccard": 0.1794333683105981,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 3266,
+      "city": 1,
+      "start": 449907,
+      "dest": 498262,
+      "gt_len": 439,
+      "best_jaccard": 0.22413793103448276,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 3267,
+      "city": 1,
+      "start": 516359,
+      "dest": 585124,
+      "gt_len": 669,
+      "best_jaccard": 0.39883040935672515,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 3288,
+      "city": 1,
+      "start": 497440,
+      "dest": 712847,
+      "gt_len": 644,
+      "best_jaccard": 0.10069790628115653,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 3296,
+      "city": 1,
+      "start": 700818,
+      "dest": 602967,
+      "gt_len": 354,
+      "best_jaccard": 0.153184165232358,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 3311,
+      "city": 1,
+      "start": 633291,
+      "dest": 545908,
+      "gt_len": 113,
+      "best_jaccard": 0.13333333333333333,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 3324,
+      "city": 1,
+      "start": 537118,
+      "dest": 637579,
+      "gt_len": 239,
+      "best_jaccard": 0.39210526315789473,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 3347,
+      "city": 1,
+      "start": 573121,
+      "dest": 545619,
+      "gt_len": 1236,
+      "best_jaccard": 0.369949494949495,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 3359,
+      "city": 1,
+      "start": 675906,
+      "dest": 548605,
+      "gt_len": 215,
+      "best_jaccard": 0.3541666666666667,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 3360,
+      "city": 1,
+      "start": 378688,
+      "dest": 540407,
+      "gt_len": 127,
+      "best_jaccard": 0.33455882352941174,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 3375,
+      "city": 1,
+      "start": 495775,
+      "dest": 498450,
+      "gt_len": 573,
+      "best_jaccard": 0.21773288439955107,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    },
+    {
+      "route_id": 3381,
+      "city": 1,
+      "start": 499933,
+      "dest": 712091,
+      "gt_len": 479,
+      "best_jaccard": 0.16588419405320814,
+      "success_rate": 1.0,
+      "baseline_best_jaccard_kshortest": null
+    }
+  ],
+  "outputs": {
+    "report_json": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/T4_wp_ar_astar_combo_seed0/T3_eval_wp_ar_astar_K20_seed0_oracle_v2/report.json",
+    "out_dir": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/T4_wp_ar_astar_combo_seed0/T3_eval_wp_ar_astar_K20_seed0_oracle_v2"
+  },
+  "meta": {
+    "created_at": "2026-01-15T00:20:53.847369+08:00"
+  }
+}

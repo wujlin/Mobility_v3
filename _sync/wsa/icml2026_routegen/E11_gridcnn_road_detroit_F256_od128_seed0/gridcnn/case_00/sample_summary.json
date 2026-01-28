@@ -1,0 +1,22 @@
+{
+  "inputs": {
+    "checkpoint": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E11_gridcnn_road_detroit_F256_od128_seed0/gridcnn_ckpt/last.pt",
+    "case_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E0_gt_baseline_detroit_F256_n200k_seed0_od128_n10_sep2/case_00/gt_case.npz"
+  },
+  "config": {
+    "K_waypoints": 2,
+    "K_samples": 20,
+    "od_bin": 128.0,
+    "o_clip": 2.0,
+    "cond_dim": 70,
+    "uses_semantics": true,
+    "seed": 0
+  },
+  "stats": {
+    "N": 59,
+    "F": 256
+  },
+  "outputs": {
+    "samples_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/E11_gridcnn_road_detroit_F256_od128_seed0/gridcnn/case_00/samples.npz"
+  }
+}

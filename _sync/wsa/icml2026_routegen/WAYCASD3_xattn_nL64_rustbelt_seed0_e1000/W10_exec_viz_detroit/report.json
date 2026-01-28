@@ -1,0 +1,85 @@
+{
+  "ok": true,
+  "task": "way_casd_gps_sample_viz",
+  "created_at": "2026-01-18T03:21:37.422410+08:00",
+  "cfg": {
+    "seed": 0,
+    "device": "cuda",
+    "tz_offset_hours": -5.0,
+    "traj_len": 256,
+    "n_routes": 8,
+    "n_samples_per_route": 4,
+    "max_way_len": 128,
+    "min_way_len": 2,
+    "prefer_matched": true,
+    "fix_ends": true
+  },
+  "inputs": {
+    "segments_parquet": "/home/jinlin/data/geoexplicit_data/worldtrace/detroit_core_v1/segments_with_wayid.parquet",
+    "route_city": 0,
+    "way_graph_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD1_waydata_rustbelt_seed0/W3_way_graph/way_graph.npz",
+    "way_features_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD1_waydata_rustbelt_seed0/W4_way_features/way_features.npz",
+    "ae_ckpt": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD3_xattn_nL64_rustbelt_seed0_e1000/W6_train_ae/ckpt_best.pt",
+    "exec_ckpt": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD3_xattn_nL64_rustbelt_seed0_e1000/W9_train_exec/ckpt_best.pt"
+  },
+  "picked_rows": [
+    1467,
+    406,
+    1375,
+    393,
+    637,
+    755,
+    260,
+    1047
+  ],
+  "per_route": [
+    {
+      "row_id": 1467,
+      "way_len": 53,
+      "hour": 10,
+      "dow": 1
+    },
+    {
+      "row_id": 406,
+      "way_len": 8,
+      "hour": 16,
+      "dow": 1
+    },
+    {
+      "row_id": 1375,
+      "way_len": 60,
+      "hour": 19,
+      "dow": 6
+    },
+    {
+      "row_id": 393,
+      "way_len": 33,
+      "hour": 23,
+      "dow": 4
+    },
+    {
+      "row_id": 637,
+      "way_len": 30,
+      "hour": 16,
+      "dow": 6
+    },
+    {
+      "row_id": 755,
+      "way_len": 11,
+      "hour": 13,
+      "dow": 0
+    },
+    {
+      "row_id": 260,
+      "way_len": 26,
+      "hour": 18,
+      "dow": 5
+    },
+    {
+      "row_id": 1047,
+      "way_len": 21,
+      "hour": 13,
+      "dow": 5
+    }
+  ]
+}

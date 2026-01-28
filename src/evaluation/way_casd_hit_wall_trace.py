@@ -303,13 +303,29 @@ def run(
 
     way_features = load_way_features_from_npz(Path(way_features_npz), device=device)
     wf = np.load(str(way_features_npz), allow_pickle=True)
-    n_highway_types = int(np.max(np.asarray(wf["way_highway_code"], dtype=np.int64))) + 1
-    n_cities = int(np.max(routes.route_city.astype(np.int64))) + 1
+    n_highway_types_data = int(np.max(np.asarray(wf["way_highway_code"], dtype=np.int64))) + 1
+    n_cities_data = int(np.max(routes.route_city.astype(np.int64))) + 1
 
     ckpt = torch.load(str(ae_ckpt), map_location=device)
     state = ckpt["model_state_dict"] if isinstance(ckpt, dict) and "model_state_dict" in ckpt else ckpt
     ae_cfg_dict = ckpt.get("config", {}) if isinstance(ckpt, dict) else {}
     inferred = _infer_decoder_cfg_from_state(state) if isinstance(state, dict) else {}
+
+    # Infer embedding sizes from checkpoint to avoid shape mismatch (e.g., route_city_embed).
+    n_route_cities_ckpt = None
+    n_highway_types_ckpt = None
+    if isinstance(state, dict):
+        w_city = state.get("decoder.cond_enc.route_city_embed.weight", None)
+        if isinstance(w_city, torch.Tensor) and w_city.ndim == 2:
+            n_route_cities_ckpt = int(w_city.shape[0])
+        w_hw = state.get("way_enc.highway_embed.weight", None)
+        if isinstance(w_hw, torch.Tensor) and w_hw.ndim == 2:
+            n_highway_types_ckpt = int(w_hw.shape[0])
+
+    n_route_cities = int(ae_cfg_dict.get("n_route_cities", n_route_cities_ckpt or n_cities_data))
+    n_route_cities = max(int(n_route_cities), int(n_cities_data))  # must cover observed city ids
+    n_highway_types = int(ae_cfg_dict.get("n_highway_types", n_highway_types_ckpt or n_highway_types_data))
+    n_highway_types = max(int(n_highway_types), int(n_highway_types_data))
 
     ae = WayCASDAutoEncoder(
         cfg=WayCASDAECfg(
@@ -333,7 +349,7 @@ def run(
         way_features=way_features,
         way_adj_ptr=ptr,
         way_adj_idx=idx,
-        n_route_cities=int(n_cities),
+        n_route_cities=int(n_route_cities),
         n_highway_types=int(n_highway_types),
     ).to(device=device)
     ae.load_state_dict(state, strict=False)
@@ -341,7 +357,7 @@ def run(
 
     # Scan routes and collect hit-wall examples.
     picks: Dict[int, np.ndarray] = {}
-    for c in range(n_cities):
+    for c in range(n_cities_data):
         picks[c] = _pick_routes_per_city(routes, city=int(c), n_routes=int(cfg.n_routes), max_way_len=int(cfg.max_way_len), seed=int(cfg.seed))
 
     scan = []
@@ -351,7 +367,7 @@ def run(
     n_hit_wall = 0
     n_success = 0
 
-    for c in range(n_cities):
+    for c in range(n_cities_data):
         for rid in picks[c].tolist():
             rid = int(rid)
             n_scanned += 1
@@ -381,7 +397,7 @@ def run(
         },
         "ckpt_decoder_cfg_inferred": inferred,
         "scan_stats": {
-            "n_cities": int(n_cities),
+            "n_cities": int(n_cities_data),
             "n_scanned": int(n_scanned),
             "n_success": int(n_success),
             "n_hit_wall": int(n_hit_wall),
@@ -447,4 +463,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

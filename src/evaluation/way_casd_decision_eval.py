@@ -38,6 +38,38 @@ class EvalCfg:
     decode_include_dest_if_successor: bool
 
 
+def _infer_decoder_config_from_state(state: Dict[str, torch.Tensor]) -> Dict[str, object]:
+    """
+    从 checkpoint 的 state_dict 推断 decoder 配置（尤其是 past-context 相关）。
+
+    目的：避免把“带 past-context 的新模型”当成“旧模型”来评估，导致到达率被系统性低估。
+    """
+    cfg: Dict[str, object] = {}
+
+    # use_dest_dist：通过 scorer 第一层的输入维度推断
+    w = state.get("decoder.scorer.0.weight", None)
+    if isinstance(w, torch.Tensor) and w.ndim == 2:
+        hidden = int(w.shape[0])
+        in_dim = int(w.shape[1])
+        # in_dim == 3*hidden (+ optional scalar features)
+        cfg["decoder_use_dest_dist"] = (int(in_dim - hidden * 3) != 0)
+    else:
+        cfg["decoder_use_dest_dist"] = True
+
+    cfg["decoder_use_cross_attn"] = any(str(k).startswith("decoder.cross_attn.") for k in state.keys())
+    cfg["decoder_use_step_emb"] = any(str(k).startswith("decoder.step_emb.") for k in state.keys())
+    cfg["decoder_use_dest_query"] = any(str(k).startswith("decoder.dest_proj.") for k in state.keys())
+    cfg["decoder_use_past_context"] = any(str(k).startswith("decoder.past_encoder.") for k in state.keys())
+
+    pe = state.get("decoder.past_encoder.pos_emb.weight", None)
+    if isinstance(pe, torch.Tensor) and pe.ndim == 2:
+        cfg["decoder_past_k"] = int(pe.shape[0])
+    else:
+        cfg["decoder_past_k"] = 8
+
+    return cfg
+
+
 def _set_seed(seed: int) -> None:
     np.random.seed(int(seed))
     torch.manual_seed(int(seed))
@@ -532,6 +564,7 @@ def main() -> None:
     ckpt_ae = torch.load(str(args.ae_ckpt), map_location=device)
     ae_state = ckpt_ae["model_state_dict"] if isinstance(ckpt_ae, dict) and "model_state_dict" in ckpt_ae else ckpt_ae
     ae_cfg_dict = ckpt_ae.get("config", {}) if isinstance(ckpt_ae, dict) else {}
+    inferred = _infer_decoder_config_from_state(ae_state) if isinstance(ae_state, dict) else {}
     ae = WayCASDAutoEncoder(
         cfg=WayCASDAECfg(
             d_model=int(ae_cfg_dict.get("d_model", 256)),
@@ -541,18 +574,28 @@ def main() -> None:
             max_candidates=int(ae_cfg_dict.get("max_candidates", 32)),
             max_len=int(ae_cfg_dict.get("max_len", cfg.max_way_len)),
             coord_scale=float(ae_cfg_dict.get("coord_scale", 1024.0)),
-            decoder_use_dest_dist=bool(ae_cfg_dict.get("decoder_use_dest_dist", True)),
-            decoder_use_cross_attn=bool(ae_cfg_dict.get("decoder_use_cross_attn", True)),
+            decoder_use_dest_dist=bool(inferred.get("decoder_use_dest_dist", ae_cfg_dict.get("decoder_use_dest_dist", True))),
+            decoder_use_cross_attn=bool(inferred.get("decoder_use_cross_attn", ae_cfg_dict.get("decoder_use_cross_attn", True))),
             decoder_n_cross_heads=int(ae_cfg_dict.get("decoder_n_cross_heads", 4)),
-            decoder_use_step_emb=bool(ae_cfg_dict.get("decoder_use_step_emb", False)),
-            decoder_use_dest_query=bool(ae_cfg_dict.get("decoder_use_dest_query", False)),
+            decoder_use_step_emb=bool(inferred.get("decoder_use_step_emb", ae_cfg_dict.get("decoder_use_step_emb", False))),
+            decoder_use_dest_query=bool(inferred.get("decoder_use_dest_query", ae_cfg_dict.get("decoder_use_dest_query", False))),
+            decoder_use_past_context=bool(inferred.get("decoder_use_past_context", ae_cfg_dict.get("decoder_use_past_context", False))),
+            decoder_past_k=int(inferred.get("decoder_past_k", ae_cfg_dict.get("decoder_past_k", 8))),
+            decoder_past_n_layers=int(ae_cfg_dict.get("decoder_past_n_layers", 2)),
+            decoder_past_n_heads=int(ae_cfg_dict.get("decoder_past_n_heads", 4)),
         ),
         way_features=way_features,
         way_adj_ptr=wg["way_adj_ptr"],
         way_adj_idx=wg["way_adj_idx"],
         n_highway_types=int(max(4, n_highway_types)),
     ).to(device)
-    ae.load_state_dict(ae_state, strict=False)
+    ckpt_strict_load_ok = True
+    try:
+        ae.load_state_dict(ae_state, strict=True)
+    except Exception as e:
+        ckpt_strict_load_ok = False
+        print(f"[WARN] strict load_state_dict failed, fallback to strict=False: {e}")
+        ae.load_state_dict(ae_state, strict=False)
     ae.eval()
 
     # Load Flow (optional)
@@ -591,6 +634,8 @@ def main() -> None:
             "ae_ckpt": str(args.ae_ckpt),
             "flow_ckpt": str(args.flow_ckpt) if args.flow_ckpt is not None else None,
         },
+        "ckpt_strict_load_ok": bool(ckpt_strict_load_ok),
+        "ckpt_decoder_cfg_inferred": dict(inferred),
         "per_city": [],
     }
 

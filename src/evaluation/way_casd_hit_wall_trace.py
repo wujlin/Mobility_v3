@@ -379,7 +379,7 @@ def run(
                 n_hit_wall += 1
                 if len(hit_wall_cases) < int(cfg.n_cases):
                     hit_wall_cases.append(rep)
-            if len(hit_wall_cases) >= int(cfg.n_cases) and n_scanned >= int(cfg.n_routes) * n_cities:
+            if len(hit_wall_cases) >= int(cfg.n_cases) and n_scanned >= int(cfg.n_routes) * int(n_cities_data):
                 # already have enough cases; still finish scan for stats? (KISS: stop early)
                 pass
 

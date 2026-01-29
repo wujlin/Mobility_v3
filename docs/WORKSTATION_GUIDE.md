@@ -533,7 +533,33 @@ python -m src.evaluation.way_casd_sample_viz \
 
 输出：
 - `W8_sample_viz/report.json`：每条 route 的 success/valid/jaccard
-- `W8_sample_viz/case_route*.png`：GT（黑）+ 多个 sample（彩色）叠图
+- `W8_sample_viz/city0/case_route*.png`、`W8_sample_viz/city1/case_route*.png`：GT（黑）+ 多个 sample（彩色）叠图（按 city 分目录）
+
+**(指标评估) Decision Stage：Way 序列生成**
+
+> 目标：用统一口径输出“到达率 / hit-wall / Jaccard / 采样带来的 any-success”等核心指标（比只看 `val_acc` 更接近真实可用性）。
+
+```bash
+# 评估矩阵：gt vs flow；greedy vs beam
+python -m src.evaluation.way_casd_decision_eval \
+  --way_routes_npz "$WAY_ROUTES_NPZ" \
+  --way_graph_npz "$WAY_GRAPH_NPZ" \
+  --way_features_npz "$WAY_FEATS_NPZ" \
+  --ae_ckpt "$OUT_BASE/W6_train_ae/ckpt_best.pt" \
+  --flow_ckpt "$OUT_BASE/W7_train_flow/ckpt_best.pt" \
+  --out_json "$OUT_BASE/W8_diag/decision_eval_n200.json" \
+  --latent_sources gt flow \
+  --decode_methods greedy beam \
+  --n_routes 200 --n_samples_per_route 10 \
+  --beam_size 10 \
+  --decode_max_candidates 0 --decode_candidate_policy first \
+  --max_way_len 160 --max_decode_len 160 \
+  --device cuda --seed 0 \
+  |& tee "$OUT_BASE/W8_diag/run_decision_eval.log"
+```
+
+输出：
+- `W8_diag/decision_eval_n200.json`：按城市汇总的 success/hit_wall/len_ratio/jaccard 等
 
 **(可选 Step C) Execution Stage：GPS-level 条件扩散（依赖 segments_with_wayid.parquet）**
 
@@ -567,6 +593,26 @@ python -m src.evaluation.way_casd_gps_sample_viz \
   --out_dir "$OUT_BASE/W10_exec_viz" \
   --n_routes 8 --n_samples_per_route 4 --traj_len 256 --prefer_matched \
   --device cuda
+```
+
+**(指标评估) Execution Stage：GPS 轨迹（micro + distribution + on-road）**
+
+```bash
+python -m src.evaluation.way_casd_exec_eval \
+  --segments_parquet "$RAW_ROOT/worldtrace/detroit_core_v1/segments_with_wayid.parquet" \
+                    "$RAW_ROOT/worldtrace/columbus_core_v1/segments_with_wayid.parquet" \
+  --route_city 0 1 \
+  --semantic_dir "$RAW_ROOT/worldtrace/detroit_core_v1" \
+                 "$RAW_ROOT/worldtrace/columbus_core_v1" \
+  --way_graph_npz "$WAY_GRAPH_NPZ" \
+  --way_features_npz "$WAY_FEATS_NPZ" \
+  --ae_ckpt "$OUT_BASE/W6_train_ae/ckpt_best.pt" \
+  --exec_ckpt "$OUT_BASE/W9_train_exec/ckpt_best.pt" \
+  --out_json "$OUT_BASE/W11_exec_eval/exec_eval_n512.json" \
+  --n_routes 512 --n_samples_per_route 4 --traj_len 256 --prefer_matched \
+  --batch_routes 16 --frechet_points 64 \
+  --device cuda --seed 0 \
+  |& tee "$OUT_BASE/W11_exec_eval/run_exec_eval.log"
 ```
 
 **(2) segments→graph paths（map-match，T1）**：

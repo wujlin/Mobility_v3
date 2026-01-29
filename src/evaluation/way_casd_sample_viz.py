@@ -194,8 +194,14 @@ def _seq_to_xy(seq: List[int], *, way_center_x: np.ndarray, way_center_y: np.nda
 
 
 def _load_city_road_prob(semantic_dir: Path) -> Optional[np.ndarray]:
-    p = Path(semantic_dir) / "osm_road_prob.npy"
-    if not p.exists():
+    # Accept either a city root (contains osm_road_prob.npy) or a nested
+    # directory such as ".../semantic_maps" (then try parent).
+    cand_paths = [
+        Path(semantic_dir) / "osm_road_prob.npy",
+        Path(semantic_dir).parent / "osm_road_prob.npy",
+    ]
+    p = next((x for x in cand_paths if x.exists()), None)
+    if p is None:
         return None
     a = np.load(str(p))
     if a.ndim != 2:
@@ -204,25 +210,48 @@ def _load_city_road_prob(semantic_dir: Path) -> Optional[np.ndarray]:
 
 
 def _load_city_poi_total(semantic_dir: Path) -> Optional[np.ndarray]:
-    meta_path = Path(semantic_dir) / "poi_raster_meta.json"
-    if not meta_path.exists():
-        return None
-    meta = json.loads(meta_path.read_text(encoding="utf-8"))
-    cats = meta.get("categories", None)
-    if not isinstance(cats, list) or not cats:
-        return None
+    # Accept either a city root (contains poi_density_*.npy) or a nested
+    # directory such as ".../semantic_maps" (then try parent).
+    cand_dirs = [Path(semantic_dir), Path(semantic_dir).parent]
 
-    total = None
-    for cat in cats:
-        p = Path(semantic_dir) / f"poi_density_{cat}.npy"
-        if not p.exists():
+    # (1) Preferred: if we have an explicit meta json, follow its categories list
+    # to ensure stable ordering.
+    for d in cand_dirs:
+        meta_path = d / "poi_raster_meta.json"
+        if not meta_path.exists():
             continue
-        a = np.load(str(p))
-        if a.ndim != 2:
+        meta = json.loads(meta_path.read_text(encoding="utf-8"))
+        cats = meta.get("categories", None)
+        if not isinstance(cats, list) or not cats:
+            break
+        total = None
+        for cat in cats:
+            p = d / f"poi_density_{cat}.npy"
+            if not p.exists():
+                continue
+            a = np.load(str(p))
+            if a.ndim != 2:
+                continue
+            a = np.asarray(a, dtype=np.float32)
+            total = a if total is None else (total + a)
+        if total is not None:
+            return total
+
+    # (2) Fallback: sum all poi_density_*.npy (stable sort for reproducibility).
+    for d in cand_dirs:
+        files = sorted(d.glob("poi_density_*.npy"))
+        if not files:
             continue
-        a = np.asarray(a, dtype=np.float32)
-        total = a if total is None else (total + a)
-    return total
+        total = None
+        for p in files:
+            a = np.load(str(p))
+            if a.ndim != 2:
+                continue
+            a = np.asarray(a, dtype=np.float32)
+            total = a if total is None else (total + a)
+        if total is not None:
+            return total
+    return None
 
 
 def _imshow_background(ax, arr: np.ndarray, *, cmap: str, alpha: float, vmin: Optional[float] = None, vmax: Optional[float] = None) -> None:
@@ -642,7 +671,9 @@ def main() -> None:
                 city_cache[city]["road_prob"] = _load_city_road_prob(sem)
                 city_cache[city]["poi_total"] = _load_city_poi_total(sem)
 
-        out_png = out_dir / f"case_route{rid:05d}.png"
+        # Keep city separation in filesystem, so Detroit/Columbus visualizations
+        # are immediately distinguishable during PI review.
+        out_png = out_dir / f"city{city}" / f"case_route{rid:05d}.png"
         _plot_one(
             out_png=out_png,
             route_id=int(rid),

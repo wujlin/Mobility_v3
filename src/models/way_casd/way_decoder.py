@@ -333,6 +333,7 @@ class WayDecoder(nn.Module):
         dest_pos: torch.Tensor,  # (B,2)
         past_way: Optional[torch.Tensor] = None,  # (T, K) past way IDs, -1 for padding
         past_mask: Optional[torch.Tensor] = None,  # (T, K) bool, True=valid
+        return_attn_weights: bool = False,
     ) -> torch.Tensor:
         """
         Compute context vector for each transition.
@@ -400,6 +401,7 @@ class WayDecoder(nn.Module):
                 query_vec = query_vec + past_ctx
             # If past_way is None (e.g., step 0), query_vec remains unchanged
 
+        attn_weights_out: Optional[torch.Tensor] = None
         if self.use_cross_attn:
             # Gather latent tokens for each transition: (B, L, d) -> (T, L, d)
             lat_gathered = latent_tokens[route_idx]  # (T, L, d_model)
@@ -424,31 +426,56 @@ class WayDecoder(nn.Module):
                 valid = cand_mask.to(dtype=torch.bool)
                 idx = valid.nonzero(as_tuple=False)  # (N,2)
                 if int(idx.numel()) == 0:
-                    return torch.zeros((T, C, int(self.cfg.hidden_dim)), dtype=query_vec.dtype, device=device)
+                    ctx0 = torch.zeros((T, C, int(self.cfg.hidden_dim)), dtype=query_vec.dtype, device=device)
+                    if bool(return_attn_weights):
+                        attn0 = torch.zeros((T, C, int(lat_gathered.shape[1])), dtype=torch.float32, device=device)
+                        return ctx0, attn0
+                    return ctx0
                 t_idx = idx[:, 0]
                 c_idx = idx[:, 1]
 
                 qv = cand_q[t_idx, c_idx]  # (N,d_model)
                 kv = lat_gathered[t_idx]  # (N,L,d_model)
                 query = qv.unsqueeze(1)  # (N,1,d_model)
-                attn_out, _ = self.cross_attn(query, kv, kv)  # (N,1,d_model)
+                attn_out, attn_w = self.cross_attn(query, kv, kv, need_weights=bool(return_attn_weights))  # (N,1,d_model)
                 attn_vec = self.cross_ln(attn_out[:, 0, :] + qv)  # (N,d_model)
                 ctx_v = self.ctx_mlp(torch.cat([cond_t[t_idx], attn_vec], dim=-1))  # (N,hidden)
 
                 ctx = torch.zeros((T, C, ctx_v.shape[-1]), dtype=ctx_v.dtype, device=ctx_v.device)
                 ctx[t_idx, c_idx] = ctx_v
+
+                if bool(return_attn_weights) and isinstance(attn_w, torch.Tensor):
+                    w = attn_w.to(dtype=torch.float32)
+                    # Default shape: (N,1,L) when average_attn_weights=True
+                    if w.ndim == 3:
+                        w = w[:, 0, :]  # (N,L)
+                    elif w.ndim != 2:
+                        w = w.reshape(w.shape[0], -1)
+                    L2 = int(w.shape[-1])
+                    attn = torch.zeros((T, C, L2), dtype=w.dtype, device=w.device)
+                    attn[t_idx, c_idx] = w
+                    attn_weights_out = attn
             else:
                 # Candidate-independent context (original): (T,hidden)
                 query = query_vec.unsqueeze(1)  # (T,1,d_model)
-                attn_out, _ = self.cross_attn(query, lat_gathered, lat_gathered)  # (T,1,d_model)
+                attn_out, attn_w = self.cross_attn(
+                    query, lat_gathered, lat_gathered, need_weights=bool(return_attn_weights)
+                )  # (T,1,d_model)
                 attn_out = self.cross_ln(attn_out[:, 0, :] + query_vec)  # (T,d_model), residual
                 ctx = self.ctx_mlp(torch.cat([cond_t, attn_out], dim=-1))  # (T,hidden)
+                if bool(return_attn_weights) and isinstance(attn_w, torch.Tensor):
+                    w = attn_w.to(dtype=torch.float32)
+                    if w.ndim == 3:
+                        w = w[:, 0, :]  # (T,L)
+                    attn_weights_out = w
         else:
             # Fallback: mean-pooled latent
             lat_vec = latent_tokens.mean(dim=1)  # (B, d_model)
             ctx_b = self.ctx_mlp(torch.cat([cond_emb, lat_vec], dim=-1))  # (B, hidden)
             ctx = ctx_b[route_idx]  # (T, hidden)
         
+        if bool(return_attn_weights):
+            return ctx, attn_weights_out
         return ctx
 
     def score_candidates(

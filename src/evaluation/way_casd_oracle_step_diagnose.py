@@ -40,6 +40,9 @@ class Cfg:
 
     progress_every: int
 
+    dump_attn: bool
+    attn_topk: int  # 0=store full attn weights; >0=store top-k per candidate
+
 
 def _set_seed(seed: int) -> None:
     np.random.seed(int(seed))
@@ -456,6 +459,15 @@ def run(
                     ctx_gt_norm = None
                     ctx_diff_norm = None
                     cand_h_diff = None
+                    cand_attn_weights = None
+                    cand_attn_topk_idx = None
+                    cand_attn_topk_val = None
+                    gt_attn_weight = None
+                    pred_attn_weight = None
+                    gt_attn_topk_idx = None
+                    gt_attn_topk_val = None
+                    pred_attn_topk_idx = None
+                    pred_attn_topk_val = None
                     try:
                         # Candidate embedding diff
                         cand_emb_dbg, _ = ae.way_enc(cand_way)  # (1,C,d)
@@ -466,21 +478,40 @@ def run(
                             cand_h_diff = float(torch.norm(cand_h_dbg[int(j)] - cand_h_dbg[int(gt_pos2)]).item())
 
                         # Context norm(s)
-                        ctx_out_dbg = ae.decoder._compute_context(
-                            way_embedder=ae.way_enc,
-                            latent_tokens=z_enc,
-                            cond_emb=cond_emb,
-                            cur_way=trans["cur_way"],
-                            cand_way=trans["cand_way"],
-                            cand_mask=trans["cand_mask"],
-                            cur_emb=None,
-                            cand_emb=None,
-                            route_idx=trans["route_idx"],
-                            step=trans["step"],
-                            dest_pos=route_cond["dest_pos"],
-                            past_way=trans.get("past_way", None),
-                            past_mask=trans.get("past_mask", None),
-                        )
+                        attn_dbg = None
+                        if bool(cfg.dump_attn):
+                            ctx_out_dbg, attn_dbg = ae.decoder._compute_context(
+                                way_embedder=ae.way_enc,
+                                latent_tokens=z_enc,
+                                cond_emb=cond_emb,
+                                cur_way=trans["cur_way"],
+                                cand_way=trans["cand_way"],
+                                cand_mask=trans["cand_mask"],
+                                cur_emb=None,
+                                cand_emb=None,
+                                route_idx=trans["route_idx"],
+                                step=trans["step"],
+                                dest_pos=route_cond["dest_pos"],
+                                past_way=trans.get("past_way", None),
+                                past_mask=trans.get("past_mask", None),
+                                return_attn_weights=True,
+                            )
+                        else:
+                            ctx_out_dbg = ae.decoder._compute_context(
+                                way_embedder=ae.way_enc,
+                                latent_tokens=z_enc,
+                                cond_emb=cond_emb,
+                                cur_way=trans["cur_way"],
+                                cand_way=trans["cand_way"],
+                                cand_mask=trans["cand_mask"],
+                                cur_emb=None,
+                                cand_emb=None,
+                                route_idx=trans["route_idx"],
+                                step=trans["step"],
+                                dest_pos=route_cond["dest_pos"],
+                                past_way=trans.get("past_way", None),
+                                past_mask=trans.get("past_mask", None),
+                            )
                         if ctx_out_dbg.ndim == 2:
                             v = ctx_out_dbg[0]
                             ctx_norm = float(torch.norm(v).item())
@@ -497,6 +528,30 @@ def run(
                                 v_gt = ctx_out_dbg[0, gt_pos2]
                                 ctx_gt_norm = float(torch.norm(v_gt).item())
                                 ctx_diff_norm = float(torch.norm(v_pred - v_gt).item())
+
+                        # Candidate attention weights (only meaningful for candidate-aware ctx: (T,C,hidden))
+                        if bool(cfg.dump_attn) and isinstance(attn_dbg, torch.Tensor) and attn_dbg.ndim == 3:
+                            # attn_dbg: (T,C,L); here T=1
+                            w = attn_dbg[0].detach().to("cpu", dtype=torch.float32)  # (C,L)
+                            if int(cfg.attn_topk) > 0:
+                                k = min(int(cfg.attn_topk), int(w.shape[1]))
+                                vals, idxs = torch.topk(w, k=k, dim=-1)  # (C,k)
+                                cand_attn_topk_idx = idxs.tolist()
+                                cand_attn_topk_val = vals.tolist()
+                                if gt_rank is not None and gt_in_sel:
+                                    sel_list = [int(x) for x in cand_sel.detach().to("cpu").numpy().reshape(-1).tolist()]
+                                    gt_pos2 = int(sel_list.index(int(gt_next)))
+                                    gt_attn_topk_idx = cand_attn_topk_idx[int(gt_pos2)]
+                                    gt_attn_topk_val = cand_attn_topk_val[int(gt_pos2)]
+                                pred_attn_topk_idx = cand_attn_topk_idx[int(j)]
+                                pred_attn_topk_val = cand_attn_topk_val[int(j)]
+                            else:
+                                cand_attn_weights = w.tolist()
+                                pred_attn_weight = cand_attn_weights[int(j)]
+                                if gt_rank is not None and gt_in_sel:
+                                    sel_list = [int(x) for x in cand_sel.detach().to("cpu").numpy().reshape(-1).tolist()]
+                                    gt_pos2 = int(sel_list.index(int(gt_next)))
+                                    gt_attn_weight = cand_attn_weights[int(gt_pos2)]
                     except Exception:
                         pass
                     
@@ -525,6 +580,16 @@ def run(
                         "ctx_gt_norm": ctx_gt_norm,
                         "ctx_diff_norm": ctx_diff_norm,
                         "cand_h_diff": cand_h_diff,
+                        "attn_topk": int(cfg.attn_topk) if bool(cfg.dump_attn) else None,
+                        "cand_attn_weights": cand_attn_weights,
+                        "gt_attn_weight": gt_attn_weight,
+                        "pred_attn_weight": pred_attn_weight,
+                        "cand_attn_topk_idx": cand_attn_topk_idx,
+                        "cand_attn_topk_val": cand_attn_topk_val,
+                        "gt_attn_topk_idx": gt_attn_topk_idx,
+                        "gt_attn_topk_val": gt_attn_topk_val,
+                        "pred_attn_topk_idx": pred_attn_topk_idx,
+                        "pred_attn_topk_val": pred_attn_topk_val,
                     }
                     div_outdeg.append(int(succ_full_n))
                     if gt_in_full is not None:
@@ -732,6 +797,14 @@ def build_argparser() -> argparse.ArgumentParser:
     p.add_argument("--focus_trace_radius", type=int, default=12)
 
     p.add_argument("--progress_every", type=int, default=50)
+
+    p.add_argument("--dump_attn", action="store_true", help="Dump candidate attention weights at the first divergence step (focus traces only).")
+    p.add_argument(
+        "--attn_topk",
+        type=int,
+        default=0,
+        help="If >0, store top-k latent indices/weights per candidate instead of full (C,L) attention matrix.",
+    )
     return p
 
 
@@ -752,6 +825,8 @@ def main() -> None:
         focus_max_examples=int(args.focus_max_examples),
         focus_trace_radius=int(args.focus_trace_radius),
         progress_every=int(args.progress_every),
+        dump_attn=bool(args.dump_attn),
+        attn_topk=int(args.attn_topk),
     )
     run(
         cfg,

@@ -1,0 +1,20 @@
+/home/jinlin/miniconda3/envs/dpl/lib/python3.11/site-packages/torch/nn/modules/transformer.py:392: UserWarning: enable_nested_tensor is True, but self.use_nested_tensor is False because encoder_layer.norm_first was True
+  warnings.warn(
+Encoded 400 routes
+Running true z_enc...
+Running shuffle z_enc...
+Running zero z_enc...
+Saved to /home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD_SEED_candq1_pastctx_k8_strict_sem5_seed1_e100/W8_diag/zenc_info_n200.json
+
+============================================================
+z_enc Informativeness Diagnostic Results
+============================================================
+  true    : success=69.50%, jaccard=0.7714
+  shuffle : success=12.50%, jaccard=0.2530
+  zero    : success=11.75%, jaccard=0.2408
+------------------------------------------------------------
+  [city0] true:64.50%/0.721 | shuffle:12.00%/0.243 | zero:8.00%/0.212
+  [city1] true:74.50%/0.822 | shuffle:13.00%/0.263 | zero:15.50%/0.270
+------------------------------------------------------------
+  → true > shuffle (+57.00%): z_enc 携带可用路径信息，问题在解码策略
+============================================================

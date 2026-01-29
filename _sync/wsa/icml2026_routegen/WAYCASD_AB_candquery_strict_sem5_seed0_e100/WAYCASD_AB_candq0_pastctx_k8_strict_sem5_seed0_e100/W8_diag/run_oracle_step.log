@@ -1,0 +1,11 @@
+/home/jinlin/miniconda3/envs/dpl/lib/python3.11/site-packages/torch/nn/modules/transformer.py:392: UserWarning: enable_nested_tensor is True, but self.use_nested_tensor is False because encoder_layer.norm_first was True
+  warnings.warn(
+[progress] done=50 rps=5.57 succ=46.00%
+[progress] done=100 rps=6.03 succ=49.00%
+[progress] done=150 rps=6.19 succ=48.00%
+[progress] done=200 rps=6.05 succ=47.00%
+[progress] done=250 rps=6.41 succ=50.40%
+[progress] done=300 rps=6.85 succ=52.33%
+[progress] done=350 rps=7.26 succ=56.57%
+[progress] done=400 rps=7.44 succ=58.25%
+Saved to /home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD_AB_candq0_pastctx_k8_strict_sem5_seed0_e100/W8_diag/oracle_step_n200.json

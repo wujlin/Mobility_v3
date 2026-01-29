@@ -1,0 +1,535 @@
+{
+  "ok": true,
+  "task": "way_casd_hit_wall_trace",
+  "created_at": "2026-01-29T00:00:11.239769+08:00",
+  "cfg": {
+    "seed": 0,
+    "device": "cuda",
+    "tz_offset_hours": -5.0,
+    "n_routes": 200,
+    "max_way_len": 160,
+    "max_decode_len": 160,
+    "decode_max_candidates": 0,
+    "decode_candidate_policy": "first",
+    "decode_include_dest_if_successor": false,
+    "last_k_steps": 5,
+    "topk_logits": 5,
+    "n_cases": 3
+  },
+  "inputs": {
+    "way_routes_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD1_waydata_rustbelt_seed0_strict_v1/W5_way_routes_strict/way_routes_strict_masklen0.npz",
+    "way_graph_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD1_waydata_rustbelt_seed0_strict_v1/W3_way_graph_strict/way_graph.npz",
+    "way_features_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD1_waydata_rustbelt_seed0_strict_v1/W4_way_features_sem/way_features.npz",
+    "ae_ckpt": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD_AB_candq0_pastctx_k8_strict_sem5_seed0_e100/W6_train_ae/ckpt_best.pt"
+  },
+  "ckpt_decoder_cfg_inferred": {
+    "decoder_use_dest_dist": true,
+    "decoder_use_cross_attn": true,
+    "decoder_use_step_emb": false,
+    "decoder_use_dest_query": false,
+    "decoder_use_dir_query": false,
+    "decoder_use_cand_query": false,
+    "decoder_use_past_context": true,
+    "decoder_past_k": 8
+  },
+  "scan_stats": {
+    "n_cities": 2,
+    "n_scanned": 400,
+    "n_success": 233,
+    "n_hit_wall": 72,
+    "success_rate": 0.5825,
+    "hit_wall_rate": 0.18,
+    "elapsed_s": 52.25707530975342
+  },
+  "hit_wall_cases": [
+    {
+      "route_id": 21,
+      "city": 0,
+      "gt_len": 17,
+      "pred_len": 161,
+      "success": false,
+      "hit_wall": true,
+      "last_k_steps": 5,
+      "steps": [
+        {
+          "step": 155,
+          "cur_way": 975,
+          "chosen_next": 956,
+          "chosen_logit": -0.4435994029045105,
+          "topk": [
+            {
+              "way": 956,
+              "logit": -0.4435994029045105
+            },
+            {
+              "way": 653,
+              "logit": -0.4920591711997986
+            },
+            {
+              "way": 9230,
+              "logit": -3.0509438514709473
+            }
+          ],
+          "dest_in_cands": false,
+          "dest_rank": null,
+          "gt_prefix_ok": false,
+          "gt_next": null,
+          "gt_next_in_cands": false,
+          "gt_next_rank": null,
+          "gt_next_logit": null,
+          "chosen_minus_gt_next": null,
+          "ctx_norm": 43.13513946533203,
+          "ctx_pred_norm": 43.13513946533203,
+          "ctx_gt_norm": 43.13513946533203,
+          "ctx_diff_norm": 0.0,
+          "cand_h_diff": null,
+          "dist_pred_to_dest": 0.011570543050765991,
+          "dist_gt_to_dest": null,
+          "dist_pred_minus_gt": null
+        },
+        {
+          "step": 156,
+          "cur_way": 956,
+          "chosen_next": 12863,
+          "chosen_logit": 1.0137783288955688,
+          "topk": [
+            {
+              "way": 12863,
+              "logit": 1.0137783288955688
+            },
+            {
+              "way": 660,
+              "logit": -1.2934457063674927
+            },
+            {
+              "way": 975,
+              "logit": -1.686919927597046
+            }
+          ],
+          "dest_in_cands": false,
+          "dest_rank": null,
+          "gt_prefix_ok": false,
+          "gt_next": null,
+          "gt_next_in_cands": false,
+          "gt_next_rank": null,
+          "gt_next_logit": null,
+          "chosen_minus_gt_next": null,
+          "ctx_norm": 36.929203033447266,
+          "ctx_pred_norm": 36.929203033447266,
+          "ctx_gt_norm": 36.929203033447266,
+          "ctx_diff_norm": 0.0,
+          "cand_h_diff": null,
+          "dist_pred_to_dest": 0.020329061895608902,
+          "dist_gt_to_dest": null,
+          "dist_pred_minus_gt": null
+        },
+        {
+          "step": 157,
+          "cur_way": 12863,
+          "chosen_next": 13980,
+          "chosen_logit": 3.957517147064209,
+          "topk": [
+            {
+              "way": 13980,
+              "logit": 3.957517147064209
+            },
+            {
+              "way": 8847,
+              "logit": 2.388392448425293
+            },
+            {
+              "way": 13979,
+              "logit": 1.3941794633865356
+            }
+          ],
+          "dest_in_cands": false,
+          "dest_rank": null,
+          "gt_prefix_ok": false,
+          "gt_next": null,
+          "gt_next_in_cands": false,
+          "gt_next_rank": null,
+          "gt_next_logit": null,
+          "chosen_minus_gt_next": null,
+          "ctx_norm": 22.268762588500977,
+          "ctx_pred_norm": 22.268762588500977,
+          "ctx_gt_norm": 22.268762588500977,
+          "ctx_diff_norm": 0.0,
+          "cand_h_diff": null,
+          "dist_pred_to_dest": 0.02341805025935173,
+          "dist_gt_to_dest": null,
+          "dist_pred_minus_gt": null
+        },
+        {
+          "step": 158,
+          "cur_way": 13980,
+          "chosen_next": 13979,
+          "chosen_logit": -0.6528041362762451,
+          "topk": [
+            {
+              "way": 13979,
+              "logit": -0.6528041362762451
+            }
+          ],
+          "dest_in_cands": false,
+          "dest_rank": null,
+          "gt_prefix_ok": false,
+          "gt_next": null,
+          "gt_next_in_cands": false,
+          "gt_next_rank": null,
+          "gt_next_logit": null,
+          "chosen_minus_gt_next": null,
+          "ctx_norm": 33.94746780395508,
+          "ctx_pred_norm": 33.94746780395508,
+          "ctx_gt_norm": 33.94746780395508,
+          "ctx_diff_norm": 0.0,
+          "cand_h_diff": null,
+          "dist_pred_to_dest": 0.023821033537387848,
+          "dist_gt_to_dest": null,
+          "dist_pred_minus_gt": null
+        },
+        {
+          "step": 159,
+          "cur_way": 13979,
+          "chosen_next": 8947,
+          "chosen_logit": -0.04935794323682785,
+          "topk": [
+            {
+              "way": 8947,
+              "logit": -0.04935794323682785
+            },
+            {
+              "way": 979,
+              "logit": -0.1757703423500061
+            }
+          ],
+          "dest_in_cands": false,
+          "dest_rank": null,
+          "gt_prefix_ok": false,
+          "gt_next": null,
+          "gt_next_in_cands": false,
+          "gt_next_rank": null,
+          "gt_next_logit": null,
+          "chosen_minus_gt_next": null,
+          "ctx_norm": 38.24957275390625,
+          "ctx_pred_norm": 38.24957275390625,
+          "ctx_gt_norm": 38.24957275390625,
+          "ctx_diff_norm": 0.0,
+          "cand_h_diff": null,
+          "dist_pred_to_dest": 0.024373728781938553,
+          "dist_gt_to_dest": null,
+          "dist_pred_minus_gt": null
+        }
+      ]
+    },
+    {
+      "route_id": 1524,
+      "city": 0,
+      "gt_len": 96,
+      "pred_len": 161,
+      "success": false,
+      "hit_wall": true,
+      "last_k_steps": 5,
+      "steps": [
+        {
+          "step": 155,
+          "cur_way": 11978,
+          "chosen_next": 11977,
+          "chosen_logit": -0.5908132791519165,
+          "topk": [
+            {
+              "way": 11977,
+              "logit": -0.5908132791519165
+            }
+          ],
+          "dest_in_cands": false,
+          "dest_rank": null,
+          "gt_prefix_ok": false,
+          "gt_next": null,
+          "gt_next_in_cands": false,
+          "gt_next_rank": null,
+          "gt_next_logit": null,
+          "chosen_minus_gt_next": null,
+          "ctx_norm": 16.420101165771484,
+          "ctx_pred_norm": 16.420101165771484,
+          "ctx_gt_norm": 16.420101165771484,
+          "ctx_diff_norm": 0.0,
+          "cand_h_diff": null,
+          "dist_pred_to_dest": 0.2737361788749695,
+          "dist_gt_to_dest": null,
+          "dist_pred_minus_gt": null
+        },
+        {
+          "step": 156,
+          "cur_way": 11977,
+          "chosen_next": 11976,
+          "chosen_logit": -0.0570295974612236,
+          "topk": [
+            {
+              "way": 11976,
+              "logit": -0.0570295974612236
+            }
+          ],
+          "dest_in_cands": false,
+          "dest_rank": null,
+          "gt_prefix_ok": false,
+          "gt_next": null,
+          "gt_next_in_cands": false,
+          "gt_next_rank": null,
+          "gt_next_logit": null,
+          "chosen_minus_gt_next": null,
+          "ctx_norm": 15.144329071044922,
+          "ctx_pred_norm": 15.144329071044922,
+          "ctx_gt_norm": 15.144329071044922,
+          "ctx_diff_norm": 0.0,
+          "cand_h_diff": null,
+          "dist_pred_to_dest": 0.2733819782733917,
+          "dist_gt_to_dest": null,
+          "dist_pred_minus_gt": null
+        },
+        {
+          "step": 157,
+          "cur_way": 11976,
+          "chosen_next": 7751,
+          "chosen_logit": 3.1909728050231934,
+          "topk": [
+            {
+              "way": 7751,
+              "logit": 3.1909728050231934
+            }
+          ],
+          "dest_in_cands": false,
+          "dest_rank": null,
+          "gt_prefix_ok": false,
+          "gt_next": null,
+          "gt_next_in_cands": false,
+          "gt_next_rank": null,
+          "gt_next_logit": null,
+          "chosen_minus_gt_next": null,
+          "ctx_norm": 14.919971466064453,
+          "ctx_pred_norm": 14.919971466064453,
+          "ctx_gt_norm": 14.919971466064453,
+          "ctx_diff_norm": 0.0,
+          "cand_h_diff": null,
+          "dist_pred_to_dest": 0.27273276448249817,
+          "dist_gt_to_dest": null,
+          "dist_pred_minus_gt": null
+        },
+        {
+          "step": 158,
+          "cur_way": 7751,
+          "chosen_next": 11975,
+          "chosen_logit": -0.10352997481822968,
+          "topk": [
+            {
+              "way": 11975,
+              "logit": -0.10352997481822968
+            }
+          ],
+          "dest_in_cands": false,
+          "dest_rank": null,
+          "gt_prefix_ok": false,
+          "gt_next": null,
+          "gt_next_in_cands": false,
+          "gt_next_rank": null,
+          "gt_next_logit": null,
+          "chosen_minus_gt_next": null,
+          "ctx_norm": 14.453008651733398,
+          "ctx_pred_norm": 14.453008651733398,
+          "ctx_gt_norm": 14.453008651733398,
+          "ctx_diff_norm": 0.0,
+          "cand_h_diff": null,
+          "dist_pred_to_dest": 0.2721618413925171,
+          "dist_gt_to_dest": null,
+          "dist_pred_minus_gt": null
+        },
+        {
+          "step": 159,
+          "cur_way": 11975,
+          "chosen_next": 17407,
+          "chosen_logit": 2.0764060020446777,
+          "topk": [
+            {
+              "way": 17407,
+              "logit": 2.0764060020446777
+            }
+          ],
+          "dest_in_cands": false,
+          "dest_rank": null,
+          "gt_prefix_ok": false,
+          "gt_next": null,
+          "gt_next_in_cands": false,
+          "gt_next_rank": null,
+          "gt_next_logit": null,
+          "chosen_minus_gt_next": null,
+          "ctx_norm": 19.36768341064453,
+          "ctx_pred_norm": 19.36768341064453,
+          "ctx_gt_norm": 19.36768341064453,
+          "ctx_diff_norm": 0.0,
+          "cand_h_diff": null,
+          "dist_pred_to_dest": 0.27197062969207764,
+          "dist_gt_to_dest": null,
+          "dist_pred_minus_gt": null
+        }
+      ]
+    },
+    {
+      "route_id": 824,
+      "city": 0,
+      "gt_len": 47,
+      "pred_len": 161,
+      "success": false,
+      "hit_wall": true,
+      "last_k_steps": 5,
+      "steps": [
+        {
+          "step": 155,
+          "cur_way": 583,
+          "chosen_next": 393,
+          "chosen_logit": -0.015232793986797333,
+          "topk": [
+            {
+              "way": 393,
+              "logit": -0.015232793986797333
+            },
+            {
+              "way": 4822,
+              "logit": -2.6772232055664062
+            }
+          ],
+          "dest_in_cands": false,
+          "dest_rank": null,
+          "gt_prefix_ok": false,
+          "gt_next": null,
+          "gt_next_in_cands": false,
+          "gt_next_rank": null,
+          "gt_next_logit": null,
+          "chosen_minus_gt_next": null,
+          "ctx_norm": 20.90178871154785,
+          "ctx_pred_norm": 20.90178871154785,
+          "ctx_gt_norm": 20.90178871154785,
+          "ctx_diff_norm": 0.0,
+          "cand_h_diff": null,
+          "dist_pred_to_dest": 0.342986524105072,
+          "dist_gt_to_dest": null,
+          "dist_pred_minus_gt": null
+        },
+        {
+          "step": 156,
+          "cur_way": 393,
+          "chosen_next": 4822,
+          "chosen_logit": -7.042938232421875,
+          "topk": [
+            {
+              "way": 4822,
+              "logit": -7.042938232421875
+            }
+          ],
+          "dest_in_cands": false,
+          "dest_rank": null,
+          "gt_prefix_ok": false,
+          "gt_next": null,
+          "gt_next_in_cands": false,
+          "gt_next_rank": null,
+          "gt_next_logit": null,
+          "chosen_minus_gt_next": null,
+          "ctx_norm": 25.155345916748047,
+          "ctx_pred_norm": 25.155345916748047,
+          "ctx_gt_norm": 25.155345916748047,
+          "ctx_diff_norm": 0.0,
+          "cand_h_diff": null,
+          "dist_pred_to_dest": 0.34350496530532837,
+          "dist_gt_to_dest": null,
+          "dist_pred_minus_gt": null
+        },
+        {
+          "step": 157,
+          "cur_way": 4822,
+          "chosen_next": 4823,
+          "chosen_logit": -7.1005401611328125,
+          "topk": [
+            {
+              "way": 4823,
+              "logit": -7.1005401611328125
+            }
+          ],
+          "dest_in_cands": false,
+          "dest_rank": null,
+          "gt_prefix_ok": false,
+          "gt_next": null,
+          "gt_next_in_cands": false,
+          "gt_next_rank": null,
+          "gt_next_logit": null,
+          "chosen_minus_gt_next": null,
+          "ctx_norm": 20.500537872314453,
+          "ctx_pred_norm": 20.500537872314453,
+          "ctx_gt_norm": 20.500537872314453,
+          "ctx_diff_norm": 0.0,
+          "cand_h_diff": null,
+          "dist_pred_to_dest": 0.3446178138256073,
+          "dist_gt_to_dest": null,
+          "dist_pred_minus_gt": null
+        },
+        {
+          "step": 158,
+          "cur_way": 4823,
+          "chosen_next": 375,
+          "chosen_logit": -2.7623448371887207,
+          "topk": [
+            {
+              "way": 375,
+              "logit": -2.7623448371887207
+            },
+            {
+              "way": 2974,
+              "logit": -6.372384071350098
+            }
+          ],
+          "dest_in_cands": false,
+          "dest_rank": null,
+          "gt_prefix_ok": false,
+          "gt_next": null,
+          "gt_next_in_cands": false,
+          "gt_next_rank": null,
+          "gt_next_logit": null,
+          "chosen_minus_gt_next": null,
+          "ctx_norm": 16.8891658782959,
+          "ctx_pred_norm": 16.8891658782959,
+          "ctx_gt_norm": 16.8891658782959,
+          "ctx_diff_norm": 0.0,
+          "cand_h_diff": null,
+          "dist_pred_to_dest": 0.3457326292991638,
+          "dist_gt_to_dest": null,
+          "dist_pred_minus_gt": null
+        },
+        {
+          "step": 159,
+          "cur_way": 375,
+          "chosen_next": 18964,
+          "chosen_logit": -4.1005682945251465,
+          "topk": [
+            {
+              "way": 18964,
+              "logit": -4.1005682945251465
+            }
+          ],
+          "dest_in_cands": false,
+          "dest_rank": null,
+          "gt_prefix_ok": false,
+          "gt_next": null,
+          "gt_next_in_cands": false,
+          "gt_next_rank": null,
+          "gt_next_logit": null,
+          "chosen_minus_gt_next": null,
+          "ctx_norm": 19.52712059020996,
+          "ctx_pred_norm": 19.52712059020996,
+          "ctx_gt_norm": 19.52712059020996,
+          "ctx_diff_norm": 0.0,
+          "cand_h_diff": null,
+          "dist_pred_to_dest": 0.3464711308479309,
+          "dist_gt_to_dest": null,
+          "dist_pred_minus_gt": null
+        }
+      ]
+    }
+  ]
+}

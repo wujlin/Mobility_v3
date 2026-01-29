@@ -1,0 +1,14 @@
+{
+  "ok": true,
+  "task": "train_way_casd_autoencoder",
+  "created_at": "2026-01-28T23:47:25.268286+08:00",
+  "epoch": 100,
+  "train_loss": 0.05629488093973337,
+  "train_acc": 0.9775677180606102,
+  "val_loss": 0.23062417579372552,
+  "val_acc": 0.9458437291038134,
+  "best_val_loss": 0.1895594336777175,
+  "best_epoch": 51,
+  "save_every": 20,
+  "early_stop_patience": 0
+}

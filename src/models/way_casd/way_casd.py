@@ -33,6 +33,8 @@ class WayCASDAECfg:
     decoder_use_dir_query: bool = False
     # Candidate-aware cross-attention: each candidate queries z_enc separately.
     decoder_use_cand_query: bool = False
+    # Candidate contrast feature in scorer: include (cand_h - mean_cand_h).
+    decoder_use_cand_contrast: bool = False
     # Past context: encode past-K path with small Transformer (key fix for exposure bias)
     decoder_use_past_context: bool = False
     decoder_past_k: int = 8
@@ -91,6 +93,7 @@ class WayCASDAutoEncoder(nn.Module):
                 use_dest_query=bool(cfg.decoder_use_dest_query),
                 use_dir_query=bool(cfg.decoder_use_dir_query),
                 use_cand_query=bool(cfg.decoder_use_cand_query),
+                use_cand_contrast=bool(cfg.decoder_use_cand_contrast),
                 use_past_context=bool(cfg.decoder_use_past_context),
                 past_k=int(cfg.decoder_past_k),
                 past_n_layers=int(cfg.decoder_past_n_layers),

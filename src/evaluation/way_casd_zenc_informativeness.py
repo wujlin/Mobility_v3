@@ -109,19 +109,27 @@ def _infer_decoder_config_from_state(state: Dict[str, torch.Tensor]) -> Dict[str
     """Infer decoder config from checkpoint state dict."""
     cfg = {}
     
-    # use_dest_dist
+    # scorer features: use_dest_dist + use_cand_contrast
     w = state.get("decoder.scorer.0.weight", None)
     if w is not None and isinstance(w, torch.Tensor) and w.ndim == 2:
         hidden = int(w.shape[0])
         in_dim = int(w.shape[1])
-        delta = int(in_dim - hidden * 3)
-        # Historical variants:
-        # - no dest-dist scalar: in_dim == 3*hidden  -> delta == 0
-        # - with dest-dist scalar: in_dim == 3*hidden + 1 -> delta == 1
-        # Future-proof: any positive delta implies extra scalar features exist.
-        cfg["decoder_use_dest_dist"] = (delta != 0)
+        # Old: in_dim = 3*hidden (+1 if dest_dist)
+        # New: in_dim = 4*hidden (+1 if dest_dist) when cand_contrast enabled.
+        d4 = int(in_dim - hidden * 4)
+        d3 = int(in_dim - hidden * 3)
+        if d4 in (0, 1):
+            cfg["decoder_use_cand_contrast"] = True
+            cfg["decoder_use_dest_dist"] = bool(d4 == 1)
+        elif d3 in (0, 1):
+            cfg["decoder_use_cand_contrast"] = False
+            cfg["decoder_use_dest_dist"] = bool(d3 == 1)
+        else:
+            cfg["decoder_use_cand_contrast"] = False
+            cfg["decoder_use_dest_dist"] = True
     else:
         cfg["decoder_use_dest_dist"] = True
+        cfg["decoder_use_cand_contrast"] = False
     
     cfg["decoder_use_cross_attn"] = any(str(k).startswith("decoder.cross_attn.") for k in state.keys())
     cfg["decoder_use_step_emb"] = any(str(k).startswith("decoder.step_emb.") for k in state.keys())
@@ -185,6 +193,7 @@ def run(
             decoder_use_dest_query=bool(inferred.get("decoder_use_dest_query", False)),
             decoder_use_dir_query=bool(inferred.get("decoder_use_dir_query", False)),
             decoder_use_cand_query=bool(inferred.get("decoder_use_cand_query", False)),
+            decoder_use_cand_contrast=bool(inferred.get("decoder_use_cand_contrast", False)),
             decoder_use_past_context=bool(inferred.get("decoder_use_past_context", False)),
             decoder_past_k=int(inferred.get("decoder_past_k", 8)),
             decoder_past_n_layers=int(ae_cfg_dict.get("decoder_past_n_layers", 2)),

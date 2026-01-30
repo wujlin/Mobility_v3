@@ -17,6 +17,9 @@ class WayDecoderCfg:
     max_candidates: int = 32
     dropout: float = 0.1
     max_len: int = 128
+    # Candidate contrast feature in scorer: include (cand_h - mean_cand_h) so each candidate
+    # can be scored relative to others, not only independently.
+    use_cand_contrast: bool = False
     # Cross-attention for querying latent tokens
     use_cross_attn: bool = True
     n_cross_heads: int = 4
@@ -147,6 +150,7 @@ class WayDecoder(nn.Module):
         self.use_dest_query = bool(cfg.use_dest_query)
         self.use_dir_query = bool(cfg.use_dir_query)
         self.use_cand_query = bool(cfg.use_cand_query)
+        self.use_cand_contrast = bool(cfg.use_cand_contrast)
 
         self.register_buffer("way_adj_ptr", torch.as_tensor(way_adj_ptr, dtype=torch.long), persistent=False)
         self.register_buffer("way_adj_idx", torch.as_tensor(way_adj_idx, dtype=torch.long), persistent=False)
@@ -219,7 +223,7 @@ class WayDecoder(nn.Module):
         
         self.cur_proj = nn.Linear(d_model, hidden)
         self.cand_proj = nn.Linear(d_model, hidden)
-        in_dim = int(hidden * 3) + (1 if bool(cfg.use_dest_dist) else 0)
+        in_dim = int(hidden * (4 if self.use_cand_contrast else 3)) + (1 if bool(cfg.use_dest_dist) else 0)
         self.scorer = nn.Sequential(
             nn.Linear(in_dim, hidden),
             nn.SiLU(),
@@ -552,6 +556,13 @@ class WayDecoder(nn.Module):
         else:
             ctx_h = ctx_out
         cur_h2 = cur_h[:, None, :].expand(T, C, -1)
+
+        diff_from_mean: Optional[torch.Tensor] = None
+        if bool(self.use_cand_contrast):
+            mask_f = cand_mask[:, :, None].to(dtype=cand_h.dtype)  # (T,C,1)
+            denom = mask_f.sum(dim=1).clamp(min=1.0)  # (T,1)
+            mean_cand = (cand_h * mask_f).sum(dim=1) / denom  # (T,hidden)
+            diff_from_mean = (cand_h - mean_cand[:, None, :]) * mask_f  # (T,C,hidden)
         
         if bool(self.cfg.use_dest_dist):
             # Candidate-to-destination distance
@@ -565,9 +576,15 @@ class WayDecoder(nn.Module):
             except Exception:
                 cand_center = torch.zeros((T, C, 2), dtype=torch.float32, device=dest.device)
             dist = torch.norm(dest[:, None, :] - cand_center, dim=-1, keepdim=True)
-            x = torch.cat([ctx_h, cur_h2, cand_h, dist], dim=-1)
+            if diff_from_mean is not None:
+                x = torch.cat([ctx_h, cur_h2, cand_h, diff_from_mean, dist], dim=-1)
+            else:
+                x = torch.cat([ctx_h, cur_h2, cand_h, dist], dim=-1)
         else:
-            x = torch.cat([ctx_h, cur_h2, cand_h], dim=-1)
+            if diff_from_mean is not None:
+                x = torch.cat([ctx_h, cur_h2, cand_h, diff_from_mean], dim=-1)
+            else:
+                x = torch.cat([ctx_h, cur_h2, cand_h], dim=-1)
         
         logits = self.scorer(x).squeeze(-1)
         logits = logits.masked_fill(~cand_mask, float("-inf"))

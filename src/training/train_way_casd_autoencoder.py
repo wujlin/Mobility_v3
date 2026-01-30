@@ -50,6 +50,7 @@ class TrainCfg:
     decoder_use_dest_query: bool
     decoder_use_dir_query: bool
     decoder_use_cand_query: bool
+    decoder_use_cand_contrast: bool
     # Cross-attention
     decoder_use_cross_attn: bool
     # Past context
@@ -161,6 +162,11 @@ def build_argparser() -> argparse.ArgumentParser:
         action="store_true",
         help="Candidate-aware cross-attn: let each candidate query z_enc separately (decoder).",
     )
+    p.add_argument(
+        "--decoder_use_cand_contrast",
+        action="store_true",
+        help="Contrastive candidate feature in scorer: include (cand_h - mean_cand_h) to score candidates relatively.",
+    )
     # Cross-attention ablation
     p.add_argument(
         "--decoder_use_cross_attn",
@@ -210,6 +216,7 @@ def main() -> None:
         decoder_use_dest_query=bool(args.decoder_use_dest_query),
         decoder_use_dir_query=bool(args.decoder_use_dir_query),
         decoder_use_cand_query=bool(args.decoder_use_cand_query),
+        decoder_use_cand_contrast=bool(args.decoder_use_cand_contrast),
         decoder_use_cross_attn=bool(args.decoder_use_cross_attn),
         decoder_use_past_context=bool(args.decoder_use_past_context),
         decoder_past_k=int(args.decoder_past_k),
@@ -282,6 +289,7 @@ def main() -> None:
             decoder_use_dest_query=bool(cfg.decoder_use_dest_query),
             decoder_use_dir_query=bool(cfg.decoder_use_dir_query),
             decoder_use_cand_query=bool(cfg.decoder_use_cand_query),
+            decoder_use_cand_contrast=bool(cfg.decoder_use_cand_contrast),
             decoder_use_past_context=bool(cfg.decoder_use_past_context),
             decoder_past_k=int(cfg.decoder_past_k),
             decoder_past_n_layers=int(cfg.decoder_past_n_layers),

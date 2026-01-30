@@ -155,13 +155,36 @@ def _reverse_bfs_dist(*, rev_ptr: np.ndarray, rev_idx: np.ndarray, dest: int) ->
 
 
 def _infer_decoder_use_dest_dist_from_state(state: Dict[str, torch.Tensor]) -> bool:
+    # Backward-compatible inference based on scorer input dim.
+    # Old: in_dim = 3*hidden (+1 if dest_dist)
+    # New: in_dim = 4*hidden (+1 if dest_dist) when cand_contrast enabled.
     w = state.get("decoder.scorer.0.weight", None)
-    if w is not None and isinstance(w, torch.Tensor) and w.ndim == 2:
-        hidden = int(w.shape[0])
-        in_dim = int(w.shape[1])
-        delta = int(in_dim - hidden * 3)
-        return bool(delta != 0)
+    if not isinstance(w, torch.Tensor) or w.ndim != 2:
+        return True
+    hidden = int(w.shape[0])
+    in_dim = int(w.shape[1])
+    d4 = int(in_dim - hidden * 4)
+    if d4 in (0, 1):
+        return bool(d4 == 1)
+    d3 = int(in_dim - hidden * 3)
+    if d3 in (0, 1):
+        return bool(d3 == 1)
     return True
+
+
+def _infer_decoder_use_cand_contrast_from_state(state: Dict[str, torch.Tensor]) -> bool:
+    w = state.get("decoder.scorer.0.weight", None)
+    if not isinstance(w, torch.Tensor) or w.ndim != 2:
+        return False
+    hidden = int(w.shape[0])
+    in_dim = int(w.shape[1])
+    d4 = int(in_dim - hidden * 4)
+    if d4 in (0, 1):
+        return True
+    d3 = int(in_dim - hidden * 3)
+    if d3 in (0, 1):
+        return False
+    return False
 
 
 def _infer_flag(state: Dict[str, torch.Tensor], prefix: str) -> bool:
@@ -200,6 +223,7 @@ def run(
 
     inferred = {
         "decoder_use_dest_dist": _infer_decoder_use_dest_dist_from_state(state) if isinstance(state, dict) else True,
+        "decoder_use_cand_contrast": _infer_decoder_use_cand_contrast_from_state(state) if isinstance(state, dict) else False,
         "decoder_use_cross_attn": _infer_flag(state, "decoder.cross_attn.") if isinstance(state, dict) else True,
         "decoder_use_step_emb": _infer_flag(state, "decoder.step_emb.") if isinstance(state, dict) else False,
         "decoder_use_dest_query": _infer_flag(state, "decoder.dest_proj.") if isinstance(state, dict) else False,
@@ -256,6 +280,8 @@ def run(
         return ids[: min(int(cfg.n_routes), int(ids.size))]
 
     picks = {0: _pick_city(0), 1: _pick_city(1)}
+    cities = sorted(int(c) for c in picks.keys())
+    ways_used_by_city: Dict[int, set[int]] = {int(c): set() for c in cities}
 
     max_candidates = int(cfg.decode_max_candidates)
     if max_candidates < 0:
@@ -285,7 +311,7 @@ def run(
     t0 = time.time()
     done = 0
 
-    for city in (0, 1):
+    for city in cities:
         for rid in picks[int(city)].tolist():
             rid = int(rid)
             done += 1
@@ -293,6 +319,7 @@ def run(
             s = int(routes.way_seq_ptr[rid])
             gt = routes.way_seq_idx[s : s + L].astype(np.int64).tolist()
             gt = [int(x) for x in gt]
+            ways_used_by_city[int(city)].update(int(x) for x in gt)
 
             start_way = int(routes.start_way[rid])
             dest_way = int(routes.dest_way[rid])
@@ -464,6 +491,7 @@ def run(
                     cand_attn_topk_val = None
                     gt_attn_weight = None
                     pred_attn_weight = None
+                    attn_cos_pred_gt = None
                     gt_attn_topk_idx = None
                     gt_attn_topk_val = None
                     pred_attn_topk_idx = None
@@ -533,6 +561,12 @@ def run(
                         if bool(cfg.dump_attn) and isinstance(attn_dbg, torch.Tensor) and attn_dbg.ndim == 3:
                             # attn_dbg: (T,C,L); here T=1
                             w = attn_dbg[0].detach().to("cpu", dtype=torch.float32)  # (C,L)
+                            if gt_rank is not None and gt_in_sel:
+                                sel_list = [int(x) for x in cand_sel.detach().to("cpu").numpy().reshape(-1).tolist()]
+                                gt_pos2 = int(sel_list.index(int(gt_next)))
+                                attn_cos_pred_gt = float(
+                                    F.cosine_similarity(w[int(j)].unsqueeze(0), w[int(gt_pos2)].unsqueeze(0), dim=-1).item()
+                                )
                             if int(cfg.attn_topk) > 0:
                                 k = min(int(cfg.attn_topk), int(w.shape[1]))
                                 vals, idxs = torch.topk(w, k=k, dim=-1)  # (C,k)
@@ -580,6 +614,7 @@ def run(
                         "ctx_gt_norm": ctx_gt_norm,
                         "ctx_diff_norm": ctx_diff_norm,
                         "cand_h_diff": cand_h_diff,
+                        "attn_cos_pred_gt": attn_cos_pred_gt,
                         "attn_topk": int(cfg.attn_topk) if bool(cfg.dump_attn) else None,
                         "cand_attn_weights": cand_attn_weights,
                         "gt_attn_weight": gt_attn_weight,
@@ -714,6 +749,44 @@ def run(
     div_succ_full_frac = float(np.mean(div_succ_full_gt)) if div_succ_full_gt else None
     div_succ_sel_frac = float(np.mean(div_succ_sel_gt)) if div_succ_sel_gt else None
 
+    # --- Per-city diagnosis (Detroit vs Columbus) ---
+    way_sem = wf.get("way_semantic", None)
+    if way_sem is not None:
+        way_sem = np.asarray(way_sem, dtype=np.float32)
+
+    by_city: Dict[str, Dict[str, Any]] = {}
+    for c in cities:
+        rows_c = [r for r in per_route if int(r.get("city", -1)) == int(c)]
+        fail_c = [r for r in rows_c if not bool(r.get("success", False))]
+
+        outdeg_fail: List[float] = []
+        cos_fail: List[float] = []
+        for r in fail_c:
+            fd = r.get("first_div_transition", None)
+            if not isinstance(fd, dict):
+                continue
+            if fd.get("succ_full_n", None) is not None:
+                outdeg_fail.append(float(fd["succ_full_n"]))
+            if fd.get("attn_cos_pred_gt", None) is not None:
+                cos_fail.append(float(fd["attn_cos_pred_gt"]))
+
+        sem_var = None
+        if way_sem is not None:
+            ids = np.asarray(list(ways_used_by_city.get(int(c), set())), dtype=np.int64).reshape(-1)
+            ids = ids[(ids >= 0) & (ids < int(way_sem.shape[0]))]
+            if ids.size > 0:
+                v = np.var(way_sem[ids], axis=0)
+                sem_var = float(np.mean(v))
+
+        by_city[str(int(c))] = {
+            "city": int(c),
+            "n_eval": int(len(rows_c)),
+            "n_fail": int(len(fail_c)),
+            "first_div_outdeg_mean": float(np.mean(outdeg_fail)) if outdeg_fail else None,
+            "semantic_variance": sem_var,
+            "fail_cos_attn_mean": float(np.mean(cos_fail)) if cos_fail else None,
+        }
+
     out = {
         "ok": True,
         "task": "way_casd_oracle_step_diagnose",
@@ -760,6 +833,7 @@ def run(
             "diverged_success_min_hop_after_div_quantiles": _quantiles_int(recov_min_hop_after_div),
             "diverged_success_hop_drop_quantiles": _quantiles_int(recov_hop_drop),
         },
+        "city_diag": by_city,
         "per_route": per_route,
         "focus_traces": focus_traces,
     }

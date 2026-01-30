@@ -1,4 +1,4 @@
-
+# 文献综述
 
 ## 总体问题的“现有研究拼图”与缺口
 
@@ -43,9 +43,9 @@
 - **方向4（条件扩散与约束满足）**提供把约束写入生成过程的三类手段（条件输入、guidance、inpainting/投影），其中 RePaint 为“骨架固定+扩散填充”的关键锚点；  
 - **方向5（仿真平台）**提供跨层一致性为何重要的应用证据：模块化校准虽可运行，但难保证联合一致性与误差可追踪。
 
-# 方向1：合成人口生成（Synthetic Population Generation）
+## 方向1：合成人口生成（Synthetic Population Generation）
 
-## 1.1 传统方法怎么做（IPF / IPU / MCMC / BN）
+### 1.1 传统方法怎么做（IPF / IPU / MCMC / BN）
 
 * **IPF（Iterative Proportional Fitting）**：用样本微观数据（PUMS/HTS）+ 区域边际统计（census marginals）进行反复配平，得到个体/家庭权重，使得合成数据边际与目标边际一致。典型应用是“创建基线合成人口”。([ScienceDirect][1])
 * **IPU（Iterative Proportional Updating）**：在 IPF 基础上针对“家庭—个体双层边际”做更新，使得 household 与 person 控制量能同时匹配。([ScienceDirect][2])
@@ -53,12 +53,12 @@
 * **贝叶斯网络（BN）**：学习属性之间的依赖结构（有向图），再采样生成；优点是结构可解释，缺点是高维/复杂依赖下建模与校准仍难。
 * **层次/结构建模**：把家庭成员关系（如配偶/亲子）作为结构关系显式进入模型，提升“家庭结构一致性”。
 
-## 1.2 深度生成（VAE/GAN/扩散）做了什么
+### 1.2 深度生成（VAE/GAN/扩散）做了什么
 
 * **VAE/GAN 用于合成人口**已经不少：核心价值是缓解“维度灾难”、补齐样本缺失组合（sampling zeros），但会引入“结构零”（本应为0却生成了）。
 * **扩散用于合成人口**：近两三年开始出现。已有工作把 DDPM 用到人口合成，并提出后处理/约束过滤以降低结构零。
 
-## 1.3 现有局限（与你们问题的对照）
+### 1.3 现有局限（与你们问题的对照）
 
 * **层次一致性**：家庭—个体、个体—活动、活动—轨迹跨层联动难以保证；传统方法多“分步配平”，深度方法多“分布拟合”，都缺少“跨层结构耦合”。
 * **混合离散+连续**：年龄/收入（连续或分箱）、职业/性别（离散）混合；扩散/连续生成需 embedding 或离散扩散（D3PM等）。
@@ -67,9 +67,9 @@
 
 ---
 
-## 1.4 方向1 代表性文献（按你要求的卡片格式）
+### 1.4 方向1 代表性文献（按你要求的卡片格式）
 
-### (1) 传统/基线：IPF
+#### (1) 传统/基线：IPF
 
 【标题】Creating Synthetic Baseline Populations
 【作者，年份，venue】Beckman, Baggerly, McKay, 1996（技术报告/交通领域基线方法）([ScienceDirect][1])
@@ -86,7 +86,7 @@
 
 ---
 
-### (2) 传统：IPU（双层控制）
+#### (2) 传统：IPU（双层控制）
 
 【标题】Iterative Proportional Updating (IPU) / 同步家庭—个体配平
 【作者，年份，venue】Ye et al., 2009（人口合成/交通需求建模常用）([ScienceDirect][2])
@@ -103,7 +103,7 @@
 
 ---
 
-### (3) 结构学习：贝叶斯网络 PopSyn
+#### (3) 结构学习：贝叶斯网络 PopSyn
 
 【标题】A Bayesian network approach for population synthesis
 【作者，年份，venue】Sun & Erath, 2015, Transportation Research Part C
@@ -120,7 +120,7 @@
 
 ---
 
-### (4) 显式层次结构建模：家庭结构一致性
+#### (4) 显式层次结构建模：家庭结构一致性
 
 【标题】A hierarchical mixture modeling framework for population synthesis
 【作者，年份，venue】Sun et al., 2018, Transportation Research Part B
@@ -137,7 +137,7 @@
 
 ---
 
-### (5) 深度生成：VAE/GAN 缓解 sampling zeros，但会引入 structural zeros
+#### (5) 深度生成：VAE/GAN 缓解 sampling zeros，但会引入 structural zeros
 
 【标题】A deep generative model for feasible and diverse population synthesis
 【作者，年份，venue】Kim & Bansal, 2023, Transportation Research Part C
@@ -154,7 +154,7 @@
 
 ---
 
-### (6) 深度生成：VAE/CVAE 处理 household-person 层次
+#### (6) 深度生成：VAE/CVAE 处理 household-person 层次
 
 【标题】Generative population synthesis for joint household and individual characteristics
 【作者，年份，venue】Aemmer & MacKenzie, 2022, （ScienceDirect/期刊论文）
@@ -171,7 +171,7 @@
 
 ---
 
-### (7) 合成人口中的扩散：WSC 2023 首批尝试之一
+#### (7) 合成人口中的扩散：WSC 2023 首批尝试之一
 
 【标题】Generating population synthesis using a diffusion model
 【作者，年份，venue】Kang et al., 2023, Winter Simulation Conference (WSC) Proceedings
@@ -188,7 +188,7 @@
 
 ---
 
-### (8) 合成人口中的扩散：2025 更“面向可行性/多样性”度量
+#### (8) 合成人口中的扩散：2025 更“面向可行性/多样性”度量
 
 【标题】Generating Feasible and Diverse Synthetic Populations Using Diffusion Models
 【作者，年份，venue】Tang et al., 2025, arXiv:2508.09164
@@ -205,7 +205,7 @@
 
 ---
 
-### (9) “纯硬约束”路线：约束编程生成精确统计、完全一致的合成人口
+#### (9) “纯硬约束”路线：约束编程生成精确统计、完全一致的合成人口
 
 【标题】Exact Synthetic Populations for Scalable Societal and Market Modeling
 【作者，年份，venue】Petit & Pachot, 2025, arXiv:2512.07306
@@ -222,9 +222,9 @@
 
 ---
 
-# 方向2：活动-出行生成（Activity–Travel Pattern Generation）
+## 方向2：活动-出行生成（Activity–Travel Pattern Generation）
 
-## 2.1 Activity-based model（ABM）的经典框架是什么？
+### 2.1 Activity-based model（ABM）的经典框架是什么？
 
 典型 ABM 核心思想是**“出行需求源于活动需求”**，从人口属性出发生成一日活动计划（活动类型、顺序、时间、地点、方式），再进入网络加载/交通分配。MATSim、SimMobility 都明确以“活动计划/活动日程”为核心输入。
 
@@ -234,14 +234,14 @@
 * ALBATROSS（规则/学习结合的活动计划生成系统）
 * DaySim、CT-RAMP、ActivitySim 等工程化平台/框架
 
-## 2.2 怎么从人口属性生成活动链/出行需求？
+### 2.2 怎么从人口属性生成活动链/出行需求？
 
 主流是**分层决策**：
 
 * 先决定活动参与（是否工作/购物/接送等）、主活动（primary tour），再决定次活动插入（secondary tours）、时段与持续时间，最后决定目的地/方式/路径。
 * 家庭约束（带娃、车拥有、同住成员）与资源约束（车辆、时间窗）会进入 choice-set 或约束过滤。
 
-## 2.3 深度学习最新进展？是否有生成模型？
+### 2.3 深度学习最新进展？是否有生成模型？
 
 有，而且近两年开始出现“把活动日程当作生成对象”的工作：
 
@@ -253,9 +253,9 @@
 
 ---
 
-## 2.4 方向2 代表性文献卡片
+### 2.4 方向2 代表性文献卡片
 
-### (1) ABM 经典：活动基出行需求框架
+#### (1) ABM 经典：活动基出行需求框架
 
 【标题】Activity-based disaggregate travel demand model system with activity schedules
 【作者，年份，venue】Bowman & Ben-Akiva, 2001（经典ABM框架）
@@ -272,7 +272,7 @@
 
 ---
 
-### (2) 工程化系统：ALBATROSS
+#### (2) 工程化系统：ALBATROSS
 
 【标题】ALBATROSS: A learning-based transportation oriented simulation system
 【作者，年份，venue】Arentze & Timmermans（ALBATROSS 系列，约2000前后）
@@ -289,7 +289,7 @@
 
 ---
 
-### (3) 开源/应用广：DaySim
+#### (3) 开源/应用广：DaySim
 
 【标题】DaySim（activity-based travel demand microsimulation）
 【作者，年份，venue】DaySim 项目/文档与系列论文（开源实现）
@@ -305,7 +305,7 @@
 
 ---
 
-### (4) 工业级 ABM：CT-RAMP / ActivitySim
+#### (4) 工业级 ABM：CT-RAMP / ActivitySim
 
 【标题】CT-RAMP / ActivitySim（ABM框架）
 【作者，年份，venue】CT-RAMP 计划文档；ActivitySim 开源框架
@@ -322,7 +322,7 @@
 
 ---
 
-### (5) 深度学习+领域知识：活动模式生成
+#### (5) 深度学习+领域知识：活动模式生成
 
 【标题】A novel activity pattern generation incorporating deep learning for transport demand models
 【作者，年份，venue】Phan & Vu, 2021, arXiv:2104.02278
@@ -339,7 +339,7 @@
 
 ---
 
-### (6) 深度生成：VAE 直接学“活动日程分布”
+#### (6) 深度生成：VAE 直接学“活动日程分布”
 
 【标题】Synthesising activity participations and scheduling with deep generative machine learning
 【作者，年份，venue】Shone & Hillel, 2025, Transportation Research Part C（Open Access）
@@ -356,7 +356,7 @@
 
 ---
 
-### (7) 条件生成：ActVAE（labels→schedule）
+#### (7) 条件生成：ActVAE（labels→schedule）
 
 【标题】ActVAE: Modelling human activity schedules with a deep conditional generative approach
 【作者，年份，venue】Shone et al., 2025, Transportation Research Part B（arXiv 版本）
@@ -373,15 +373,15 @@
 
 ---
 
-# 方向3：轨迹生成中的扩散模型（Trajectory Diffusion / Mobility Generation）
+## 方向3：轨迹生成中的扩散模型（Trajectory Diffusion / Mobility Generation）
 
-## 3.1 最新工作有哪些？（扩散已进入轨迹生成）
+### 3.1 最新工作有哪些？（扩散已进入轨迹生成）
 
 * **DiffTraj**：提出时空扩散模型生成 GPS 轨迹，用 Traj-UNet 嵌入条件信息并逐步去噪生成轨迹。
 * **Diff-RNTraj**：提出“路网约束轨迹生成（RNTraj）”新问题，直接在路网坐标系生成：每个点由**离散路段+连续移动率**组成（混合数据），通过“嵌入到连续表示→扩散→解码回混合格式”，并设计损失增强空间有效性；同时指出传统“先生成GPS再 map-matching”的两阶段会降低质量且不可靠。
 * 近年还有“自回归扩散/Transformer+扩散”的轨迹生成尝试（更强调长序列与条件控制）。
 
-## 3.2 路网约束怎么处理？
+### 3.2 路网约束怎么处理？
 
 可归纳为三类（对应你们写“技术路线/关键难点”很有用）：
 
@@ -389,7 +389,7 @@
 2. **硬约束（hard constraint）**：直接在路网离散空间生成（路段序列/节点序列），或生成后做投影/修复（map-matching、投影、约束解码）。Diff-RNTraj 属于“在结构空间内生成”的路线。
 3. **图结构/混合表示**：把轨迹表示为图上的离散序列 + 连续属性（时间/速度/停留），再用混合建模（embedding + 连续扩散或离散扩散）。Diff-RNTraj 明确讨论这种混合点表示。
 
-## 3.3 条件生成怎么做（OD、时间等）
+### 3.3 条件生成怎么做（OD、时间等）
 
 轨迹扩散常见条件包括：
 
@@ -399,16 +399,16 @@
 
 你们如果要把“宏观流量模式（OD、时段流量）”转成微观轨迹/链，可以把这些宏观量写成**条件向量/条件场**，并用 CFG/能量指导/投影来匹配。
 
-## 3.4 扩散在轨迹上的局限（你们可写成“科学问题/挑战”）
+### 3.4 扩散在轨迹上的局限（你们可写成“科学问题/挑战”）
 
 * **两阶段（GPS→map-matching）误差**：Diff-RNTraj 明确指出 map-matching 在带误差 GPS 上不可靠，质量会下降。
 * **强指导/硬约束下的多样性坍缩风险**：扩散指导普遍存在“质量—多样性”权衡；当指导尺度很大或约束很硬时，样本容易向少数模式集中（你们提到“坍缩到最短路”正是这种现象的轨迹版本）。这一点在 CFG 机理分析与“条件退火采样”等工作中被系统讨论（方向4会给可引用的文献）。
 
 ---
 
-## 3.5 方向3 代表性文献卡片
+### 3.5 方向3 代表性文献卡片
 
-### (1) 扩散生成 GPS 轨迹：DiffTraj
+#### (1) 扩散生成 GPS 轨迹：DiffTraj
 
 【标题】DiffTraj: Generating GPS Trajectory with Diffusion Probabilistic Model
 【作者，年份，venue】Zhu et al., 2023, arXiv:2304.11582（NeurIPS 相关工作流派）
@@ -425,7 +425,7 @@
 
 ---
 
-### (2) 路网约束轨迹：Diff-RNTraj（混合离散+连续）
+#### (2) 路网约束轨迹：Diff-RNTraj（混合离散+连续）
 
 【标题】Diff-RNTraj: A Structure-aware Diffusion Model for Road Network-constrained Trajectory Generation
 【作者，年份，venue】arXiv:2402.07369, 2024
@@ -443,7 +443,7 @@
 
 ---
 
-### (3) 自回归扩散轨迹：Traveller（长序列/模式感知方向）
+#### (3) 自回归扩散轨迹：Traveller（长序列/模式感知方向）
 
 【标题】Travel-Pattern Aware Trajectory Generation via Autoregressive Diffusion Models (Traveller)
 【作者，年份，venue】Luo et al., 2025（Information Sciences/相关期刊条目）
@@ -459,7 +459,7 @@
 
 ---
 
-### (4) Transformer + 扩散的轨迹生成
+#### (4) Transformer + 扩散的轨迹生成
 
 【标题】Diffusion Models with Transformer for GPS Trajectory Generation
 【作者，年份，venue】Xu et al., 2025, arXiv
@@ -475,9 +475,9 @@
 
 ---
 
-# 方向4：条件扩散与约束满足（Conditional Diffusion + Constraints）
+## 方向4：条件扩散与约束满足（Conditional Diffusion + Constraints）
 
-## 4.1 条件扩散主流方法谱系
+### 4.1 条件扩散主流方法谱系
 
 你可以在本子里把条件扩散分成三大类（利于对照你们“自适应耦合”）：
 
@@ -488,7 +488,7 @@
    * **classifier-free guidance（CFG）**（同时训练有/无条件模型，推理时线性组合）
 3. **部分观测/补全（inpainting / imputation）**：固定一部分变量/时间点/空间点，其余由扩散补全；RePaint 是典型“只改采样过程、不改网络”的条件注入范式。
 
-## 4.2 硬约束 vs 软约束怎么注入？
+### 4.2 硬约束 vs 软约束怎么注入？
 
 * **软约束（倾向满足）**：把约束写成可微能量/损失，在采样时做 loss-guidance 或能量引导（如 loss-guided diffusion、posterior sampling 等）。
 * **硬约束（必须满足）**：典型两条路
@@ -496,23 +496,23 @@
   1. **投影/可行性映射**：每一步/最终把样本投影到可行集（Projected Diffusion Models 等）。
   2. **结构化生成空间**：直接在可行结构空间里生成（例如路网离散空间、图生成的离散扩散）。
 
-## 4.3 扩散在非图像：时序/图/表格/混合数据
+### 4.3 扩散在非图像：时序/图/表格/混合数据
 
 * **时序/时间序列**：TimeGrad 把扩散用于多元概率预测，本质是逐步从噪声采样恢复分布。
 * **离散数据**：D3PM（结构化离散扩散）为离散状态空间的扩散提供基础。
 * **图生成**：DiGress 用离散扩散在图结构上做边增删与类别变化，并提出图级条件生成。
 * **表格数据**：TabDDPM 等让扩散适配 tabular（你们做合成人口/混合属性时可引用）。
 
-## 4.4 “强结构约束下扩散的局限”：多样性坍缩/模式集中
+### 4.4 “强结构约束下扩散的局限”：多样性坍缩/模式集中
 
 * **CFG 是主流条件控制方法**，但其本身存在“控制强度↑ → 多样性↓”的普遍权衡；近期有专门分析 CFG 动态的工作与“条件退火采样（CADS）”等方法试图改善多样性。
 * 当约束像“必须走路网、必须满足OD、必须满足时段流量”这类强结构时，如果只靠 guidance，确实容易出现你说的那类“收敛到少数典型/最短路”的现象——**这正是你们需要“显式结构骨架 + 扩散填充”来分解难度的动机**（先把骨架放在可行域，再让扩散补多样细节）。
 
 ---
 
-## 4.5 方向4 代表性文献卡片
+### 4.5 方向4 代表性文献卡片
 
-### (1) CFG：主流条件控制
+#### (1) CFG：主流条件控制
 
 【标题】Classifier-Free Diffusion Guidance
 【作者，年份，venue】Ho & Salimans, 2022, arXiv:2207.12598
@@ -528,7 +528,7 @@
 
 ---
 
-### (2) Inpainting：固定骨架/锚点，扩散填细节（结构+扩散的强先例）
+#### (2) Inpainting：固定骨架/锚点，扩散填细节（结构+扩散的强先例）
 
 【标题】RePaint: Inpainting using Denoising Diffusion Probabilistic Models
 【作者，年份，venue】Lugmayr et al., 2022, CVPR
@@ -545,7 +545,7 @@
 
 ---
 
-### (3) 离散扩散：为“离散属性/结构”提供扩散基础
+#### (3) 离散扩散：为“离散属性/结构”提供扩散基础
 
 【标题】Structured Denoising Diffusion Models in Discrete State-Spaces (D3PM)
 【作者，年份，venue】Austin et al., 2021, arXiv:2107.03006
@@ -561,7 +561,7 @@
 
 ---
 
-### (4) 图上的离散扩散：结构化生成与条件控制
+#### (4) 图上的离散扩散：结构化生成与条件控制
 
 【标题】DiGress: Discrete Denoising diffusion for graph generation
 【作者，年份，venue】Vignac et al., ICLR 2023 (arXiv:2209.14734)
@@ -576,7 +576,7 @@
 
 ---
 
-### (5) 时间序列扩散：非图像扩散的代表
+#### (5) 时间序列扩散：非图像扩散的代表
 
 【标题】Autoregressive Denoising Diffusion Models for Multivariate Probabilistic Time Series Forecasting (TimeGrad)
 【作者，年份，venue】Rasul et al., ICML 2021
@@ -591,7 +591,7 @@
 
 ---
 
-### (6) 硬约束/优化：扩散与可行域的交互（补充你们“硬约束注入”背景）
+#### (6) 硬约束/优化：扩散与可行域的交互（补充你们“硬约束注入”背景）
 
 【标题】DiOpt: Self-supervised Diffusion for Constrained Optimization
 【作者，年份，venue】2025, arXiv:2502.10330
@@ -606,9 +606,9 @@
 
 ---
 
-# 方向5：城市数字孪生中的人口/行为模拟（Urban Digital Twin / ABM Platforms）
+## 方向5：城市数字孪生中的人口/行为模拟（Urban Digital Twin / ABM Platforms）
 
-## 5.1 数字孪生对合成人口与行为模拟的需求
+### 5.1 数字孪生对合成人口与行为模拟的需求
 
 数字孪生要“可解释、可控、可校准、可复现”，而人口与行为层面常见需求是：
 
@@ -617,7 +617,7 @@
 * **隐私合规**（用合成数据替代敏感微观数据）
 * **跨尺度联动**（长期位置选择 ↔ 日常活动链 ↔ 秒级交通运行）
 
-## 5.2 主流平台如何生成虚拟人口与行为？
+### 5.2 主流平台如何生成虚拟人口与行为？
 
 * **UrbanSim**：作为土地利用微观仿真模型，用于评估土地政策与基础设施投资影响。
 * **MATSim**：活动基、多智能体交通仿真框架，跟踪合成旅行者的日/周活动计划以产生交通与拥堵。
@@ -628,9 +628,9 @@
 
 ---
 
-## 5.3 方向5 代表性文献卡片
+### 5.3 方向5 代表性文献卡片
 
-### (1) UrbanSim：土地利用微观仿真与交通耦合
+#### (1) UrbanSim：土地利用微观仿真与交通耦合
 
 【标题】UrbanSim: Modeling Urban Development for Land Use, Transportation and Environmental Planning（及 UrbanSim 平台文档）
 【作者，年份，venue】Waddell, 2002, JAPA；UrbanSim 文档
@@ -647,7 +647,7 @@
 
 ---
 
-### (2) MATSim：活动计划驱动的多智能体交通仿真
+#### (2) MATSim：活动计划驱动的多智能体交通仿真
 
 【标题】Introducing MATSim / MATSim book (part one)
 【作者，年份，venue】Horni et al., 2016（书章/介绍）
@@ -663,7 +663,7 @@
 
 ---
 
-### (3) SimMobility：多尺度集成数字孪生平台
+#### (3) SimMobility：多尺度集成数字孪生平台
 
 【标题】A Multi-Scale Integrated Agent-based Simulation Platform（SimMobility 框架论文）
 【作者，年份，venue】Adnan et al., TRB 2016（框架论文）
@@ -680,7 +680,7 @@
 
 ---
 
-### (4) SimMobility 的“企业/设施合成”侧：虚拟城市要合成的不止人口
+#### (4) SimMobility 的“企业/设施合成”侧：虚拟城市要合成的不止人口
 
 【标题】Constructing a Synthetic Population of Establishments for incorporation into SimMobility
 【作者，年份，venue】Le et al., 2016（SimMobility 相关论文）
@@ -695,9 +695,9 @@
 
 ---
 
-# 特别需要确认的问题：结论性回答（可直接写进“国内外研究现状评述/科学问题凝练”）
+## 特别需要确认的问题：结论性回答（可直接写进“国内外研究现状评述/科学问题凝练”）
 
-## Q1：有没有人做过“属性→位置→行为”的端到端生成？如何保证层次一致性？
+### Q1：有没有人做过“属性→位置→行为”的端到端生成？如何保证层次一致性？
 
 **严格意义的“属性→位置→活动链→轨迹”端到端生成并同时保证多层统计一致性**，在我检索到的交通/城市计算文献里**仍不算成熟主流**。更常见的是：
 
@@ -705,7 +705,7 @@
 * 近年有“合成属性 + 合成序列行为（位置序列/出行序列）”的生成式尝试，如 CTGAN 组合 GAN 生成 tabular 与 sequential（轨迹/位置序列）。
   但这些工作多**缺少“层次化一致性”机制**（例如家庭—个体—活动—轨迹的硬结构与统计闭环）。这正是你们“层次化条件扩散 + 显式结构耦合”的关键空白位。
 
-## Q2：扩散在“合成人口”或“活动链生成”上有应用吗？还是主要在轨迹层面？
+### Q2：扩散在“合成人口”或“活动链生成”上有应用吗？还是主要在轨迹层面？
 
 * **合成人口：有，且刚起步**。WSC 2023 已有 DDPM 用于人口合成并结合规则后处理降低结构零；2025 又出现面向“可行性/多样性”的扩散人口合成工作。
 * **活动链/活动日程：扩散不是主流**。目前更常见的是 VAE/CVAE 等深度生成模型（Shone & Hillel 2025 TRC；ActVAE 2025 TRB）。
@@ -713,7 +713,7 @@
 
 > 这对你们写“创新性”很有利：**把扩散从轨迹层上升到‘属性—位置—行为’的层次化一致生成**，并把统计约束与显式结构耦合进生成过程。
 
-## Q3：有没有讨论“扩散在强结构约束下的局限”？比如轨迹生成坍缩到最短路？
+### Q3：有没有讨论“扩散在强结构约束下的局限”？比如轨迹生成坍缩到最短路？
 
 目前在你们领域（城市轨迹/出行）里，对“坍缩到最短路”的**专门系统讨论**还不算多，但相关“根因”在扩散社区已有共识：
 
@@ -724,7 +724,7 @@
 
 > “在强结构约束（路网、活动时序、资源约束）与强统计约束（OD/时段流量/空间分布）同时存在时，纯 guidance 或纯后处理往往导致多样性坍缩或可行性不足；需要结构化分解与生成过程内耦合。”
 
-## Q4：“显式结构 + 扩散生成”的耦合有没有先例（规则骨架+扩散填充细节）？
+### Q4：“显式结构 + 扩散生成”的耦合有没有先例（规则骨架+扩散填充细节）？
 
 **有明确先例，而且可以直接引用**：
 
@@ -738,7 +738,7 @@
 
 ---
 
-## 你们本子里可以直接用的“研究空白”表述（建议写法）
+### 你们本子里可以直接用的“研究空白”表述（建议写法）
 
 结合上面文献，你们可以把科学问题落在三句话：
 
@@ -747,4 +747,3 @@
 3. **结构×生成的机制空白**：已有 inpainting/后处理式“结构×扩散”先例，但缺乏面向城市行为的“生成过程内、可自适应、可层次化”的结构—扩散耦合框架。
 
 ---
-

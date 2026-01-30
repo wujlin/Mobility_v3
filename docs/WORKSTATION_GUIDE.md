@@ -16,7 +16,7 @@
 ### 1.1 工作站 A（训练/大规模处理）
 
 - **设备信息（最小可复现口径）**：
-  - hostname/别名：`wsA`（ssh config）
+  - hostname/别名：`wsa`（ssh config；兼容旧别名 `wsA`）
   - OS/Kernel：以 `uname -a` 为准
   - CPU：24C/48T（已知；以 `lscpu` 为准）
   - GPU：以 `nvidia-smi` 为准
@@ -97,7 +97,7 @@ df -h | head
 ### 1.2 本地 WSL（写作/轻量分析/拉图）
 
 - **仓库路径（WSL）**：`/mnt/e/newdesktop/HKUST/GeoExplicit_SFM/v3`
-- 若需要从工作站拉取图/JSON：使用 `rsync -avP wsA:... local/...`（见第 6 节）
+- 若需要从工作站拉取图/JSON：使用 `rsync -avP wsa:... local/...`（见第 6 节）
 
 ---
 
@@ -205,11 +205,49 @@ python -m src.data.worldtrace.build_detroit_segments \
 
 ## 6) 跨机器传输（图/JSON/小产物）
 
-从工作站 A 拉图到本地（WSL）示例：
+### 6.0 代码仓库同步（本地 → wsa）
+
+> 目标：**本地改代码 → 同步到工作站跑 → rsync 结果回本地给 PI review**。  
+> 原则：只同步“代码/脚本/小文档”，**不要**把 `$RAW_ROOT/` 或大产物同步到 git 仓库目录里。
+
+**推荐做法（wsa 可访问 git remote）**：直接在工作站拉取最新代码
 
 ```bash
-rsync -avP wsA:"$RAW_ROOT/worldtrace/detroit_core_v1/story/" \
-  "/mnt/e/newdesktop/HKUST/GeoExplicit_SFM/v3/essay/figures/worldtrace_detroit/story/"
+ssh wsa "cd ~/projects/Mobility_v3 && git pull"
+```
+
+**备选做法（wsa 无法 git pull：无网/权限）**：从本地用 `rsync` 推送代码
+
+```bash
+# 本地：在仓库根目录执行（pwd == <repo_root>）
+rsync -avP \
+  --exclude ".git/" \
+  --exclude "__pycache__/" \
+  --exclude ".pytest_cache/" \
+  --exclude ".mypy_cache/" \
+  --exclude ".ruff_cache/" \
+  --exclude ".venv/" \
+  --exclude "_sync/" \
+  --exclude "data/" \
+  ./ wsa:"~/projects/Mobility_v3/"
+```
+
+> [!WARNING]
+> 不要默认加 `--delete`。如果你确实需要镜像同步：先 `--dry-run` 预演，再确认远端目录有备份/在版本控制中。
+
+从工作站 A 拉图到本地示例（建议先落到 `_sync/wsa/...`，再用软链接接入论文/报告目录）：
+
+```bash
+rsync -avP wsa:"$RAW_ROOT/worldtrace/detroit_core_v1/story/" \
+  "_sync/wsa/worldtrace_detroit/story/"
+```
+
+从工作站拉回某次实验 `out_dir`（通用模板）：
+
+```bash
+# 约定：远端 out_dir 位于 $RAW_ROOT/experiments/...；本地统一落到 _sync/wsa/...
+rsync -avP wsa:"$RAW_ROOT/experiments/<proj>/<EXP_DIR>/" \
+  "_sync/wsa/<proj>/<EXP_DIR>/"
 ```
 
 建议：

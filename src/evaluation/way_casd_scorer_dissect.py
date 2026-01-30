@@ -4,7 +4,7 @@
 核心问题：为什么 gt_rank=2 如此稳定（93% 的失败样本）？
 
 分解目标：
-- scorer 输入 = [ctx_h, cur_h, cand_h, dist]
+- scorer 输入 = [ctx_h, cur_h, cand_h, (cand_h - mean_cand_h), dist]
 - 对于 pred_next 和 gt_next，分别计算各部分的差异
 
 关键指标：
@@ -59,13 +59,35 @@ def _dow_from_unix(start_t: int, tz_offset_hours: float) -> int:
 
 
 def _infer_decoder_use_dest_dist_from_state(state: Dict[str, torch.Tensor]) -> bool:
+    # Old: in_dim = 3*hidden (+1 if dest_dist)
+    # New: in_dim = 4*hidden (+1 if dest_dist) when cand_contrast enabled.
     w = state.get("decoder.scorer.0.weight", None)
-    if w is not None and isinstance(w, torch.Tensor) and w.ndim == 2:
-        hidden = int(w.shape[0])
-        in_dim = int(w.shape[1])
-        delta = int(in_dim - hidden * 3)
-        return bool(delta != 0)
+    if not isinstance(w, torch.Tensor) or w.ndim != 2:
+        return True
+    hidden = int(w.shape[0])
+    in_dim = int(w.shape[1])
+    d4 = int(in_dim - hidden * 4)
+    if d4 in (0, 1):
+        return bool(d4 == 1)
+    d3 = int(in_dim - hidden * 3)
+    if d3 in (0, 1):
+        return bool(d3 == 1)
     return True
+
+
+def _infer_decoder_use_cand_contrast_from_state(state: Dict[str, torch.Tensor]) -> bool:
+    w = state.get("decoder.scorer.0.weight", None)
+    if not isinstance(w, torch.Tensor) or w.ndim != 2:
+        return False
+    hidden = int(w.shape[0])
+    in_dim = int(w.shape[1])
+    d4 = int(in_dim - hidden * 4)
+    if d4 in (0, 1):
+        return True
+    d3 = int(in_dim - hidden * 3)
+    if d3 in (0, 1):
+        return False
+    return False
 
 
 def _infer_flag(state: Dict[str, torch.Tensor], prefix: str) -> bool:
@@ -109,6 +131,7 @@ def run(
 
     inferred = {
         "decoder_use_dest_dist": _infer_decoder_use_dest_dist_from_state(state) if isinstance(state, dict) else bool(ckpt_cfg.get("decoder_use_dest_dist", True)),
+        "decoder_use_cand_contrast": _infer_decoder_use_cand_contrast_from_state(state) if isinstance(state, dict) else bool(ckpt_cfg.get("decoder_use_cand_contrast", False)),
         "decoder_use_cross_attn": _infer_flag(state, "decoder.cross_attn.") if isinstance(state, dict) else bool(ckpt_cfg.get("decoder_use_cross_attn", True)),
         "decoder_use_past_context": _infer_flag(state, "decoder.past_encoder.") if isinstance(state, dict) else bool(ckpt_cfg.get("decoder_use_past_context", False)),
         "decoder_use_step_emb": _infer_flag(state, "decoder.step_emb.") if isinstance(state, dict) else bool(ckpt_cfg.get("decoder_use_step_emb", False)),
@@ -132,6 +155,7 @@ def run(
         decoder_use_dest_query=bool(inferred["decoder_use_dest_query"]),
         decoder_use_dir_query=bool(inferred["decoder_use_dir_query"]),
         decoder_use_cand_query=bool(inferred["decoder_use_cand_query"]),
+        decoder_use_cand_contrast=bool(inferred["decoder_use_cand_contrast"]),
         decoder_use_past_context=bool(inferred["decoder_use_past_context"]),
         decoder_past_k=int(ckpt_cfg.get("decoder_past_k", 8)),
         decoder_past_n_layers=int(ckpt_cfg.get("decoder_past_n_layers", 2)),
@@ -345,6 +369,14 @@ def run(
                     
                     hidden_dim = int(ctx_h.shape[0])
                     
+                    use_cand_contrast = bool(getattr(ae.decoder.cfg, "use_cand_contrast", False))
+                    diff_pred_t = None
+                    diff_gt_t = None
+                    if use_cand_contrast:
+                        mean_cand = cand_h[0].mean(dim=0)  # (hidden,)
+                        diff_pred_t = cand_h_pred - mean_cand
+                        diff_gt_t = cand_h_gt - mean_cand
+
                     # Construct scorer input for pred and gt
                     if ae.decoder.cfg.use_dest_dist:
                         coord_scale = float(getattr(ae.way_enc, "coord_scale", 1024.0))
@@ -355,12 +387,20 @@ def run(
                         
                         cand_geom_gt, _, _ = ae.way_enc._lookup(torch.tensor([[gt_next]], dtype=torch.long, device=device))
                         dist_gt_t = torch.norm(dest_norm - cand_geom_gt[0, 0, :2]).unsqueeze(0)
-                        
-                        x_pred = torch.cat([ctx_h, cur_h_vec, cand_h_pred, dist_pred_t])
-                        x_gt = torch.cat([ctx_h, cur_h_vec, cand_h_gt, dist_gt_t])
+
+                        if use_cand_contrast and diff_pred_t is not None and diff_gt_t is not None:
+                            x_pred = torch.cat([ctx_h, cur_h_vec, cand_h_pred, diff_pred_t, dist_pred_t])
+                            x_gt = torch.cat([ctx_h, cur_h_vec, cand_h_gt, diff_gt_t, dist_gt_t])
+                        else:
+                            x_pred = torch.cat([ctx_h, cur_h_vec, cand_h_pred, dist_pred_t])
+                            x_gt = torch.cat([ctx_h, cur_h_vec, cand_h_gt, dist_gt_t])
                     else:
-                        x_pred = torch.cat([ctx_h, cur_h_vec, cand_h_pred])
-                        x_gt = torch.cat([ctx_h, cur_h_vec, cand_h_gt])
+                        if use_cand_contrast and diff_pred_t is not None and diff_gt_t is not None:
+                            x_pred = torch.cat([ctx_h, cur_h_vec, cand_h_pred, diff_pred_t])
+                            x_gt = torch.cat([ctx_h, cur_h_vec, cand_h_gt, diff_gt_t])
+                        else:
+                            x_pred = torch.cat([ctx_h, cur_h_vec, cand_h_pred])
+                            x_gt = torch.cat([ctx_h, cur_h_vec, cand_h_gt])
                     
                     # Contribution analysis: which part of x contributes most to the difference?
                     # x = [ctx_h, cur_h, cand_h, (dist)]
@@ -371,10 +411,18 @@ def run(
                     z1_diff = z1_pred - z1_gt  # (hidden,)
                     
                     # Get contribution from each input segment
-                    # ctx: [0:hidden], cur: [hidden:2*hidden], cand: [2*hidden:3*hidden], dist: [3*hidden:]
-                    w0_ctx = w0[:, :hidden_dim]
-                    w0_cur = w0[:, hidden_dim:2*hidden_dim]
-                    w0_cand = w0[:, 2*hidden_dim:3*hidden_dim]
+                    # [ctx, cur, cand, (cand_diff), (dist)]
+                    off = 0
+                    w0_ctx = w0[:, off : off + hidden_dim]
+                    off += hidden_dim
+                    w0_cur = w0[:, off : off + hidden_dim]
+                    off += hidden_dim
+                    w0_cand = w0[:, off : off + hidden_dim]
+                    off += hidden_dim
+                    w0_cdiff = None
+                    if use_cand_contrast:
+                        w0_cdiff = w0[:, off : off + hidden_dim]
+                        off += hidden_dim
                     
                     # Linear contribution (before SiLU)
                     lin_ctx = w0_ctx @ ctx_h  # same for pred and gt
@@ -382,9 +430,15 @@ def run(
                     lin_cand_pred = w0_cand @ cand_h_pred
                     lin_cand_gt = w0_cand @ cand_h_gt
                     lin_cand_diff = lin_cand_pred - lin_cand_gt  # (hidden,)
-                    
+
+                    lin_cdiff_diff = None
+                    if w0_cdiff is not None and diff_pred_t is not None and diff_gt_t is not None:
+                        lin_cdiff_pred = w0_cdiff @ diff_pred_t
+                        lin_cdiff_gt = w0_cdiff @ diff_gt_t
+                        lin_cdiff_diff = lin_cdiff_pred - lin_cdiff_gt
+
                     if ae.decoder.cfg.use_dest_dist:
-                        w0_dist = w0[:, 3*hidden_dim:]
+                        w0_dist = w0[:, off:]
                         lin_dist_pred = w0_dist @ dist_pred_t
                         lin_dist_gt = w0_dist @ dist_gt_t
                         lin_dist_diff = lin_dist_pred - lin_dist_gt
@@ -414,6 +468,8 @@ def run(
                         "dist_diff": float(dist_pred - dist_gt) if dist_pred is not None and dist_gt is not None else None,
                         "lin_cand_diff_mean": float(lin_cand_diff.mean().item()),
                         "lin_cand_diff_std": float(lin_cand_diff.std().item()),
+                        "lin_cdiff_diff_mean": float(lin_cdiff_diff.mean().item()) if lin_cdiff_diff is not None else None,
+                        "lin_cdiff_diff_std": float(lin_cdiff_diff.std().item()) if lin_cdiff_diff is not None else None,
                         "lin_dist_diff_mean": float(lin_dist_diff.mean().item()) if ae.decoder.cfg.use_dest_dist else None,
                         "z1_diff_mean": float(z1_diff.mean().item()),
                         "z1_diff_std": float(z1_diff.std().item()),

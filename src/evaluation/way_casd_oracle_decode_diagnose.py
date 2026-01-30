@@ -139,19 +139,35 @@ def _slice_csr(ptr: np.ndarray, idx: np.ndarray, u: int) -> np.ndarray:
     return np.asarray(idx[s:e], dtype=np.int64)
 
 def _infer_decoder_use_dest_dist_from_state(state: Dict[str, torch.Tensor]) -> bool:
+    # Old: in_dim = 3*hidden (+1 if dest_dist)
+    # New: in_dim = 4*hidden (+1 if dest_dist) when cand_contrast enabled.
     w = state.get("decoder.scorer.0.weight", None)
-    if w is None:
-        return True
-    if (not isinstance(w, torch.Tensor)) or w.ndim != 2:
+    if not isinstance(w, torch.Tensor) or w.ndim != 2:
         return True
     hidden = int(w.shape[0])
     in_dim = int(w.shape[1])
-    delta = int(in_dim - hidden * 3)
-    if delta == 0:
-        return False
-    if delta == 1:
-        return True
+    d4 = int(in_dim - hidden * 4)
+    if d4 in (0, 1):
+        return bool(d4 == 1)
+    d3 = int(in_dim - hidden * 3)
+    if d3 in (0, 1):
+        return bool(d3 == 1)
     return True
+
+
+def _infer_decoder_use_cand_contrast_from_state(state: Dict[str, torch.Tensor]) -> bool:
+    w = state.get("decoder.scorer.0.weight", None)
+    if not isinstance(w, torch.Tensor) or w.ndim != 2:
+        return False
+    hidden = int(w.shape[0])
+    in_dim = int(w.shape[1])
+    d4 = int(in_dim - hidden * 4)
+    if d4 in (0, 1):
+        return True
+    d3 = int(in_dim - hidden * 3)
+    if d3 in (0, 1):
+        return False
+    return False
 
 
 def _infer_decoder_use_cross_attn_from_state(state: Dict[str, torch.Tensor]) -> bool:
@@ -254,6 +270,9 @@ def run(cfg: Cfg, *, way_routes_npz: Path, way_graph_npz: Path, way_features_npz
     state = ckpt["model_state_dict"] if isinstance(ckpt, dict) and "model_state_dict" in ckpt else ckpt
     ae_cfg = ckpt.get("config", {}) if isinstance(ckpt, dict) else {}
     use_dest_dist = _infer_decoder_use_dest_dist_from_state(state) if isinstance(state, dict) else True
+    use_cand_contrast = (_infer_decoder_use_cand_contrast_from_state(state) if isinstance(state, dict) else False) or bool(
+        ae_cfg.get("decoder_use_cand_contrast", False)
+    )
     use_cross_attn = (_infer_decoder_use_cross_attn_from_state(state) if isinstance(state, dict) else False) or bool(ae_cfg.get("decoder_use_cross_attn", True))
     use_step_emb = (_infer_decoder_use_step_emb_from_state(state) if isinstance(state, dict) else False) or bool(ae_cfg.get("decoder_use_step_emb", False))
     use_dest_query = (_infer_decoder_use_dest_query_from_state(state) if isinstance(state, dict) else False) or bool(ae_cfg.get("decoder_use_dest_query", False))
@@ -288,6 +307,7 @@ def run(cfg: Cfg, *, way_routes_npz: Path, way_graph_npz: Path, way_features_npz
             decoder_use_dest_query=bool(use_dest_query),
             decoder_use_dir_query=bool(use_dir_query),
             decoder_use_cand_query=bool(use_cand_query),
+            decoder_use_cand_contrast=bool(use_cand_contrast),
             decoder_use_past_context=bool(use_past_context),
             decoder_past_k=int(past_k),
             decoder_past_n_layers=int(past_n_layers),

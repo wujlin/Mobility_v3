@@ -69,19 +69,35 @@ def _split_dataset(n: int, val_ratio: float, seed: int) -> Tuple[np.ndarray, np.
 
 
 def _infer_decoder_use_dest_dist_from_state(state: Dict[str, torch.Tensor]) -> bool:
+    # Old: in_dim = 3*hidden (+1 if dest_dist)
+    # New: in_dim = 4*hidden (+1 if dest_dist) when cand_contrast enabled.
     w = state.get("decoder.scorer.0.weight", None)
-    if w is None:
-        return True
     if not isinstance(w, torch.Tensor) or w.ndim != 2:
         return True
     hidden = int(w.shape[0])
     in_dim = int(w.shape[1])
-    delta = int(in_dim - hidden * 3)
-    if delta == 0:
-        return False
-    if delta == 1:
-        return True
+    d4 = int(in_dim - hidden * 4)
+    if d4 in (0, 1):
+        return bool(d4 == 1)
+    d3 = int(in_dim - hidden * 3)
+    if d3 in (0, 1):
+        return bool(d3 == 1)
     return True
+
+
+def _infer_decoder_use_cand_contrast_from_state(state: Dict[str, torch.Tensor]) -> bool:
+    w = state.get("decoder.scorer.0.weight", None)
+    if not isinstance(w, torch.Tensor) or w.ndim != 2:
+        return False
+    hidden = int(w.shape[0])
+    in_dim = int(w.shape[1])
+    d4 = int(in_dim - hidden * 4)
+    if d4 in (0, 1):
+        return True
+    d3 = int(in_dim - hidden * 3)
+    if d3 in (0, 1):
+        return False
+    return False
 
 
 def _infer_decoder_use_cross_attn_from_state(state: Dict[str, torch.Tensor]) -> bool:
@@ -312,6 +328,9 @@ def main() -> None:
         raise TypeError(f"Unexpected AE state format: {type(ae_state)}")
 
     use_dest_dist = _infer_decoder_use_dest_dist_from_state(ae_state)
+    use_cand_contrast = (_infer_decoder_use_cand_contrast_from_state(ae_state) if isinstance(ae_state, dict) else False) or bool(
+        ae_cfg_dict.get("decoder_use_cand_contrast", False)
+    )
     use_cross_attn = _infer_decoder_use_cross_attn_from_state(ae_state)
     use_step_emb = _infer_decoder_use_step_emb_from_state(ae_state) or bool(ae_cfg_dict.get("decoder_use_step_emb", False))
     use_dest_query = _infer_decoder_use_dest_query_from_state(ae_state) or bool(ae_cfg_dict.get("decoder_use_dest_query", False))
@@ -341,6 +360,7 @@ def main() -> None:
             decoder_use_dest_query=bool(use_dest_query),
             decoder_use_dir_query=bool(use_dir_query),
             decoder_use_cand_query=bool(use_cand_query),
+            decoder_use_cand_contrast=bool(use_cand_contrast),
             decoder_use_past_context=bool(use_past_ctx),
             decoder_past_k=int(past_k) if past_k is not None else 8,
             decoder_past_n_layers=int(past_n_layers) if past_n_layers is not None else 2,

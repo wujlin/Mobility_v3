@@ -1,0 +1,9 @@
+[progress] done=50 rps=7.55 succ=32.00%
+[progress] done=100 rps=7.88 succ=30.00%
+[progress] done=150 rps=7.78 succ=28.67%
+[progress] done=200 rps=7.43 succ=27.00%
+[progress] done=250 rps=7.37 succ=27.20%
+[progress] done=300 rps=7.54 succ=30.67%
+[progress] done=350 rps=7.59 succ=32.00%
+[progress] done=400 rps=7.70 succ=33.50%
+Saved to /home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD1_waydata_rustbelt_seed0_strict_v1/W8_diag_contrast_s0/oracle_step_diagnose_n200.json

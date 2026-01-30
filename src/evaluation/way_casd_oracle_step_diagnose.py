@@ -246,6 +246,7 @@ def run(
             max_len=int(ae_cfg_dict.get("max_len", cfg.max_way_len)),
             coord_scale=float(ae_cfg_dict.get("coord_scale", 1024.0)),
             decoder_use_dest_dist=bool(inferred["decoder_use_dest_dist"]),
+            decoder_use_cand_contrast=bool(inferred["decoder_use_cand_contrast"]),
             decoder_use_cross_attn=bool(inferred["decoder_use_cross_attn"]),
             decoder_n_cross_heads=int(ae_cfg_dict.get("decoder_n_cross_heads", 4)),
             decoder_use_step_emb=bool(inferred["decoder_use_step_emb"]),

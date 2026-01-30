@@ -39,6 +39,7 @@ class Cfg:
     focus_trace_radius: int
 
     progress_every: int
+    compute_hop: bool
 
     dump_attn: bool
     attn_topk: int  # 0=store full attn weights; >0=store top-k per candidate
@@ -190,6 +191,13 @@ def _infer_decoder_use_cand_contrast_from_state(state: Dict[str, torch.Tensor]) 
 def _infer_flag(state: Dict[str, torch.Tensor], prefix: str) -> bool:
     return any(str(k).startswith(prefix) for k in state.keys())
 
+def _safe_hop(hop: Optional[np.ndarray], way_id: int) -> int:
+    if hop is None:
+        return -1
+    if 0 <= int(way_id) < int(hop.size):
+        return int(hop[int(way_id)])
+    return -1
+
 
 @torch.no_grad()
 def run(
@@ -235,6 +243,10 @@ def run(
     pe = state.get("decoder.past_encoder.pos_emb.weight", None) if isinstance(state, dict) else None
     if isinstance(pe, torch.Tensor) and pe.ndim == 2 and int(pe.shape[0]) > 0:
         inferred["decoder_past_k"] = int(pe.shape[0])
+
+    dump_attn_effective = bool(cfg.dump_attn) and bool(inferred.get("decoder_use_cand_query", False))
+    if bool(cfg.dump_attn) and (not dump_attn_effective):
+        print("[WARN] --dump_attn requested but decoder_use_cand_query=False; skip candidate-level attn dump (no per-candidate attn).")
 
     ae = WayCASDAutoEncoder(
         cfg=WayCASDAECfg(
@@ -292,6 +304,10 @@ def run(
     per_route: List[Dict[str, Any]] = []
     focus_traces: List[Dict[str, Any]] = []
 
+    hop_cache: Dict[int, np.ndarray] = {}
+    hop_cache_hits = 0
+    hop_cache_misses = 0
+
     # Q1/Q2 containers
     div_outdeg: List[int] = []
     div_succ_full_gt: List[int] = []
@@ -337,7 +353,17 @@ def run(
             z_enc, _ = ae.encode(way_pad_t)
 
             # Pre-compute hop distance for this dest
-            hop = _reverse_bfs_dist(rev_ptr=rev_ptr, rev_idx=rev_idx, dest=int(dest_way))
+            hop: Optional[np.ndarray] = None
+            if bool(cfg.compute_hop):
+                key = int(dest_way)
+                cached = hop_cache.get(key, None)
+                if cached is None:
+                    hop_cache_misses += 1
+                    cached = _reverse_bfs_dist(rev_ptr=rev_ptr, rev_idx=rev_idx, dest=int(dest_way))
+                    hop_cache[key] = cached
+                else:
+                    hop_cache_hits += 1
+                hop = cached
 
             route_cond = {
                 "start_pos": torch.as_tensor(start_pos[None, :], dtype=torch.float32, device=device),
@@ -508,7 +534,7 @@ def run(
 
                         # Context norm(s)
                         attn_dbg = None
-                        if bool(cfg.dump_attn):
+                        if bool(dump_attn_effective):
                             ctx_out_dbg, attn_dbg = ae.decoder._compute_context(
                                 way_embedder=ae.way_enc,
                                 latent_tokens=z_enc,
@@ -559,7 +585,7 @@ def run(
                                 ctx_diff_norm = float(torch.norm(v_pred - v_gt).item())
 
                         # Candidate attention weights (only meaningful for candidate-aware ctx: (T,C,hidden))
-                        if bool(cfg.dump_attn) and isinstance(attn_dbg, torch.Tensor) and attn_dbg.ndim == 3:
+                        if bool(dump_attn_effective) and isinstance(attn_dbg, torch.Tensor) and attn_dbg.ndim == 3:
                             # attn_dbg: (T,C,L); here T=1
                             w = attn_dbg[0].detach().to("cpu", dtype=torch.float32)  # (C,L)
                             if gt_rank is not None and gt_in_sel:
@@ -604,8 +630,8 @@ def run(
                         "gt_gap": gt_gap,
                         "logit_gap_pred_gt": logit_gap_pred_gt,
                         "close_call": bool(close_call),
-                        "hop_cur": int(hop[cur]) if 0 <= cur < int(hop.size) else -1,
-                        "hop_pred_next": int(hop[pred_next]) if 0 <= pred_next < int(hop.size) else -1,
+                        "hop_cur": _safe_hop(hop, int(cur)),
+                        "hop_pred_next": _safe_hop(hop, int(pred_next)),
                         "dist_pred_to_dest": dist_pred,
                         "dist_gt_to_dest": dist_gt,
                         "dist_pred_minus_gt": dist_pred_minus_gt,
@@ -616,7 +642,7 @@ def run(
                         "ctx_diff_norm": ctx_diff_norm,
                         "cand_h_diff": cand_h_diff,
                         "attn_cos_pred_gt": attn_cos_pred_gt,
-                        "attn_topk": int(cfg.attn_topk) if bool(cfg.dump_attn) else None,
+                        "attn_topk": int(cfg.attn_topk) if bool(dump_attn_effective) else None,
                         "cand_attn_weights": cand_attn_weights,
                         "gt_attn_weight": gt_attn_weight,
                         "pred_attn_weight": pred_attn_weight,
@@ -656,8 +682,8 @@ def run(
                         "gt_rank": gt_rank,
                         "logit_margin": float(margin),
                         "close_call": bool(close_call),
-                        "hop_cur": int(hop[cur]) if 0 <= cur < int(hop.size) else -1,
-                        "hop_pred_next": int(hop[pred_next]) if 0 <= pred_next < int(hop.size) else -1,
+                        "hop_cur": _safe_hop(hop, int(cur)),
+                        "hop_pred_next": _safe_hop(hop, int(pred_next)),
                     }
                 )
 
@@ -682,12 +708,13 @@ def run(
                         rejoin = True
                         rejoin_step = int(k)
                         break
-                # hop trend after divergence
-                hop_seq = [int(hop[int(w)]) if 0 <= int(w) < int(hop.size) else -1 for w in path]
-                hop_after = [h for h in hop_seq[div_idx:] if int(h) >= 0]
-                if hop_after:
-                    min_hop_after = int(min(hop_after))
-                    hop_drop = int(hop_after[0] - min_hop_after)
+                # hop trend after divergence (optional; hop may be disabled for speed)
+                if hop is not None:
+                    hop_seq = [_safe_hop(hop, int(w)) for w in path]
+                    hop_after = [h for h in hop_seq[div_idx:] if int(h) >= 0]
+                    if hop_after:
+                        min_hop_after = int(min(hop_after))
+                        hop_drop = int(hop_after[0] - min_hop_after)
 
                 recov_rejoin.append(bool(rejoin))
                 if rejoin_step is not None:
@@ -801,6 +828,13 @@ def run(
         },
         "ckpt_strict_load_ok": ckpt_strict_load_ok,
         "ckpt_decoder_cfg_inferred": inferred,
+        "perf": {
+            "dump_attn_effective": bool(dump_attn_effective),
+            "compute_hop": bool(cfg.compute_hop),
+            "hop_cache_size": int(len(hop_cache)) if bool(cfg.compute_hop) else 0,
+            "hop_cache_hits": int(hop_cache_hits) if bool(cfg.compute_hop) else 0,
+            "hop_cache_misses": int(hop_cache_misses) if bool(cfg.compute_hop) else 0,
+        },
         "n_eval": n_eval,
         "summary": {
             "success_rate": float(len(succ_rows)) / float(max(1, n_eval)),
@@ -872,6 +906,12 @@ def build_argparser() -> argparse.ArgumentParser:
     p.add_argument("--focus_trace_radius", type=int, default=12)
 
     p.add_argument("--progress_every", type=int, default=50)
+    p.add_argument(
+        "--compute_hop",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Compute hop-to-dest distances via reverse BFS (slow; set --no-compute_hop to speed up).",
+    )
 
     p.add_argument("--dump_attn", action="store_true", help="Dump candidate attention weights at the first divergence step (focus traces only).")
     p.add_argument(
@@ -900,6 +940,7 @@ def main() -> None:
         focus_max_examples=int(args.focus_max_examples),
         focus_trace_radius=int(args.focus_trace_radius),
         progress_every=int(args.progress_every),
+        compute_hop=bool(args.compute_hop),
         dump_attn=bool(args.dump_attn),
         attn_topk=int(args.attn_topk),
     )

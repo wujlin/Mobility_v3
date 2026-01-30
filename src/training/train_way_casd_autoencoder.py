@@ -193,6 +193,13 @@ def main() -> None:
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
+    if bool(args.decoder_use_cand_contrast) and (not bool(args.decoder_use_cand_query)):
+        log.warning(
+            "decoder_use_cand_contrast=True but decoder_use_cand_query=False. "
+            "In this setting, ctx_h is candidate-agnostic; contrast features may hurt unless this is an intended ablation. "
+            "If you want the strong baseline, also enable --decoder_use_cand_query and (recommended) --decoder_use_past_context."
+        )
+
     cfg = TrainCfg(
         batch_size=int(args.batch_size),
         num_workers=int(args.num_workers),

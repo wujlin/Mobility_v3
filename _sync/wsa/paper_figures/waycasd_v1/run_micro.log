@@ -1,4 +1,4 @@
-Traceback (most recent call last):
-  File "/home/jinlin/projects/Mobility_v3/tools/waycasd_plot_city_micro_case_study.py", line 19, in <module>
-    from src.data.way_graph.way_sequence_dataset import load_way_routes_npz
-ModuleNotFoundError: No module named 'src'
+/home/jinlin/miniconda3/envs/dpl/lib/python3.11/site-packages/torch/nn/modules/transformer.py:392: UserWarning: enable_nested_tensor is True, but self.use_nested_tensor is False because encoder_layer.norm_first was True
+  warnings.warn(
+[OK] saved _sync/wsa/paper_figures/waycasd_v1/micro/waycasd_city_micro_case_study.pdf
+[OK] saved _sync/wsa/paper_figures/waycasd_v1/micro/waycasd_city_micro_case_study.png

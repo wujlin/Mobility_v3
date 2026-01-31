@@ -1,6 +1,14 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import sys
+from pathlib import Path as _Path
+
+# Allow running as a file: `python tools/xxx.py ...` (so that `import src.*` works).
+_REPO_ROOT = _Path(__file__).resolve().parents[1]
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
+
 import argparse
 import json
 from dataclasses import asdict, dataclass
@@ -85,7 +93,8 @@ def _hist2d(
 def build_argparser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description="WayCASD macro overview: failure clustering + difficulty partition (by start location).")
     p.add_argument("--eval_dir", type=Path, required=True, help="Strong-ckpt eval dir (oracle_decode_greedy/beam10 json).")
-    p.add_argument("--out_dir", type=Path, default=Path("_sync/wsa/paper_figures/waycasd_v1"))
+    p.add_argument("--out_dir", type=Path, default=Path("_sync/wsa/paper_figures/waycasd_v1/macro"))
+    p.add_argument("--style", type=str, choices=["paper"], default="paper")
     p.add_argument("--greedy_json", type=Path, default=None)
     p.add_argument("--beam10_json", type=Path, default=None)
     p.add_argument("--way_routes_npz", type=Path, default=None)
@@ -220,7 +229,7 @@ def main() -> None:
         rate_hists[int(city)] = rate
         rate_counts[int(city)] = h_cnt
 
-    out_dir = Path(args.out_dir) / "macro"
+    out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
     meta = {
@@ -352,4 +361,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

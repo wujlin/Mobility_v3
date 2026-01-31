@@ -1,6 +1,14 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import sys
+from pathlib import Path as _Path
+
+# Allow running as a file: `python tools/xxx.py ...` (so that `import src.*` works).
+_REPO_ROOT = _Path(__file__).resolve().parents[1]
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
+
 import argparse
 import json
 from dataclasses import asdict, dataclass
@@ -435,7 +443,9 @@ def _pick_cases(
 def build_argparser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description="WayCASD micro case study (GT vs Greedy vs Beam10) in city space.")
     p.add_argument("--eval_dir", type=Path, required=True, help="Strong-ckpt eval dir (contains oracle_decode_greedy/beam10 json).")
-    p.add_argument("--out_dir", type=Path, default=Path("_sync/wsa/paper_figures/waycasd_v1"))
+    p.add_argument("--out_dir", type=Path, default=Path("_sync/wsa/paper_figures/waycasd_v1/micro"))
+    p.add_argument("--style", type=str, choices=["paper"], default="paper")
+    p.add_argument("--cases_per_city", type=int, default=3, help="PI default: 3 (easy/recovered/hard).")
 
     p.add_argument("--greedy_json", type=Path, default=None)
     p.add_argument("--beam10_json", type=Path, default=None)
@@ -456,6 +466,8 @@ def build_argparser() -> argparse.ArgumentParser:
 
 def main() -> None:
     args = build_argparser().parse_args()
+    if int(args.cases_per_city) != 3:
+        raise SystemExit("[FATAL] This script currently supports cases_per_city=3 only (easy/recovered/hard).")
     eval_dir = Path(args.eval_dir)
 
     greedy_json = Path(args.greedy_json) if args.greedy_json is not None else (eval_dir / "oracle_decode_greedy_n200.json")
@@ -562,7 +574,7 @@ def main() -> None:
     except Exception:
         ae.load_state_dict(state, strict=False)
 
-    out_dir = Path(args.out_dir) / "micro"
+    out_dir = Path(args.out_dir)
     cases = _pick_cases(
         routes=routes,
         ptr_np=ptr_np,
@@ -697,4 +709,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

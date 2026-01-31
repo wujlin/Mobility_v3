@@ -1,0 +1,122 @@
+{
+  "ok": true,
+  "task": "pi_verify_beam_recoverability",
+  "created_at": "2026-01-31T17:48:17.799312+08:00",
+  "inputs": {
+    "greedy_json": "_sync/wsa/paper_final/20260131_paper_cfg_candq1_past8_destdist_beam_s0/eval/oracle_decode_greedy_n200.json",
+    "beam3_json": "_sync/wsa/paper_final/20260131_paper_cfg_candq1_past8_destdist_beam_s0/eval/oracle_decode_beam3_n200.json",
+    "beam5_json": "_sync/wsa/paper_final/20260131_paper_cfg_candq1_past8_destdist_beam_s0/eval/oracle_decode_beam5_n200.json",
+    "beam10_json": "_sync/wsa/paper_final/20260131_paper_cfg_candq1_past8_destdist_beam_s0/eval/oracle_decode_beam10_n200.json"
+  },
+  "cfg_signature": {
+    "greedy": {
+      "seed": 0,
+      "n_routes": 200,
+      "max_way_len": 160,
+      "max_decode_len": 160,
+      "decode_max_candidates": 0,
+      "decode_candidate_policy": "first",
+      "decode_include_dest_if_successor": false,
+      "tz_offset_hours": -5.0
+    },
+    "beam3": {
+      "seed": 0,
+      "n_routes": 200,
+      "max_way_len": 160,
+      "max_decode_len": 160,
+      "decode_max_candidates": 0,
+      "decode_candidate_policy": "first",
+      "decode_include_dest_if_successor": false,
+      "tz_offset_hours": -5.0
+    },
+    "beam5": {
+      "seed": 0,
+      "n_routes": 200,
+      "max_way_len": 160,
+      "max_decode_len": 160,
+      "decode_max_candidates": 0,
+      "decode_candidate_policy": "first",
+      "decode_include_dest_if_successor": false,
+      "tz_offset_hours": -5.0
+    },
+    "beam10": {
+      "seed": 0,
+      "n_routes": 200,
+      "max_way_len": 160,
+      "max_decode_len": 160,
+      "decode_max_candidates": 0,
+      "decode_candidate_policy": "first",
+      "decode_include_dest_if_successor": false,
+      "tz_offset_hours": -5.0
+    }
+  },
+  "mismatches": [],
+  "by_city": {
+    "0": {
+      "n_eval": 200,
+      "success_rate_greedy": 0.475,
+      "success_rate_beam3": 0.715,
+      "success_rate_beam5": 0.785,
+      "success_rate_beam10": 0.845,
+      "failure_beam_recoverable": {
+        "beam1_fail_n": 105,
+        "beam3_fail_n": 57,
+        "beam5_fail_n": 43,
+        "beam10_fail_n": 31,
+        "beam3_recovered_from_greedy_fail_n": 48,
+        "beam5_recovered_from_greedy_fail_n": 62,
+        "beam10_recovered_from_greedy_fail_n": 76,
+        "beam3_recovered_from_greedy_fail_rate": 0.45714285714285713,
+        "beam5_recovered_from_greedy_fail_rate": 0.5904761904761905,
+        "beam10_recovered_from_greedy_fail_rate": 0.7238095238095238,
+        "beam3_regress_from_greedy_success_n": 0,
+        "beam5_regress_from_greedy_success_n": 0,
+        "beam10_regress_from_greedy_success_n": 2,
+        "beam3_regress_from_greedy_success_rate": 0.0,
+        "beam5_regress_from_greedy_success_rate": 0.0,
+        "beam10_regress_from_greedy_success_rate": 0.021052631578947368
+      }
+    },
+    "1": {
+      "n_eval": 200,
+      "success_rate_greedy": 0.695,
+      "success_rate_beam3": 0.895,
+      "success_rate_beam5": 0.945,
+      "success_rate_beam10": 0.96,
+      "failure_beam_recoverable": {
+        "beam1_fail_n": 61,
+        "beam3_fail_n": 21,
+        "beam5_fail_n": 11,
+        "beam10_fail_n": 8,
+        "beam3_recovered_from_greedy_fail_n": 40,
+        "beam5_recovered_from_greedy_fail_n": 50,
+        "beam10_recovered_from_greedy_fail_n": 53,
+        "beam3_recovered_from_greedy_fail_rate": 0.6557377049180327,
+        "beam5_recovered_from_greedy_fail_rate": 0.819672131147541,
+        "beam10_recovered_from_greedy_fail_rate": 0.8688524590163934,
+        "beam3_regress_from_greedy_success_n": 0,
+        "beam5_regress_from_greedy_success_n": 0,
+        "beam10_regress_from_greedy_success_n": 0,
+        "beam3_regress_from_greedy_success_rate": 0.0,
+        "beam5_regress_from_greedy_success_rate": 0.0,
+        "beam10_regress_from_greedy_success_rate": 0.0
+      }
+    }
+  },
+  "overall": {
+    "n_eval": 400,
+    "greedy_fail_n": 166,
+    "beam3_fail_n": 78,
+    "beam5_fail_n": 54,
+    "beam10_fail_n": 39,
+    "beam3_recovered_from_greedy_fail_n": 88,
+    "beam5_recovered_from_greedy_fail_n": 112,
+    "beam10_recovered_from_greedy_fail_n": 129,
+    "beam3_regress_from_greedy_success_n": 0,
+    "beam5_regress_from_greedy_success_n": 0,
+    "beam10_regress_from_greedy_success_n": 2,
+    "beam3_recovered_from_greedy_fail_rate": 0.5301204819277109,
+    "beam5_recovered_from_greedy_fail_rate": 0.6746987951807228,
+    "beam10_recovered_from_greedy_fail_rate": 0.7771084337349398
+  }
+}

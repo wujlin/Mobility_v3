@@ -1,0 +1,19 @@
+/home/jinlin/miniconda3/envs/dpl/lib/python3.11/site-packages/torch/nn/modules/transformer.py:392: UserWarning: enable_nested_tensor is True, but self.use_nested_tensor is False because encoder_layer.norm_first was True
+  warnings.warn(
+[city0] done=25/200 rps=6.09 succ=9/25
+[city0] done=50/200 rps=6.56 succ=20/50
+[city0] done=75/200 rps=6.76 succ=32/75
+[city0] done=100/200 rps=6.86 succ=45/100
+[city0] done=125/200 rps=6.78 succ=57/125
+[city0] done=150/200 rps=6.90 succ=68/150
+[city0] done=175/200 rps=6.90 succ=81/175
+[city0] done=200/200 rps=7.00 succ=95/200
+[city1] done=25/200 rps=10.04 succ=16/25
+[city1] done=50/200 rps=10.45 succ=32/50
+[city1] done=75/200 rps=9.75 succ=49/75
+[city1] done=100/200 rps=10.47 succ=68/100
+[city1] done=125/200 rps=10.16 succ=85/125
+[city1] done=150/200 rps=10.30 succ=103/150
+[city1] done=175/200 rps=10.47 succ=121/175
+[city1] done=200/200 rps=10.35 succ=139/200
+[saved] _sync/wsa/paper_final/20260131_paper_cfg_candq1_past8_destdist_beam_s0/eval/oracle_decode_greedy_n200.json cities=2

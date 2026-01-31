@@ -38,6 +38,7 @@ class Cfg:
     last_k_steps: int
     reachability_max_visits: int
     progress_every: int
+    dump_way_seqs: bool
 
 
 def _set_seed(seed: int) -> None:
@@ -65,6 +66,16 @@ def _jaccard(a: List[int], b: List[int]) -> float:
     if not sa and not sb:
         return 1.0
     return float(len(sa & sb)) / float(len(sa | sb))
+
+
+def _first_repeat_step(seq: List[int]) -> Optional[int]:
+    seen: set[int] = set()
+    for i, x in enumerate(seq):
+        xx = int(x)
+        if xx in seen:
+            return int(i)
+        seen.add(xx)
+    return None
 
 
 def _build_reverse_csr(*, ptr: np.ndarray, idx: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
@@ -546,6 +557,11 @@ def run(cfg: Cfg, *, way_routes_npz: Path, way_graph_npz: Path, way_features_npz
                         gt_final_dest_in_full = bool(int(v) in set(succ_full.tolist()))
                         gt_final_dest_in_sel = bool(int(v) in set(succ_sel.tolist()))
 
+                gt_ids = [int(x) for x in gt]
+                pred_ids = [int(x) for x in pred]
+                gt_rep = _first_repeat_step(gt_ids)
+                pred_rep = _first_repeat_step(pred_ids)
+
                 failures.append(
                     {
                         "route_id": int(rid),
@@ -571,6 +587,12 @@ def run(cfg: Cfg, *, way_routes_npz: Path, way_graph_npz: Path, way_features_npz
                         "diverge_gt_way": div_gt,
                         "diverge_pred_can_reach_dest": bool(div_can_reach),
                         "rejoin_gt_after_diverge": bool(rejoin),
+                        "gt_has_loop": bool(gt_rep is not None),
+                        "gt_first_repeat_step": gt_rep,
+                        "gt_unique_n": int(len(set(gt_ids))),
+                        "pred_has_loop": bool(pred_rep is not None),
+                        "pred_first_repeat_step": pred_rep,
+                        "pred_unique_n": int(len(set(pred_ids))),
                         "last_k": {
                             "k": int(last_k),
                             "any_dest_in_full": bool(any_dest_in_full),
@@ -581,6 +603,7 @@ def run(cfg: Cfg, *, way_routes_npz: Path, way_graph_npz: Path, way_features_npz
                             "steps": last_steps,
                         },
                         "gt_final_hop": {"gt_final_in_full": gt_final_dest_in_full, "gt_final_in_sel": gt_final_dest_in_sel},
+                        **({"gt_way_ids": gt_ids, "pred_way_ids": pred_ids} if bool(cfg.dump_way_seqs) else {}),
                     }
                 )
 
@@ -654,6 +677,11 @@ def build_argparser() -> argparse.ArgumentParser:
     p.add_argument("--last_k_steps", type=int, default=5, help="Inspect last K transitions for dest/pred-of-dest availability.")
     p.add_argument("--reachability_max_visits", type=int, default=200000, help="Safety cap for reverse BFS visits.")
     p.add_argument("--progress_every", type=int, default=25)
+    p.add_argument(
+        "--dump_way_seqs",
+        action="store_true",
+        help="If set, include gt_way_ids and pred_way_ids for failures (helps manual review; increases JSON size).",
+    )
     return p
 
 
@@ -675,6 +703,7 @@ def main() -> None:
         last_k_steps=int(args.last_k_steps),
         reachability_max_visits=int(args.reachability_max_visits),
         progress_every=int(args.progress_every),
+        dump_way_seqs=bool(args.dump_way_seqs),
     )
     _set_seed(cfg.seed)
     rep = run(

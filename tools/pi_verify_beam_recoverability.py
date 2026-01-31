@@ -22,10 +22,11 @@ def _require_file(path: Path) -> None:
         raise SystemExit(f"[FATAL] not a file: {path}")
 
 
-def _default_paths(run_dir: Path) -> Tuple[Path, Path, Path]:
+def _default_paths(run_dir: Path) -> Tuple[Path, Path, Path, Path]:
     return (
         run_dir / "oracle_decode_greedy_n200.json",
         run_dir / "oracle_decode_beam3_n200.json",
+        run_dir / "oracle_decode_beam5_n200.json",
         run_dir / "oracle_decode_beam10_n200.json",
     )
 
@@ -78,19 +79,23 @@ def _safe_rate(num: int, den: int) -> Optional[float]:
     return float(num) / float(den)
 
 
-def _build_report(*, greedy: dict, beam3: dict, beam10: dict, out_json: Path, paths: Dict[str, str]) -> dict:
+def _build_report(*, greedy: dict, beam3: dict, beam5: Optional[dict], beam10: dict, out_json: Path, paths: Dict[str, str]) -> dict:
     ig = _index_by_city(greedy)
     i3 = _index_by_city(beam3)
+    i5 = _index_by_city(beam5) if beam5 is not None else {}
     i10 = _index_by_city(beam10)
 
-    cities = sorted(set(ig.keys()) | set(i3.keys()) | set(i10.keys()))
+    cities = sorted(set(ig.keys()) | set(i3.keys()) | set(i5.keys()) | set(i10.keys()))
     mismatches: List[str] = []
 
     cfg_g = _cfg_sig(greedy.get("cfg"))
     cfg_3 = _cfg_sig(beam3.get("cfg"))
+    cfg_5 = _cfg_sig(beam5.get("cfg")) if isinstance(beam5, dict) else None
     cfg_10 = _cfg_sig(beam10.get("cfg"))
     if cfg_g != cfg_3:
         mismatches.append("cfg_mismatch(greedy vs beam3)")
+    if cfg_5 is not None and cfg_g != cfg_5:
+        mismatches.append("cfg_mismatch(greedy vs beam5)")
     if cfg_g != cfg_10:
         mismatches.append("cfg_mismatch(greedy vs beam10)")
 
@@ -99,44 +104,62 @@ def _build_report(*, greedy: dict, beam3: dict, beam10: dict, out_json: Path, pa
         "n_eval": 0,
         "greedy_fail_n": 0,
         "beam3_fail_n": 0,
+        "beam5_fail_n": 0,
         "beam10_fail_n": 0,
         "beam3_recovered_from_greedy_fail_n": 0,
+        "beam5_recovered_from_greedy_fail_n": 0,
         "beam10_recovered_from_greedy_fail_n": 0,
         "beam3_regress_from_greedy_success_n": 0,
+        "beam5_regress_from_greedy_success_n": 0,
         "beam10_regress_from_greedy_success_n": 0,
     }
 
     for city in cities:
         g = ig.get(city, CityIndex(n_eval=0, success_rate=None, succ=set(), fail=set()))
         b3 = i3.get(city, CityIndex(n_eval=0, success_rate=None, succ=set(), fail=set()))
+        b5 = i5.get(city, CityIndex(n_eval=0, success_rate=None, succ=set(), fail=set()))
         b10 = i10.get(city, CityIndex(n_eval=0, success_rate=None, succ=set(), fail=set()))
 
-        if not (g.n_eval == b3.n_eval == b10.n_eval):
-            mismatches.append(f"n_eval_mismatch(city={city} greedy={g.n_eval} beam3={b3.n_eval} beam10={b10.n_eval})")
+        if beam5 is None:
+            if not (g.n_eval == b3.n_eval == b10.n_eval):
+                mismatches.append(f"n_eval_mismatch(city={city} greedy={g.n_eval} beam3={b3.n_eval} beam10={b10.n_eval})")
+        else:
+            if not (g.n_eval == b3.n_eval == b5.n_eval == b10.n_eval):
+                mismatches.append(
+                    f"n_eval_mismatch(city={city} greedy={g.n_eval} beam3={b3.n_eval} beam5={b5.n_eval} beam10={b10.n_eval})"
+                )
 
         greedy_fail = set(g.fail)
         greedy_succ = set(g.succ)
         recov3 = len(greedy_fail & set(b3.succ))
+        recov5 = len(greedy_fail & set(b5.succ))
         recov10 = len(greedy_fail & set(b10.succ))
         regress3 = len(greedy_succ - set(b3.succ))
+        regress5 = len(greedy_succ - set(b5.succ))
         regress10 = len(greedy_succ - set(b10.succ))
 
         by_city[str(int(city))] = {
             "n_eval": int(g.n_eval),
             "success_rate_greedy": g.success_rate,
             "success_rate_beam3": b3.success_rate,
+            "success_rate_beam5": (b5.success_rate if beam5 is not None else None),
             "success_rate_beam10": b10.success_rate,
             "failure_beam_recoverable": {
                 "beam1_fail_n": int(len(greedy_fail)),
                 "beam3_fail_n": int(len(b3.fail)),
+                "beam5_fail_n": (int(len(b5.fail)) if beam5 is not None else None),
                 "beam10_fail_n": int(len(b10.fail)),
                 "beam3_recovered_from_greedy_fail_n": int(recov3),
+                "beam5_recovered_from_greedy_fail_n": (int(recov5) if beam5 is not None else None),
                 "beam10_recovered_from_greedy_fail_n": int(recov10),
                 "beam3_recovered_from_greedy_fail_rate": _safe_rate(recov3, len(greedy_fail)),
+                "beam5_recovered_from_greedy_fail_rate": (_safe_rate(recov5, len(greedy_fail)) if beam5 is not None else None),
                 "beam10_recovered_from_greedy_fail_rate": _safe_rate(recov10, len(greedy_fail)),
                 "beam3_regress_from_greedy_success_n": int(regress3),
+                "beam5_regress_from_greedy_success_n": (int(regress5) if beam5 is not None else None),
                 "beam10_regress_from_greedy_success_n": int(regress10),
                 "beam3_regress_from_greedy_success_rate": _safe_rate(regress3, len(greedy_succ)),
+                "beam5_regress_from_greedy_success_rate": (_safe_rate(regress5, len(greedy_succ)) if beam5 is not None else None),
                 "beam10_regress_from_greedy_success_rate": _safe_rate(regress10, len(greedy_succ)),
             },
         }
@@ -144,14 +167,20 @@ def _build_report(*, greedy: dict, beam3: dict, beam10: dict, out_json: Path, pa
         overall["n_eval"] += int(g.n_eval)
         overall["greedy_fail_n"] += int(len(greedy_fail))
         overall["beam3_fail_n"] += int(len(b3.fail))
+        overall["beam5_fail_n"] += int(len(b5.fail)) if beam5 is not None else 0
         overall["beam10_fail_n"] += int(len(b10.fail))
         overall["beam3_recovered_from_greedy_fail_n"] += int(recov3)
+        overall["beam5_recovered_from_greedy_fail_n"] += int(recov5) if beam5 is not None else 0
         overall["beam10_recovered_from_greedy_fail_n"] += int(recov10)
         overall["beam3_regress_from_greedy_success_n"] += int(regress3)
+        overall["beam5_regress_from_greedy_success_n"] += int(regress5) if beam5 is not None else 0
         overall["beam10_regress_from_greedy_success_n"] += int(regress10)
 
     overall["beam3_recovered_from_greedy_fail_rate"] = _safe_rate(
         int(overall["beam3_recovered_from_greedy_fail_n"]), int(overall["greedy_fail_n"])
+    )
+    overall["beam5_recovered_from_greedy_fail_rate"] = (
+        _safe_rate(int(overall["beam5_recovered_from_greedy_fail_n"]), int(overall["greedy_fail_n"])) if beam5 is not None else None
     )
     overall["beam10_recovered_from_greedy_fail_rate"] = _safe_rate(
         int(overall["beam10_recovered_from_greedy_fail_n"]), int(overall["greedy_fail_n"])
@@ -162,7 +191,7 @@ def _build_report(*, greedy: dict, beam3: dict, beam10: dict, out_json: Path, pa
         "task": "pi_verify_beam_recoverability",
         "created_at": datetime.now(tz=TZ_SHANGHAI).isoformat(),
         "inputs": paths,
-        "cfg_signature": {"greedy": cfg_g, "beam3": cfg_3, "beam10": cfg_10},
+        "cfg_signature": {"greedy": cfg_g, "beam3": cfg_3, "beam5": cfg_5, "beam10": cfg_10},
         "mismatches": mismatches,
         "by_city": by_city,
         "overall": overall,
@@ -178,6 +207,7 @@ def build_argparser() -> argparse.ArgumentParser:
     p.add_argument("--run_dir", type=Path, default=None, help="If set, use default filenames under this directory.")
     p.add_argument("--greedy_json", type=Path, default=None)
     p.add_argument("--beam3_json", type=Path, default=None)
+    p.add_argument("--beam5_json", type=Path, default=None)
     p.add_argument("--beam10_json", type=Path, default=None)
     p.add_argument("--out_json", type=Path, default=None)
     return p
@@ -187,34 +217,43 @@ def main() -> None:
     args = build_argparser().parse_args()
 
     if args.run_dir is not None:
-        g, b3, b10 = _default_paths(Path(args.run_dir))
+        g, b3, b5, b10 = _default_paths(Path(args.run_dir))
         greedy_json = Path(args.greedy_json) if args.greedy_json is not None else g
         beam3_json = Path(args.beam3_json) if args.beam3_json is not None else b3
+        beam5_json = Path(args.beam5_json) if args.beam5_json is not None else b5
         beam10_json = Path(args.beam10_json) if args.beam10_json is not None else b10
         out_json = Path(args.out_json) if args.out_json is not None else (Path(args.run_dir) / "beam_recoverability_summary.json")
     else:
         if args.greedy_json is None or args.beam3_json is None or args.beam10_json is None:
-            raise SystemExit("[FATAL] need --run_dir or all of --greedy_json/--beam3_json/--beam10_json")
+            raise SystemExit("[FATAL] need --run_dir or all of --greedy_json/--beam3_json/--beam10_json (beam5 optional)")
         greedy_json = Path(args.greedy_json)
         beam3_json = Path(args.beam3_json)
+        beam5_json = Path(args.beam5_json) if args.beam5_json is not None else None
         beam10_json = Path(args.beam10_json)
         out_json = Path(args.out_json) if args.out_json is not None else (greedy_json.parent / "beam_recoverability_summary.json")
 
     for p in (greedy_json, beam3_json, beam10_json):
         _require_file(p)
+    if beam5_json is not None and beam5_json.exists():
+        _require_file(beam5_json)
+    else:
+        beam5_json = None
 
     greedy = _read_json(greedy_json)
     beam3 = _read_json(beam3_json)
+    beam5 = _read_json(beam5_json) if beam5_json is not None else None
     beam10 = _read_json(beam10_json)
 
     rep = _build_report(
         greedy=greedy,
         beam3=beam3,
+        beam5=beam5,
         beam10=beam10,
         out_json=out_json,
         paths={
             "greedy_json": str(greedy_json),
             "beam3_json": str(beam3_json),
+            "beam5_json": (str(beam5_json) if beam5_json is not None else None),
             "beam10_json": str(beam10_json),
         },
     )

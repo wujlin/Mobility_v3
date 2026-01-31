@@ -1,0 +1,133 @@
+{
+  "ok": true,
+  "task": "pi_verify_nonspatial_first_div_diag",
+  "created_at": "2026-01-31T13:53:35.002438+08:00",
+  "inputs": {
+    "oracle_step_json": "_sync/wsa/pi_verify/20260131_beam_recoverability_and_nonspatial_candq1_past8_len160_allcand_s0/oracle_step_diagnose_n200.json",
+    "way_features_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD1_waydata_rustbelt_seed0_strict_v1/W4_way_features_sem/way_features.npz",
+    "turn_threshold_deg": 30.0
+  },
+  "n_events": 122,
+  "overall": {
+    "abs_turn_err_deg_stats": {
+      "mean": 9.740319408566998,
+      "p50": 3.912782067345651,
+      "p90": 16.944310893794324,
+      "p95": 33.76137532422687,
+      "p99": 90.40359834798599,
+      "max": 96.63868544886105
+    },
+    "abs_turn_err_deg_stats_fail": {
+      "mean": 9.637241210431675,
+      "p50": 4.112943418812241,
+      "p90": 17.13986100536174,
+      "p95": 21.548728944833876,
+      "p99": 90.18984953569829,
+      "max": 90.49520498182359
+    },
+    "abs_turn_err_deg_stats_succ_diverged": {
+      "mean": 9.883820429500487,
+      "p50": 2.3751137038490477,
+      "p90": 14.825780010129888,
+      "p95": 60.39065848681021,
+      "p99": 93.21667932767227,
+      "max": 96.63868544886105
+    },
+    "first_div_outdeg_stats": {
+      "mean": 2.7131147540983607,
+      "p50": 2.0,
+      "p90": 4.0,
+      "p95": 6.0,
+      "p99": 6.789999999999992,
+      "max": 7.0
+    }
+  },
+  "by_city": {
+    "0": {
+      "city": 0,
+      "fail_n": 41,
+      "fail_turn_mismatch_rate": 0.07317073170731707,
+      "fail_tier_mismatch_rate": 0.024390243902439025,
+      "fail_highway_mismatch_rate": 0.024390243902439025,
+      "fail_abs_turn_err_deg_stats": {
+        "mean": 10.619379794980075,
+        "p50": 4.29781251497577,
+        "p90": 15.18435988968745,
+        "p95": 24.666711371553877,
+        "p99": 89.77266596483615,
+        "max": 90.49520498182359
+      },
+      "fail_first_div_outdeg_stats": {
+        "mean": 2.4146341463414633,
+        "p50": 2.0,
+        "p90": 3.0,
+        "p95": 3.0,
+        "p99": 5.600000000000001,
+        "max": 6.0
+      },
+      "succ_diverged_n": 35,
+      "succ_diverged_turn_mismatch_rate": 0.08571428571428572,
+      "succ_diverged_tier_mismatch_rate": 0.0,
+      "succ_diverged_highway_mismatch_rate": 0.02857142857142857,
+      "succ_diverged_abs_turn_err_deg_stats": {
+        "mean": 9.164755779697709,
+        "p50": 1.7940993908699445,
+        "p90": 18.818077629923117,
+        "p95": 49.93041183130673,
+        "p99": 93.20556593894156,
+        "max": 96.63868544886105
+      },
+      "succ_diverged_first_div_outdeg_stats": {
+        "mean": 2.8,
+        "p50": 2.0,
+        "p90": 5.600000000000001,
+        "p95": 6.0,
+        "p99": 6.659999999999997,
+        "max": 7.0
+      }
+    },
+    "1": {
+      "city": 1,
+      "fail_n": 30,
+      "fail_turn_mismatch_rate": 0.1,
+      "fail_tier_mismatch_rate": 0.03333333333333333,
+      "fail_highway_mismatch_rate": 0.06666666666666667,
+      "fail_abs_turn_err_deg_stats": {
+        "mean": 8.2949851448822,
+        "p50": 3.78954263294915,
+        "p90": 18.265367776159295,
+        "p95": 18.430746518113875,
+        "p99": 69.2867943605636,
+        "max": 90.0589829159303
+      },
+      "fail_first_div_outdeg_stats": {
+        "mean": 2.7666666666666666,
+        "p50": 2.0,
+        "p90": 4.100000000000001,
+        "p95": 5.549999999999997,
+        "p99": 6.710000000000001,
+        "max": 7.0
+      },
+      "succ_diverged_n": 16,
+      "succ_diverged_turn_mismatch_rate": 0.0625,
+      "succ_diverged_tier_mismatch_rate": 0.0625,
+      "succ_diverged_highway_mismatch_rate": 0.125,
+      "succ_diverged_abs_turn_err_deg_stats": {
+        "mean": 11.456774350944064,
+        "p50": 7.248500950899492,
+        "p90": 13.470050656379494,
+        "p95": 33.56800330921829,
+        "p99": 78.54933922703043,
+        "max": 89.7946732064835
+      },
+      "succ_diverged_first_div_outdeg_stats": {
+        "mean": 3.1875,
+        "p50": 3.0,
+        "p90": 4.5,
+        "p95": 5.25,
+        "p99": 5.85,
+        "max": 6.0
+      }
+    }
+  }
+}

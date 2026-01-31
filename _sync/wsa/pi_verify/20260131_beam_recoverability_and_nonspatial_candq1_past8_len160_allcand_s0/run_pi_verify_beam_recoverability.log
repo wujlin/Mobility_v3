@@ -1,0 +1,13 @@
+[saved] _sync/wsa/pi_verify/20260131_beam_recoverability_and_nonspatial_candq1_past8_len160_allcand_s0/beam_recoverability_summary.json
+{
+  "n_eval": 400,
+  "greedy_fail_n": 71,
+  "beam3_fail_n": 25,
+  "beam10_fail_n": 13,
+  "beam3_recovered_from_greedy_fail_n": 48,
+  "beam10_recovered_from_greedy_fail_n": 58,
+  "beam3_regress_from_greedy_success_n": 2,
+  "beam10_regress_from_greedy_success_n": 0,
+  "beam3_recovered_from_greedy_fail_rate": 0.676056338028169,
+  "beam10_recovered_from_greedy_fail_rate": 0.8169014084507042
+}

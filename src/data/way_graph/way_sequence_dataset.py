@@ -60,9 +60,18 @@ def load_way_routes_npz(path: Path) -> WayRoutes:
 class WayRouteDataset(Dataset):
     """Dataset of per-route way sequences (CSR-backed)."""
 
-    def __init__(self, routes: WayRoutes, *, max_routes: Optional[int] = None, max_way_len: Optional[int] = None) -> None:
+    def __init__(
+        self,
+        routes: WayRoutes,
+        *,
+        max_routes: Optional[int] = None,
+        max_way_len: Optional[int] = None,
+        min_hops: int = 1,
+    ) -> None:
         self.routes = routes
         keep = routes.way_seq_len > 0
+        # A route with L ways has (L-1) transitions (hops). We filter by transitions.
+        keep &= routes.way_seq_len >= (int(min_hops) + 1)
         if max_way_len is not None:
             keep &= routes.way_seq_len <= int(max_way_len)
         ids = np.nonzero(keep)[0].astype(np.int64, copy=False)

@@ -26,6 +26,7 @@ class Cfg:
     tz_offset_hours: float
 
     n_routes: int  # per city
+    min_hops: int
     max_way_len: int
     max_decode_len: int
 
@@ -286,7 +287,11 @@ def run(
 
     # Route sampling per city
     def _pick_city(city: int) -> np.ndarray:
-        keep = (routes.route_city.astype(np.int64) == int(city)) & (routes.way_seq_len > 1) & (routes.way_seq_len <= int(cfg.max_way_len))
+        keep = (
+            (routes.route_city.astype(np.int64) == int(city))
+            & (routes.way_seq_len >= (int(cfg.min_hops) + 1))
+            & (routes.way_seq_len <= int(cfg.max_way_len))
+        )
         ids = np.nonzero(keep)[0].astype(np.int64, copy=False)
         rng = np.random.default_rng(int(cfg.seed) + 101 * int(city))
         rng.shuffle(ids)
@@ -893,6 +898,7 @@ def build_argparser() -> argparse.ArgumentParser:
     p.add_argument("--tz_offset_hours", type=float, default=-5.0)
 
     p.add_argument("--n_routes", type=int, default=200, help="Per-city sample size")
+    p.add_argument("--min_hops", type=int, default=1, help="Filter routes with fewer than this many way transitions (hops).")
     p.add_argument("--max_way_len", type=int, default=160)
     p.add_argument("--max_decode_len", type=int, default=160)
 
@@ -930,6 +936,7 @@ def main() -> None:
         device=str(args.device),
         tz_offset_hours=float(args.tz_offset_hours),
         n_routes=int(args.n_routes),
+        min_hops=int(args.min_hops),
         max_way_len=int(args.max_way_len),
         max_decode_len=int(args.max_decode_len),
         decode_max_candidates=int(args.decode_max_candidates),

@@ -47,3 +47,7 @@ legacy/shenzhen/track_data/**/*.rar
 # System
 .DS_Store
 Thumbs.db
+
+# Local scratch / notes (do not commit)
+_tmp/
+opinion_pi.md

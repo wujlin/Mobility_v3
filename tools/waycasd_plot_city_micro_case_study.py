@@ -23,6 +23,7 @@ import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+from matplotlib.lines import Line2D
 
 from src.data.way_graph.way_sequence_dataset import load_way_routes_npz
 from src.models.way_casd.way_casd import WayCASDAECfg, WayCASDAutoEncoder
@@ -326,6 +327,9 @@ def _pick_cases(
     beam10_rep: dict,
     city_names: Dict[int, str],
     beam_size: int,
+    easy_min_hops: int,
+    easy_max_hops: int,
+    easy_max_detour: float,
     out_dir: Path,
 ) -> List[Case]:
     g = _build_city_index(greedy_rep)
@@ -347,6 +351,11 @@ def _pick_cases(
         "inputs": {
             "eval_cfg": cfg,
             "beam_size": int(beam_size),
+            "easy_case_filter": {
+                "min_hops": int(easy_min_hops),
+                "max_hops": int(easy_max_hops),
+                "max_detour_over_shortest": float(easy_max_detour),
+            },
         },
         "picked": [],
     }
@@ -370,8 +379,6 @@ def _pick_cases(
             )
             if int(case.city) != int(city):
                 continue
-            if want == "easy" and bool(case.greedy_success):
-                return case
             if want == "recovered" and (not bool(case.greedy_success)) and bool(case.beam_success):
                 return case
             if want == "hard" and (not bool(case.beam_success)):
@@ -381,14 +388,62 @@ def _pick_cases(
     for city in (0, 1):
         city_name = city_names.get(int(city), f"city{int(city)}")
 
-        # Easy: greedy success & short (<30 hops), else shortest among successes.
+        # Easy: greedy success & "good visualization" (PI): 5-20 hops + not too detoured.
         succ = [int(x) for x in g.get(int(city), {}).get("success_ids", [])]
         succ = [rid for rid in succ if int(routes.way_seq_len[int(rid)]) > 1]
-        succ_short = [rid for rid in succ if int(routes.way_seq_len[int(rid)]) - 1 < 30]
-        succ_short.sort(key=lambda rid: int(routes.way_seq_len[int(rid)]))
-        succ.sort(key=lambda rid: int(routes.way_seq_len[int(rid)]))
-        easy_candidates = succ_short if succ_short else succ
-        easy = _try_pick(easy_candidates[:50], want="easy", city=int(city))
+        succ_good = [
+            rid
+            for rid in succ
+            if int(easy_min_hops) <= (int(routes.way_seq_len[int(rid)]) - 1) <= int(easy_max_hops)
+        ]
+        # Prefer mid-length within the band (more "planning-like" than 1-2 hops).
+        target = int((int(easy_min_hops) + int(easy_max_hops)) // 2)
+
+        def _easy_len_key(rid: int) -> Tuple[int, int]:
+            hops = int(routes.way_seq_len[int(rid)]) - 1
+            return (abs(int(hops) - int(target)), int(hops))
+
+        easy_candidates = succ_good if succ_good else succ
+        easy_candidates.sort(key=_easy_len_key)
+        easy_rid = None
+        easy_relaxed = False
+        # First pass: enforce detour threshold using a cheap BFS (avoid decoding many candidates).
+        fallback_rid = int(easy_candidates[0]) if easy_candidates else None
+        for rid in easy_candidates[:200]:
+            rid = int(rid)
+            hops = int(routes.way_seq_len[rid]) - 1
+            sw = int(routes.start_way[rid])
+            dw = int(routes.dest_way[rid])
+            shortest = _shortest_hops_bfs(ptr_np, idx_np, int(sw), int(dw))
+            if shortest is None or int(shortest) <= 0:
+                continue
+            detour = float(hops) / float(shortest)
+            if float(detour) <= float(easy_max_detour):
+                easy_rid = int(rid)
+                break
+        if easy_rid is None:
+            # Fallback: keep hop-band, but relax detour constraint (avoid hard failure).
+            easy_rid = int(fallback_rid) if fallback_rid is not None else None
+            easy_relaxed = True
+        if easy_rid is None:
+            raise SystemExit(f"[FATAL] cannot find a valid 'easy' case for city={city}.")
+        easy = _decode_one_oracle(
+            ae=ae,
+            routes=routes,
+            ptr_np=ptr_np,
+            idx_np=idx_np,
+            route_id=int(easy_rid),
+            device=device,
+            tz_offset_hours=float(tz_offset_hours),
+            decode_max_candidates=int(decode_max_candidates),
+            decode_candidate_policy=str(decode_candidate_policy),
+            decode_include_dest_if_successor=bool(decode_include_dest_if_successor),
+            guided_dest_alpha=float(guided_dest_alpha),
+            max_decode_len=int(max_decode_len),
+            beam_size=int(beam_size),
+        )
+        if int(easy.city) != int(city) or (not bool(easy.greedy_success)):
+            raise SystemExit(f"[FATAL] picked easy rid={easy_rid} but greedy_success=False or city mismatch (city={city}).")
         easy = Case(**{**asdict(easy), "category": "easy"})
         out_cases.append(easy)
 
@@ -430,6 +485,7 @@ def _pick_cases(
                 "city": int(city),
                 "city_name": str(city_name),
                 "easy_route_id": int(easy.route_id),
+                "easy_detour_filter_relaxed": bool(easy_relaxed),
                 "recovered_route_id": int(recovered.route_id),
                 "hard_route_id": int(hard.route_id),
             }
@@ -461,6 +517,9 @@ def build_argparser() -> argparse.ArgumentParser:
     p.add_argument("--pad_frac", type=float, default=0.2, help="Plot bbox padding for per-case view.")
     p.add_argument("--bg_alpha", type=float, default=0.4)
     p.add_argument("--bg_s", type=float, default=0.8, help="Way-center background marker size.")
+    p.add_argument("--easy_min_hops", type=int, default=5, help="Easy-case filter: min GT hops (PI: 5).")
+    p.add_argument("--easy_max_hops", type=int, default=20, help="Easy-case filter: max GT hops (PI: 20).")
+    p.add_argument("--easy_max_detour", type=float, default=1.5, help="Easy-case filter: max GT detour over shortest (PI: 1.5).")
     return p
 
 
@@ -509,6 +568,7 @@ def main() -> None:
     idx_np = np.asarray(wg["way_adj_idx"], dtype=np.int64)
     way_center_y = np.asarray(wf["way_center_y"], dtype=np.float64).reshape(-1)
     way_center_x = np.asarray(wf["way_center_x"], dtype=np.float64).reshape(-1)
+    way_len_m = np.asarray(wf["way_len_m"], dtype=np.float64).reshape(-1)
 
     # Build AE (infer decoder cfg from state dict; keep consistent with eval scripts).
     way_features = load_way_features_from_npz(Path(way_features_npz), device=device)
@@ -585,6 +645,9 @@ def main() -> None:
         beam10_rep=beam10_rep,
         city_names=city_names,
         beam_size=int(args.beam_size),
+        easy_min_hops=int(args.easy_min_hops),
+        easy_max_hops=int(args.easy_max_hops),
+        easy_max_detour=float(args.easy_max_detour),
         out_dir=out_dir,
     )
 
@@ -607,8 +670,13 @@ def main() -> None:
                 g_x, g_y = _seq_to_xy(c.greedy_way_ids, way_center_x=way_center_x, way_center_y=way_center_y)
                 b_x, b_y = _seq_to_xy(c.beam_way_ids, way_center_x=way_center_x, way_center_y=way_center_y)
 
-                sx, sy = float(c.start_pos_yx[1]), float(c.start_pos_yx[0])
-                dx, dy = float(c.dest_pos_yx[1]), float(c.dest_pos_yx[0])
+                # For visualization: use start/dest way-centers (align with plotted trajectories).
+                if gt_x.size > 0 and gt_y.size > 0:
+                    sx, sy = float(gt_x[0]), float(gt_y[0])
+                    dx, dy = float(gt_x[-1]), float(gt_y[-1])
+                else:
+                    sx, sy = float(c.start_pos_yx[1]), float(c.start_pos_yx[0])
+                    dx, dy = float(c.dest_pos_yx[1]), float(c.dest_pos_yx[0])
 
                 xmin, xmax, ymin, ymax = _compute_bbox([gt_x, g_x, b_x, np.asarray([sx, dx])], [gt_y, g_y, b_y, np.asarray([sy, dy])], pad_frac=float(args.pad_frac))
                 mask = (way_center_x >= xmin) & (way_center_x <= xmax) & (way_center_y >= ymin) & (way_center_y <= ymax)
@@ -637,6 +705,26 @@ def main() -> None:
                 city_name = city_names.get(int(city), f"city{int(city)}")
                 cat_title = {"easy": "Easy", "recovered": "Recovered", "hard": "Hard"}[str(cat)]
                 ax.set_title(f"{city_name} · {cat_title} (rid={c.route_id})")
+
+                # Granularity info (always show): dest-way length + avg way length on GT route.
+                gt_ids = np.asarray([int(x) for x in (c.gt_way_ids or [])], dtype=np.int64)
+                gt_ids = gt_ids[gt_ids >= 0]
+                gt_lens = way_len_m[np.clip(gt_ids, 0, way_len_m.size - 1)] if gt_ids.size else np.asarray([], dtype=np.float64)
+                avg_len = float(np.mean(gt_lens)) if gt_lens.size else float("nan")
+                dest_way = int(gt_ids[-1]) if gt_ids.size else -1
+                dest_len = float(way_len_m[dest_way]) if 0 <= dest_way < int(way_len_m.size) else float("nan")
+                ax.text(
+                    0.98,
+                    0.02,
+                    f"GT hops: {int(c.gt_hops)}\nDest way: {dest_len:.0f}m\nAvg way: {avg_len:.0f}m",
+                    transform=ax.transAxes,
+                    ha="right",
+                    va="bottom",
+                    fontsize=9,
+                    color="#222222",
+                    bbox=dict(boxstyle="round,pad=0.2", facecolor="white", edgecolor="none", alpha=0.75),
+                    zorder=10,
+                )
 
                 # Hard-case annotation (only).
                 if str(cat) == "hard":
@@ -667,12 +755,22 @@ def main() -> None:
                 panel += 1
 
         if legend_handles is not None:
+            bg_handle = Line2D(
+                [0],
+                [0],
+                marker="o",
+                linestyle="None",
+                markerfacecolor="#DDDDDD",
+                markeredgecolor="none",
+                markersize=6.0,
+                alpha=0.8,
+            )
             fig.legend(
-                handles=legend_handles,
-                labels=["GT", "Greedy", "Beam-10", "O", "D"],
-                loc="upper center",
-                bbox_to_anchor=(0.5, 0.02),
-                ncol=5,
+                handles=[*legend_handles, bg_handle],
+                labels=["GT", "Greedy", "Beam-10", "O", "D", "Road graph"],
+                loc="lower center",
+                bbox_to_anchor=(0.5, 0.01),
+                ncol=6,
                 frameon=False,
             )
 

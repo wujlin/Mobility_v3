@@ -205,8 +205,10 @@ def main() -> None:
         xmin, xmax, ymin, ymax = d["bbox"]
         h_fail = _hist2d(d["fail10_x"], d["fail10_y"], xmin=xmin, xmax=xmax, ymin=ymin, ymax=ymax, bins=int(args.bins_fail))
         h_fail_log = np.log1p(h_fail)
+        h_fail_log[h_fail <= 0] = np.nan
         fail_hists[int(city)] = h_fail_log
-        vmax_fail = max(vmax_fail, float(np.max(h_fail_log)))
+        if np.isfinite(h_fail_log).any():
+            vmax_fail = max(vmax_fail, float(np.nanmax(h_fail_log)))
 
         # success-rate grid (greedy): sum(success)/count per bin.
         h_cnt = _hist2d(d["starts_x"], d["starts_y"], xmin=xmin, xmax=xmax, ymin=ymin, ymax=ymax, bins=int(args.bins_rate))
@@ -258,6 +260,11 @@ def main() -> None:
 
     # Plot: rows=cities, cols=[fail density, greedy success rate].
     with paper_style():
+        cmap_fail = plt.get_cmap("magma").copy()
+        cmap_fail.set_bad(color=(1.0, 1.0, 1.0, 0.0))
+        cmap_rate = plt.get_cmap("viridis").copy()
+        cmap_rate.set_bad(color=(1.0, 1.0, 1.0, 0.0))
+
         fig, axes = plt.subplots(nrows=2, ncols=2, figsize=(12.6, 7.2), constrained_layout=True)
         panel = 0
 
@@ -287,16 +294,28 @@ def main() -> None:
                 fail_hists[int(city)],
                 origin="upper",
                 extent=(xmin, xmax, ymax, ymin),
-                cmap="magma",
+                cmap=cmap_fail,
                 vmin=0.0,
                 vmax=vmax_fail if vmax_fail > 0 else None,
-                alpha=0.92,
+                alpha=0.88,
                 zorder=2,
                 interpolation="nearest",
             )
             # Overlay failure points (small N; helps interpret heatmap)
             if d["fail10_x"].size > 0:
                 ax0.scatter(d["fail10_x"], d["fail10_y"], s=28, c=OKABE_ITO["vermillion"], alpha=0.9, linewidths=0, zorder=3)
+            ax0.text(
+                0.02,
+                0.02,
+                f"n_fail={int(d['fail10_x'].size)}/{int(len(d['rids']))}",
+                transform=ax0.transAxes,
+                ha="left",
+                va="bottom",
+                fontsize=9,
+                color="#222222",
+                bbox=dict(boxstyle="round,pad=0.2", facecolor="white", edgecolor="none", alpha=0.75),
+                zorder=10,
+            )
             ax0.set_title(f"{city_names.get(int(city), f'city{city}')} · Beam-10 failures (start density)")
             ax0.set_xlim(xmin, xmax)
             ax0.set_ylim(ymin, ymax)
@@ -323,12 +342,26 @@ def main() -> None:
                 rate_hists[int(city)],
                 origin="upper",
                 extent=(xmin, xmax, ymax, ymin),
-                cmap="viridis",
+                cmap=cmap_rate,
                 vmin=0.0,
                 vmax=1.0,
                 alpha=0.92,
                 zorder=2,
                 interpolation="nearest",
+            )
+            sr = float(np.mean(d["succ_flags"])) if int(d["succ_flags"].size) > 0 else float("nan")
+            sr_s = f"{sr:.1%}" if np.isfinite(sr) else "n/a"
+            ax1.text(
+                0.02,
+                0.02,
+                f"greedy={sr_s} (n={int(d['succ_flags'].size)})",
+                transform=ax1.transAxes,
+                ha="left",
+                va="bottom",
+                fontsize=9,
+                color="#222222",
+                bbox=dict(boxstyle="round,pad=0.2", facecolor="white", edgecolor="none", alpha=0.75),
+                zorder=10,
             )
             ax1.set_title(f"{city_names.get(int(city), f'city{city}')} · Greedy success rate (start bins)")
             ax1.set_xlim(xmin, xmax)

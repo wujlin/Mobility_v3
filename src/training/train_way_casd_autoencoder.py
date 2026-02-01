@@ -36,6 +36,7 @@ class TrainCfg:
     seed: int
     device: str
     tz_offset_hours: float
+    min_hops: int
     max_way_len: int
     max_candidates: int
     max_routes: Optional[int]
@@ -139,6 +140,7 @@ def build_argparser() -> argparse.ArgumentParser:
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--device", type=str, default="cuda")
     p.add_argument("--tz_offset_hours", type=float, default=-5.0)
+    p.add_argument("--min_hops", type=int, default=1, help="Filter routes with fewer than this many way transitions (hops).")
     p.add_argument("--max_way_len", type=int, default=128)
     p.add_argument("--max_candidates", type=int, default=32)
     p.add_argument("--max_routes", type=int, default=None, help="Debug: cap number of routes (after filtering).")
@@ -210,6 +212,7 @@ def main() -> None:
         seed=int(args.seed),
         device=str(args.device),
         tz_offset_hours=float(args.tz_offset_hours),
+        min_hops=int(args.min_hops),
         max_way_len=int(args.max_way_len),
         max_candidates=int(args.max_candidates),
         max_routes=(int(args.max_routes) if args.max_routes is not None else None),
@@ -244,11 +247,13 @@ def main() -> None:
         log.info(f"loaded way_semantic: n_channels={n_semantic}")
 
     routes = load_way_routes_npz(Path(args.way_routes_npz))
-    dataset = WayRouteDataset(routes, max_routes=cfg.max_routes, max_way_len=int(cfg.max_way_len))
+    dataset = WayRouteDataset(routes, max_routes=cfg.max_routes, max_way_len=int(cfg.max_way_len), min_hops=int(cfg.min_hops))
     train_ids, val_ids = _split_dataset(len(dataset), cfg.val_ratio, cfg.seed)
     train_set = Subset(dataset, train_ids.tolist())
     val_set = Subset(dataset, val_ids.tolist())
-    log.info(f"routes: total={len(dataset)} train={len(train_set)} val={len(val_set)} max_way_len={cfg.max_way_len}")
+    log.info(
+        f"routes: total={len(dataset)} train={len(train_set)} val={len(val_set)} min_hops={cfg.min_hops} max_way_len={cfg.max_way_len}"
+    )
 
     collate_fn = make_way_casd_collate_fn(
         way_adj_ptr=wg["way_adj_ptr"],

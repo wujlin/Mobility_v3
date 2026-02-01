@@ -93,7 +93,7 @@ def _hist2d(
 def build_argparser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description="WayCASD macro overview: failure clustering + difficulty partition (by start location).")
     p.add_argument("--eval_dir", type=Path, required=True, help="Strong-ckpt eval dir (oracle_decode_greedy/beam10 json).")
-    p.add_argument("--out_dir", type=Path, default=Path("_sync/wsa/paper_figures/waycasd_v1/macro"))
+    p.add_argument("--out_dir", type=Path, default=Path("_sync/wsa/paper_figures/waycasd_v1/min5_s0/macro"))
     p.add_argument("--style", type=str, choices=["paper"], default="paper")
     p.add_argument("--greedy_json", type=Path, default=None)
     p.add_argument("--beam10_json", type=Path, default=None)
@@ -161,7 +161,9 @@ def main() -> None:
         starts_x: List[float] = []
         starts_y: List[float] = []
         greedy_succ_set = set(int(x) for x in g.get(int(city), {}).get("success_ids", []))
+        beam_succ_set = set(int(x) for x in b10.get(int(city), {}).get("success_ids", []))
         succ_flags: List[int] = []
+        beam_flags: List[int] = []
         for rid in rids:
             rid = int(rid)
             if int(routes.route_city[rid]) != int(city):
@@ -170,6 +172,7 @@ def main() -> None:
             starts_y.append(float(sp[0]))
             starts_x.append(float(sp[1]))
             succ_flags.append(1 if int(rid) in greedy_succ_set else 0)
+            beam_flags.append(1 if int(rid) in beam_succ_set else 0)
 
         fail10_ids = set(int(x) for x in b10.get(int(city), {}).get("fail_ids", []))
         fail10_x: List[float] = []
@@ -191,6 +194,7 @@ def main() -> None:
             "starts_x": starts_xa,
             "starts_y": starts_ya,
             "succ_flags": np.asarray(succ_flags, dtype=np.int64),
+            "beam_flags": np.asarray(beam_flags, dtype=np.int64),
             "fail10_x": np.asarray(fail10_x, dtype=np.float64),
             "fail10_y": np.asarray(fail10_y, dtype=np.float64),
             "bbox": (xmin, xmax, ymin, ymax),
@@ -200,7 +204,10 @@ def main() -> None:
     vmax_fail = 0.0
     fail_hists: Dict[int, np.ndarray] = {}
     rate_hists: Dict[int, np.ndarray] = {}
+    beam_rate_hists: Dict[int, np.ndarray] = {}
+    delta_hists: Dict[int, np.ndarray] = {}
     rate_counts: Dict[int, np.ndarray] = {}
+    vmax_delta = 0.0
     for city, d in city_data.items():
         xmin, xmax, ymin, ymax = d["bbox"]
         h_fail = _hist2d(d["fail10_x"], d["fail10_y"], xmin=xmin, xmax=xmax, ymin=ymin, ymax=ymax, bins=int(args.bins_fail))
@@ -219,6 +226,7 @@ def main() -> None:
         xs = xs[mask]
         ys = ys[mask]
         sf = d["succ_flags"][mask]
+        sf2 = np.asarray(d.get("beam_flags", np.zeros_like(d["succ_flags"], dtype=np.int64)), dtype=np.int64)[mask]
         h_succ = np.zeros_like(h_cnt, dtype=np.float32)
         if xs.size > 0:
             # Map points to bins (same binning as histogram2d).
@@ -230,6 +238,21 @@ def main() -> None:
         rate[h_cnt <= 0] = np.nan
         rate_hists[int(city)] = rate
         rate_counts[int(city)] = h_cnt
+
+        # success-rate grid (beam10): same binning, different flags.
+        h_succ2 = np.zeros_like(h_cnt, dtype=np.float32)
+        if xs.size > 0:
+            for ix, iy, v in zip(bx.tolist(), by.tolist(), sf2.tolist()):
+                h_succ2[int(iy), int(ix)] += float(v)
+        rate2 = np.divide(h_succ2, np.maximum(1.0, h_cnt), dtype=np.float32)
+        rate2[h_cnt <= 0] = np.nan
+        beam_rate_hists[int(city)] = rate2
+
+        delta = (rate2 - rate).astype(np.float32, copy=False)
+        delta[h_cnt <= 0] = np.nan
+        delta_hists[int(city)] = delta
+        if np.isfinite(delta).any():
+            vmax_delta = max(vmax_delta, float(np.nanmax(np.abs(delta))))
 
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -247,6 +270,7 @@ def main() -> None:
         },
         "bins_fail": int(args.bins_fail),
         "bins_rate": int(args.bins_rate),
+        "vmax_delta": float(vmax_delta),
         "per_city": {},
     }
     for city, d in city_data.items():
@@ -258,21 +282,24 @@ def main() -> None:
         }
     (out_dir / "waycasd_city_macro_overview_meta.json").write_text(json.dumps(meta, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
-    # Plot: rows=cities, cols=[fail density, greedy success rate].
+    # Plot: rows=cities, cols=[fail density, greedy success rate, beam gain].
     with paper_style():
         cmap_fail = plt.get_cmap("magma").copy()
         cmap_fail.set_bad(color=(1.0, 1.0, 1.0, 0.0))
         cmap_rate = plt.get_cmap("viridis").copy()
         cmap_rate.set_bad(color=(1.0, 1.0, 1.0, 0.0))
+        cmap_delta = plt.get_cmap("coolwarm").copy()
+        cmap_delta.set_bad(color=(1.0, 1.0, 1.0, 0.0))
 
-        fig, axes = plt.subplots(nrows=2, ncols=2, figsize=(12.6, 7.2), constrained_layout=True)
+        fig, axes = plt.subplots(nrows=2, ncols=3, figsize=(17.4, 7.2), constrained_layout=True)
         panel = 0
 
         ims_fail = []
         ims_rate = []
+        ims_delta = []
         for r, city in enumerate([0, 1]):
             if int(city) not in city_data:
-                for cc in (0, 1):
+                for cc in (0, 1, 2):
                     axes[r, cc].axis("off")
                 continue
             d = city_data[int(city)]
@@ -374,6 +401,57 @@ def main() -> None:
             panel += 1
             ims_rate.append(im1)
 
+            # C: beam gain (beam10 success rate - greedy success rate)
+            ax2 = axes[r, 2]
+            ax2.scatter(
+                way_center_x[mask_bg],
+                way_center_y[mask_bg],
+                s=float(args.bg_s),
+                c="#DDDDDD",
+                alpha=float(args.bg_alpha),
+                linewidths=0,
+                zorder=1,
+            )
+            vmax = max(0.05, float(vmax_delta)) if np.isfinite(float(vmax_delta)) else 0.25
+            im2 = ax2.imshow(
+                delta_hists[int(city)],
+                origin="upper",
+                extent=(xmin, xmax, ymax, ymin),
+                cmap=cmap_delta,
+                vmin=-vmax,
+                vmax=vmax,
+                alpha=0.92,
+                zorder=2,
+                interpolation="nearest",
+            )
+            bf = np.asarray(d.get("beam_flags", []), dtype=np.float64).reshape(-1)
+            gf = np.asarray(d.get("succ_flags", []), dtype=np.float64).reshape(-1)
+            sr_b = float(np.mean(bf)) if bf.size else float("nan")
+            sr_g = float(np.mean(gf)) if gf.size else float("nan")
+            delta_sr = sr_b - sr_g if (np.isfinite(sr_b) and np.isfinite(sr_g)) else float("nan")
+            ax2.text(
+                0.02,
+                0.02,
+                f"beam10={sr_b:.1%} (Δ={delta_sr:+.1%})",
+                transform=ax2.transAxes,
+                ha="left",
+                va="bottom",
+                fontsize=9,
+                color="#222222",
+                bbox=dict(boxstyle="round,pad=0.2", facecolor="white", edgecolor="none", alpha=0.75),
+                zorder=10,
+            )
+            ax2.set_title(f"{city_names.get(int(city), f'city{city}')} · Beam-10 gain (Δ success rate)")
+            ax2.set_xlim(xmin, xmax)
+            ax2.set_ylim(ymin, ymax)
+            ax2.set_aspect("equal", adjustable="box")
+            ax2.invert_yaxis()
+            ax2.set_xticks([])
+            ax2.set_yticks([])
+            add_panel_label(ax2, chr(ord("a") + panel))
+            panel += 1
+            ims_delta.append(im2)
+
         # Shared colorbars (one per column).
         if ims_fail:
             cbar0 = fig.colorbar(ims_fail[0], ax=[axes[0, 0], axes[1, 0]], fraction=0.030, pad=0.02)
@@ -381,6 +459,9 @@ def main() -> None:
         if ims_rate:
             cbar1 = fig.colorbar(ims_rate[0], ax=[axes[0, 1], axes[1, 1]], fraction=0.030, pad=0.02)
             cbar1.set_label("success rate")
+        if ims_delta:
+            cbar2 = fig.colorbar(ims_delta[0], ax=[axes[0, 2], axes[1, 2]], fraction=0.030, pad=0.02)
+            cbar2.set_label("Δ success rate (beam10 - greedy)")
 
         out_pdf = out_dir / "waycasd_city_macro_overview.pdf"
         out_png = out_dir / "waycasd_city_macro_overview.png"

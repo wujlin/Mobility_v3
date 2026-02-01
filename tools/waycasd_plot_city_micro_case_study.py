@@ -10,6 +10,7 @@ if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
 import argparse
+import csv
 import json
 from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta, timezone
@@ -42,6 +43,33 @@ def _require_file(path: Path) -> None:
         raise SystemExit(f"[FATAL] file not found: {path}")
     if not path.is_file():
         raise SystemExit(f"[FATAL] not a file: {path}")
+
+
+def _load_granularity_routes_csv(path: Path) -> Dict[int, Dict[str, Any]]:
+    """
+    Load per-route final error (meters) produced by `tools/waycasd_eval_granularity_stats.py`.
+
+    Returns: route_id -> dict with keys:
+      - greedy_final_pos_error_to_dest_pos
+      - beam10_final_pos_error_to_dest_pos
+      - final_pos_error_unit
+    """
+    out: Dict[int, Dict[str, Any]] = {}
+    if not path.exists():
+        return out
+    with path.open("r", encoding="utf-8") as f:
+        r = csv.DictReader(f)
+        for row in r:
+            try:
+                rid = int(row.get("route_id", ""))
+            except Exception:
+                continue
+            out[int(rid)] = {
+                "greedy_final_pos_error_to_dest_pos": float(row.get("greedy_final_pos_error_to_dest_pos", "nan")),
+                "beam10_final_pos_error_to_dest_pos": float(row.get("beam10_final_pos_error_to_dest_pos", "nan")),
+                "final_pos_error_unit": str(row.get("final_pos_error_unit", "")),
+            }
+    return out
 
 
 def _hour_from_unix(start_t: int, tz_offset_hours: float) -> int:
@@ -379,6 +407,9 @@ def _pick_cases(
             )
             if int(case.city) != int(city):
                 continue
+            # Avoid trivial 1-2 hop cases (misleading visualization).
+            if int(case.gt_hops) < int(easy_min_hops):
+                continue
             if want == "recovered" and (not bool(case.greedy_success)) and bool(case.beam_success):
                 return case
             if want == "hard" and (not bool(case.beam_success)):
@@ -499,7 +530,7 @@ def _pick_cases(
 def build_argparser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description="WayCASD micro case study (GT vs Greedy vs Beam10) in city space.")
     p.add_argument("--eval_dir", type=Path, required=True, help="Strong-ckpt eval dir (contains oracle_decode_greedy/beam10 json).")
-    p.add_argument("--out_dir", type=Path, default=Path("_sync/wsa/paper_figures/waycasd_v1/micro"))
+    p.add_argument("--out_dir", type=Path, default=Path("_sync/wsa/paper_figures/waycasd_v1/min5_s0/micro"))
     p.add_argument("--style", type=str, choices=["paper"], default="paper")
     p.add_argument("--cases_per_city", type=int, default=3, help="PI default: 3 (easy/recovered/hard).")
 
@@ -510,6 +541,12 @@ def build_argparser() -> argparse.ArgumentParser:
     p.add_argument("--way_graph_npz", type=Path, default=None)
     p.add_argument("--way_features_npz", type=Path, default=None)
     p.add_argument("--ae_ckpt", type=Path, default=None)
+    p.add_argument(
+        "--granularity_routes_csv",
+        type=Path,
+        default=None,
+        help="Optional per-route granularity metrics csv (from tools/waycasd_eval_granularity_stats.py). If omitted, will try <eval_dir>/metrics/waycasd_eval_granularity_routes.csv.",
+    )
 
     p.add_argument("--beam_size", type=int, default=10)
     p.add_argument("--city_name", type=str, nargs="*", default=["0:Detroit", "1:Columbus"])
@@ -569,6 +606,12 @@ def main() -> None:
     way_center_y = np.asarray(wf["way_center_y"], dtype=np.float64).reshape(-1)
     way_center_x = np.asarray(wf["way_center_x"], dtype=np.float64).reshape(-1)
     way_len_m = np.asarray(wf["way_len_m"], dtype=np.float64).reshape(-1)
+    gran_csv = (
+        Path(args.granularity_routes_csv)
+        if args.granularity_routes_csv is not None
+        else (eval_dir / "metrics" / "waycasd_eval_granularity_routes.csv")
+    )
+    gran = _load_granularity_routes_csv(Path(gran_csv))
 
     # Build AE (infer decoder cfg from state dict; keep consistent with eval scripts).
     way_features = load_way_features_from_npz(Path(way_features_npz), device=device)
@@ -713,10 +756,32 @@ def main() -> None:
                 avg_len = float(np.mean(gt_lens)) if gt_lens.size else float("nan")
                 dest_way = int(gt_ids[-1]) if gt_ids.size else -1
                 dest_len = float(way_len_m[dest_way]) if 0 <= dest_way < int(way_len_m.size) else float("nan")
+
+                g_err = None
+                b_err = None
+                unit = None
+                m = gran.get(int(c.route_id), None)
+                if isinstance(m, dict):
+                    unit = str(m.get("final_pos_error_unit", ""))
+                    if "meters" in unit:
+                        unit = "m"
+                    g_err = m.get("greedy_final_pos_error_to_dest_pos", None)
+                    b_err = m.get("beam10_final_pos_error_to_dest_pos", None)
+                err_line = ""
+                if g_err is not None and b_err is not None and unit is not None:
+                    try:
+                        err_line = f"Err@dest: G={float(g_err):.0f}{unit}, B10={float(b_err):.0f}{unit}"
+                    except Exception:
+                        err_line = ""
                 ax.text(
                     0.98,
                     0.02,
-                    f"GT hops: {int(c.gt_hops)}\nDest way: {dest_len:.0f}m\nAvg way: {avg_len:.0f}m",
+                    (
+                        f"GT hops: {int(c.gt_hops)}\n"
+                        f"Dest way: {dest_len:.0f}m\n"
+                        f"Avg way: {avg_len:.0f}m"
+                        + (f"\n{err_line}" if err_line else "")
+                    ),
                     transform=ax.transAxes,
                     ha="right",
                     va="bottom",

@@ -1,0 +1,6 @@
+[Filter] min_hops=5 max_way_len=160 keep=5022/7502 (66.9%)
+[Hops all] {'p25': -1, 'p50': 13, 'p75': 30, 'p95': 57}
+[Hops keep] {'p25': 13, 'p50': 25, 'p75': 39, 'p95': 61}
+[City 0] keep=1394/2279 (61.2%)
+[City 1] keep=3628/5223 (69.5%)
+[OK] saved: _sync/wsa/pi_verify/20260201_min5_candq1_past8_len160_s0/filter_routes_min5_max160.json

@@ -1,0 +1,8 @@
+[OK] saved: _sync/wsa/pi_verify/20260201_min5_candq1_past8_len160_s0/metrics/waycasd_eval_granularity_stats.json
+[OK] saved: _sync/wsa/pi_verify/20260201_min5_candq1_past8_len160_s0/metrics/waycasd_eval_granularity_routes.csv
+[OK] saved: _sync/wsa/pi_verify/20260201_min5_candq1_past8_len160_s0/metrics/waycasd_eval_granularity_paper_snippet.md
+[WayLen(m)] p25=26 p50=74 p75=196 p95=638 max=3706
+[DestWayLen(m)] p50=213 p95=1377
+[RouteAvgWayLen(m)] p25=151 p50=204 p75=273 p95=449
+[FinalPosErr -> dest_pos] unit=grid_units beam10_success_p50=3 p95=28 | beam10_fail_p50=204 p95=673
+[StrictFilter avg_way_len] thr=2000m kept=400 removed=0 greedy=0.4400 beam10=0.7550

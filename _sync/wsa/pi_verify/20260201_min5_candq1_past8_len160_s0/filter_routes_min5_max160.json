@@ -1,0 +1,63 @@
+{
+  "ok": true,
+  "task": "waycasd_filter_routes_stats",
+  "created_at": "2026-02-01T12:22:34.306265+08:00",
+  "inputs": {
+    "way_routes_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD1_waydata_rustbelt_seed0_strict_v1/W5_way_routes_strict/way_routes_strict_masklen0.npz",
+    "min_hops": 5,
+    "max_way_len": 160
+  },
+  "overall": {
+    "n_total": 7502,
+    "n_keep": 5022,
+    "keep_frac": 0.6694214876033058,
+    "hops_quantiles_all": {
+      "p25": -1,
+      "p50": 13,
+      "p75": 30,
+      "p95": 57
+    },
+    "hops_quantiles_keep": {
+      "p25": 13,
+      "p50": 25,
+      "p75": 39,
+      "p95": 61
+    }
+  },
+  "by_city": {
+    "0": {
+      "n_total": 2279,
+      "n_keep": 1394,
+      "keep_frac": 0.611671785870996,
+      "hops_quantiles_all": {
+        "p25": -1,
+        "p50": 15,
+        "p75": 39,
+        "p95": 60
+      },
+      "hops_quantiles_keep": {
+        "p25": 19,
+        "p50": 34,
+        "p75": 49,
+        "p95": 64
+      }
+    },
+    "1": {
+      "n_total": 5223,
+      "n_keep": 3628,
+      "keep_frac": 0.69461995022018,
+      "hops_quantiles_all": {
+        "p25": 1,
+        "p50": 12,
+        "p75": 27,
+        "p95": 55
+      },
+      "hops_quantiles_keep": {
+        "p25": 11,
+        "p50": 21,
+        "p75": 34,
+        "p95": 59
+      }
+    }
+  }
+}

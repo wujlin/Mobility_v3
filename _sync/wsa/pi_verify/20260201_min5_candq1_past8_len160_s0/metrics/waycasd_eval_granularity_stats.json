@@ -1,0 +1,325 @@
+{
+  "ok": true,
+  "task": "waycasd_eval_granularity_stats",
+  "created_at": "2026-02-01T12:51:30.142923+08:00",
+  "eval_dir": "_sync/wsa/pi_verify/20260201_min5_candq1_past8_len160_s0",
+  "inputs": {
+    "greedy_json": "_sync/wsa/pi_verify/20260201_min5_candq1_past8_len160_s0/oracle_decode_greedy_n200.json",
+    "beam10_json": "_sync/wsa/pi_verify/20260201_min5_candq1_past8_len160_s0/oracle_decode_beam10_n200.json",
+    "way_routes_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD1_waydata_rustbelt_seed0_strict_v1/W5_way_routes_strict/way_routes_strict_masklen0.npz",
+    "way_features_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD1_waydata_rustbelt_seed0_strict_v1/W4_way_features_sem/way_features.npz"
+  },
+  "mismatches": {
+    "only_in_greedy": [],
+    "only_in_beam10": [],
+    "n_only_in_greedy": 0,
+    "n_only_in_beam10": 0
+  },
+  "way_len_m": {
+    "n_way": 19551,
+    "mean_m": 164.30994277635529,
+    "quantiles_m": {
+      "p25": 26.24899959564209,
+      "p50": 74.08899688720703,
+      "p75": 195.75950622558594,
+      "p95": 637.7275085449219
+    },
+    "frac_ge_1000m": 0.017390414812541558,
+    "frac_ge_2000m": 0.0020970794332770704,
+    "max_m": 3705.554931640625
+  },
+  "dest_way_len_m_on_eval_routes": {
+    "n": 400,
+    "mean_m": 363.2946168422699,
+    "quantiles_m": {
+      "p25": 81.72699737548828,
+      "p50": 212.6195068359375,
+      "p75": 469.3515090942383,
+      "p95": 1376.5279541015625
+    }
+  },
+  "route_avg_way_len_m_on_eval_routes": {
+    "all": {
+      "n": 400,
+      "mean_m": 226.77805495019675,
+      "quantiles_m": {
+        "p25": 151.34937570743872,
+        "p50": 204.3656072993751,
+        "p75": 272.77042813404745,
+        "p95": 449.3148043314612
+      }
+    },
+    "hops_1_5": {
+      "n": 11,
+      "mean_m": 332.2833951314291,
+      "quantiles_m": {
+        "p25": 286.0540029207865,
+        "p50": 302.7034959793091,
+        "p75": 329.01399755477905,
+        "p95": 563.8931725819906
+      }
+    }
+  },
+  "final_pos_error": {
+    "units_seen": [
+      "grid_units"
+    ],
+    "to_dest_pos": {
+      "greedy": {
+        "success": {
+          "n": 176,
+          "mean": 7.689433582527758,
+          "quantiles": {
+            "p50": 3.1753096350677956,
+            "p75": 11.526537970245224,
+            "p95": 31.970521276655205
+          }
+        },
+        "failure": {
+          "n": 224,
+          "mean": 187.47413315702784,
+          "quantiles": {
+            "p50": 130.1960787449656,
+            "p75": 272.03846705063336,
+            "p95": 545.164310087986
+          }
+        }
+      },
+      "beam10": {
+        "success": {
+          "n": 302,
+          "mean": 6.48567324871873,
+          "quantiles": {
+            "p50": 2.5197546709349856,
+            "p75": 7.230928648093827,
+            "p95": 27.535984859340395
+          }
+        },
+        "failure": {
+          "n": 98,
+          "mean": 267.91472063376625,
+          "quantiles": {
+            "p50": 203.86024986820718,
+            "p75": 404.08387771059586,
+            "p95": 673.4447548966145
+          }
+        }
+      }
+    },
+    "to_dest_way_center": {
+      "greedy": {
+        "success": {
+          "n": 176,
+          "mean": 0.0,
+          "quantiles": {
+            "p50": 0.0,
+            "p75": 0.0,
+            "p95": 0.0
+          }
+        },
+        "failure": {
+          "n": 224,
+          "mean": 185.65078798115152,
+          "quantiles": {
+            "p50": 127.83073856333004,
+            "p75": 267.7543756422971,
+            "p95": 534.8753632622012
+          }
+        }
+      },
+      "beam10": {
+        "success": {
+          "n": 302,
+          "mean": 0.0,
+          "quantiles": {
+            "p50": 0.0,
+            "p75": 0.0,
+            "p95": 0.0
+          }
+        },
+        "failure": {
+          "n": 98,
+          "mean": 267.9857945647432,
+          "quantiles": {
+            "p50": 205.11744871287277,
+            "p75": 402.60671647402063,
+            "p95": 673.2933559711538
+          }
+        }
+      }
+    }
+  },
+  "stratified_success_rate": {
+    "greedy": {
+      "way_bins": [
+        "<500m",
+        "500m-1km",
+        ">1km"
+      ],
+      "hop_bins": [
+        "<10",
+        "10-20",
+        "20-50",
+        ">50"
+      ],
+      "cells": {
+        "<500m": {
+          "<10": {
+            "n": 45.0,
+            "succ": 32.0,
+            "rate": 0.7111111111111111
+          },
+          "10-20": {
+            "n": 90.0,
+            "succ": 49.0,
+            "rate": 0.5444444444444444
+          },
+          "20-50": {
+            "n": 190.0,
+            "succ": 74.0,
+            "rate": 0.3894736842105263
+          },
+          ">50": {
+            "n": 65.0,
+            "succ": 13.0,
+            "rate": 0.2
+          }
+        },
+        "500m-1km": {
+          "<10": {
+            "n": 3.0,
+            "succ": 2.0,
+            "rate": 0.6666666666666666
+          },
+          "10-20": {
+            "n": 7.0,
+            "succ": 6.0,
+            "rate": 0.8571428571428571
+          },
+          "20-50": {
+            "n": 0.0,
+            "succ": 0.0,
+            "rate": NaN
+          },
+          ">50": {
+            "n": 0.0,
+            "succ": 0.0,
+            "rate": NaN
+          }
+        },
+        ">1km": {
+          "<10": {
+            "n": 0.0,
+            "succ": 0.0,
+            "rate": NaN
+          },
+          "10-20": {
+            "n": 0.0,
+            "succ": 0.0,
+            "rate": NaN
+          },
+          "20-50": {
+            "n": 0.0,
+            "succ": 0.0,
+            "rate": NaN
+          },
+          ">50": {
+            "n": 0.0,
+            "succ": 0.0,
+            "rate": NaN
+          }
+        }
+      }
+    },
+    "beam10": {
+      "way_bins": [
+        "<500m",
+        "500m-1km",
+        ">1km"
+      ],
+      "hop_bins": [
+        "<10",
+        "10-20",
+        "20-50",
+        ">50"
+      ],
+      "cells": {
+        "<500m": {
+          "<10": {
+            "n": 45.0,
+            "succ": 42.0,
+            "rate": 0.9333333333333333
+          },
+          "10-20": {
+            "n": 90.0,
+            "succ": 81.0,
+            "rate": 0.9
+          },
+          "20-50": {
+            "n": 190.0,
+            "succ": 136.0,
+            "rate": 0.7157894736842105
+          },
+          ">50": {
+            "n": 65.0,
+            "succ": 34.0,
+            "rate": 0.5230769230769231
+          }
+        },
+        "500m-1km": {
+          "<10": {
+            "n": 3.0,
+            "succ": 3.0,
+            "rate": 1.0
+          },
+          "10-20": {
+            "n": 7.0,
+            "succ": 6.0,
+            "rate": 0.8571428571428571
+          },
+          "20-50": {
+            "n": 0.0,
+            "succ": 0.0,
+            "rate": NaN
+          },
+          ">50": {
+            "n": 0.0,
+            "succ": 0.0,
+            "rate": NaN
+          }
+        },
+        ">1km": {
+          "<10": {
+            "n": 0.0,
+            "succ": 0.0,
+            "rate": NaN
+          },
+          "10-20": {
+            "n": 0.0,
+            "succ": 0.0,
+            "rate": NaN
+          },
+          "20-50": {
+            "n": 0.0,
+            "succ": 0.0,
+            "rate": NaN
+          },
+          ">50": {
+            "n": 0.0,
+            "succ": 0.0,
+            "rate": NaN
+          }
+        }
+      }
+    }
+  },
+  "strict_eval_filter_avg_way_len": {
+    "threshold_avg_way_len_m": 2000.0,
+    "kept_n": 400,
+    "removed_n": 0,
+    "removed_frac": 0.0,
+    "greedy_success_rate": 0.44,
+    "beam10_success_rate": 0.755
+  },
+  "n_eval_routes": 400
+}

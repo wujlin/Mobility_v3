@@ -160,6 +160,11 @@ next_way = candidates[argmax(logits)]
 | candq=0（候选无关） | 58.25% | baseline |
 | candq=1（候选感知） | **82.25%** | **+24.0pp** |
 
+> 口径注释（避免误读）：以上数字来自 `z_enc informativeness` 诊断（GT→Encoder→latent→Decoder 的 *oracle/reconstruction* 上界），对应文件：  
+> - candq=0：`_sync/wsa/icml2026_routegen/WAYCASD_AB_candquery_strict_sem5_seed0_e100/WAYCASD_AB_candq0_pastctx_k8_strict_sem5_seed0_e100/W8_diag/zenc_info_n200.json`  
+> - candq=1：`_sync/wsa/icml2026_routegen/WAYCASD_AB_candquery_strict_sem5_seed0_e100/WAYCASD_AB_candq1_pastctx_k8_strict_sem5_seed0_e100/W8_diag/zenc_info_n200.json`  
+> 且该实验 **未采用 min_hops=5 的短路线过滤**；若论文主口径采用 min_hops=5（见 `docs/ICML_2026_WAYCASD_EXPERIMENT_LOG.md` 第 0.0 节），需要在同口径下重跑 ablation 才能直接放主表。
+
 | z_enc 条件 | candq=0 | candq=1 |
 |------------|---------|---------|
 | true | 58.25% | 82.25% |

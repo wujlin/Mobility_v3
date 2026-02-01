@@ -4,9 +4,37 @@
 > 工作站真实落盘与环境约定见：`docs/WORKSTATION_GUIDE.md`。  
 > legacy（Map-free / raster / segment）E 系列实验索引见：`docs/ICML_2026_ROUTEGEN_SYNC_MANIFEST.md`。
 
+> ⚠️ 2026-02-01 更新（min_hops=5 的“论文口径”）：我们新增了一条“过滤短路线(min_hops=5)→重训AE→Oracle Decode(beam)→granularity(米)”的结果链路，产物在 `_sync/wsa/pi_verify/20260201_min5_candq1_past8_len160_s0/`（以及对应可视化 `_sync/wsa/paper_figures/waycasd_v1/min5_s0/`）。  
+> 这条链路 **不在** `_sync/wsa/icml2026_routegen/` 下，因此单独在第 0 节补充，避免 PI 误把旧口径（未过滤短路线 / 不同 ckpt）当作当前主结果。
+
 ---
 
 ## 0. 一句话结论（当前状态）
+
+### 0.0 论文口径（min_hops=5，2026-02-01）
+
+**核心结论**：过滤短路线后，任务更“planning-like”，但 greedy 显著变难；beam=10 仍能带来稳定提升；并且我们已把“way-level success 的地理精度”用 meters 量化清楚（成功中位误差≈65m）。
+
+- **过滤比例（min_hops=5, max_way_len=160）**：keep=5022/7502=66.9%（Detroit 61.2%，Columbus 69.5%）。  
+  产物：`_sync/wsa/pi_verify/20260201_min5_candq1_past8_len160_s0/filter_routes_min5_max160.json`  
+  备注：该 JSON 为旧格式，包含 `p25=-1`（存在无效路线）；新版脚本 `tools/waycasd_filter_routes_stats.py` 已支持输出 valid_keep（后续建议补跑 v2 产物以免口径歧义）。
+- **Oracle Decode（GT→Encoder→latent→Decoder，上界；n=200/城，共 400）**：  
+  - Greedy：Detroit 0.32，Columbus 0.56，Overall 0.44  
+  - Beam=5：Detroit 0.56，Columbus 0.805，Overall 0.6825  
+  - Beam=10：Detroit 0.66，Columbus 0.85，Overall 0.755  
+  产物：`_sync/wsa/pi_verify/20260201_min5_candq1_past8_len160_s0/oracle_decode_*_n200.json`
+- **Granularity & 终点误差（meters）**：  
+  - way_len 分布：median=74m（p25=26m, p75=196m, p95=638m）  
+  - Beam-10 终点误差（pred_last_way_center→dest_pos）：成功 median=65m，p95=662m；失败 median=5.19km，p95=17.6km  
+  产物：`_sync/wsa/pi_verify/20260201_min5_candq1_past8_len160_s0/metrics/waycasd_eval_granularity_stats.json`  
+  论文 snippet：`_sync/wsa/pi_verify/20260201_min5_candq1_past8_len160_s0/metrics/waycasd_eval_granularity_paper_snippet.md`
+- **可视化（min5 口径）**：  
+  - Micro（每城 easy/recovered/hard，带 Err@dest 角标）：`_sync/wsa/paper_figures/waycasd_v1/min5_s0/micro/waycasd_city_micro_case_study.png`  
+  - Macro（三列：beam10 failure density / greedy success rate / beam gain）：`_sync/wsa/paper_figures/waycasd_v1/min5_s0/macro/waycasd_city_macro_overview.png`
+
+> 重要声明：以上为 **reconstruction/oracle 上界**（latent_source=gt），不是 end-to-end generation。要主张“generation”，必须补齐 Flow→sample latent→decode 的定量评测（见第 3.5 与后续 TODO）。
+
+### 0.1 历史口径（未过滤短路线 / strict_sem5 旧主线，2026-01）
 
 1. **Way-level 表示是主线**：用 WorldTrace 的 `osm_way_id` 构造 way 序列（p50≈24, p90≈54），相比 node/raster 表示能把序列长度压到文献可比的量级。
 2. **Strict 数据过滤后仍可训练**：默认严格 gate 后保留 `N=5353` routes（Detroit=1448, Columbus=3905）。
@@ -113,6 +141,24 @@ way features（含 `way_semantic` 5 通道）：
 
 结论（事实）：**z_enc 携带有效路径信息，且 decoder 确实在用它（true >> shuffle/zero）。**
 
+### 3.2.1 cand_query ablation（候选感知 cross-attention 是否必要）
+
+> 目的：直接回答 PI 的“核心贡献是否有 ablation 证据”。  
+> 注意：这是 **旧口径（未做 min_hops=5 过滤）** 的 oracle 上界诊断；若论文主结果采用 min_hops=5，需要重跑同口径的 candq0 模型。
+
+来源（可复现，n=200/城，共 400）：
+- candq=0：`_sync/wsa/icml2026_routegen/WAYCASD_AB_candquery_strict_sem5_seed0_e100/WAYCASD_AB_candq0_pastctx_k8_strict_sem5_seed0_e100/W8_diag/zenc_info_n200.json`
+- candq=1：`_sync/wsa/icml2026_routegen/WAYCASD_AB_candquery_strict_sem5_seed0_e100/WAYCASD_AB_candq1_pastctx_k8_strict_sem5_seed0_e100/W8_diag/zenc_info_n200.json`
+
+结果（true z_enc，greedy decode）：
+
+| 配置 | Overall success | Detroit | Columbus | Jaccard(mean) |
+|---|---:|---:|---:|---:|
+| candq=0 | 58.25% | 47.0% | 69.5% | 0.6738 |
+| candq=1 | **82.25%** | 79.5% | 85.0% | 0.8672 |
+
+解释：candq=1 允许每个候选用自己的 query 从 `z_enc` 抽取候选相关信息；candq=0 相当于把 `z_enc` 当“全局 bias”，对候选区分能力弱。
+
 ### 3.3 Oracle step 诊断（失败机制概览）
 
 来源：`.../W6_train_ae_pastctx_k8/oracle_step_diagnose/report.json`
@@ -203,3 +249,32 @@ On-road prior 的“数据侧核验”（用于解释跨城差异）：
   - Beam 大样本：`_sync/wsa/icml2026_routegen/WAYCASD_DIAG_beam_gt_pastctxfix_seed0_n200pc/`
   - Flow any-success：`_sync/wsa/icml2026_routegen/WAYCASD_DIAG_flow_anysucc_pastctxfix_seed0_N*_n200/`
 
+---
+
+## 6. 与 PI review 的“进度口径”对齐（建议写给 PI 的版本）
+
+> 目的：避免“PI 讨论的是旧口径/旧 ckpt，而我们已经切到 min_hops=5 新口径”的信息错位。
+
+### 6.1 我们当前 **已经有** 的（可复现证据）
+
+- **cand_query ablation 证据**：candq=0→candq=1 在 oracle 上界下 +24pp（第 3.2.1 节，且有 `_sync` 文件可追溯）。
+- **beam 的价值**：在 min_hops=5 的 oracle 口径下，beam=10 相对 greedy Overall +31.5pp（第 0.0 节）。
+- **granularity 诚实披露**：已经给出 way_len 分布与终点误差（meters）（第 0.0 节），并在可视化里展示 recovered/hard case。
+
+### 6.2 目前 **还缺** 的（PI review 提到但尚未完成）
+
+1) **Flow end-to-end generation（min_hops=5 口径）**  
+   - 现状：min_hops=5 只有 AE oracle（`oracle_decode_*`），不等价 generation。  
+   - TODO：用 `src/evaluation/way_casd_decision_eval.py` 跑 `latent_source=flow`（并报告 any-success / sample-success）。
+
+2) **Baseline（Shortest Path / Random Walk）**  
+   - 注意：在 “success=到达 dest way” 的定义下，Shortest Path 很可能在过滤后的集合上接近 100% success（因为 GT 已证明可达且长度≤160）。  
+   - 因此 baseline 更应与 **路径质量指标** 绑定汇报（例如 Jaccard / DTW / length ratio / final error），否则会造成“成功率被 trivial baseline 统治”的误解。
+
+3) **路径质量指标补全（除 success/final error 外）**  
+   - 已有：Jaccard（oracle failures & zenc_info），len_ratio（decision_eval 里已有 best/mean 统计）。  
+   - 建议补：DTW（way center 序列）、Hausdorff（可放 supplementary），以及 “detour over shortest”（类似 micro 图里 BFS shortest_hops）。
+
+4) **min_hops=5 口径下的 cand_query ablation 是否仍成立**  
+   - 现状：已有的 +24pp ablation 是旧口径（未 min5 过滤）。  
+   - TODO：若论文主表采用 min_hops=5，应训练一版 candq=0(min5) 并复现对比（否则只能把旧 ablation 放在 appendix/讨论里并标注口径差异）。

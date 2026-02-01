@@ -29,6 +29,7 @@ class EvalCfg:
 
     n_routes: int  # per city
     n_samples_per_route: int
+    min_hops: int
     max_way_len: int
     max_decode_len: int
     beam_size: int
@@ -241,7 +242,12 @@ def _eval_city(
 ) -> Dict[str, object]:
     routes = load_way_routes_npz(Path(routes_npz))
     N = int(routes.way_seq_len.shape[0])
-    keep = (routes.route_city.astype(np.int64) == int(city)) & (routes.way_seq_len > 1) & (routes.way_seq_len <= int(cfg.max_way_len))
+    keep = (
+        (routes.route_city.astype(np.int64) == int(city))
+        & (routes.way_seq_len > 1)
+        & (routes.way_seq_len >= (int(cfg.min_hops) + 1))
+        & (routes.way_seq_len <= int(cfg.max_way_len))
+    )
     ids = np.nonzero(keep)[0].astype(np.int64, copy=False)
     if ids.size == 0:
         return {"city": int(city), "n_candidates": 0, "results": {}}
@@ -541,6 +547,7 @@ def build_argparser() -> argparse.ArgumentParser:
     p.add_argument("--tz_offset_hours", type=float, default=-5.0)
     p.add_argument("--n_routes", type=int, default=500, help="Per city.")
     p.add_argument("--n_samples_per_route", type=int, default=4, help="Only used for latent_source=flow.")
+    p.add_argument("--min_hops", type=int, default=1, help="Filter routes with fewer than this many way transitions (hops).")
     p.add_argument("--max_way_len", type=int, default=128)
     p.add_argument("--max_decode_len", type=int, default=160)
     return p
@@ -557,6 +564,7 @@ def main() -> None:
         tz_offset_hours=float(args.tz_offset_hours),
         n_routes=int(args.n_routes),
         n_samples_per_route=int(args.n_samples_per_route),
+        min_hops=int(args.min_hops),
         max_way_len=int(args.max_way_len),
         max_decode_len=int(args.max_decode_len),
         beam_size=int(args.beam_size),

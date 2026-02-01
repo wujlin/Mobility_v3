@@ -26,6 +26,7 @@ class Cfg:
     tz_offset_hours: float
     latent_source: str  # "gt" or "flow"
     n_samples_per_route: int
+    min_hops: int
     max_way_len: int
     max_decode_len: int
     beam_sizes: List[int]
@@ -181,9 +182,9 @@ def _bucket_name(L: int) -> str:
     return "gt60"
 
 
-def _pick_routes_by_buckets(*, lens: np.ndarray, max_way_len: int, n_per_bucket: int, seed: int) -> np.ndarray:
+def _pick_routes_by_buckets(*, lens: np.ndarray, min_hops: int, max_way_len: int, n_per_bucket: int, seed: int) -> np.ndarray:
     lens = np.asarray(lens, dtype=np.int64).reshape(-1)
-    keep = (lens > 1) & (lens <= int(max_way_len))
+    keep = (lens > 1) & (lens >= (int(min_hops) + 1)) & (lens <= int(max_way_len))
     ids = np.nonzero(keep)[0].astype(np.int64, copy=False)
     if ids.size == 0:
         return np.zeros((0,), dtype=np.int64)
@@ -240,6 +241,7 @@ def build_argparser() -> argparse.ArgumentParser:
     p.add_argument("--log_every_routes", type=int, default=10, help="Print progress every N routes per beam (0=disable).")
     p.add_argument("--tz_offset_hours", type=float, default=-5.0)
     p.add_argument("--n_per_bucket", type=int, default=50, help="Routes per length bucket (before de-dup).")
+    p.add_argument("--min_hops", type=int, default=1, help="Filter routes with fewer than this many way transitions (hops).")
 
     p.add_argument("--route_ids", type=int, nargs="*", default=None, help="Optional explicit route indices.")
     p.add_argument("--seed", type=int, default=0)
@@ -258,6 +260,7 @@ def main() -> None:
         tz_offset_hours=float(args.tz_offset_hours),
         latent_source=str(args.latent_source),
         n_samples_per_route=int(args.n_samples_per_route),
+        min_hops=int(args.min_hops),
         max_way_len=int(args.max_way_len),
         max_decode_len=int(args.max_decode_len),
         beam_sizes=[int(x) for x in args.beam_sizes],
@@ -279,7 +282,13 @@ def main() -> None:
         pick = np.asarray([int(x) for x in args.route_ids], dtype=np.int64)
         pick = pick[(pick >= 0) & (pick < N)]
     else:
-        pick = _pick_routes_by_buckets(lens=routes.way_seq_len, max_way_len=int(cfg.max_way_len), n_per_bucket=int(cfg.n_per_bucket), seed=int(cfg.seed))
+        pick = _pick_routes_by_buckets(
+            lens=routes.way_seq_len,
+            min_hops=int(cfg.min_hops),
+            max_way_len=int(cfg.max_way_len),
+            n_per_bucket=int(cfg.n_per_bucket),
+            seed=int(cfg.seed),
+        )
     if pick.size == 0:
         raise SystemExit("No routes selected. Try increasing --max_way_len or lowering filters.")
 

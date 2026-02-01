@@ -27,6 +27,7 @@ class Cfg:
     tz_offset_hours: float
     n_routes: int
     n_samples_per_route: int
+    min_hops: int
     max_way_len: int
     decode: str  # "greedy" or "beam"
     beam_size: int  # only used when decode="beam"
@@ -447,6 +448,7 @@ def build_argparser() -> argparse.ArgumentParser:
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--device", type=str, default="cuda")
     p.add_argument("--tz_offset_hours", type=float, default=-5.0)
+    p.add_argument("--min_hops", type=int, default=1, help="Filter routes with fewer than this many way transitions (hops).")
     p.add_argument("--max_way_len", type=int, default=160)
 
     p.add_argument(
@@ -494,6 +496,7 @@ def main() -> None:
         tz_offset_hours=float(args.tz_offset_hours),
         n_routes=int(args.n_routes),
         n_samples_per_route=int(args.n_samples_per_route),
+        min_hops=int(args.min_hops),
         max_way_len=int(args.max_way_len),
         decode=str(args.decode),
         beam_size=int(args.beam_size),
@@ -510,10 +513,10 @@ def main() -> None:
 
     routes = load_way_routes_npz(Path(args.way_routes_npz))
     N = int(routes.way_seq_len.shape[0])
-    keep = (routes.way_seq_len > 1) & (routes.way_seq_len <= int(cfg.max_way_len))
+    keep = (routes.way_seq_len > 1) & (routes.way_seq_len >= (int(cfg.min_hops) + 1)) & (routes.way_seq_len <= int(cfg.max_way_len))
     keep_ids = np.nonzero(keep)[0].astype(np.int64, copy=False)
     if keep_ids.size == 0:
-        raise SystemExit(f"No routes left after filtering max_way_len={cfg.max_way_len}.")
+        raise SystemExit(f"No routes left after filtering min_hops={cfg.min_hops}, max_way_len={cfg.max_way_len}.")
 
     if args.route_ids:
         pick = np.asarray([int(x) for x in args.route_ids], dtype=np.int64)

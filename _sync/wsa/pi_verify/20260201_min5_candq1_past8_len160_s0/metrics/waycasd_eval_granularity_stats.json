@@ -1,13 +1,17 @@
 {
   "ok": true,
   "task": "waycasd_eval_granularity_stats",
-  "created_at": "2026-02-01T12:51:30.142923+08:00",
+  "created_at": "2026-02-01T13:50:29.907884+08:00",
   "eval_dir": "_sync/wsa/pi_verify/20260201_min5_candq1_past8_len160_s0",
   "inputs": {
     "greedy_json": "_sync/wsa/pi_verify/20260201_min5_candq1_past8_len160_s0/oracle_decode_greedy_n200.json",
     "beam10_json": "_sync/wsa/pi_verify/20260201_min5_candq1_past8_len160_s0/oracle_decode_beam10_n200.json",
     "way_routes_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD1_waydata_rustbelt_seed0_strict_v1/W5_way_routes_strict/way_routes_strict_masklen0.npz",
-    "way_features_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD1_waydata_rustbelt_seed0_strict_v1/W4_way_features_sem/way_features.npz"
+    "way_features_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD1_waydata_rustbelt_seed0_strict_v1/W4_way_features_sem/way_features.npz",
+    "city_grid_meta": {
+      "0": "/home/jinlin/data/geoexplicit_data/worldtrace/detroit_core_v1/osm_road_prob_meta.json",
+      "1": "/home/jinlin/data/geoexplicit_data/worldtrace/columbus_core_v1/osm_road_prob_meta.json"
+    }
   },
   "mismatches": {
     "only_in_greedy": [],
@@ -62,46 +66,54 @@
   },
   "final_pos_error": {
     "units_seen": [
-      "grid_units"
+      "meters"
     ],
+    "units_by_city": {
+      "0": [
+        "meters"
+      ],
+      "1": [
+        "meters"
+      ]
+    },
     "to_dest_pos": {
       "greedy": {
         "success": {
           "n": 176,
-          "mean": 7.689433582527758,
+          "mean": 189.22050131041644,
           "quantiles": {
-            "p50": 3.1753096350677956,
-            "p75": 11.526537970245224,
-            "p95": 31.970521276655205
+            "p50": 80.32093676804391,
+            "p75": 288.4552946548034,
+            "p95": 774.2265695428823
           }
         },
         "failure": {
           "n": 224,
-          "mean": 187.47413315702784,
+          "mean": 4708.827155575137,
           "quantiles": {
-            "p50": 130.1960787449656,
-            "p75": 272.03846705063336,
-            "p95": 545.164310087986
+            "p50": 3198.664729150547,
+            "p75": 7018.052646654503,
+            "p95": 13741.796562365447
           }
         }
       },
       "beam10": {
         "success": {
           "n": 302,
-          "mean": 6.48567324871873,
+          "mean": 159.88709819428706,
           "quantiles": {
-            "p50": 2.5197546709349856,
-            "p75": 7.230928648093827,
-            "p95": 27.535984859340395
+            "p50": 64.6489014693634,
+            "p75": 177.06108594194814,
+            "p95": 662.0922152152096
           }
         },
         "failure": {
           "n": 98,
-          "mean": 267.91472063376625,
+          "mean": 6756.504651022385,
           "quantiles": {
-            "p50": 203.86024986820718,
-            "p75": 404.08387771059586,
-            "p95": 673.4447548966145
+            "p50": 5189.608360645818,
+            "p75": 10350.814412854046,
+            "p95": 17625.53666583918
           }
         }
       }
@@ -119,11 +131,11 @@
         },
         "failure": {
           "n": 224,
-          "mean": 185.65078798115152,
+          "mean": 4664.109002711758,
           "quantiles": {
-            "p50": 127.83073856333004,
-            "p75": 267.7543756422971,
-            "p95": 534.8753632622012
+            "p50": 3180.8610312065375,
+            "p75": 6797.690857373046,
+            "p95": 13568.400258978038
           }
         }
       },
@@ -139,11 +151,11 @@
         },
         "failure": {
           "n": 98,
-          "mean": 267.9857945647432,
+          "mean": 6759.122176677303,
           "quantiles": {
-            "p50": 205.11744871287277,
-            "p75": 402.60671647402063,
-            "p95": 673.2933559711538
+            "p50": 5006.250691217937,
+            "p75": 10304.754044178117,
+            "p95": 17621.575259435325
           }
         }
       }

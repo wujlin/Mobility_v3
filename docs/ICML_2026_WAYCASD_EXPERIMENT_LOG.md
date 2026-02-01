@@ -265,15 +265,21 @@ On-road prior 的“数据侧核验”（用于解释跨城差异）：
 
 1) **Flow end-to-end generation（min_hops=5 口径）**  
    - 现状：min_hops=5 只有 AE oracle（`oracle_decode_*`），不等价 generation。  
-   - TODO：用 `src/evaluation/way_casd_decision_eval.py` 跑 `latent_source=flow`（并报告 any-success / sample-success）。
+   - 现有工具：
+     - `src/evaluation/way_casd_decision_eval.py`：decision 侧（success/jaccard/len_ratio，支持多采样 any-success / sample-success）。
+     - `src/evaluation/way_casd_binned_eval.py`：shape 侧（DTW/Fréchet/len_ratio/final_error，支持 `--latent_source flow --flow_ckpt ...`）。
 
 2) **Baseline（Shortest Path / Random Walk）**  
    - 注意：在 “success=到达 dest way” 的定义下，Shortest Path 很可能在过滤后的集合上接近 100% success（因为 GT 已证明可达且长度≤160）。  
    - 因此 baseline 更应与 **路径质量指标** 绑定汇报（例如 Jaccard / DTW / length ratio / final error），否则会造成“成功率被 trivial baseline 统治”的误解。
+   - 现有工具：
+     - `src/evaluation/shortest_path_baseline.py`：length-weighted Dijkstra（meters），输出 `detour_gt_over_sp` + DTW/Fréchet（按 gt_hops 分桶）。
+     - `src/evaluation/way_casd_vs_sp_shape_compare.py`：Way-CASD vs SP 的分桶 shape 对比汇总（输出 json/markdown 表）。
 
 3) **路径质量指标补全（除 success/final error 外）**  
    - 已有：Jaccard（oracle failures & zenc_info），len_ratio（decision_eval 里已有 best/mean 统计）。  
-   - 建议补：DTW（way center 序列）、Hausdorff（可放 supplementary），以及 “detour over shortest”（类似 micro 图里 BFS shortest_hops）。
+   - 已补：DTW/Fréchet（meters，`src/evaluation/shape_metrics.py` + binned eval / SP baseline）。  
+   - 可选补：Hausdorff（已实现但未系统汇报），以及 “detour over shortest”（SP baseline 已输出 `detour_gt_over_sp`）。
 
 4) **min_hops=5 口径下的 cand_query ablation 是否仍成立**  
    - 现状：已有的 +24pp ablation 是旧口径（未 min5 过滤）。  

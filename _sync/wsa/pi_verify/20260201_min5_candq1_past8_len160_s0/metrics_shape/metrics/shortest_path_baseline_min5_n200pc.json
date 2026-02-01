@@ -1,7 +1,7 @@
 {
   "ok": true,
   "task": "shortest_path_baseline",
-  "created_at": "2026-02-02T00:23:04.754157+08:00",
+  "created_at": "2026-02-02T00:26:53.550387+08:00",
   "cfg": {
     "seed": 0,
     "n_routes": 200,

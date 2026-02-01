@@ -1,7 +1,7 @@
 {
   "ok": true,
   "task": "way_casd_vs_sp_shape_compare",
-  "created_at": "2026-02-02T00:23:05.007222+08:00",
+  "created_at": "2026-02-02T00:26:53.805753+08:00",
   "inputs": {
     "way_casd_binned_json": "_sync/wsa/pi_verify/20260201_min5_candq1_past8_len160_s0/metrics_shape/way_casd_binned_eval_oracle_min5_n200pc.json",
     "sp_baseline_json": "_sync/wsa/pi_verify/20260201_min5_candq1_past8_len160_s0/metrics_shape/metrics/shortest_path_baseline_min5_n200pc.json"

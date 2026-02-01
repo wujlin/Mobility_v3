@@ -106,18 +106,28 @@ def _union_find_components(n: int, edges: Iterable[Tuple[int, int]]) -> Tuple[in
 
 
 def _remap_labels(labels: np.ndarray) -> Tuple[np.ndarray, int, np.ndarray]:
+    """
+    Remap community labels to a compact range [0, n_regions).
+
+    Important:
+      - Negative labels (e.g. -1) are treated as "unassigned" and preserved as -1.
+      - region_sizes only counts assigned regions (excludes -1).
+    """
     lab = np.asarray(labels, dtype=np.int64).reshape(-1)
-    uniq = np.unique(lab)
-    uniq = uniq[np.isfinite(uniq)]
+    assigned = lab >= 0
+    if not bool(np.any(assigned)):
+        out = np.full_like(lab, -1, dtype=np.int64)
+        return out, 0, np.zeros((0,), dtype=np.int64)
+
+    uniq = np.unique(lab[assigned].astype(np.int64, copy=False))
     mapping = {int(old): int(i) for i, old in enumerate(uniq.tolist())}
-    out = np.full_like(lab, -1)
+    out = np.full_like(lab, -1, dtype=np.int64)
     for i, x in enumerate(lab.tolist()):
-        out[i] = int(mapping.get(int(x), -1))
-    counts = np.zeros((len(uniq),), dtype=np.int64)
-    for x in out.tolist():
-        if int(x) >= 0:
-            counts[int(x)] += 1
-    return out.astype(np.int64, copy=False), int(len(uniq)), counts.astype(np.int64, copy=False)
+        xx = int(x)
+        if xx >= 0:
+            out[i] = int(mapping.get(xx, -1))
+    counts = np.bincount(out[assigned].astype(np.int64, copy=False), minlength=int(uniq.size)).astype(np.int64, copy=False)
+    return out.astype(np.int64, copy=False), int(uniq.size), counts
 
 
 def _build_region_way_csr(way_region: np.ndarray, n_regions: int) -> Tuple[np.ndarray, np.ndarray]:
@@ -286,6 +296,8 @@ def main() -> None:
             lab[int(u)] = int(c)
 
     way_region, n_regions, region_sizes = _remap_labels(lab)
+    assigned_n = int(np.sum(way_region >= 0))
+    assigned_frac = float(assigned_n / max(1, int(n_ways)))
     region_way_ptr, region_way_idx = _build_region_way_csr(way_region, n_regions)
     region_adj_ptr, region_adj_idx, region_adj_w = _build_region_adj_csr(
         ptr=ptr,
@@ -313,12 +325,16 @@ def main() -> None:
             "inputs": {"way_graph_npz": str(args.way_graph_npz)},
             "n_ways": int(n_ways),
             "n_regions": int(n_regions),
+            "assigned_n": int(assigned_n),
+            "assigned_frac": float(assigned_frac),
             "graph": {
                 "n_connected_components_undirected": int(n_comp),
                 "largest_cc_n": int(largest_cc),
                 "largest_cc_frac": float(largest_cc / max(1, int(n_ways))),
                 "isolated_outdeg0_n": int(isolate_n),
                 "isolated_outdeg0_frac": float(isolate_n / max(1, int(n_ways))),
+                "louvain_nodes_n": int(H.number_of_nodes()),
+                "louvain_nodes_frac": float(H.number_of_nodes() / max(1, int(n_ways))),
             },
         },
     )
@@ -336,12 +352,16 @@ def main() -> None:
             "outputs": {"out_npz": str(out_npz)},
             "n_ways": int(n_ways),
             "n_regions": int(n_regions),
+            "assigned_n": int(assigned_n),
+            "assigned_frac": float(assigned_frac),
             "graph": {
                 "n_connected_components_undirected": int(n_comp),
                 "largest_cc_n": int(largest_cc),
                 "largest_cc_frac": float(largest_cc / max(1, int(n_ways))),
                 "isolated_outdeg0_n": int(isolate_n),
                 "isolated_outdeg0_frac": float(isolate_n / max(1, int(n_ways))),
+                "louvain_nodes_n": int(H.number_of_nodes()),
+                "louvain_nodes_frac": float(H.number_of_nodes() / max(1, int(n_ways))),
             },
             "region_size": {
                 "p50": int(np.quantile(region_sizes, 0.50)) if region_sizes.size else 0,

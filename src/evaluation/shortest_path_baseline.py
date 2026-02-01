@@ -126,6 +126,27 @@ def _sum_way_len_m(way_len_m: np.ndarray, seq: Sequence[int]) -> float:
     return float(np.sum(way_len_m[ids].astype(np.float64, copy=False)))
 
 
+def _hops_bins() -> List[Tuple[int, Optional[int], str]]:
+    return [
+        (5, 10, "[5,10)"),
+        (10, 20, "[10,20)"),
+        (20, 30, "[20,30)"),
+        (30, 40, "[30,40)"),
+        (40, 60, "[40,60)"),
+        (60, None, "[60,+)"),
+    ]
+
+
+def _bin_label(hops: int) -> str:
+    hh = int(hops)
+    for lo, hi, name in _hops_bins():
+        if hh < int(lo):
+            continue
+        if hi is None or hh < int(hi):
+            return str(name)
+    return str(_hops_bins()[-1][2])
+
+
 def _slice_csr(ptr: np.ndarray, idx: np.ndarray, u: int) -> np.ndarray:
     s = int(ptr[u])
     e = int(ptr[u + 1])
@@ -375,10 +396,21 @@ def main() -> None:
             "final_error_m": summarize([float(r.get("final_error_m", float("nan"))) for r in recs]),
         }
 
+    def _agg_binned(recs: List[Dict[str, Any]]) -> Dict[str, Any]:
+        cells: Dict[str, List[Dict[str, Any]]] = {b[2]: [] for b in _hops_bins()}
+        for r in recs:
+            lab = _bin_label(int(r.get("gt_hops", 0)))
+            if lab in cells:
+                cells[lab].append(r)
+        out = {"bins": [b[2] for b in _hops_bins()], "cells": {}}
+        for lab in out["bins"]:
+            out["cells"][lab] = _agg(cells.get(lab, []))
+        return out
+
     per_city = []
     for city in cities_obs:
         recs = [r for r in per_route if int(r.get("city", -1)) == int(city)]
-        per_city.append({"city": int(city), "summary": _agg(recs)})
+        per_city.append({"city": int(city), "summary": _agg(recs), "by_gt_hops": _agg_binned(recs)})
     out = {
         "ok": True,
         "task": "shortest_path_baseline",
@@ -392,6 +424,7 @@ def main() -> None:
         },
         "per_city": per_city,
         "overall": _agg(per_route),
+        "overall_by_gt_hops": _agg_binned(per_route),
         "per_route": per_route,
         "notes": {
             "path_cost_definition": "node-weighted: sum(way_len_m[way]) along path; implemented as edge cost u->v = way_len_m[v] plus init way_len_m[start].",
@@ -407,4 +440,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

@@ -13,6 +13,7 @@ import torch
 
 from src.data.way_graph.way_sequence_dataset import load_way_routes_npz
 from src.evaluation.shape_metrics import dtw_distance, frechet_distance, summarize
+from src.models.way_casd.latent_flow import LatentFlowCfg, LatentFlowMatching
 from src.models.way_casd.way_casd import WayCASDAECfg, WayCASDAutoEncoder
 from src.models.way_casd.way_encoder import load_way_features_from_npz
 
@@ -231,6 +232,11 @@ class Cfg:
     device: str
     tz_offset_hours: float
 
+    latent_source: str  # "gt" | "flow"
+    n_samples_per_route: int  # only used when latent_source=flow
+    sample_select: str  # "first" | "best"
+    flow_solver_steps: Optional[int]  # None=use ckpt/default
+
     n_routes: int  # per city
     min_hops: int
     max_way_len: int
@@ -251,6 +257,34 @@ def _require_city_meta(city_meta: Dict[int, dict], cities: Iterable[int]) -> Non
         raise SystemExit(f"[FATAL] missing --city_grid_meta for cities={missing} (PI: meters is mandatory).")
 
 
+def _nanmean(x: Sequence[float]) -> float:
+    a = np.asarray(list(x), dtype=np.float64).reshape(-1)
+    a = a[np.isfinite(a)]
+    return float(np.mean(a)) if a.size else float("nan")
+
+
+def _best_sample_index(samples: List[Dict[str, object]]) -> int:
+    if not samples:
+        return 0
+
+    def _key(m: Dict[str, object]) -> Tuple[int, float, float]:
+        succ = 0 if bool(m.get("success", False)) else 1
+        dtw = float(m.get("dtw_m", float("nan")))
+        fre = float(m.get("frechet_m", float("nan")))
+        dtw = dtw if math.isfinite(dtw) else float("inf")
+        fre = fre if math.isfinite(fre) else float("inf")
+        return (succ, dtw, fre)
+
+    best_i = 0
+    best_k = _key(samples[0])
+    for i in range(1, len(samples)):
+        k = _key(samples[i])
+        if k < best_k:
+            best_k = k
+            best_i = int(i)
+    return int(best_i)
+
+
 @torch.no_grad()
 def main() -> None:
     p = argparse.ArgumentParser(description="Way-CASD binned evaluation (meters): success + DTW/Fréchet + length ratio, stratified by gt_hops.")
@@ -263,6 +297,12 @@ def main() -> None:
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--device", type=str, default="cuda")
     p.add_argument("--tz_offset_hours", type=float, default=-5.0)
+
+    p.add_argument("--latent_source", choices=["gt", "flow"], default="gt", help="gt=oracle (GT->AE.encode); flow=generation (Flow.sample).")
+    p.add_argument("--flow_ckpt", type=Path, default=None, help="Required when --latent_source=flow.")
+    p.add_argument("--n_samples_per_route", type=int, default=1, help="Only used when --latent_source=flow.")
+    p.add_argument("--sample_select", choices=["first", "best"], default="first", help="When n_samples_per_route>1, which sample to report as route-level metrics.")
+    p.add_argument("--flow_solver_steps", type=int, default=0, help="Override flow solver steps (0=use ckpt/default).")
 
     p.add_argument("--n_routes", type=int, default=200, help="Per city (0 and 1).")
     p.add_argument("--min_hops", type=int, default=5)
@@ -290,6 +330,10 @@ def main() -> None:
         seed=int(args.seed),
         device=str(args.device),
         tz_offset_hours=float(args.tz_offset_hours),
+        latent_source=str(args.latent_source),
+        n_samples_per_route=max(1, int(args.n_samples_per_route)),
+        sample_select=str(args.sample_select),
+        flow_solver_steps=(int(args.flow_solver_steps) if int(args.flow_solver_steps) > 0 else None),
         n_routes=int(args.n_routes),
         min_hops=int(args.min_hops),
         max_way_len=int(args.max_way_len),
@@ -394,6 +438,35 @@ def main() -> None:
         ae.load_state_dict(state, strict=False)
     ae.eval()
 
+    flow: Optional[LatentFlowMatching] = None
+    flow_cfg_dict: Dict[str, object] = {}
+    if str(cfg.latent_source) == "flow":
+        if args.flow_ckpt is None:
+            raise SystemExit("[FATAL] --flow_ckpt is required when --latent_source=flow")
+        ckpt_f = torch.load(str(args.flow_ckpt), map_location=device)
+        f_state = ckpt_f["model_state_dict"] if isinstance(ckpt_f, dict) and "model_state_dict" in ckpt_f else ckpt_f
+        flow_cfg_dict = ckpt_f.get("config", {}) if isinstance(ckpt_f, dict) else {}
+        if not isinstance(f_state, dict):
+            raise SystemExit("[FATAL] unexpected flow ckpt format (state_dict missing).")
+
+        flow_cfg = LatentFlowCfg(
+            d_model=int(flow_cfg_dict.get("d_model", ae.cfg.d_model)),
+            n_latent=int(flow_cfg_dict.get("n_latent", ae.cfg.n_latent)),
+            n_layers=int(flow_cfg_dict.get("n_layers", 6)),
+            n_heads=int(flow_cfg_dict.get("n_heads", 8)),
+            dropout=float(flow_cfg_dict.get("dropout", 0.1)),
+            noise_sigma=float(flow_cfg_dict.get("noise_sigma", 1.0)),
+            solver_steps=int(flow_cfg_dict.get("solver_steps", 20)),
+        )
+        if int(flow_cfg.d_model) != int(ae.cfg.d_model) or int(flow_cfg.n_latent) != int(ae.cfg.n_latent):
+            raise SystemExit(
+                f"[FATAL] AE/Flow mismatch: AE(d_model={int(ae.cfg.d_model)}, n_latent={int(ae.cfg.n_latent)}) "
+                f"vs Flow(d_model={int(flow_cfg.d_model)}, n_latent={int(flow_cfg.n_latent)})."
+            )
+        flow = LatentFlowMatching(cfg=flow_cfg, cond_cfg=ae.decoder.cond_enc.cfg).to(device)
+        flow.load_state_dict(f_state, strict=False)
+        flow.eval()
+
     max_candidates = int(cfg.decode_max_candidates)
     if max_candidates < 0:
         max_candidates = int(ae.cfg.max_candidates)
@@ -448,13 +521,6 @@ def main() -> None:
             hour_b = hour[i0:i1]
             dow_b = dow[i0:i1]
 
-            maxL = int(max(len(x) for x in gt_b))
-            pad = np.full((int(i1 - i0), maxL), -1, dtype=np.int64)
-            for j, seq in enumerate(gt_b):
-                pad[j, : len(seq)] = np.asarray(seq, dtype=np.int64)
-            way_pad_t = torch.as_tensor(pad, dtype=torch.long, device=device)
-            z_enc, _ = ae.encode(way_pad_t)
-
             route_cond = {
                 "start_pos": torch.as_tensor(spos_b, dtype=torch.float32, device=device),
                 "dest_pos": torch.as_tensor(dpos_b, dtype=torch.float32, device=device),
@@ -465,12 +531,36 @@ def main() -> None:
             sw_t = torch.as_tensor(sw_b, dtype=torch.long, device=device)
             dw_t = torch.as_tensor(dw_b, dtype=torch.long, device=device)
 
+            K = 1
+            z_use: torch.Tensor
+            route_cond_use: Dict[str, torch.Tensor]
+            sw_use: torch.Tensor
+            dw_use: torch.Tensor
+            if str(cfg.latent_source) == "gt":
+                maxL = int(max(len(x) for x in gt_b))
+                pad = np.full((int(i1 - i0), maxL), -1, dtype=np.int64)
+                for j, seq in enumerate(gt_b):
+                    pad[j, : len(seq)] = np.asarray(seq, dtype=np.int64)
+                way_pad_t = torch.as_tensor(pad, dtype=torch.long, device=device)
+                z_use, _ = ae.encode(way_pad_t)
+                route_cond_use = route_cond
+                sw_use = sw_t
+                dw_use = dw_t
+            else:
+                if flow is None:
+                    raise SystemExit("[FATAL] latent_source=flow but Flow is not loaded (missing --flow_ckpt?)")
+                K = int(max(1, int(cfg.n_samples_per_route)))
+                route_cond_use = {k: v.repeat_interleave(K, dim=0) for k, v in route_cond.items()}
+                sw_use = sw_t.repeat_interleave(K, dim=0)
+                dw_use = dw_t.repeat_interleave(K, dim=0)
+                z_use = flow.sample(route_cond=route_cond_use, solver_steps=cfg.flow_solver_steps)
+
             greedy = ae.decoder.greedy_decode(
                 way_embedder=ae.way_enc,
-                latent_tokens=z_enc,
-                route_cond=route_cond,
-                start_way=sw_t,
-                dest_way=dw_t,
+                latent_tokens=z_use,
+                route_cond=route_cond_use,
+                start_way=sw_use,
+                dest_way=dw_use,
                 max_len=int(cfg.max_decode_len),
                 max_candidates=(None if int(cfg.decode_max_candidates) < 0 else int(max_candidates)),
                 candidate_policy=str(cfg.decode_candidate_policy),
@@ -482,10 +572,10 @@ def main() -> None:
             if bool(cfg.compare_beam):
                 beam = ae.decoder.beam_search(
                     way_embedder=ae.way_enc,
-                    latent_tokens=z_enc,
-                    route_cond=route_cond,
-                    start_way=sw_t,
-                    dest_way=dw_t,
+                    latent_tokens=z_use,
+                    route_cond=route_cond_use,
+                    start_way=sw_use,
+                    dest_way=dw_use,
                     beam_size=int(cfg.beam_size),
                     max_len=int(cfg.max_decode_len),
                     max_candidates=(None if int(cfg.decode_max_candidates) < 0 else int(max_candidates)),
@@ -500,8 +590,10 @@ def main() -> None:
             for bi in range(int(i1 - i0)):
                 rid = int(rid_b[bi])
                 gt = [int(x) for x in gt_b[bi]]
-                g = [int(x) for x in greedy[bi]]
-                b = [int(x) for x in (beam[bi] if beam is not None else [])] if beam is not None else None
+                g_samples = [[int(x) for x in greedy[int(bi) * int(K) + int(k)]] for k in range(int(K))]
+                b_samples = (
+                    [[int(x) for x in beam[int(bi) * int(K) + int(k)]] for k in range(int(K))] if beam is not None else None
+                )
 
                 gt_hops = int(max(0, len(gt) - 1))
                 gt_len_m = _sum_way_len_m(way_len_m, gt)
@@ -550,8 +642,51 @@ def main() -> None:
                         "final_error_m": float(err_m),
                     }
 
-                mg = _eval_pred(g)
-                mb = _eval_pred(b) if b is not None else None
+                mg_list = [_eval_pred(p) for p in g_samples]
+                if int(K) > 1:
+                    k_sel = 0 if str(cfg.sample_select) == "first" else _best_sample_index(mg_list)
+                    mg = dict(mg_list[int(k_sel)])
+                    mg.update(
+                        {
+                            "n_samples": int(K),
+                            "selected_k": int(k_sel),
+                            "route_any_success": bool(any(bool(m.get("success", False)) for m in mg_list)),
+                            "sample_success_rate": float(np.mean([1.0 if bool(m.get("success", False)) else 0.0 for m in mg_list])),
+                            "sample_hit_wall_rate": float(np.mean([1.0 if bool(m.get("hit_wall", False)) else 0.0 for m in mg_list])),
+                            "sample_dead_end_rate": float(np.mean([1.0 if bool(m.get("dead_end", False)) else 0.0 for m in mg_list])),
+                            "sample_loop_rate": float(np.mean([1.0 if bool(m.get("has_loop", False)) else 0.0 for m in mg_list])),
+                            "sample_dtw_m_mean": _nanmean([float(m.get("dtw_m", float("nan"))) for m in mg_list]),
+                            "sample_frechet_m_mean": _nanmean([float(m.get("frechet_m", float("nan"))) for m in mg_list]),
+                            "sample_len_ratio_mean": _nanmean([float(m.get("len_ratio", float("nan"))) for m in mg_list]),
+                            "sample_final_error_m_mean": _nanmean([float(m.get("final_error_m", float("nan"))) for m in mg_list]),
+                        }
+                    )
+                else:
+                    mg = mg_list[0]
+
+                mb: Optional[Dict[str, object]] = None
+                if b_samples is not None:
+                    mb_list = [_eval_pred(p) for p in b_samples]
+                    if int(K) > 1:
+                        k_sel = 0 if str(cfg.sample_select) == "first" else _best_sample_index(mb_list)
+                        mb = dict(mb_list[int(k_sel)])
+                        mb.update(
+                            {
+                                "n_samples": int(K),
+                                "selected_k": int(k_sel),
+                                "route_any_success": bool(any(bool(m.get("success", False)) for m in mb_list)),
+                                "sample_success_rate": float(np.mean([1.0 if bool(m.get("success", False)) else 0.0 for m in mb_list])),
+                                "sample_hit_wall_rate": float(np.mean([1.0 if bool(m.get("hit_wall", False)) else 0.0 for m in mb_list])),
+                                "sample_dead_end_rate": float(np.mean([1.0 if bool(m.get("dead_end", False)) else 0.0 for m in mb_list])),
+                                "sample_loop_rate": float(np.mean([1.0 if bool(m.get("has_loop", False)) else 0.0 for m in mb_list])),
+                                "sample_dtw_m_mean": _nanmean([float(m.get("dtw_m", float("nan"))) for m in mb_list]),
+                                "sample_frechet_m_mean": _nanmean([float(m.get("frechet_m", float("nan"))) for m in mb_list]),
+                                "sample_len_ratio_mean": _nanmean([float(m.get("len_ratio", float("nan"))) for m in mb_list]),
+                                "sample_final_error_m_mean": _nanmean([float(m.get("final_error_m", float("nan"))) for m in mb_list]),
+                            }
+                        )
+                    else:
+                        mb = mb_list[0]
 
                 rec: Dict[str, Any] = {
                     "route_id": int(rid),
@@ -641,6 +776,7 @@ def main() -> None:
             "way_graph_npz": str(args.way_graph_npz),
             "way_features_npz": str(args.way_features_npz),
             "ae_ckpt": str(args.ae_ckpt),
+            "flow_ckpt": (str(args.flow_ckpt) if args.flow_ckpt is not None else None),
             "city_grid_meta": {str(int(k)): str(v) for k, v in sorted(city_meta_src.items(), key=lambda kv: int(kv[0]))},
         },
         "ckpt_strict_load_ok": bool(strict_ok),
@@ -658,11 +794,26 @@ def main() -> None:
             "decoder_past_n_heads": int(past_n_heads),
             "n_route_cities": int(n_route_cities),
         },
+        "flow_cfg_inferred": (
+            {
+                "d_model": int(flow_cfg_dict.get("d_model", ae.cfg.d_model)) if isinstance(flow_cfg_dict, dict) else int(ae.cfg.d_model),
+                "n_latent": int(flow_cfg_dict.get("n_latent", ae.cfg.n_latent)) if isinstance(flow_cfg_dict, dict) else int(ae.cfg.n_latent),
+                "n_layers": int(flow_cfg_dict.get("n_layers", 6)) if isinstance(flow_cfg_dict, dict) else 6,
+                "n_heads": int(flow_cfg_dict.get("n_heads", 8)) if isinstance(flow_cfg_dict, dict) else 8,
+                "dropout": float(flow_cfg_dict.get("dropout", 0.1)) if isinstance(flow_cfg_dict, dict) else 0.1,
+                "noise_sigma": float(flow_cfg_dict.get("noise_sigma", 1.0)) if isinstance(flow_cfg_dict, dict) else 1.0,
+                "solver_steps": int(flow_cfg_dict.get("solver_steps", 20)) if isinstance(flow_cfg_dict, dict) else 20,
+            }
+            if flow is not None
+            else None
+        ),
         "per_city": per_city,
         "overall": overall,
         "notes": {
             "shape_metric": "DTW/Fréchet on way-center sequences (meters, equirectangular projection from osm_road_prob_meta.json bbox).",
             "bins": [b[2] for b in _hops_bins()],
+            "latent_source": "gt=oracle (GT->AE.encode->Decoder); flow=Flow.sample->Decoder (generation).",
+            "sample_select": "When n_samples_per_route>1: first=use sample0; best=prefer success then min(DTW, Fréchet).",
         },
     }
 
@@ -674,4 +825,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

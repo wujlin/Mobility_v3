@@ -1,7 +1,7 @@
 {
   "ok": true,
   "task": "sweep_region_graph_louvain",
-  "created_at": "2026-02-01T23:23:41.503116+08:00",
+  "created_at": "2026-02-02T00:23:00.856176+08:00",
   "cfg": {
     "seed": 0,
     "resolutions": [

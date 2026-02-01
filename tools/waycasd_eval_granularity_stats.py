@@ -28,6 +28,42 @@ def _read_json(path: Path) -> dict:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def _parse_city_kv(spec: str) -> Tuple[int, Path]:
+    s = str(spec or "").strip()
+    if "=" in s:
+        k, v = s.split("=", 1)
+    elif ":" in s:
+        k, v = s.split(":", 1)
+    else:
+        raise ValueError(f"Bad spec (expect CITY=PATH): {spec!r}")
+    city = int(str(k).strip())
+    path = Path(str(v).strip()).expanduser()
+    return city, path
+
+
+def _meta_from_city_grid_meta(path: Path) -> dict:
+    """
+    Load a per-city grid meta from:
+      - osm_road_prob_meta.json (recommended), or
+      - a single-city way_features.npz (meta.grid.* must exist).
+    """
+    if str(path).endswith(".npz"):
+        wf = np.load(str(path), allow_pickle=True)
+        meta = _decode_meta(wf.get("meta", None))
+        if meta is None:
+            raise ValueError(f"{path} missing meta (need meta.grid.H/W/bbox).")
+    else:
+        meta = _read_json(path)
+
+    # Normalize: allow meta with bbox/H/W at root by wrapping into meta['grid'].
+    if _grid_bbox_from_meta(meta) is None:
+        if isinstance(meta, dict) and ("H" in meta) and ("W" in meta) and ("bbox" in meta):
+            meta = {"grid": {"H": meta["H"], "W": meta["W"], "bbox": meta["bbox"]}}
+    if _grid_bbox_from_meta(meta) is None:
+        raise ValueError(f"{path} missing grid meta (need grid.H/grid.W/grid.bbox).")
+    return meta
+
+
 def _require_file(path: Path) -> None:
     if not path.exists():
         raise SystemExit(f"[FATAL] file not found: {path}")
@@ -232,6 +268,13 @@ def main() -> None:
     p.add_argument("--beam10_json", type=Path, default=None)
     p.add_argument("--way_routes_npz", type=Path, default=None)
     p.add_argument("--way_features_npz", type=Path, default=None)
+    p.add_argument(
+        "--city_grid_meta",
+        type=str,
+        action="append",
+        default=[],
+        help="Optional per-city grid meta, format CITY=PATH, where PATH is osm_road_prob_meta.json or a single-city way_features.npz.",
+    )
     p.add_argument("--filter_avg_way_len_gt_m", type=float, default=2000.0, help="Optional strict eval: remove routes with avg_way_len_m > threshold.")
     args = p.parse_args()
 
@@ -256,6 +299,18 @@ def main() -> None:
     way_center_x = np.asarray(wf["way_center_x"], dtype=np.float64).reshape(-1)
     meta = _decode_meta(wf.get("meta", None))
 
+    # Per-city grid meta (for meters conversion). Useful when way_features is merged across cities and lacks grid bbox.
+    city_meta: Dict[int, dict] = {}
+    city_meta_src: Dict[int, str] = {}
+    for spec in list(args.city_grid_meta or []):
+        c, path = _parse_city_kv(str(spec))
+        _require_file(path)
+        try:
+            city_meta[int(c)] = _meta_from_city_grid_meta(path)
+            city_meta_src[int(c)] = str(path)
+        except Exception as e:
+            raise SystemExit(f"[FATAL] bad --city_grid_meta {spec!r}: {e}") from e
+
     idx_g = _index_eval(greedy_rep)
     idx_b = _index_eval(beam10_rep)
     rids_g = set(idx_g.keys())
@@ -274,9 +329,11 @@ def main() -> None:
     # Per-route derived stats (based on GT way sequence).
     recs: List[Dict[str, Any]] = []
     units_seen: set[str] = set()
+    units_by_city: Dict[int, set[str]] = {}
     for rid in rids:
         rid_i = int(rid)
         city = int(routes.route_city[rid_i])
+        meta_r = city_meta.get(int(city), meta)
         L = int(routes.way_seq_len[rid_i])
         s = int(routes.way_seq_ptr[rid_i])
         gt = routes.way_seq_idx[s : s + L].astype(np.int64, copy=False)
@@ -293,17 +350,18 @@ def main() -> None:
         g_last = _infer_pred_last_way(routes, rid_i, idx_g[rid_i])
         b_last = _infer_pred_last_way(routes, rid_i, idx_b[rid_i])
         g_pos_err, g_unit = _dist_to_dest_m(
-            pred_last_way=g_last, dest_pos_yx=dest_pos, way_center_y=way_center_y, way_center_x=way_center_x, meta=meta
+            pred_last_way=g_last, dest_pos_yx=dest_pos, way_center_y=way_center_y, way_center_x=way_center_x, meta=meta_r
         )
         b_pos_err, b_unit = _dist_to_dest_m(
-            pred_last_way=b_last, dest_pos_yx=dest_pos, way_center_y=way_center_y, way_center_x=way_center_x, meta=meta
+            pred_last_way=b_last, dest_pos_yx=dest_pos, way_center_y=way_center_y, way_center_x=way_center_x, meta=meta_r
         )
-        g_center_err, g_unit2 = _dist_way_to_way_m(a_way=g_last, b_way=dest_way, way_center_y=way_center_y, way_center_x=way_center_x, meta=meta)
-        b_center_err, b_unit3 = _dist_way_to_way_m(a_way=b_last, b_way=dest_way, way_center_y=way_center_y, way_center_x=way_center_x, meta=meta)
+        g_center_err, g_unit2 = _dist_way_to_way_m(a_way=g_last, b_way=dest_way, way_center_y=way_center_y, way_center_x=way_center_x, meta=meta_r)
+        b_center_err, b_unit3 = _dist_way_to_way_m(a_way=b_last, b_way=dest_way, way_center_y=way_center_y, way_center_x=way_center_x, meta=meta_r)
         units_seen.add(str(g_unit))
         units_seen.add(str(b_unit))
         units_seen.add(str(g_unit2))
         units_seen.add(str(b_unit3))
+        units_by_city.setdefault(int(city), set()).update({str(g_unit), str(b_unit), str(g_unit2), str(b_unit3)})
 
         recs.append(
             {
@@ -362,6 +420,7 @@ def main() -> None:
 
     final_err = {
         "units_seen": sorted(list(u for u in units_seen if u and u != "invalid_way_id")),
+        "units_by_city": {str(int(c)): sorted(list(u for u in us if u and u != "invalid_way_id")) for c, us in sorted(units_by_city.items())},
         "to_dest_pos": {
             "greedy": _err_stats("greedy_success", "greedy_final_pos_error_to_dest_pos"),
             "beam10": _err_stats("beam10_success", "beam10_final_pos_error_to_dest_pos"),
@@ -434,6 +493,7 @@ def main() -> None:
             "beam10_json": str(beam10_json),
             "way_routes_npz": str(way_routes_npz),
             "way_features_npz": str(way_features_npz),
+            "city_grid_meta": {str(k): str(v) for k, v in sorted(city_meta_src.items(), key=lambda kv: int(kv[0]))},
         },
         "mismatches": mism,
         "way_len_m": way_stats,
@@ -483,7 +543,12 @@ def main() -> None:
     q = way_stats["quantiles_m"]
     qd = dest_stats["quantiles_m"]
     qe = final_err["to_dest_pos"]["beam10"]["success"]["quantiles"]
-    unit = (final_err["units_seen"][0] if final_err.get("units_seen") else "unknown")
+    units0 = list(final_err.get("units_seen") or [])
+    unit = ("meters" if units0 == ["meters"] else ("|".join(units0) if units0 else "unknown"))
+    note = ""
+    if unit != "meters":
+        note = "\n- NOTE: `grid_units` means the eval used grid y/x without city bbox meta; pass `--city_grid_meta CITY=.../osm_road_prob_meta.json` to convert to meters.\n"
+
     snippet = f"""## Way granularity & evaluation definition (auto-generated)
 
 - Way segment length distribution (meters): median={q.get('p50', float('nan')):.0f}m (p25={q.get('p25', float('nan')):.0f}m, p75={q.get('p75', float('nan')):.0f}m, p95={q.get('p95', float('nan')):.0f}m).
@@ -491,6 +556,7 @@ def main() -> None:
 - Success is defined as reaching the destination way (street-level *segment* granularity). We additionally report final position error as the distance between the predicted last-way center and the destination position (unit: {unit}).
 - Beam-10 final position error (successful cases): median={qe.get('p50', float('nan')):.0f} ({unit}), p95={qe.get('p95', float('nan')):.0f} ({unit}).
 """
+    snippet += note
     out_md = out_dir / "waycasd_eval_granularity_paper_snippet.md"
     out_md.write_text(snippet, encoding="utf-8")
 
@@ -502,7 +568,8 @@ def main() -> None:
     mx = out["way_len_m"]["max_m"]
     qd = out["dest_way_len_m_on_eval_routes"]["quantiles_m"]
     qa = out["route_avg_way_len_m_on_eval_routes"]["all"]["quantiles_m"]
-    unit = (out["final_pos_error"]["units_seen"][0] if out["final_pos_error"].get("units_seen") else "unknown")
+    units0 = list(out.get("final_pos_error", {}).get("units_seen") or [])
+    unit = ("meters" if units0 == ["meters"] else ("|".join(units0) if units0 else "unknown"))
     b_succ = out["final_pos_error"]["to_dest_pos"]["beam10"]["success"]["quantiles"]
     b_fail = out["final_pos_error"]["to_dest_pos"]["beam10"]["failure"]["quantiles"]
     strict = out["strict_eval_filter_avg_way_len"]
@@ -533,6 +600,8 @@ def main() -> None:
         f"beam10_fail_p50={b_fail.get('p50', float('nan')):.0f} "
         f"p95={b_fail.get('p95', float('nan')):.0f}"
     )
+    if unit != "meters":
+        print("[WARN] final_pos_error is not meters; pass --city_grid_meta CITY=.../osm_road_prob_meta.json for meters conversion.")
     if isinstance(strict, dict) and "kept_n" in strict:
         print(
             "[StrictFilter avg_way_len] "

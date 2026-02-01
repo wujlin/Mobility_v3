@@ -43,7 +43,13 @@ def main() -> None:
 
     min_hops = int(args.min_hops)
     max_way_len = int(args.max_way_len)
-    keep = (routes.way_seq_len >= (min_hops + 1)) & (routes.way_seq_len <= max_way_len)
+    max_hops = int(max_way_len) - 1
+    valid = hops >= 0
+    keep = valid & (hops >= int(min_hops)) & (hops <= int(max_hops))
+
+    removed_invalid = int(np.sum(~valid))
+    removed_short = int(np.sum(valid & (hops < int(min_hops))))
+    removed_long = int(np.sum(valid & (hops > int(max_hops))))
 
     out = {
         "ok": True,
@@ -52,9 +58,15 @@ def main() -> None:
         "inputs": {"way_routes_npz": str(args.way_routes_npz), "min_hops": int(min_hops), "max_way_len": int(max_way_len)},
         "overall": {
             "n_total": int(hops.size),
+            "n_valid": int(np.sum(valid)),
             "n_keep": int(np.sum(keep)),
             "keep_frac": float(np.mean(keep)),
+            "keep_frac_valid": float(np.sum(keep) / max(1, int(np.sum(valid)))),
+            "removed_invalid_n": int(removed_invalid),
+            "removed_short_n": int(removed_short),
+            "removed_long_n": int(removed_long),
             "hops_quantiles_all": _quantiles_int(hops),
+            "hops_quantiles_valid": _quantiles_int(hops[valid]),
             "hops_quantiles_keep": _quantiles_int(hops[keep]),
         },
         "by_city": {},
@@ -66,9 +78,15 @@ def main() -> None:
             continue
         out["by_city"][str(int(city))] = {
             "n_total": int(np.sum(m)),
+            "n_valid": int(np.sum(m & valid)),
             "n_keep": int(np.sum(m & keep)),
             "keep_frac": float(np.mean(keep[m])) if int(np.sum(m)) > 0 else float("nan"),
+            "keep_frac_valid": float(np.sum(m & keep) / max(1, int(np.sum(m & valid)))),
+            "removed_invalid_n": int(np.sum(m & (~valid))),
+            "removed_short_n": int(np.sum(m & valid & (hops < int(min_hops)))),
+            "removed_long_n": int(np.sum(m & valid & (hops > int(max_hops)))),
             "hops_quantiles_all": _quantiles_int(hops[m]),
+            "hops_quantiles_valid": _quantiles_int(hops[m & valid]),
             "hops_quantiles_keep": _quantiles_int(hops[m & keep]),
         }
 
@@ -76,12 +94,18 @@ def main() -> None:
     ov = out["overall"]
     print(
         f"[Filter] min_hops={min_hops} max_way_len={max_way_len} "
-        f"keep={ov['n_keep']}/{ov['n_total']} ({ov['keep_frac']:.1%})"
+        f"keep={ov['n_keep']}/{ov['n_total']} ({ov['keep_frac']:.1%}) "
+        f"valid_keep={ov['n_keep']}/{ov['n_valid']} ({ov['keep_frac_valid']:.1%})"
     )
+    print(f"[Removed] invalid={ov['removed_invalid_n']} short<{min_hops}={ov['removed_short_n']} long>{max_hops}={ov['removed_long_n']}")
     print(f"[Hops all] {ov['hops_quantiles_all']}")
+    print(f"[Hops valid] {ov['hops_quantiles_valid']}")
     print(f"[Hops keep] {ov['hops_quantiles_keep']}")
     for city, s in out["by_city"].items():
-        print(f"[City {city}] keep={s['n_keep']}/{s['n_total']} ({s['keep_frac']:.1%})")
+        print(
+            f"[City {city}] keep={s['n_keep']}/{s['n_total']} ({s['keep_frac']:.1%}) "
+            f"valid_keep={s['n_keep']}/{s['n_valid']} ({s['keep_frac_valid']:.1%})"
+        )
     if args.out_json is not None:
         out_json = Path(args.out_json)
         out_json.parent.mkdir(parents=True, exist_ok=True)

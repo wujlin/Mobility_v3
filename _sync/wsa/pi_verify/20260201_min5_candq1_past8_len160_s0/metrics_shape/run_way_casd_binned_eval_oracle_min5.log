@@ -1,0 +1,5 @@
+/home/jinlin/miniconda3/envs/dpl/lib/python3.11/site-packages/torch/nn/modules/transformer.py:392: UserWarning: enable_nested_tensor is True, but self.use_nested_tensor is False because encoder_layer.norm_first was True
+  warnings.warn(
+[city0] done=200 routes
+[city1] done=200 routes
+[OK] saved: _sync/wsa/pi_verify/20260201_min5_candq1_past8_len160_s0/metrics_shape/way_casd_binned_eval_oracle_min5_n200pc.json

@@ -1,0 +1,22 @@
+{
+  "ok": true,
+  "task": "build_region_graph",
+  "created_at": "2026-02-01T20:42:56.575426+08:00",
+  "cfg": {
+    "seed": 0,
+    "directed_region_edges": false
+  },
+  "inputs": {
+    "way_graph_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD1_waydata_rustbelt_seed0_strict_v1/W3_way_graph_strict/way_graph.npz"
+  },
+  "outputs": {
+    "out_npz": "_sync/wsa/pi_verify/20260201_min5_candq1_past8_len160_s0/metrics_shape/way_regions_louvain_seed0.npz"
+  },
+  "n_ways": 19551,
+  "n_regions": 4364,
+  "region_size": {
+    "p50": 1,
+    "p90": 1,
+    "max": 390
+  }
+}

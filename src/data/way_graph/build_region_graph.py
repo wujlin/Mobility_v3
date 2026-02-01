@@ -16,6 +16,9 @@ TZ_SHANGHAI = timezone(timedelta(hours=8))
 class Cfg:
     seed: int
     directed_region_edges: bool
+    resolution: float
+    min_component_size: int
+    keep_only_largest_cc: bool
 
 
 def _import_louvain():
@@ -65,6 +68,41 @@ def _csr_to_edge_weights(ptr: np.ndarray, idx: np.ndarray) -> Dict[Tuple[int, in
             a, b = _sym_edge_key(int(u), int(vv))
             out[(a, b)] = int(out.get((a, b), 0) + 1)
     return out
+
+
+def _union_find_components(n: int, edges: Iterable[Tuple[int, int]]) -> Tuple[int, np.ndarray]:
+    parent = np.arange(int(n), dtype=np.int64)
+    size = np.ones((int(n),), dtype=np.int64)
+
+    def find(x: int) -> int:
+        xx = int(x)
+        while parent[xx] != xx:
+            parent[xx] = parent[parent[xx]]
+            xx = int(parent[xx])
+        return int(xx)
+
+    def union(a: int, b: int) -> None:
+        ra = find(int(a))
+        rb = find(int(b))
+        if ra == rb:
+            return
+        if int(size[ra]) < int(size[rb]):
+            ra, rb = rb, ra
+        parent[rb] = ra
+        size[ra] += size[rb]
+
+    for u, v in edges:
+        uu = int(u)
+        vv = int(v)
+        if uu == vv:
+            continue
+        union(uu, vv)
+
+    roots = np.asarray([find(i) for i in range(int(n))], dtype=np.int64)
+    _, inv = np.unique(roots, return_inverse=True)
+    comp_sizes = np.bincount(inv.astype(np.int64), minlength=int(inv.max()) + 1 if inv.size else 0).astype(np.int64)
+    n_comp = int(comp_sizes.size)
+    return n_comp, comp_sizes
 
 
 def _remap_labels(labels: np.ndarray) -> Tuple[np.ndarray, int, np.ndarray]:
@@ -163,6 +201,18 @@ def main() -> None:
     ap.add_argument("--out_npz", type=Path, required=True, help="Output region_graph.npz (mapping + region CSR).")
     ap.add_argument("--out_json", type=Path, default=None, help="Optional: save a small report json next to out_npz.")
     ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--resolution", type=float, default=1.0, help="Louvain resolution (smaller => fewer/larger communities).")
+    ap.add_argument(
+        "--min_component_size",
+        type=int,
+        default=2,
+        help="Ignore tiny connected components (< this size) during Louvain; their nodes are assigned region=-1.",
+    )
+    ap.add_argument(
+        "--keep_only_largest_cc",
+        action="store_true",
+        help="If set, run Louvain only on the largest connected component; others assigned region=-1.",
+    )
     ap.add_argument(
         "--directed_region_edges",
         action="store_true",
@@ -170,7 +220,13 @@ def main() -> None:
     )
     args = ap.parse_args()
 
-    cfg = Cfg(seed=int(args.seed), directed_region_edges=bool(args.directed_region_edges))
+    cfg = Cfg(
+        seed=int(args.seed),
+        directed_region_edges=bool(args.directed_region_edges),
+        resolution=float(args.resolution),
+        min_component_size=int(args.min_component_size),
+        keep_only_largest_cc=bool(args.keep_only_largest_cc),
+    )
 
     data = np.load(str(args.way_graph_npz), allow_pickle=True)
     need = {"way_osm_id", "way_adj_ptr", "way_adj_idx"}
@@ -186,13 +242,44 @@ def main() -> None:
 
     # Build undirected weighted graph for Louvain.
     ew = _csr_to_edge_weights(ptr=ptr, idx=idx)
+    edges = [(int(u), int(v)) for (u, v) in ew.keys() if int(u) != int(v)]
+    undeg = np.zeros((n_ways,), dtype=np.int64)
+    for u, v in edges:
+        undeg[int(u)] += 1
+        undeg[int(v)] += 1
+    n_comp, comp_sizes = _union_find_components(n_ways, edges)
+    largest_cc = int(comp_sizes.max()) if comp_sizes.size else 0
+    isolate_n = int(np.sum(undeg == 0))
+
     G = nx.Graph()
     G.add_nodes_from(range(n_ways))
     for (u, v), w in ew.items():
         if int(u) != int(v) and int(w) > 0:
             G.add_edge(int(u), int(v), weight=float(w))
 
-    part = cl.best_partition(G, weight="weight", random_state=int(cfg.seed))
+    # Restrict nodes for Louvain (optional): remove tiny CCs and/or keep only largest CC.
+    nodes_for_louvain = None
+    if bool(cfg.keep_only_largest_cc) or int(cfg.min_component_size) > 1:
+        # Use networkx CCs for exact node set (graph already built).
+        comps = list(nx.connected_components(G))
+        if comps:
+            comps = sorted(comps, key=lambda s: len(s), reverse=True)
+            if bool(cfg.keep_only_largest_cc):
+                comps = [comps[0]]
+            if int(cfg.min_component_size) > 1:
+                comps = [c for c in comps if len(c) >= int(cfg.min_component_size)]
+            nodes_for_louvain = set().union(*comps) if comps else set()
+
+    if nodes_for_louvain is not None:
+        H = G.subgraph(nodes_for_louvain).copy()
+    else:
+        H = G
+
+    try:
+        part = cl.best_partition(H, weight="weight", random_state=int(cfg.seed), resolution=float(cfg.resolution))
+    except TypeError:
+        # Older python-louvain may not accept `resolution`.
+        part = cl.best_partition(H, weight="weight", random_state=int(cfg.seed))
     lab = np.full((n_ways,), -1, dtype=np.int64)
     for u, c in part.items():
         if 0 <= int(u) < n_ways:
@@ -226,6 +313,13 @@ def main() -> None:
             "inputs": {"way_graph_npz": str(args.way_graph_npz)},
             "n_ways": int(n_ways),
             "n_regions": int(n_regions),
+            "graph": {
+                "n_connected_components_undirected": int(n_comp),
+                "largest_cc_n": int(largest_cc),
+                "largest_cc_frac": float(largest_cc / max(1, int(n_ways))),
+                "isolated_outdeg0_n": int(isolate_n),
+                "isolated_outdeg0_frac": float(isolate_n / max(1, int(n_ways))),
+            },
         },
     )
     print(f"[OK] saved: {out_npz} (n_regions={int(n_regions)})")
@@ -242,6 +336,13 @@ def main() -> None:
             "outputs": {"out_npz": str(out_npz)},
             "n_ways": int(n_ways),
             "n_regions": int(n_regions),
+            "graph": {
+                "n_connected_components_undirected": int(n_comp),
+                "largest_cc_n": int(largest_cc),
+                "largest_cc_frac": float(largest_cc / max(1, int(n_ways))),
+                "isolated_outdeg0_n": int(isolate_n),
+                "isolated_outdeg0_frac": float(isolate_n / max(1, int(n_ways))),
+            },
             "region_size": {
                 "p50": int(np.quantile(region_sizes, 0.50)) if region_sizes.size else 0,
                 "p90": int(np.quantile(region_sizes, 0.90)) if region_sizes.size else 0,
@@ -254,4 +355,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

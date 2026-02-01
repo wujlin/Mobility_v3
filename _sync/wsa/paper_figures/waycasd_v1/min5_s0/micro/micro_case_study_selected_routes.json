@@ -1,0 +1,50 @@
+{
+  "ok": true,
+  "task": "waycasd_plot_city_micro_case_study",
+  "created_at": "2026-02-01T16:01:01.371021+08:00",
+  "inputs": {
+    "eval_cfg": {
+      "seed": 0,
+      "device": "cuda",
+      "tz_offset_hours": -5.0,
+      "n_routes": 200,
+      "min_hops": 5,
+      "max_way_len": 160,
+      "max_decode_len": 160,
+      "decode": "greedy",
+      "beam_size": 1,
+      "decode_max_candidates": 0,
+      "decode_candidate_policy": "first",
+      "decode_include_dest_if_successor": false,
+      "decode_guided_dest_alpha": 0.0,
+      "last_k_steps": 5,
+      "reachability_max_visits": 200000,
+      "progress_every": 25,
+      "dump_way_seqs": false
+    },
+    "beam_size": 10,
+    "easy_case_filter": {
+      "min_hops": 5,
+      "max_hops": 20,
+      "max_detour_over_shortest": 1.5
+    }
+  },
+  "picked": [
+    {
+      "city": 0,
+      "city_name": "Detroit",
+      "easy_route_id": 1740,
+      "easy_detour_filter_relaxed": false,
+      "recovered_route_id": 156,
+      "hard_route_id": 1524
+    },
+    {
+      "city": 1,
+      "city_name": "Columbus",
+      "easy_route_id": 3009,
+      "easy_detour_filter_relaxed": false,
+      "recovered_route_id": 6461,
+      "hard_route_id": 5195
+    }
+  ]
+}

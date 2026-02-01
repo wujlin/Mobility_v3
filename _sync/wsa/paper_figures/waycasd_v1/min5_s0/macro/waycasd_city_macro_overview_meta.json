@@ -1,0 +1,39 @@
+{
+  "ok": true,
+  "task": "waycasd_plot_city_macro_overview",
+  "created_at": "2026-02-01T16:01:20.266269+08:00",
+  "eval_dir": "_sync/wsa/pi_verify/20260201_min5_candq1_past8_len160_s0",
+  "greedy_json": "_sync/wsa/pi_verify/20260201_min5_candq1_past8_len160_s0/oracle_decode_greedy_n200.json",
+  "beam10_json": "_sync/wsa/pi_verify/20260201_min5_candq1_past8_len160_s0/oracle_decode_beam10_n200.json",
+  "inputs": {
+    "way_routes_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD1_waydata_rustbelt_seed0_strict_v1/W5_way_routes_strict/way_routes_strict_masklen0.npz",
+    "way_features_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD1_waydata_rustbelt_seed0_strict_v1/W4_way_features_sem/way_features.npz"
+  },
+  "bins_fail": 60,
+  "bins_rate": 22,
+  "vmax_delta": 1.0,
+  "per_city": {
+    "0": {
+      "city_name": "Detroit",
+      "n_eval_routes": 200,
+      "n_fail_beam10": 68,
+      "bbox": {
+        "xmin": -81.84,
+        "xmax": 1104.84,
+        "ymin": -81.84,
+        "ymax": 1104.84
+      }
+    },
+    "1": {
+      "city_name": "Columbus",
+      "n_eval_routes": 200,
+      "n_fail_beam10": 30,
+      "bbox": {
+        "xmin": -81.84,
+        "xmax": 1104.84,
+        "ymin": -81.84,
+        "ymax": 1104.84
+      }
+    }
+  }
+}

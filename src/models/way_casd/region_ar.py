@@ -20,6 +20,7 @@ class RegionARCfg:
     n_regions: int = 154
     n_route_cities: int = 2
     coord_scale: float = 1024.0
+    use_candidate_mask: bool = False
 
 
 class RegionEmbedding(nn.Module):
@@ -227,6 +228,33 @@ class RegionARModel(nn.Module):
         flat_tgt = torch.clamp(tgt.reshape(B * T), min=0)
         flat_mask = mask.reshape(B * T).to(dtype=torch.float32)
 
+        tgt_not_neighbor_rate = float("nan")
+        if bool(self.cfg.use_candidate_mask):
+            if getattr(self, "region_adj", None) is None:
+                raise RuntimeError("use_candidate_mask=True requires region_adj")
+            prev = torch.clamp(x_in.reshape(B * T), min=0)
+            allowed = self.region_adj[prev].clone()  # (B*T,R)
+            # Disallow staying in the same region (region_seq is compressed).
+            allowed[torch.arange(int(B * T), device=allowed.device), prev] = False
+
+            # Guarantee at least one valid class per token (for numerical safety).
+            empty = (allowed.sum(dim=1) == 0)
+            if bool(empty.any()):
+                allowed[empty, prev[empty]] = True
+
+            # Some transitions may be missing in region_adj due to graph artifacts.
+            # We record their rate and include the target to avoid infinite loss.
+            with torch.no_grad():
+                ok = allowed[torch.arange(int(B * T), device=allowed.device), flat_tgt].to(dtype=torch.float32)
+                bad = (1.0 - ok) * flat_mask
+                denom = float(torch.clamp_min(flat_mask.sum(), 1.0).item())
+                tgt_not_neighbor_rate = float(bad.sum().item() / denom)
+            bad_idx = (ok < 0.5) & (flat_mask > 0.0)
+            if bool(bad_idx.any()):
+                allowed[bad_idx, flat_tgt[bad_idx]] = True
+
+            flat_logits = flat_logits.masked_fill(~allowed, -1e9)
+
         per = F.cross_entropy(flat_logits, flat_tgt, reduction="none")  # (B*T,)
         loss = (per * flat_mask).sum() / torch.clamp_min(flat_mask.sum(), 1.0)
 
@@ -241,6 +269,11 @@ class RegionARModel(nn.Module):
                 invalid = (1.0 - valid) * flat_mask
                 invalid_rate = float(invalid.sum().item() / float(torch.clamp_min(flat_mask.sum(), 1.0).item()))
 
-        stats = {"loss": float(loss.item()), "acc": float(acc), "invalid_rate": float(invalid_rate), "n_tokens": float(flat_mask.sum().item())}
+        stats = {
+            "loss": float(loss.item()),
+            "acc": float(acc),
+            "invalid_rate": float(invalid_rate),
+            "tgt_not_neighbor_rate": float(tgt_not_neighbor_rate),
+            "n_tokens": float(flat_mask.sum().item()),
+        }
         return loss, stats
-

@@ -40,6 +40,7 @@ class TrainCfg:
     coord_scale: float
     n_route_cities: int
     max_routes: Optional[int]
+    use_candidate_mask: bool
 
 
 def _set_seed(seed: int) -> None:
@@ -181,6 +182,7 @@ def train_epoch(model: RegionARModel, loader: DataLoader, opt: torch.optim.Optim
     total_loss = 0.0
     total_acc = 0.0
     total_invalid = 0.0
+    total_tgt_not_neighbor = 0.0
     total_tokens = 0.0
 
     for batch in loader:
@@ -197,6 +199,8 @@ def train_epoch(model: RegionARModel, loader: DataLoader, opt: torch.optim.Optim
         total_acc += float(stats["acc"]) * n_tok
         if np.isfinite(float(stats["invalid_rate"])):
             total_invalid += float(stats["invalid_rate"]) * n_tok
+        if np.isfinite(float(stats.get("tgt_not_neighbor_rate", float("nan")))):
+            total_tgt_not_neighbor += float(stats["tgt_not_neighbor_rate"]) * n_tok
         total_tokens += n_tok
 
     denom = max(1.0, float(total_tokens))
@@ -204,6 +208,7 @@ def train_epoch(model: RegionARModel, loader: DataLoader, opt: torch.optim.Optim
         "loss": float(total_loss / denom),
         "acc": float(total_acc / denom),
         "invalid_rate": float(total_invalid / denom) if total_tokens > 0 else float("nan"),
+        "tgt_not_neighbor_rate": float(total_tgt_not_neighbor / denom) if total_tokens > 0 else float("nan"),
         "n_tokens": float(total_tokens),
     }
 
@@ -214,6 +219,7 @@ def eval_epoch(model: RegionARModel, loader: DataLoader, device: torch.device) -
     total_loss = 0.0
     total_acc = 0.0
     total_invalid = 0.0
+    total_tgt_not_neighbor = 0.0
     total_tokens = 0.0
 
     for batch in loader:
@@ -226,6 +232,8 @@ def eval_epoch(model: RegionARModel, loader: DataLoader, device: torch.device) -
         total_acc += float(stats["acc"]) * n_tok
         if np.isfinite(float(stats["invalid_rate"])):
             total_invalid += float(stats["invalid_rate"]) * n_tok
+        if np.isfinite(float(stats.get("tgt_not_neighbor_rate", float("nan")))):
+            total_tgt_not_neighbor += float(stats["tgt_not_neighbor_rate"]) * n_tok
         total_tokens += n_tok
 
     denom = max(1.0, float(total_tokens))
@@ -233,6 +241,7 @@ def eval_epoch(model: RegionARModel, loader: DataLoader, device: torch.device) -
         "loss": float(total_loss / denom),
         "acc": float(total_acc / denom),
         "invalid_rate": float(total_invalid / denom) if total_tokens > 0 else float("nan"),
+        "tgt_not_neighbor_rate": float(total_tgt_not_neighbor / denom) if total_tokens > 0 else float("nan"),
         "n_tokens": float(total_tokens),
     }
 
@@ -263,6 +272,7 @@ def build_argparser() -> argparse.ArgumentParser:
     p.add_argument("--max_len", type=int, default=16, help="Max region_seq length used (truncate longer).")
     p.add_argument("--coord_scale", type=float, default=1024.0, help="Normalize (y,x) coords by this constant (must match data).")
     p.add_argument("--n_route_cities", type=int, default=2)
+    p.add_argument("--use_candidate_mask", action="store_true", help="Score only neighbor regions (inductive bias).")
     return p
 
 
@@ -289,6 +299,7 @@ def main() -> None:
         coord_scale=float(args.coord_scale),
         n_route_cities=int(args.n_route_cities),
         max_routes=(int(args.max_routes) if args.max_routes is not None else None),
+        use_candidate_mask=bool(args.use_candidate_mask),
     )
 
     _set_seed(cfg.seed)
@@ -343,6 +354,7 @@ def main() -> None:
             n_regions=int(region_city.numel()),
             n_route_cities=int(cfg.n_route_cities),
             coord_scale=float(cfg.coord_scale),
+            use_candidate_mask=bool(cfg.use_candidate_mask),
         ),
         region_city=region_city,
         region_static=region_static,
@@ -351,20 +363,46 @@ def main() -> None:
 
     opt = torch.optim.AdamW(model.parameters(), lr=float(cfg.lr), weight_decay=float(cfg.weight_decay))
 
-    best = {"val_loss": float("inf"), "epoch": -1, "val_acc": 0.0}
+    best_by_loss = {"val_loss": float("inf"), "epoch": -1, "val_acc": 0.0}
+    best_by_acc = {"val_acc": float("-inf"), "epoch": -1, "val_loss": float("inf")}
     for epoch in range(int(cfg.n_epochs)):
         tr = train_epoch(model, train_loader, opt, device)
         va = eval_epoch(model, val_loader, device)
         log.info(f"[epoch {epoch:03d}] train={tr} val={va}")
 
-        improved = float(va["loss"]) < float(best["val_loss"])
-        if improved:
-            best = {"val_loss": float(va["loss"]), "epoch": int(epoch), "val_acc": float(va["acc"])}
-            ckpt = {"model": model.state_dict(), "cfg": asdict(cfg), "region_meta": region_meta_report, "best": best}
+        improved_loss = float(va["loss"]) < float(best_by_loss["val_loss"])
+        if improved_loss:
+            best_by_loss = {"val_loss": float(va["loss"]), "epoch": int(epoch), "val_acc": float(va["acc"])}
+            ckpt = {
+                "model": model.state_dict(),
+                "cfg": asdict(cfg),
+                "region_meta": region_meta_report,
+                "best_by_loss": best_by_loss,
+                "best_by_acc": best_by_acc,
+            }
             torch.save(ckpt, out_dir / "ckpt_best.pt")
 
+        improved_acc = float(va["acc"]) > float(best_by_acc["val_acc"])
+        if improved_acc:
+            best_by_acc = {"val_acc": float(va["acc"]), "epoch": int(epoch), "val_loss": float(va["loss"])}
+            ckpt = {
+                "model": model.state_dict(),
+                "cfg": asdict(cfg),
+                "region_meta": region_meta_report,
+                "best_by_loss": best_by_loss,
+                "best_by_acc": best_by_acc,
+            }
+            torch.save(ckpt, out_dir / "ckpt_best_acc.pt")
+
         if (epoch + 1) % 10 == 0:
-            ckpt = {"model": model.state_dict(), "cfg": asdict(cfg), "region_meta": region_meta_report, "best": best, "epoch": int(epoch)}
+            ckpt = {
+                "model": model.state_dict(),
+                "cfg": asdict(cfg),
+                "region_meta": region_meta_report,
+                "best_by_loss": best_by_loss,
+                "best_by_acc": best_by_acc,
+                "epoch": int(epoch),
+            }
             torch.save(ckpt, out_dir / "ckpt_last.pt")
 
     report = {
@@ -379,13 +417,14 @@ def main() -> None:
             "way_features_npz": str(args.way_features_npz),
         },
         "region_meta": region_meta_report,
-        "best": best,
+        "best_by_loss": best_by_loss,
+        "best_by_acc": best_by_acc,
     }
     (out_dir / "report.json").write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     log.info(f"saved: {out_dir/'report.json'}")
-    log.info(f"ckpt: {out_dir/'ckpt_best.pt'}")
+    log.info(f"ckpt_best: {out_dir/'ckpt_best.pt'}")
+    log.info(f"ckpt_best_acc: {out_dir/'ckpt_best_acc.pt'}")
 
 
 if __name__ == "__main__":
     main()
-

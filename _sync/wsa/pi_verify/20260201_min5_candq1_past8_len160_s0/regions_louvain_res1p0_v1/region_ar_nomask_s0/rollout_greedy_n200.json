@@ -1,0 +1,4683 @@
+{
+  "ok": true,
+  "task": "region_ar_rollout_eval",
+  "created_at": "2026-02-02T21:38:40.006946+08:00",
+  "cfg": {
+    "seed": 0,
+    "n_routes": 200,
+    "max_len": 16,
+    "decode": "greedy",
+    "beam_size": 5,
+    "baseline": "none",
+    "use_model": true
+  },
+  "inputs": {
+    "way_routes_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD1_waydata_rustbelt_seed0_strict_v1/W5_way_routes_strict/way_routes_strict_masklen0.npz",
+    "way_regions_npz": "_sync/wsa/pi_verify/20260201_min5_candq1_past8_len160_s0/regions_louvain_res1p0_v1/way_regions_louvain_per_city_res1p0_seed0.npz",
+    "region_seq_npz": "_sync/wsa/pi_verify/20260201_min5_candq1_past8_len160_s0/regions_louvain_res1p0_v1/region_seq_min5_max160.npz",
+    "way_features_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD1_waydata_rustbelt_seed0_strict_v1/W4_way_features_sem/way_features.npz",
+    "model_ckpt": "_sync/wsa/pi_verify/20260201_min5_candq1_past8_len160_s0/regions_louvain_res1p0_v1/region_ar_nomask_s0/ckpt_best.pt"
+  },
+  "region_meta": {
+    "n_regions": 154,
+    "n_cities": 2,
+    "region_city_counts": {
+      "0": 77,
+      "1": 77
+    },
+    "static_dim": 4,
+    "deg": {
+      "p50": 4.0,
+      "p90": 8.0,
+      "max": 12
+    },
+    "n_ways": {
+      "p50": 106.5,
+      "p90": 170.70000000000002,
+      "max": 239.0
+    },
+    "coord_scale": 1024.0
+  },
+  "summary": {
+    "n_routes": 200,
+    "reach_dest_rate": 1.0,
+    "exact_match_rate": 0.94,
+    "has_backtrack_rate": 0.01,
+    "invalid_steps_rate": 0.0,
+    "pred_len": {
+      "p50": 2.0,
+      "p95": 7.0,
+      "max": 8
+    },
+    "gt_len": {
+      "p50": 2.0,
+      "p95": 7.0,
+      "max": 8
+    }
+  },
+  "summary_by_city": {
+    "1": {
+      "n_routes": 154,
+      "reach_dest_rate": 1.0,
+      "exact_match_rate": 0.961038961038961,
+      "has_backtrack_rate": 0.0,
+      "invalid_steps_rate": 0.0,
+      "pred_len": {
+        "p50": 2.0,
+        "p95": 6.0,
+        "max": 8
+      },
+      "gt_len": {
+        "p50": 2.0,
+        "p95": 6.0,
+        "max": 8
+      }
+    },
+    "0": {
+      "n_routes": 46,
+      "reach_dest_rate": 1.0,
+      "exact_match_rate": 0.8695652173913043,
+      "has_backtrack_rate": 0.043478260869565216,
+      "invalid_steps_rate": 0.0,
+      "pred_len": {
+        "p50": 4.0,
+        "p95": 7.0,
+        "max": 8
+      },
+      "gt_len": {
+        "p50": 4.0,
+        "p95": 7.0,
+        "max": 8
+      }
+    }
+  },
+  "records": [
+    {
+      "route_id": 5040,
+      "city": 1,
+      "o_region": 92,
+      "d_region": 99,
+      "gt_seq": [
+        92,
+        99
+      ],
+      "pred_seq": [
+        92,
+        99
+      ],
+      "gt_len": 2,
+      "pred_len": 2,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 1
+    },
+    {
+      "route_id": 6254,
+      "city": 1,
+      "o_region": 105,
+      "d_region": 112,
+      "gt_seq": [
+        105,
+        86,
+        112
+      ],
+      "pred_seq": [
+        105,
+        86,
+        112
+      ],
+      "gt_len": 3,
+      "pred_len": 3,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 2
+    },
+    {
+      "route_id": 2528,
+      "city": 1,
+      "o_region": 120,
+      "d_region": 123,
+      "gt_seq": [
+        120,
+        132,
+        108,
+        123
+      ],
+      "pred_seq": [
+        120,
+        132,
+        108,
+        123
+      ],
+      "gt_len": 4,
+      "pred_len": 4,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 3
+    },
+    {
+      "route_id": 3358,
+      "city": 1,
+      "o_region": 114,
+      "d_region": 132,
+      "gt_seq": [
+        114,
+        97,
+        89,
+        132
+      ],
+      "pred_seq": [
+        114,
+        109,
+        97,
+        89,
+        132
+      ],
+      "gt_len": 4,
+      "pred_len": 5,
+      "reach_dest": true,
+      "exact_match": false,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 4
+    },
+    {
+      "route_id": 870,
+      "city": 0,
+      "o_region": 45,
+      "d_region": 48,
+      "gt_seq": [
+        45,
+        42,
+        34,
+        47,
+        48
+      ],
+      "pred_seq": [
+        45,
+        42,
+        34,
+        47,
+        48
+      ],
+      "gt_len": 5,
+      "pred_len": 5,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 4
+    },
+    {
+      "route_id": 125,
+      "city": 0,
+      "o_region": 9,
+      "d_region": 23,
+      "gt_seq": [
+        9,
+        7,
+        33,
+        28,
+        23
+      ],
+      "pred_seq": [
+        9,
+        7,
+        33,
+        28,
+        23
+      ],
+      "gt_len": 5,
+      "pred_len": 5,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 4
+    },
+    {
+      "route_id": 3738,
+      "city": 1,
+      "o_region": 122,
+      "d_region": 86,
+      "gt_seq": [
+        122,
+        86
+      ],
+      "pred_seq": [
+        122,
+        86
+      ],
+      "gt_len": 2,
+      "pred_len": 2,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 1
+    },
+    {
+      "route_id": 946,
+      "city": 0,
+      "o_region": 1,
+      "d_region": 6,
+      "gt_seq": [
+        1,
+        15,
+        23,
+        6
+      ],
+      "pred_seq": [
+        1,
+        15,
+        23,
+        6
+      ],
+      "gt_len": 4,
+      "pred_len": 4,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 3
+    },
+    {
+      "route_id": 1503,
+      "city": 0,
+      "o_region": 75,
+      "d_region": 12,
+      "gt_seq": [
+        75,
+        12
+      ],
+      "pred_seq": [
+        75,
+        12
+      ],
+      "gt_len": 2,
+      "pred_len": 2,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 1
+    },
+    {
+      "route_id": 5300,
+      "city": 1,
+      "o_region": 113,
+      "d_region": 80,
+      "gt_seq": [
+        113,
+        103,
+        94,
+        91,
+        80
+      ],
+      "pred_seq": [
+        113,
+        103,
+        94,
+        91,
+        80
+      ],
+      "gt_len": 5,
+      "pred_len": 5,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 4
+    },
+    {
+      "route_id": 4172,
+      "city": 1,
+      "o_region": 90,
+      "d_region": 106,
+      "gt_seq": [
+        90,
+        106
+      ],
+      "pred_seq": [
+        90,
+        106
+      ],
+      "gt_len": 2,
+      "pred_len": 2,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 1
+    },
+    {
+      "route_id": 603,
+      "city": 0,
+      "o_region": 7,
+      "d_region": 45,
+      "gt_seq": [
+        7,
+        30,
+        32,
+        48,
+        58,
+        50,
+        34,
+        45
+      ],
+      "pred_seq": [
+        7,
+        30,
+        32,
+        48,
+        58,
+        50,
+        34,
+        45
+      ],
+      "gt_len": 8,
+      "pred_len": 8,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 7
+    },
+    {
+      "route_id": 3997,
+      "city": 1,
+      "o_region": 111,
+      "d_region": 123,
+      "gt_seq": [
+        111,
+        107,
+        123
+      ],
+      "pred_seq": [
+        111,
+        107,
+        123
+      ],
+      "gt_len": 3,
+      "pred_len": 3,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 2
+    },
+    {
+      "route_id": 5619,
+      "city": 1,
+      "o_region": 114,
+      "d_region": 114,
+      "gt_seq": [
+        114
+      ],
+      "pred_seq": [
+        114
+      ],
+      "gt_len": 1,
+      "pred_len": 1,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 0
+    },
+    {
+      "route_id": 5340,
+      "city": 1,
+      "o_region": 123,
+      "d_region": 123,
+      "gt_seq": [
+        123
+      ],
+      "pred_seq": [
+        123
+      ],
+      "gt_len": 1,
+      "pred_len": 1,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 0
+    },
+    {
+      "route_id": 395,
+      "city": 0,
+      "o_region": 30,
+      "d_region": 14,
+      "gt_seq": [
+        30,
+        9,
+        5,
+        14
+      ],
+      "pred_seq": [
+        30,
+        9,
+        5,
+        14
+      ],
+      "gt_len": 4,
+      "pred_len": 4,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 3
+    },
+    {
+      "route_id": 1612,
+      "city": 0,
+      "o_region": 29,
+      "d_region": 70,
+      "gt_seq": [
+        29,
+        57,
+        43,
+        70
+      ],
+      "pred_seq": [
+        29,
+        57,
+        43,
+        70
+      ],
+      "gt_len": 4,
+      "pred_len": 4,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 3
+    },
+    {
+      "route_id": 7391,
+      "city": 1,
+      "o_region": 114,
+      "d_region": 106,
+      "gt_seq": [
+        114,
+        124,
+        90,
+        106
+      ],
+      "pred_seq": [
+        114,
+        124,
+        90,
+        106
+      ],
+      "gt_len": 4,
+      "pred_len": 4,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 3
+    },
+    {
+      "route_id": 4850,
+      "city": 1,
+      "o_region": 90,
+      "d_region": 97,
+      "gt_seq": [
+        90,
+        97
+      ],
+      "pred_seq": [
+        90,
+        97
+      ],
+      "gt_len": 2,
+      "pred_len": 2,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 1
+    },
+    {
+      "route_id": 2993,
+      "city": 1,
+      "o_region": 81,
+      "d_region": 112,
+      "gt_seq": [
+        81,
+        86,
+        112
+      ],
+      "pred_seq": [
+        81,
+        86,
+        112
+      ],
+      "gt_len": 3,
+      "pred_len": 3,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 2
+    },
+    {
+      "route_id": 5386,
+      "city": 1,
+      "o_region": 92,
+      "d_region": 92,
+      "gt_seq": [
+        92
+      ],
+      "pred_seq": [
+        92
+      ],
+      "gt_len": 1,
+      "pred_len": 1,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 0
+    },
+    {
+      "route_id": 5561,
+      "city": 1,
+      "o_region": 80,
+      "d_region": 91,
+      "gt_seq": [
+        80,
+        84,
+        91
+      ],
+      "pred_seq": [
+        80,
+        84,
+        91
+      ],
+      "gt_len": 3,
+      "pred_len": 3,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 2
+    },
+    {
+      "route_id": 3832,
+      "city": 1,
+      "o_region": 123,
+      "d_region": 88,
+      "gt_seq": [
+        123,
+        132,
+        123,
+        82,
+        117,
+        98,
+        88
+      ],
+      "pred_seq": [
+        123,
+        82,
+        117,
+        98,
+        88
+      ],
+      "gt_len": 7,
+      "pred_len": 5,
+      "reach_dest": true,
+      "exact_match": false,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 4
+    },
+    {
+      "route_id": 4815,
+      "city": 1,
+      "o_region": 90,
+      "d_region": 124,
+      "gt_seq": [
+        90,
+        124
+      ],
+      "pred_seq": [
+        90,
+        124
+      ],
+      "gt_len": 2,
+      "pred_len": 2,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 1
+    },
+    {
+      "route_id": 6521,
+      "city": 1,
+      "o_region": 105,
+      "d_region": 112,
+      "gt_seq": [
+        105,
+        86,
+        112
+      ],
+      "pred_seq": [
+        105,
+        86,
+        112
+      ],
+      "gt_len": 3,
+      "pred_len": 3,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 2
+    },
+    {
+      "route_id": 1898,
+      "city": 0,
+      "o_region": 45,
+      "d_region": 30,
+      "gt_seq": [
+        45,
+        42,
+        34,
+        39,
+        56,
+        48,
+        30
+      ],
+      "pred_seq": [
+        45,
+        42,
+        34,
+        39,
+        56,
+        48,
+        30
+      ],
+      "gt_len": 7,
+      "pred_len": 7,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 6
+    },
+    {
+      "route_id": 5119,
+      "city": 1,
+      "o_region": 95,
+      "d_region": 95,
+      "gt_seq": [
+        95
+      ],
+      "pred_seq": [
+        95
+      ],
+      "gt_len": 1,
+      "pred_len": 1,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 0
+    },
+    {
+      "route_id": 6793,
+      "city": 1,
+      "o_region": 122,
+      "d_region": 122,
+      "gt_seq": [
+        122
+      ],
+      "pred_seq": [
+        122
+      ],
+      "gt_len": 1,
+      "pred_len": 1,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 0
+    },
+    {
+      "route_id": 170,
+      "city": 0,
+      "o_region": 13,
+      "d_region": 11,
+      "gt_seq": [
+        13,
+        11
+      ],
+      "pred_seq": [
+        13,
+        11
+      ],
+      "gt_len": 2,
+      "pred_len": 2,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 1
+    },
+    {
+      "route_id": 6271,
+      "city": 1,
+      "o_region": 114,
+      "d_region": 114,
+      "gt_seq": [
+        114
+      ],
+      "pred_seq": [
+        114
+      ],
+      "gt_len": 1,
+      "pred_len": 1,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 0
+    },
+    {
+      "route_id": 3246,
+      "city": 1,
+      "o_region": 120,
+      "d_region": 87,
+      "gt_seq": [
+        120,
+        100,
+        132,
+        96,
+        87
+      ],
+      "pred_seq": [
+        120,
+        100,
+        132,
+        96,
+        87
+      ],
+      "gt_len": 5,
+      "pred_len": 5,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 4
+    },
+    {
+      "route_id": 4706,
+      "city": 1,
+      "o_region": 112,
+      "d_region": 86,
+      "gt_seq": [
+        112,
+        86
+      ],
+      "pred_seq": [
+        112,
+        86
+      ],
+      "gt_len": 2,
+      "pred_len": 2,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 1
+    },
+    {
+      "route_id": 4950,
+      "city": 1,
+      "o_region": 97,
+      "d_region": 121,
+      "gt_seq": [
+        97,
+        89,
+        132,
+        96,
+        100,
+        121
+      ],
+      "pred_seq": [
+        97,
+        89,
+        132,
+        96,
+        100,
+        121
+      ],
+      "gt_len": 6,
+      "pred_len": 6,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 5
+    },
+    {
+      "route_id": 6690,
+      "city": 1,
+      "o_region": 123,
+      "d_region": 94,
+      "gt_seq": [
+        123,
+        77,
+        108,
+        89,
+        97,
+        109,
+        94
+      ],
+      "pred_seq": [
+        123,
+        77,
+        108,
+        89,
+        97,
+        109,
+        94
+      ],
+      "gt_len": 7,
+      "pred_len": 7,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 6
+    },
+    {
+      "route_id": 5023,
+      "city": 1,
+      "o_region": 83,
+      "d_region": 98,
+      "gt_seq": [
+        83,
+        78,
+        89,
+        107,
+        82,
+        117,
+        98
+      ],
+      "pred_seq": [
+        83,
+        78,
+        89,
+        107,
+        82,
+        117,
+        98
+      ],
+      "gt_len": 7,
+      "pred_len": 7,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 6
+    },
+    {
+      "route_id": 2306,
+      "city": 1,
+      "o_region": 92,
+      "d_region": 92,
+      "gt_seq": [
+        92
+      ],
+      "pred_seq": [
+        92
+      ],
+      "gt_len": 1,
+      "pred_len": 1,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 0
+    },
+    {
+      "route_id": 3561,
+      "city": 1,
+      "o_region": 133,
+      "d_region": 139,
+      "gt_seq": [
+        133,
+        139
+      ],
+      "pred_seq": [
+        133,
+        139
+      ],
+      "gt_len": 2,
+      "pred_len": 2,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 1
+    },
+    {
+      "route_id": 3707,
+      "city": 1,
+      "o_region": 87,
+      "d_region": 96,
+      "gt_seq": [
+        87,
+        96
+      ],
+      "pred_seq": [
+        87,
+        96
+      ],
+      "gt_len": 2,
+      "pred_len": 2,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 1
+    },
+    {
+      "route_id": 5094,
+      "city": 1,
+      "o_region": 111,
+      "d_region": 89,
+      "gt_seq": [
+        111,
+        107,
+        108,
+        89
+      ],
+      "pred_seq": [
+        111,
+        107,
+        108,
+        89
+      ],
+      "gt_len": 4,
+      "pred_len": 4,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 3
+    },
+    {
+      "route_id": 3293,
+      "city": 1,
+      "o_region": 123,
+      "d_region": 121,
+      "gt_seq": [
+        123,
+        121
+      ],
+      "pred_seq": [
+        123,
+        121
+      ],
+      "gt_len": 2,
+      "pred_len": 2,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 1
+    },
+    {
+      "route_id": 7021,
+      "city": 1,
+      "o_region": 92,
+      "d_region": 92,
+      "gt_seq": [
+        92
+      ],
+      "pred_seq": [
+        92
+      ],
+      "gt_len": 1,
+      "pred_len": 1,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 0
+    },
+    {
+      "route_id": 3038,
+      "city": 1,
+      "o_region": 92,
+      "d_region": 92,
+      "gt_seq": [
+        92
+      ],
+      "pred_seq": [
+        92
+      ],
+      "gt_len": 1,
+      "pred_len": 1,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 0
+    },
+    {
+      "route_id": 1205,
+      "city": 0,
+      "o_region": 8,
+      "d_region": 8,
+      "gt_seq": [
+        8
+      ],
+      "pred_seq": [
+        8
+      ],
+      "gt_len": 1,
+      "pred_len": 1,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 0
+    },
+    {
+      "route_id": 4771,
+      "city": 1,
+      "o_region": 97,
+      "d_region": 97,
+      "gt_seq": [
+        97
+      ],
+      "pred_seq": [
+        97
+      ],
+      "gt_len": 1,
+      "pred_len": 1,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 0
+    },
+    {
+      "route_id": 1001,
+      "city": 0,
+      "o_region": 42,
+      "d_region": 48,
+      "gt_seq": [
+        42,
+        34,
+        47,
+        48,
+        60,
+        48
+      ],
+      "pred_seq": [
+        42,
+        34,
+        47,
+        48
+      ],
+      "gt_len": 6,
+      "pred_len": 4,
+      "reach_dest": true,
+      "exact_match": false,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 3
+    },
+    {
+      "route_id": 2608,
+      "city": 1,
+      "o_region": 145,
+      "d_region": 77,
+      "gt_seq": [
+        145,
+        77
+      ],
+      "pred_seq": [
+        145,
+        77
+      ],
+      "gt_len": 2,
+      "pred_len": 2,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 1
+    },
+    {
+      "route_id": 2135,
+      "city": 0,
+      "o_region": 58,
+      "d_region": 49,
+      "gt_seq": [
+        58,
+        50,
+        34,
+        45,
+        42,
+        49
+      ],
+      "pred_seq": [
+        58,
+        50,
+        34,
+        45,
+        42,
+        49
+      ],
+      "gt_len": 6,
+      "pred_len": 6,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 5
+    },
+    {
+      "route_id": 3294,
+      "city": 1,
+      "o_region": 83,
+      "d_region": 83,
+      "gt_seq": [
+        83
+      ],
+      "pred_seq": [
+        83
+      ],
+      "gt_len": 1,
+      "pred_len": 1,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 0
+    },
+    {
+      "route_id": 5941,
+      "city": 1,
+      "o_region": 80,
+      "d_region": 91,
+      "gt_seq": [
+        80,
+        84,
+        91
+      ],
+      "pred_seq": [
+        80,
+        84,
+        91
+      ],
+      "gt_len": 3,
+      "pred_len": 3,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 2
+    },
+    {
+      "route_id": 4510,
+      "city": 1,
+      "o_region": 144,
+      "d_region": 100,
+      "gt_seq": [
+        144,
+        100
+      ],
+      "pred_seq": [
+        144,
+        100
+      ],
+      "gt_len": 2,
+      "pred_len": 2,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 1
+    },
+    {
+      "route_id": 4360,
+      "city": 1,
+      "o_region": 118,
+      "d_region": 87,
+      "gt_seq": [
+        118,
+        79,
+        87
+      ],
+      "pred_seq": [
+        118,
+        79,
+        87
+      ],
+      "gt_len": 3,
+      "pred_len": 3,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 2
+    },
+    {
+      "route_id": 7037,
+      "city": 1,
+      "o_region": 132,
+      "d_region": 132,
+      "gt_seq": [
+        132
+      ],
+      "pred_seq": [
+        132
+      ],
+      "gt_len": 1,
+      "pred_len": 1,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 0
+    },
+    {
+      "route_id": 433,
+      "city": 0,
+      "o_region": 58,
+      "d_region": 34,
+      "gt_seq": [
+        58,
+        34
+      ],
+      "pred_seq": [
+        58,
+        34
+      ],
+      "gt_len": 2,
+      "pred_len": 2,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 1
+    },
+    {
+      "route_id": 3142,
+      "city": 1,
+      "o_region": 114,
+      "d_region": 114,
+      "gt_seq": [
+        114
+      ],
+      "pred_seq": [
+        114
+      ],
+      "gt_len": 1,
+      "pred_len": 1,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 0
+    },
+    {
+      "route_id": 5743,
+      "city": 1,
+      "o_region": 123,
+      "d_region": 88,
+      "gt_seq": [
+        123,
+        82,
+        117,
+        98,
+        88
+      ],
+      "pred_seq": [
+        123,
+        82,
+        117,
+        98,
+        88
+      ],
+      "gt_len": 5,
+      "pred_len": 5,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 4
+    },
+    {
+      "route_id": 216,
+      "city": 0,
+      "o_region": 26,
+      "d_region": 14,
+      "gt_seq": [
+        26,
+        14
+      ],
+      "pred_seq": [
+        26,
+        14
+      ],
+      "gt_len": 2,
+      "pred_len": 2,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 1
+    },
+    {
+      "route_id": 7499,
+      "city": 1,
+      "o_region": 96,
+      "d_region": 121,
+      "gt_seq": [
+        96,
+        100,
+        121
+      ],
+      "pred_seq": [
+        96,
+        100,
+        121
+      ],
+      "gt_len": 3,
+      "pred_len": 3,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 2
+    },
+    {
+      "route_id": 3239,
+      "city": 1,
+      "o_region": 132,
+      "d_region": 144,
+      "gt_seq": [
+        132,
+        144
+      ],
+      "pred_seq": [
+        132,
+        144
+      ],
+      "gt_len": 2,
+      "pred_len": 2,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 1
+    },
+    {
+      "route_id": 2203,
+      "city": 0,
+      "o_region": 21,
+      "d_region": 21,
+      "gt_seq": [
+        21
+      ],
+      "pred_seq": [
+        21
+      ],
+      "gt_len": 1,
+      "pred_len": 1,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 0
+    },
+    {
+      "route_id": 2816,
+      "city": 1,
+      "o_region": 79,
+      "d_region": 87,
+      "gt_seq": [
+        79,
+        87
+      ],
+      "pred_seq": [
+        79,
+        87
+      ],
+      "gt_len": 2,
+      "pred_len": 2,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 1
+    },
+    {
+      "route_id": 3467,
+      "city": 1,
+      "o_region": 115,
+      "d_region": 81,
+      "gt_seq": [
+        115,
+        81
+      ],
+      "pred_seq": [
+        115,
+        81
+      ],
+      "gt_len": 2,
+      "pred_len": 2,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 1
+    },
+    {
+      "route_id": 5370,
+      "city": 1,
+      "o_region": 80,
+      "d_region": 91,
+      "gt_seq": [
+        80,
+        84,
+        91
+      ],
+      "pred_seq": [
+        80,
+        84,
+        91
+      ],
+      "gt_len": 3,
+      "pred_len": 3,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 2
+    },
+    {
+      "route_id": 2942,
+      "city": 1,
+      "o_region": 92,
+      "d_region": 92,
+      "gt_seq": [
+        92
+      ],
+      "pred_seq": [
+        92
+      ],
+      "gt_len": 1,
+      "pred_len": 1,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 0
+    },
+    {
+      "route_id": 3958,
+      "city": 1,
+      "o_region": 107,
+      "d_region": 78,
+      "gt_seq": [
+        107,
+        120,
+        89,
+        78
+      ],
+      "pred_seq": [
+        107,
+        108,
+        89,
+        78
+      ],
+      "gt_len": 4,
+      "pred_len": 4,
+      "reach_dest": true,
+      "exact_match": false,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 3
+    },
+    {
+      "route_id": 2963,
+      "city": 1,
+      "o_region": 110,
+      "d_region": 110,
+      "gt_seq": [
+        110
+      ],
+      "pred_seq": [
+        110
+      ],
+      "gt_len": 1,
+      "pred_len": 1,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 0
+    },
+    {
+      "route_id": 595,
+      "city": 0,
+      "o_region": 16,
+      "d_region": 30,
+      "gt_seq": [
+        16,
+        30
+      ],
+      "pred_seq": [
+        16,
+        30
+      ],
+      "gt_len": 2,
+      "pred_len": 2,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 1
+    },
+    {
+      "route_id": 6907,
+      "city": 1,
+      "o_region": 123,
+      "d_region": 123,
+      "gt_seq": [
+        123
+      ],
+      "pred_seq": [
+        123
+      ],
+      "gt_len": 1,
+      "pred_len": 1,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 0
+    },
+    {
+      "route_id": 4378,
+      "city": 1,
+      "o_region": 92,
+      "d_region": 99,
+      "gt_seq": [
+        92,
+        99
+      ],
+      "pred_seq": [
+        92,
+        99
+      ],
+      "gt_len": 2,
+      "pred_len": 2,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 1
+    },
+    {
+      "route_id": 4725,
+      "city": 1,
+      "o_region": 111,
+      "d_region": 88,
+      "gt_seq": [
+        111,
+        82,
+        117,
+        98,
+        88
+      ],
+      "pred_seq": [
+        111,
+        82,
+        117,
+        98,
+        88
+      ],
+      "gt_len": 5,
+      "pred_len": 5,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 4
+    },
+    {
+      "route_id": 2968,
+      "city": 1,
+      "o_region": 89,
+      "d_region": 78,
+      "gt_seq": [
+        89,
+        78
+      ],
+      "pred_seq": [
+        89,
+        78
+      ],
+      "gt_len": 2,
+      "pred_len": 2,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 1
+    },
+    {
+      "route_id": 3522,
+      "city": 1,
+      "o_region": 119,
+      "d_region": 110,
+      "gt_seq": [
+        119,
+        110
+      ],
+      "pred_seq": [
+        119,
+        110
+      ],
+      "gt_len": 2,
+      "pred_len": 2,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 1
+    },
+    {
+      "route_id": 4609,
+      "city": 1,
+      "o_region": 88,
+      "d_region": 88,
+      "gt_seq": [
+        88
+      ],
+      "pred_seq": [
+        88
+      ],
+      "gt_len": 1,
+      "pred_len": 1,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 0
+    },
+    {
+      "route_id": 7294,
+      "city": 1,
+      "o_region": 105,
+      "d_region": 107,
+      "gt_seq": [
+        105,
+        86,
+        81,
+        93,
+        111,
+        107
+      ],
+      "pred_seq": [
+        105,
+        86,
+        81,
+        93,
+        111,
+        107
+      ],
+      "gt_len": 6,
+      "pred_len": 6,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 5
+    },
+    {
+      "route_id": 7258,
+      "city": 1,
+      "o_region": 83,
+      "d_region": 120,
+      "gt_seq": [
+        83,
+        78,
+        89,
+        132,
+        120
+      ],
+      "pred_seq": [
+        83,
+        78,
+        89,
+        132,
+        120
+      ],
+      "gt_len": 5,
+      "pred_len": 5,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 4
+    },
+    {
+      "route_id": 6960,
+      "city": 1,
+      "o_region": 104,
+      "d_region": 83,
+      "gt_seq": [
+        104,
+        83
+      ],
+      "pred_seq": [
+        104,
+        83
+      ],
+      "gt_len": 2,
+      "pred_len": 2,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 1
+    },
+    {
+      "route_id": 22,
+      "city": 0,
+      "o_region": 63,
+      "d_region": 62,
+      "gt_seq": [
+        63,
+        6,
+        1,
+        37,
+        62
+      ],
+      "pred_seq": [
+        63,
+        6,
+        1,
+        37,
+        62
+      ],
+      "gt_len": 5,
+      "pred_len": 5,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 4
+    },
+    {
+      "route_id": 3188,
+      "city": 1,
+      "o_region": 87,
+      "d_region": 100,
+      "gt_seq": [
+        87,
+        96,
+        100
+      ],
+      "pred_seq": [
+        87,
+        96,
+        100
+      ],
+      "gt_len": 3,
+      "pred_len": 3,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 2
+    },
+    {
+      "route_id": 4829,
+      "city": 1,
+      "o_region": 93,
+      "d_region": 123,
+      "gt_seq": [
+        93,
+        111,
+        107,
+        123
+      ],
+      "pred_seq": [
+        93,
+        111,
+        107,
+        123
+      ],
+      "gt_len": 4,
+      "pred_len": 4,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 3
+    },
+    {
+      "route_id": 6216,
+      "city": 1,
+      "o_region": 93,
+      "d_region": 112,
+      "gt_seq": [
+        93,
+        81,
+        86,
+        112
+      ],
+      "pred_seq": [
+        93,
+        81,
+        86,
+        112
+      ],
+      "gt_len": 4,
+      "pred_len": 4,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 3
+    },
+    {
+      "route_id": 3686,
+      "city": 1,
+      "o_region": 144,
+      "d_region": 87,
+      "gt_seq": [
+        144,
+        100,
+        96,
+        87
+      ],
+      "pred_seq": [
+        144,
+        100,
+        96,
+        87
+      ],
+      "gt_len": 4,
+      "pred_len": 4,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 3
+    },
+    {
+      "route_id": 7366,
+      "city": 1,
+      "o_region": 80,
+      "d_region": 97,
+      "gt_seq": [
+        80,
+        83,
+        78,
+        89,
+        97
+      ],
+      "pred_seq": [
+        80,
+        83,
+        78,
+        89,
+        97
+      ],
+      "gt_len": 5,
+      "pred_len": 5,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 4
+    },
+    {
+      "route_id": 6338,
+      "city": 1,
+      "o_region": 86,
+      "d_region": 115,
+      "gt_seq": [
+        86,
+        81,
+        115
+      ],
+      "pred_seq": [
+        86,
+        81,
+        115
+      ],
+      "gt_len": 3,
+      "pred_len": 3,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 2
+    },
+    {
+      "route_id": 2470,
+      "city": 1,
+      "o_region": 123,
+      "d_region": 94,
+      "gt_seq": [
+        123,
+        77,
+        108,
+        89,
+        97,
+        109,
+        94
+      ],
+      "pred_seq": [
+        123,
+        77,
+        108,
+        89,
+        97,
+        109,
+        94
+      ],
+      "gt_len": 7,
+      "pred_len": 7,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 6
+    },
+    {
+      "route_id": 2144,
+      "city": 0,
+      "o_region": 66,
+      "d_region": 66,
+      "gt_seq": [
+        66
+      ],
+      "pred_seq": [
+        66
+      ],
+      "gt_len": 1,
+      "pred_len": 1,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 0
+    },
+    {
+      "route_id": 3075,
+      "city": 1,
+      "o_region": 105,
+      "d_region": 86,
+      "gt_seq": [
+        105,
+        86
+      ],
+      "pred_seq": [
+        105,
+        86
+      ],
+      "gt_len": 2,
+      "pred_len": 2,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 1
+    },
+    {
+      "route_id": 4044,
+      "city": 1,
+      "o_region": 112,
+      "d_region": 86,
+      "gt_seq": [
+        112,
+        86
+      ],
+      "pred_seq": [
+        112,
+        86
+      ],
+      "gt_len": 2,
+      "pred_len": 2,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 1
+    },
+    {
+      "route_id": 4723,
+      "city": 1,
+      "o_region": 79,
+      "d_region": 118,
+      "gt_seq": [
+        79,
+        118
+      ],
+      "pred_seq": [
+        79,
+        118
+      ],
+      "gt_len": 2,
+      "pred_len": 2,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 1
+    },
+    {
+      "route_id": 7155,
+      "city": 1,
+      "o_region": 92,
+      "d_region": 99,
+      "gt_seq": [
+        92,
+        99
+      ],
+      "pred_seq": [
+        92,
+        99
+      ],
+      "gt_len": 2,
+      "pred_len": 2,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 1
+    },
+    {
+      "route_id": 6511,
+      "city": 1,
+      "o_region": 82,
+      "d_region": 88,
+      "gt_seq": [
+        82,
+        117,
+        98,
+        88
+      ],
+      "pred_seq": [
+        82,
+        117,
+        98,
+        88
+      ],
+      "gt_len": 4,
+      "pred_len": 4,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 3
+    },
+    {
+      "route_id": 4488,
+      "city": 1,
+      "o_region": 86,
+      "d_region": 86,
+      "gt_seq": [
+        86
+      ],
+      "pred_seq": [
+        86
+      ],
+      "gt_len": 1,
+      "pred_len": 1,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 0
+    },
+    {
+      "route_id": 1841,
+      "city": 0,
+      "o_region": 1,
+      "d_region": 15,
+      "gt_seq": [
+        1,
+        15
+      ],
+      "pred_seq": [
+        1,
+        15
+      ],
+      "gt_len": 2,
+      "pred_len": 2,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 1
+    },
+    {
+      "route_id": 2062,
+      "city": 0,
+      "o_region": 63,
+      "d_region": 62,
+      "gt_seq": [
+        63,
+        6,
+        1,
+        37,
+        62
+      ],
+      "pred_seq": [
+        63,
+        6,
+        1,
+        37,
+        62
+      ],
+      "gt_len": 5,
+      "pred_len": 5,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 4
+    },
+    {
+      "route_id": 5070,
+      "city": 1,
+      "o_region": 123,
+      "d_region": 94,
+      "gt_seq": [
+        123,
+        77,
+        108,
+        89,
+        97,
+        109,
+        94
+      ],
+      "pred_seq": [
+        123,
+        77,
+        108,
+        89,
+        97,
+        109,
+        94
+      ],
+      "gt_len": 7,
+      "pred_len": 7,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 6
+    },
+    {
+      "route_id": 3051,
+      "city": 1,
+      "o_region": 117,
+      "d_region": 95,
+      "gt_seq": [
+        117,
+        82,
+        102,
+        85,
+        95
+      ],
+      "pred_seq": [
+        117,
+        82,
+        102,
+        85,
+        95
+      ],
+      "gt_len": 5,
+      "pred_len": 5,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 4
+    },
+    {
+      "route_id": 5093,
+      "city": 1,
+      "o_region": 93,
+      "d_region": 86,
+      "gt_seq": [
+        93,
+        81,
+        86
+      ],
+      "pred_seq": [
+        93,
+        81,
+        86
+      ],
+      "gt_len": 3,
+      "pred_len": 3,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 2
+    },
+    {
+      "route_id": 6652,
+      "city": 1,
+      "o_region": 105,
+      "d_region": 86,
+      "gt_seq": [
+        105,
+        86
+      ],
+      "pred_seq": [
+        105,
+        86
+      ],
+      "gt_len": 2,
+      "pred_len": 2,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 1
+    },
+    {
+      "route_id": 7077,
+      "city": 1,
+      "o_region": 112,
+      "d_region": 86,
+      "gt_seq": [
+        112,
+        86
+      ],
+      "pred_seq": [
+        112,
+        86
+      ],
+      "gt_len": 2,
+      "pred_len": 2,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 1
+    },
+    {
+      "route_id": 6292,
+      "city": 1,
+      "o_region": 95,
+      "d_region": 95,
+      "gt_seq": [
+        95
+      ],
+      "pred_seq": [
+        95
+      ],
+      "gt_len": 1,
+      "pred_len": 1,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 0
+    },
+    {
+      "route_id": 6208,
+      "city": 1,
+      "o_region": 100,
+      "d_region": 96,
+      "gt_seq": [
+        100,
+        96
+      ],
+      "pred_seq": [
+        100,
+        96
+      ],
+      "gt_len": 2,
+      "pred_len": 2,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 1
+    },
+    {
+      "route_id": 6642,
+      "city": 1,
+      "o_region": 86,
+      "d_region": 97,
+      "gt_seq": [
+        86,
+        81,
+        93,
+        111,
+        107,
+        108,
+        89,
+        97
+      ],
+      "pred_seq": [
+        86,
+        81,
+        93,
+        111,
+        107,
+        108,
+        89,
+        97
+      ],
+      "gt_len": 8,
+      "pred_len": 8,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 7
+    },
+    {
+      "route_id": 2565,
+      "city": 1,
+      "o_region": 121,
+      "d_region": 121,
+      "gt_seq": [
+        121
+      ],
+      "pred_seq": [
+        121
+      ],
+      "gt_len": 1,
+      "pred_len": 1,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 0
+    },
+    {
+      "route_id": 2683,
+      "city": 1,
+      "o_region": 122,
+      "d_region": 86,
+      "gt_seq": [
+        122,
+        86
+      ],
+      "pred_seq": [
+        122,
+        86
+      ],
+      "gt_len": 2,
+      "pred_len": 2,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 1
+    },
+    {
+      "route_id": 39,
+      "city": 0,
+      "o_region": 38,
+      "d_region": 20,
+      "gt_seq": [
+        38,
+        54,
+        20
+      ],
+      "pred_seq": [
+        38,
+        54,
+        68,
+        54,
+        20
+      ],
+      "gt_len": 3,
+      "pred_len": 5,
+      "reach_dest": true,
+      "exact_match": false,
+      "has_backtrack": true,
+      "n_invalid_steps": 0,
+      "n_steps": 4
+    },
+    {
+      "route_id": 7178,
+      "city": 1,
+      "o_region": 95,
+      "d_region": 82,
+      "gt_seq": [
+        95,
+        111,
+        82
+      ],
+      "pred_seq": [
+        95,
+        111,
+        82
+      ],
+      "gt_len": 3,
+      "pred_len": 3,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 2
+    },
+    {
+      "route_id": 7045,
+      "city": 1,
+      "o_region": 88,
+      "d_region": 132,
+      "gt_seq": [
+        88,
+        98,
+        117,
+        82,
+        123,
+        132
+      ],
+      "pred_seq": [
+        88,
+        98,
+        117,
+        82,
+        123,
+        132
+      ],
+      "gt_len": 6,
+      "pred_len": 6,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 5
+    },
+    {
+      "route_id": 7244,
+      "city": 1,
+      "o_region": 98,
+      "d_region": 88,
+      "gt_seq": [
+        98,
+        88
+      ],
+      "pred_seq": [
+        98,
+        88
+      ],
+      "gt_len": 2,
+      "pred_len": 2,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 1
+    },
+    {
+      "route_id": 5691,
+      "city": 1,
+      "o_region": 79,
+      "d_region": 79,
+      "gt_seq": [
+        79
+      ],
+      "pred_seq": [
+        79
+      ],
+      "gt_len": 1,
+      "pred_len": 1,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 0
+    },
+    {
+      "route_id": 5714,
+      "city": 1,
+      "o_region": 132,
+      "d_region": 123,
+      "gt_seq": [
+        132,
+        108,
+        123
+      ],
+      "pred_seq": [
+        132,
+        123
+      ],
+      "gt_len": 3,
+      "pred_len": 2,
+      "reach_dest": true,
+      "exact_match": false,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 1
+    },
+    {
+      "route_id": 6202,
+      "city": 1,
+      "o_region": 120,
+      "d_region": 120,
+      "gt_seq": [
+        120
+      ],
+      "pred_seq": [
+        120
+      ],
+      "gt_len": 1,
+      "pred_len": 1,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 0
+    },
+    {
+      "route_id": 2422,
+      "city": 1,
+      "o_region": 87,
+      "d_region": 96,
+      "gt_seq": [
+        87,
+        96
+      ],
+      "pred_seq": [
+        87,
+        96
+      ],
+      "gt_len": 2,
+      "pred_len": 2,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 1
+    },
+    {
+      "route_id": 2953,
+      "city": 1,
+      "o_region": 92,
+      "d_region": 99,
+      "gt_seq": [
+        92,
+        99
+      ],
+      "pred_seq": [
+        92,
+        99
+      ],
+      "gt_len": 2,
+      "pred_len": 2,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 1
+    },
+    {
+      "route_id": 6588,
+      "city": 1,
+      "o_region": 92,
+      "d_region": 92,
+      "gt_seq": [
+        92
+      ],
+      "pred_seq": [
+        92
+      ],
+      "gt_len": 1,
+      "pred_len": 1,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 0
+    },
+    {
+      "route_id": 4687,
+      "city": 1,
+      "o_region": 91,
+      "d_region": 91,
+      "gt_seq": [
+        91
+      ],
+      "pred_seq": [
+        91
+      ],
+      "gt_len": 1,
+      "pred_len": 1,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 0
+    },
+    {
+      "route_id": 486,
+      "city": 0,
+      "o_region": 1,
+      "d_region": 15,
+      "gt_seq": [
+        1,
+        15
+      ],
+      "pred_seq": [
+        1,
+        15
+      ],
+      "gt_len": 2,
+      "pred_len": 2,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 1
+    },
+    {
+      "route_id": 696,
+      "city": 0,
+      "o_region": 69,
+      "d_region": 72,
+      "gt_seq": [
+        69,
+        72
+      ],
+      "pred_seq": [
+        69,
+        72
+      ],
+      "gt_len": 2,
+      "pred_len": 2,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 1
+    },
+    {
+      "route_id": 6571,
+      "city": 1,
+      "o_region": 88,
+      "d_region": 98,
+      "gt_seq": [
+        88,
+        98
+      ],
+      "pred_seq": [
+        88,
+        98
+      ],
+      "gt_len": 2,
+      "pred_len": 2,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 1
+    },
+    {
+      "route_id": 4011,
+      "city": 1,
+      "o_region": 88,
+      "d_region": 102,
+      "gt_seq": [
+        88,
+        98,
+        117,
+        82,
+        102
+      ],
+      "pred_seq": [
+        88,
+        98,
+        117,
+        82,
+        102
+      ],
+      "gt_len": 5,
+      "pred_len": 5,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 4
+    },
+    {
+      "route_id": 113,
+      "city": 0,
+      "o_region": 69,
+      "d_region": 58,
+      "gt_seq": [
+        69,
+        54,
+        57,
+        43,
+        58
+      ],
+      "pred_seq": [
+        69,
+        54,
+        57,
+        43,
+        58
+      ],
+      "gt_len": 5,
+      "pred_len": 5,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 4
+    },
+    {
+      "route_id": 1084,
+      "city": 0,
+      "o_region": 49,
+      "d_region": 49,
+      "gt_seq": [
+        49
+      ],
+      "pred_seq": [
+        49
+      ],
+      "gt_len": 1,
+      "pred_len": 1,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 0
+    },
+    {
+      "route_id": 5950,
+      "city": 1,
+      "o_region": 104,
+      "d_region": 83,
+      "gt_seq": [
+        104,
+        83
+      ],
+      "pred_seq": [
+        104,
+        83
+      ],
+      "gt_len": 2,
+      "pred_len": 2,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 1
+    },
+    {
+      "route_id": 4109,
+      "city": 1,
+      "o_region": 101,
+      "d_region": 92,
+      "gt_seq": [
+        101,
+        85,
+        99,
+        92
+      ],
+      "pred_seq": [
+        101,
+        85,
+        99,
+        92
+      ],
+      "gt_len": 4,
+      "pred_len": 4,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 3
+    },
+    {
+      "route_id": 6869,
+      "city": 1,
+      "o_region": 78,
+      "d_region": 120,
+      "gt_seq": [
+        78,
+        120
+      ],
+      "pred_seq": [
+        78,
+        120
+      ],
+      "gt_len": 2,
+      "pred_len": 2,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 1
+    },
+    {
+      "route_id": 1886,
+      "city": 0,
+      "o_region": 46,
+      "d_region": 42,
+      "gt_seq": [
+        46,
+        43,
+        44,
+        42
+      ],
+      "pred_seq": [
+        46,
+        43,
+        44,
+        42
+      ],
+      "gt_len": 4,
+      "pred_len": 4,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 3
+    },
+    {
+      "route_id": 5655,
+      "city": 1,
+      "o_region": 87,
+      "d_region": 132,
+      "gt_seq": [
+        87,
+        96,
+        100,
+        120,
+        132
+      ],
+      "pred_seq": [
+        87,
+        96,
+        100,
+        132
+      ],
+      "gt_len": 5,
+      "pred_len": 4,
+      "reach_dest": true,
+      "exact_match": false,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 3
+    },
+    {
+      "route_id": 4056,
+      "city": 1,
+      "o_region": 106,
+      "d_region": 123,
+      "gt_seq": [
+        106,
+        82,
+        108,
+        123
+      ],
+      "pred_seq": [
+        106,
+        82,
+        108,
+        123
+      ],
+      "gt_len": 4,
+      "pred_len": 4,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 3
+    },
+    {
+      "route_id": 3623,
+      "city": 1,
+      "o_region": 103,
+      "d_region": 94,
+      "gt_seq": [
+        103,
+        94
+      ],
+      "pred_seq": [
+        103,
+        94
+      ],
+      "gt_len": 2,
+      "pred_len": 2,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 1
+    },
+    {
+      "route_id": 6999,
+      "city": 1,
+      "o_region": 86,
+      "d_region": 86,
+      "gt_seq": [
+        86
+      ],
+      "pred_seq": [
+        86
+      ],
+      "gt_len": 1,
+      "pred_len": 1,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 0
+    },
+    {
+      "route_id": 5235,
+      "city": 1,
+      "o_region": 118,
+      "d_region": 139,
+      "gt_seq": [
+        118,
+        139
+      ],
+      "pred_seq": [
+        118,
+        139
+      ],
+      "gt_len": 2,
+      "pred_len": 2,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 1
+    },
+    {
+      "route_id": 5403,
+      "city": 1,
+      "o_region": 120,
+      "d_region": 87,
+      "gt_seq": [
+        120,
+        100,
+        132,
+        96,
+        87
+      ],
+      "pred_seq": [
+        120,
+        100,
+        132,
+        96,
+        87
+      ],
+      "gt_len": 5,
+      "pred_len": 5,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 4
+    },
+    {
+      "route_id": 6955,
+      "city": 1,
+      "o_region": 100,
+      "d_region": 129,
+      "gt_seq": [
+        100,
+        129
+      ],
+      "pred_seq": [
+        100,
+        129
+      ],
+      "gt_len": 2,
+      "pred_len": 2,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 1
+    },
+    {
+      "route_id": 2380,
+      "city": 1,
+      "o_region": 129,
+      "d_region": 129,
+      "gt_seq": [
+        129
+      ],
+      "pred_seq": [
+        129
+      ],
+      "gt_len": 1,
+      "pred_len": 1,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 0
+    },
+    {
+      "route_id": 6209,
+      "city": 1,
+      "o_region": 92,
+      "d_region": 92,
+      "gt_seq": [
+        92
+      ],
+      "pred_seq": [
+        92
+      ],
+      "gt_len": 1,
+      "pred_len": 1,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 0
+    },
+    {
+      "route_id": 5355,
+      "city": 1,
+      "o_region": 116,
+      "d_region": 104,
+      "gt_seq": [
+        116,
+        80,
+        104
+      ],
+      "pred_seq": [
+        116,
+        80,
+        104
+      ],
+      "gt_len": 3,
+      "pred_len": 3,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 2
+    },
+    {
+      "route_id": 1384,
+      "city": 0,
+      "o_region": 11,
+      "d_region": 63,
+      "gt_seq": [
+        11,
+        16,
+        4,
+        5,
+        14,
+        17,
+        63
+      ],
+      "pred_seq": [
+        11,
+        16,
+        4,
+        5,
+        14,
+        17,
+        63
+      ],
+      "gt_len": 7,
+      "pred_len": 7,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 6
+    },
+    {
+      "route_id": 2902,
+      "city": 1,
+      "o_region": 112,
+      "d_region": 86,
+      "gt_seq": [
+        112,
+        86
+      ],
+      "pred_seq": [
+        112,
+        86
+      ],
+      "gt_len": 2,
+      "pred_len": 2,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 1
+    },
+    {
+      "route_id": 1947,
+      "city": 0,
+      "o_region": 32,
+      "d_region": 39,
+      "gt_seq": [
+        32,
+        48,
+        56,
+        39
+      ],
+      "pred_seq": [
+        32,
+        48,
+        56,
+        39
+      ],
+      "gt_len": 4,
+      "pred_len": 4,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 3
+    },
+    {
+      "route_id": 6559,
+      "city": 1,
+      "o_region": 92,
+      "d_region": 99,
+      "gt_seq": [
+        92,
+        99
+      ],
+      "pred_seq": [
+        92,
+        99
+      ],
+      "gt_len": 2,
+      "pred_len": 2,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 1
+    },
+    {
+      "route_id": 5736,
+      "city": 1,
+      "o_region": 123,
+      "d_region": 83,
+      "gt_seq": [
+        123,
+        77,
+        108,
+        89,
+        78,
+        83
+      ],
+      "pred_seq": [
+        123,
+        77,
+        108,
+        89,
+        78,
+        83
+      ],
+      "gt_len": 6,
+      "pred_len": 6,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 5
+    },
+    {
+      "route_id": 6983,
+      "city": 1,
+      "o_region": 117,
+      "d_region": 88,
+      "gt_seq": [
+        117,
+        98,
+        88
+      ],
+      "pred_seq": [
+        117,
+        98,
+        88
+      ],
+      "gt_len": 3,
+      "pred_len": 3,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 2
+    },
+    {
+      "route_id": 6408,
+      "city": 1,
+      "o_region": 122,
+      "d_region": 86,
+      "gt_seq": [
+        122,
+        86
+      ],
+      "pred_seq": [
+        122,
+        86
+      ],
+      "gt_len": 2,
+      "pred_len": 2,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 1
+    },
+    {
+      "route_id": 2802,
+      "city": 1,
+      "o_region": 89,
+      "d_region": 97,
+      "gt_seq": [
+        89,
+        97
+      ],
+      "pred_seq": [
+        89,
+        97
+      ],
+      "gt_len": 2,
+      "pred_len": 2,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 1
+    },
+    {
+      "route_id": 4377,
+      "city": 1,
+      "o_region": 139,
+      "d_region": 80,
+      "gt_seq": [
+        139,
+        133,
+        80
+      ],
+      "pred_seq": [
+        139,
+        133,
+        80
+      ],
+      "gt_len": 3,
+      "pred_len": 3,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 2
+    },
+    {
+      "route_id": 4097,
+      "city": 1,
+      "o_region": 92,
+      "d_region": 99,
+      "gt_seq": [
+        92,
+        99
+      ],
+      "pred_seq": [
+        92,
+        99
+      ],
+      "gt_len": 2,
+      "pred_len": 2,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 1
+    },
+    {
+      "route_id": 4205,
+      "city": 1,
+      "o_region": 115,
+      "d_region": 98,
+      "gt_seq": [
+        115,
+        81,
+        93,
+        111,
+        82,
+        117,
+        98
+      ],
+      "pred_seq": [
+        115,
+        81,
+        93,
+        111,
+        82,
+        117,
+        98
+      ],
+      "gt_len": 7,
+      "pred_len": 7,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 6
+    },
+    {
+      "route_id": 5527,
+      "city": 1,
+      "o_region": 92,
+      "d_region": 92,
+      "gt_seq": [
+        92
+      ],
+      "pred_seq": [
+        92
+      ],
+      "gt_len": 1,
+      "pred_len": 1,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 0
+    },
+    {
+      "route_id": 7108,
+      "city": 1,
+      "o_region": 129,
+      "d_region": 144,
+      "gt_seq": [
+        129,
+        100,
+        144
+      ],
+      "pred_seq": [
+        129,
+        100,
+        144
+      ],
+      "gt_len": 3,
+      "pred_len": 3,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 2
+    },
+    {
+      "route_id": 6714,
+      "city": 1,
+      "o_region": 112,
+      "d_region": 86,
+      "gt_seq": [
+        112,
+        86
+      ],
+      "pred_seq": [
+        112,
+        86
+      ],
+      "gt_len": 2,
+      "pred_len": 2,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 1
+    },
+    {
+      "route_id": 1394,
+      "city": 0,
+      "o_region": 58,
+      "d_region": 39,
+      "gt_seq": [
+        58,
+        50,
+        34,
+        39
+      ],
+      "pred_seq": [
+        58,
+        50,
+        34,
+        39
+      ],
+      "gt_len": 4,
+      "pred_len": 4,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 3
+    },
+    {
+      "route_id": 646,
+      "city": 0,
+      "o_region": 54,
+      "d_region": 39,
+      "gt_seq": [
+        54,
+        57,
+        34,
+        39
+      ],
+      "pred_seq": [
+        54,
+        57,
+        34,
+        39
+      ],
+      "gt_len": 4,
+      "pred_len": 4,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 3
+    },
+    {
+      "route_id": 3121,
+      "city": 1,
+      "o_region": 103,
+      "d_region": 89,
+      "gt_seq": [
+        103,
+        94,
+        109,
+        97,
+        89
+      ],
+      "pred_seq": [
+        103,
+        94,
+        109,
+        97,
+        89
+      ],
+      "gt_len": 5,
+      "pred_len": 5,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 4
+    },
+    {
+      "route_id": 3273,
+      "city": 1,
+      "o_region": 79,
+      "d_region": 87,
+      "gt_seq": [
+        79,
+        87
+      ],
+      "pred_seq": [
+        79,
+        87
+      ],
+      "gt_len": 2,
+      "pred_len": 2,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 1
+    },
+    {
+      "route_id": 5954,
+      "city": 1,
+      "o_region": 98,
+      "d_region": 123,
+      "gt_seq": [
+        98,
+        117,
+        123
+      ],
+      "pred_seq": [
+        98,
+        117,
+        123
+      ],
+      "gt_len": 3,
+      "pred_len": 3,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 2
+    },
+    {
+      "route_id": 642,
+      "city": 0,
+      "o_region": 14,
+      "d_region": 26,
+      "gt_seq": [
+        14,
+        8,
+        24,
+        26
+      ],
+      "pred_seq": [
+        14,
+        8,
+        24,
+        26
+      ],
+      "gt_len": 4,
+      "pred_len": 4,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 3
+    },
+    {
+      "route_id": 5982,
+      "city": 1,
+      "o_region": 144,
+      "d_region": 100,
+      "gt_seq": [
+        144,
+        100
+      ],
+      "pred_seq": [
+        144,
+        100
+      ],
+      "gt_len": 2,
+      "pred_len": 2,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 1
+    },
+    {
+      "route_id": 3900,
+      "city": 1,
+      "o_region": 139,
+      "d_region": 133,
+      "gt_seq": [
+        139,
+        133
+      ],
+      "pred_seq": [
+        139,
+        133
+      ],
+      "gt_len": 2,
+      "pred_len": 2,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 1
+    },
+    {
+      "route_id": 399,
+      "city": 0,
+      "o_region": 55,
+      "d_region": 58,
+      "gt_seq": [
+        55,
+        39,
+        34,
+        47,
+        58
+      ],
+      "pred_seq": [
+        55,
+        39,
+        34,
+        47,
+        58
+      ],
+      "gt_len": 5,
+      "pred_len": 5,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 4
+    },
+    {
+      "route_id": 5368,
+      "city": 1,
+      "o_region": 133,
+      "d_region": 116,
+      "gt_seq": [
+        133,
+        116
+      ],
+      "pred_seq": [
+        133,
+        116
+      ],
+      "gt_len": 2,
+      "pred_len": 2,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 1
+    },
+    {
+      "route_id": 4095,
+      "city": 1,
+      "o_region": 118,
+      "d_region": 79,
+      "gt_seq": [
+        118,
+        79
+      ],
+      "pred_seq": [
+        118,
+        79
+      ],
+      "gt_len": 2,
+      "pred_len": 2,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 1
+    },
+    {
+      "route_id": 5945,
+      "city": 1,
+      "o_region": 92,
+      "d_region": 92,
+      "gt_seq": [
+        92
+      ],
+      "pred_seq": [
+        92
+      ],
+      "gt_len": 1,
+      "pred_len": 1,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 0
+    },
+    {
+      "route_id": 5905,
+      "city": 1,
+      "o_region": 112,
+      "d_region": 86,
+      "gt_seq": [
+        112,
+        86
+      ],
+      "pred_seq": [
+        112,
+        86
+      ],
+      "gt_len": 2,
+      "pred_len": 2,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 1
+    },
+    {
+      "route_id": 3327,
+      "city": 1,
+      "o_region": 135,
+      "d_region": 135,
+      "gt_seq": [
+        135
+      ],
+      "pred_seq": [
+        135
+      ],
+      "gt_len": 1,
+      "pred_len": 1,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 0
+    },
+    {
+      "route_id": 695,
+      "city": 0,
+      "o_region": 30,
+      "d_region": 45,
+      "gt_seq": [
+        30,
+        32,
+        48,
+        58,
+        50,
+        34,
+        45
+      ],
+      "pred_seq": [
+        30,
+        32,
+        48,
+        58,
+        50,
+        34,
+        45
+      ],
+      "gt_len": 7,
+      "pred_len": 7,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 6
+    },
+    {
+      "route_id": 2905,
+      "city": 1,
+      "o_region": 123,
+      "d_region": 123,
+      "gt_seq": [
+        123
+      ],
+      "pred_seq": [
+        123
+      ],
+      "gt_len": 1,
+      "pred_len": 1,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 0
+    },
+    {
+      "route_id": 7348,
+      "city": 1,
+      "o_region": 116,
+      "d_region": 78,
+      "gt_seq": [
+        116,
+        80,
+        83,
+        78
+      ],
+      "pred_seq": [
+        116,
+        80,
+        83,
+        78
+      ],
+      "gt_len": 4,
+      "pred_len": 4,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 3
+    },
+    {
+      "route_id": 4801,
+      "city": 1,
+      "o_region": 92,
+      "d_region": 99,
+      "gt_seq": [
+        92,
+        99
+      ],
+      "pred_seq": [
+        92,
+        99
+      ],
+      "gt_len": 2,
+      "pred_len": 2,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 1
+    },
+    {
+      "route_id": 61,
+      "city": 0,
+      "o_region": 20,
+      "d_region": 20,
+      "gt_seq": [
+        20
+      ],
+      "pred_seq": [
+        20
+      ],
+      "gt_len": 1,
+      "pred_len": 1,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 0
+    },
+    {
+      "route_id": 7400,
+      "city": 1,
+      "o_region": 105,
+      "d_region": 112,
+      "gt_seq": [
+        105,
+        86,
+        112
+      ],
+      "pred_seq": [
+        105,
+        86,
+        112
+      ],
+      "gt_len": 3,
+      "pred_len": 3,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 2
+    },
+    {
+      "route_id": 420,
+      "city": 0,
+      "o_region": 39,
+      "d_region": 58,
+      "gt_seq": [
+        39,
+        2,
+        34,
+        47,
+        58
+      ],
+      "pred_seq": [
+        39,
+        34,
+        50,
+        34,
+        58
+      ],
+      "gt_len": 5,
+      "pred_len": 5,
+      "reach_dest": true,
+      "exact_match": false,
+      "has_backtrack": true,
+      "n_invalid_steps": 0,
+      "n_steps": 4
+    },
+    {
+      "route_id": 3887,
+      "city": 1,
+      "o_region": 80,
+      "d_region": 97,
+      "gt_seq": [
+        80,
+        83,
+        78,
+        89,
+        110,
+        97
+      ],
+      "pred_seq": [
+        80,
+        83,
+        78,
+        89,
+        97
+      ],
+      "gt_len": 6,
+      "pred_len": 5,
+      "reach_dest": true,
+      "exact_match": false,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 4
+    },
+    {
+      "route_id": 6285,
+      "city": 1,
+      "o_region": 91,
+      "d_region": 97,
+      "gt_seq": [
+        91,
+        84,
+        94,
+        109,
+        97
+      ],
+      "pred_seq": [
+        91,
+        84,
+        94,
+        109,
+        97
+      ],
+      "gt_len": 5,
+      "pred_len": 5,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 4
+    },
+    {
+      "route_id": 2412,
+      "city": 1,
+      "o_region": 113,
+      "d_region": 99,
+      "gt_seq": [
+        113,
+        99
+      ],
+      "pred_seq": [
+        113,
+        99
+      ],
+      "gt_len": 2,
+      "pred_len": 2,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 1
+    },
+    {
+      "route_id": 5369,
+      "city": 1,
+      "o_region": 103,
+      "d_region": 99,
+      "gt_seq": [
+        103,
+        113,
+        99
+      ],
+      "pred_seq": [
+        103,
+        113,
+        99
+      ],
+      "gt_len": 3,
+      "pred_len": 3,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 2
+    },
+    {
+      "route_id": 3873,
+      "city": 1,
+      "o_region": 133,
+      "d_region": 133,
+      "gt_seq": [
+        133
+      ],
+      "pred_seq": [
+        133
+      ],
+      "gt_len": 1,
+      "pred_len": 1,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 0
+    },
+    {
+      "route_id": 7270,
+      "city": 1,
+      "o_region": 91,
+      "d_region": 116,
+      "gt_seq": [
+        91,
+        80,
+        104,
+        116
+      ],
+      "pred_seq": [
+        91,
+        80,
+        104,
+        116
+      ],
+      "gt_len": 4,
+      "pred_len": 4,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 3
+    },
+    {
+      "route_id": 758,
+      "city": 0,
+      "o_region": 58,
+      "d_region": 20,
+      "gt_seq": [
+        58,
+        43,
+        61,
+        57,
+        54,
+        20
+      ],
+      "pred_seq": [
+        58,
+        43,
+        61,
+        57,
+        54,
+        20
+      ],
+      "gt_len": 6,
+      "pred_len": 6,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 5
+    },
+    {
+      "route_id": 3893,
+      "city": 1,
+      "o_region": 86,
+      "d_region": 122,
+      "gt_seq": [
+        86,
+        122
+      ],
+      "pred_seq": [
+        86,
+        122
+      ],
+      "gt_len": 2,
+      "pred_len": 2,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 1
+    },
+    {
+      "route_id": 323,
+      "city": 0,
+      "o_region": 16,
+      "d_region": 48,
+      "gt_seq": [
+        16,
+        35,
+        31,
+        48
+      ],
+      "pred_seq": [
+        16,
+        31,
+        48
+      ],
+      "gt_len": 4,
+      "pred_len": 3,
+      "reach_dest": true,
+      "exact_match": false,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 2
+    },
+    {
+      "route_id": 3067,
+      "city": 1,
+      "o_region": 133,
+      "d_region": 133,
+      "gt_seq": [
+        133
+      ],
+      "pred_seq": [
+        133
+      ],
+      "gt_len": 1,
+      "pred_len": 1,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 0
+    },
+    {
+      "route_id": 2680,
+      "city": 1,
+      "o_region": 81,
+      "d_region": 112,
+      "gt_seq": [
+        81,
+        86,
+        112
+      ],
+      "pred_seq": [
+        81,
+        86,
+        112
+      ],
+      "gt_len": 3,
+      "pred_len": 3,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 2
+    },
+    {
+      "route_id": 735,
+      "city": 0,
+      "o_region": 63,
+      "d_region": 63,
+      "gt_seq": [
+        63
+      ],
+      "pred_seq": [
+        63
+      ],
+      "gt_len": 1,
+      "pred_len": 1,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 0
+    },
+    {
+      "route_id": 6641,
+      "city": 1,
+      "o_region": 97,
+      "d_region": 80,
+      "gt_seq": [
+        97,
+        110,
+        78,
+        83,
+        80
+      ],
+      "pred_seq": [
+        97,
+        110,
+        78,
+        83,
+        80
+      ],
+      "gt_len": 5,
+      "pred_len": 5,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 4
+    },
+    {
+      "route_id": 1591,
+      "city": 0,
+      "o_region": 74,
+      "d_region": 1,
+      "gt_seq": [
+        74,
+        1
+      ],
+      "pred_seq": [
+        74,
+        1
+      ],
+      "gt_len": 2,
+      "pred_len": 2,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 1
+    },
+    {
+      "route_id": 122,
+      "city": 0,
+      "o_region": 64,
+      "d_region": 28,
+      "gt_seq": [
+        64,
+        28
+      ],
+      "pred_seq": [
+        64,
+        33,
+        28
+      ],
+      "gt_len": 2,
+      "pred_len": 3,
+      "reach_dest": true,
+      "exact_match": false,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 2
+    },
+    {
+      "route_id": 4433,
+      "city": 1,
+      "o_region": 133,
+      "d_region": 78,
+      "gt_seq": [
+        133,
+        80,
+        83,
+        78
+      ],
+      "pred_seq": [
+        133,
+        80,
+        83,
+        78
+      ],
+      "gt_len": 4,
+      "pred_len": 4,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 3
+    },
+    {
+      "route_id": 5664,
+      "city": 1,
+      "o_region": 87,
+      "d_region": 87,
+      "gt_seq": [
+        87
+      ],
+      "pred_seq": [
+        87
+      ],
+      "gt_len": 1,
+      "pred_len": 1,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 0
+    },
+    {
+      "route_id": 1217,
+      "city": 0,
+      "o_region": 11,
+      "d_region": 5,
+      "gt_seq": [
+        11,
+        16,
+        4,
+        5
+      ],
+      "pred_seq": [
+        11,
+        16,
+        4,
+        5
+      ],
+      "gt_len": 4,
+      "pred_len": 4,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 3
+    },
+    {
+      "route_id": 2055,
+      "city": 0,
+      "o_region": 4,
+      "d_region": 4,
+      "gt_seq": [
+        4
+      ],
+      "pred_seq": [
+        4
+      ],
+      "gt_len": 1,
+      "pred_len": 1,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 0
+    },
+    {
+      "route_id": 1604,
+      "city": 0,
+      "o_region": 69,
+      "d_region": 57,
+      "gt_seq": [
+        69,
+        54,
+        57
+      ],
+      "pred_seq": [
+        69,
+        54,
+        57
+      ],
+      "gt_len": 3,
+      "pred_len": 3,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 2
+    },
+    {
+      "route_id": 5862,
+      "city": 1,
+      "o_region": 103,
+      "d_region": 99,
+      "gt_seq": [
+        103,
+        113,
+        99
+      ],
+      "pred_seq": [
+        103,
+        113,
+        99
+      ],
+      "gt_len": 3,
+      "pred_len": 3,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 2
+    },
+    {
+      "route_id": 4343,
+      "city": 1,
+      "o_region": 77,
+      "d_region": 87,
+      "gt_seq": [
+        77,
+        108,
+        89,
+        132,
+        96,
+        87
+      ],
+      "pred_seq": [
+        77,
+        108,
+        89,
+        132,
+        96,
+        87
+      ],
+      "gt_len": 6,
+      "pred_len": 6,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 5
+    },
+    {
+      "route_id": 5632,
+      "city": 1,
+      "o_region": 112,
+      "d_region": 126,
+      "gt_seq": [
+        112,
+        126
+      ],
+      "pred_seq": [
+        112,
+        126
+      ],
+      "gt_len": 2,
+      "pred_len": 2,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 1
+    },
+    {
+      "route_id": 991,
+      "city": 0,
+      "o_region": 45,
+      "d_region": 30,
+      "gt_seq": [
+        45,
+        42,
+        34,
+        47,
+        48,
+        30
+      ],
+      "pred_seq": [
+        45,
+        42,
+        34,
+        39,
+        56,
+        48,
+        30
+      ],
+      "gt_len": 6,
+      "pred_len": 7,
+      "reach_dest": true,
+      "exact_match": false,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 6
+    },
+    {
+      "route_id": 1086,
+      "city": 0,
+      "o_region": 66,
+      "d_region": 62,
+      "gt_seq": [
+        66,
+        53,
+        62
+      ],
+      "pred_seq": [
+        66,
+        53,
+        62
+      ],
+      "gt_len": 3,
+      "pred_len": 3,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 2
+    },
+    {
+      "route_id": 254,
+      "city": 0,
+      "o_region": 69,
+      "d_region": 62,
+      "gt_seq": [
+        69,
+        72,
+        53,
+        62
+      ],
+      "pred_seq": [
+        69,
+        72,
+        53,
+        62
+      ],
+      "gt_len": 4,
+      "pred_len": 4,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 3
+    },
+    {
+      "route_id": 4621,
+      "city": 1,
+      "o_region": 125,
+      "d_region": 125,
+      "gt_seq": [
+        125
+      ],
+      "pred_seq": [
+        125
+      ],
+      "gt_len": 1,
+      "pred_len": 1,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 0
+    },
+    {
+      "route_id": 6930,
+      "city": 1,
+      "o_region": 110,
+      "d_region": 104,
+      "gt_seq": [
+        110,
+        78,
+        83,
+        80,
+        104
+      ],
+      "pred_seq": [
+        110,
+        78,
+        83,
+        80,
+        104
+      ],
+      "gt_len": 5,
+      "pred_len": 5,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 4
+    },
+    {
+      "route_id": 6246,
+      "city": 1,
+      "o_region": 122,
+      "d_region": 122,
+      "gt_seq": [
+        122
+      ],
+      "pred_seq": [
+        122
+      ],
+      "gt_len": 1,
+      "pred_len": 1,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 0
+    },
+    {
+      "route_id": 6453,
+      "city": 1,
+      "o_region": 123,
+      "d_region": 121,
+      "gt_seq": [
+        123,
+        121
+      ],
+      "pred_seq": [
+        123,
+        121
+      ],
+      "gt_len": 2,
+      "pred_len": 2,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 1
+    },
+    {
+      "route_id": 4693,
+      "city": 1,
+      "o_region": 92,
+      "d_region": 101,
+      "gt_seq": [
+        92,
+        99,
+        101
+      ],
+      "pred_seq": [
+        92,
+        99,
+        101
+      ],
+      "gt_len": 3,
+      "pred_len": 3,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 2
+    },
+    {
+      "route_id": 4974,
+      "city": 1,
+      "o_region": 128,
+      "d_region": 87,
+      "gt_seq": [
+        128,
+        96,
+        87
+      ],
+      "pred_seq": [
+        128,
+        96,
+        87
+      ],
+      "gt_len": 3,
+      "pred_len": 3,
+      "reach_dest": true,
+      "exact_match": true,
+      "has_backtrack": false,
+      "n_invalid_steps": 0,
+      "n_steps": 2
+    }
+  ]
+}

@@ -1,7 +1,7 @@
 {
   "ok": true,
   "task": "scan_multimodal_od_bin_region_seq",
-  "created_at": "2026-02-02T16:43:33.356359+08:00",
+  "created_at": "2026-02-02T17:28:50.209750+08:00",
   "cfg": {
     "od_bin_deg": 0.02,
     "min_od_km": 1.0,
@@ -14,79 +14,9191 @@
   },
   "inputs": {
     "way_routes_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD1_waydata_rustbelt_seed0_strict_v1/W5_way_routes_strict/way_routes_strict_masklen0.npz",
-    "region_seq_npz": "_sync/wsa/pi_verify/20260201_min5_candq1_past8_len160_s0/regions_louvain_v1/region_seq_min5_max160.npz"
+    "region_seq_npz": "_sync/wsa/pi_verify/20260201_min5_candq1_past8_len160_s0/regions_louvain_v1/region_seq_min5_max160.npz",
+    "city_grid_meta": {
+      "0": "/home/jinlin/data/geoexplicit_data/worldtrace/detroit_core_v1/osm_road_prob_meta.json",
+      "1": "/home/jinlin/data/geoexplicit_data/worldtrace/columbus_core_v1/osm_road_prob_meta.json"
+    }
   },
   "n_routes_in_region_seq_npz": 5022,
-  "skipped_short_od": 0,
+  "skipped_short_od": 485,
   "skipped_oob": 0,
   "od_km": {
-    "looks_deg": true,
-    "p50": 5490.703003343448,
-    "p90": 10199.144352041092
+    "units": "km",
+    "p50": 4.882040466297088,
+    "p90": 11.637087775140241
   },
   "od_bins": {
-    "n_bins": 4672,
+    "n_bins": 1925,
     "routes_per_bin": {
       "p50": 1.0,
-      "p90": 1.0,
-      "p95": 1.0,
-      "max": 32
+      "p90": 4.0,
+      "p95": 6.0,
+      "max": 89
     },
-    "n_bins_ge_min_routes": 14
+    "n_bins_ge_min_routes": 171
   },
   "multimodal": {
-    "n_bins_multi": 0,
-    "frac_multi_over_ge_min": 0.0,
-    "n_bins_sep_lcs": 0,
-    "frac_sep_over_multi": 0.0
+    "n_bins_multi": 149,
+    "frac_multi_over_ge_min": 0.8713450292397661,
+    "n_bins_sep_lcs": 84,
+    "frac_sep_over_multi": 0.5637583892617449
   },
   "uniq_patterns_per_bin_ge_min": {
-    "p50": 1.0,
-    "p90": 1.0,
-    "p95": 1.0,
-    "max": 1
+    "p50": 3.0,
+    "p90": 6.0,
+    "p95": 7.0,
+    "max": 12
   },
   "per_city": {
     "0": {
-      "n_od_bins": 1361,
+      "n_od_bins": 774,
       "routes_per_bin": {
         "p50": 1.0,
-        "p90": 1.0,
-        "p95": 1.0,
-        "max": 16
+        "p90": 3.0,
+        "p95": 4.0,
+        "max": 21
       },
-      "n_bins_ge_min_routes": 1,
+      "n_bins_ge_min_routes": 34,
       "multimodal_bins": {
-        "n_bins_multi": 0,
-        "frac_multi_over_ge_min": 0.0
+        "n_bins_multi": 29,
+        "frac_multi_over_ge_min": 0.8529411764705882
       },
       "uniq_patterns_per_bin_ge_min": {
-        "p50": 1.0,
-        "p90": 1.0,
-        "p95": 1.0,
-        "max": 1
+        "p50": 3.0,
+        "p90": 5.699999999999999,
+        "p95": 6.349999999999998,
+        "max": 7
       }
     },
     "1": {
-      "n_od_bins": 3311,
+      "n_od_bins": 1151,
       "routes_per_bin": {
         "p50": 1.0,
-        "p90": 1.0,
-        "p95": 1.0,
-        "max": 32
+        "p90": 5.0,
+        "p95": 9.0,
+        "max": 89
       },
-      "n_bins_ge_min_routes": 13,
+      "n_bins_ge_min_routes": 137,
       "multimodal_bins": {
-        "n_bins_multi": 0,
-        "frac_multi_over_ge_min": 0.0
+        "n_bins_multi": 120,
+        "frac_multi_over_ge_min": 0.8759124087591241
       },
       "uniq_patterns_per_bin_ge_min": {
-        "p50": 1.0,
-        "p90": 1.0,
-        "p95": 1.0,
-        "max": 1
+        "p50": 3.0,
+        "p90": 6.0,
+        "p95": 7.0,
+        "max": 12
       }
     }
   },
-  "top_multimodal_bins": []
+  "top_multimodal_bins": [
+    {
+      "od_bin": {
+        "o_lon": -4152,
+        "o_lat": 1999,
+        "d_lon": -4151,
+        "d_lat": 1999
+      },
+      "city": 1,
+      "n_routes": 18,
+      "n_patterns": 12,
+      "lcs_sep_score_max": 0.8,
+      "patterns": [
+        {
+          "seq": [
+            347,
+            443
+          ],
+          "count": 5,
+          "rep_route_ids": [
+            2491,
+            3793,
+            4859
+          ]
+        },
+        {
+          "seq": [
+            352,
+            347,
+            443
+          ],
+          "count": 2,
+          "rep_route_ids": [
+            2632,
+            5789
+          ]
+        },
+        {
+          "seq": [
+            499,
+            347,
+            443
+          ],
+          "count": 2,
+          "rep_route_ids": [
+            2814,
+            5531
+          ]
+        },
+        {
+          "seq": [
+            347,
+            512,
+            443,
+            486
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            2528
+          ]
+        },
+        {
+          "seq": [
+            347,
+            512,
+            526,
+            512
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            2856
+          ]
+        },
+        {
+          "seq": [
+            512,
+            443,
+            486,
+            445,
+            486
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            3320
+          ]
+        },
+        {
+          "seq": [
+            347,
+            443,
+            485
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            3554
+          ]
+        },
+        {
+          "seq": [
+            537,
+            512,
+            443,
+            486
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            5714
+          ]
+        },
+        {
+          "seq": [
+            392,
+            549,
+            494,
+            393,
+            445,
+            486
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            6076
+          ]
+        },
+        {
+          "seq": [
+            347,
+            512,
+            443,
+            486,
+            485
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            6615
+          ]
+        },
+        {
+          "seq": [
+            347,
+            512,
+            443,
+            486,
+            485,
+            486
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            6977
+          ]
+        },
+        {
+          "seq": [
+            352,
+            347,
+            464,
+            443
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            7099
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4146,
+        "o_lat": 2000,
+        "d_lon": -4146,
+        "d_lat": 2003
+      },
+      "city": 1,
+      "n_routes": 36,
+      "n_patterns": 11,
+      "lcs_sep_score_max": 0.75,
+      "patterns": [
+        {
+          "seq": [
+            429,
+            337,
+            317
+          ],
+          "count": 9,
+          "rep_route_ids": [
+            2906,
+            3353,
+            3650
+          ]
+        },
+        {
+          "seq": [
+            429,
+            337,
+            531
+          ],
+          "count": 6,
+          "rep_route_ids": [
+            2637,
+            3155,
+            4955
+          ]
+        },
+        {
+          "seq": [
+            400,
+            337,
+            317
+          ],
+          "count": 5,
+          "rep_route_ids": [
+            2910,
+            4336,
+            4488
+          ]
+        },
+        {
+          "seq": [
+            400,
+            337,
+            531
+          ],
+          "count": 4,
+          "rep_route_ids": [
+            3379,
+            4078,
+            5477
+          ]
+        },
+        {
+          "seq": [
+            544,
+            400,
+            337,
+            317
+          ],
+          "count": 2,
+          "rep_route_ids": [
+            2368,
+            6065
+          ]
+        },
+        {
+          "seq": [
+            544,
+            400,
+            337,
+            531
+          ],
+          "count": 2,
+          "rep_route_ids": [
+            2680,
+            2681
+          ]
+        },
+        {
+          "seq": [
+            337,
+            317
+          ],
+          "count": 2,
+          "rep_route_ids": [
+            2764,
+            7162
+          ]
+        },
+        {
+          "seq": [
+            337,
+            531
+          ],
+          "count": 2,
+          "rep_route_ids": [
+            3217,
+            6020
+          ]
+        },
+        {
+          "seq": [
+            461,
+            544,
+            400,
+            337,
+            531
+          ],
+          "count": 2,
+          "rep_route_ids": [
+            4232,
+            6844
+          ]
+        },
+        {
+          "seq": [
+            532,
+            544,
+            400,
+            337,
+            317
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            2522
+          ]
+        },
+        {
+          "seq": [
+            400,
+            429,
+            337,
+            531
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            4766
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4146,
+        "o_lat": 2002,
+        "d_lon": -4146,
+        "d_lat": 2003
+      },
+      "city": 1,
+      "n_routes": 37,
+      "n_patterns": 10,
+      "lcs_sep_score_max": 1.0,
+      "patterns": [
+        {
+          "seq": [
+            525,
+            369,
+            317
+          ],
+          "count": 11,
+          "rep_route_ids": [
+            2660,
+            2683,
+            3947
+          ]
+        },
+        {
+          "seq": [
+            369,
+            317
+          ],
+          "count": 9,
+          "rep_route_ids": [
+            2593,
+            2741,
+            3065
+          ]
+        },
+        {
+          "seq": [
+            531
+          ],
+          "count": 6,
+          "rep_route_ids": [
+            3460,
+            3652,
+            3714
+          ]
+        },
+        {
+          "seq": [
+            369,
+            531
+          ],
+          "count": 4,
+          "rep_route_ids": [
+            3450,
+            4692,
+            4941
+          ]
+        },
+        {
+          "seq": [
+            337,
+            317
+          ],
+          "count": 2,
+          "rep_route_ids": [
+            3464,
+            5219
+          ]
+        },
+        {
+          "seq": [
+            337,
+            531
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            2309
+          ]
+        },
+        {
+          "seq": [
+            428,
+            525,
+            369,
+            317
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            3466
+          ]
+        },
+        {
+          "seq": [
+            317
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            4226
+          ]
+        },
+        {
+          "seq": [
+            525,
+            369,
+            531
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            5608
+          ]
+        },
+        {
+          "seq": [
+            428,
+            531
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            6242
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4151,
+        "o_lat": 1999,
+        "d_lon": -4151,
+        "d_lat": 2000
+      },
+      "city": 1,
+      "n_routes": 9,
+      "n_patterns": 8,
+      "lcs_sep_score_max": 0.75,
+      "patterns": [
+        {
+          "seq": [
+            485,
+            486,
+            505
+          ],
+          "count": 2,
+          "rep_route_ids": [
+            3619,
+            4472
+          ]
+        },
+        {
+          "seq": [
+            443,
+            485,
+            486,
+            505
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            2903
+          ]
+        },
+        {
+          "seq": [
+            486,
+            485,
+            486,
+            445,
+            486,
+            533,
+            505
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            4744
+          ]
+        },
+        {
+          "seq": [
+            486,
+            445,
+            486,
+            533
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            6291
+          ]
+        },
+        {
+          "seq": [
+            486,
+            485,
+            486,
+            445,
+            486,
+            533
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            6871
+          ]
+        },
+        {
+          "seq": [
+            486,
+            485,
+            486,
+            505
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            6890
+          ]
+        },
+        {
+          "seq": [
+            486,
+            445,
+            486,
+            533,
+            505
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            7092
+          ]
+        },
+        {
+          "seq": [
+            485,
+            486,
+            445,
+            486
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            7392
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4146,
+        "o_lat": 2003,
+        "d_lon": -4146,
+        "d_lat": 2000
+      },
+      "city": 1,
+      "n_routes": 19,
+      "n_patterns": 7,
+      "lcs_sep_score_max": 0.8,
+      "patterns": [
+        {
+          "seq": [
+            561,
+            319,
+            400
+          ],
+          "count": 8,
+          "rep_route_ids": [
+            3082,
+            3603,
+            3654
+          ]
+        },
+        {
+          "seq": [
+            319,
+            400
+          ],
+          "count": 3,
+          "rep_route_ids": [
+            3973,
+            5457,
+            5577
+          ]
+        },
+        {
+          "seq": [
+            561,
+            319,
+            400,
+            429
+          ],
+          "count": 2,
+          "rep_route_ids": [
+            2298,
+            4322
+          ]
+        },
+        {
+          "seq": [
+            319,
+            400,
+            429
+          ],
+          "count": 2,
+          "rep_route_ids": [
+            3625,
+            6191
+          ]
+        },
+        {
+          "seq": [
+            319,
+            369,
+            525,
+            370,
+            532
+          ],
+          "count": 2,
+          "rep_route_ids": [
+            3960,
+            6192
+          ]
+        },
+        {
+          "seq": [
+            319,
+            400,
+            429,
+            363
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            3755
+          ]
+        },
+        {
+          "seq": [
+            319,
+            400,
+            545,
+            336
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            6318
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4153,
+        "o_lat": 2003,
+        "d_lon": -4152,
+        "d_lat": 2000
+      },
+      "city": 1,
+      "n_routes": 16,
+      "n_patterns": 7,
+      "lcs_sep_score_max": 0.6666666666666667,
+      "patterns": [
+        {
+          "seq": [
+            360,
+            383,
+            453,
+            549
+          ],
+          "count": 9,
+          "rep_route_ids": [
+            3153,
+            3188,
+            5670
+          ]
+        },
+        {
+          "seq": [
+            489,
+            360,
+            383,
+            453,
+            549
+          ],
+          "count": 2,
+          "rep_route_ids": [
+            3119,
+            3540
+          ]
+        },
+        {
+          "seq": [
+            489,
+            360,
+            383,
+            453,
+            549,
+            494
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            4081
+          ]
+        },
+        {
+          "seq": [
+            360,
+            383,
+            453,
+            549,
+            494
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            5036
+          ]
+        },
+        {
+          "seq": [
+            360,
+            383,
+            419
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            5184
+          ]
+        },
+        {
+          "seq": [
+            360,
+            383,
+            453
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            5414
+          ]
+        },
+        {
+          "seq": [
+            489,
+            360,
+            383,
+            453
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            6515
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4146,
+        "o_lat": 2003,
+        "d_lon": -4146,
+        "d_lat": 2002
+      },
+      "city": 1,
+      "n_routes": 16,
+      "n_patterns": 7,
+      "lcs_sep_score_max": 1.0,
+      "patterns": [
+        {
+          "seq": [
+            319,
+            369
+          ],
+          "count": 5,
+          "rep_route_ids": [
+            3315,
+            3893,
+            5371
+          ]
+        },
+        {
+          "seq": [
+            531
+          ],
+          "count": 3,
+          "rep_route_ids": [
+            3720,
+            6025,
+            6199
+          ]
+        },
+        {
+          "seq": [
+            319,
+            369,
+            525
+          ],
+          "count": 3,
+          "rep_route_ids": [
+            4594,
+            5419,
+            6633
+          ]
+        },
+        {
+          "seq": [
+            561,
+            531
+          ],
+          "count": 2,
+          "rep_route_ids": [
+            3817,
+            4777
+          ]
+        },
+        {
+          "seq": [
+            561,
+            531,
+            428
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            3458
+          ]
+        },
+        {
+          "seq": [
+            319
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            4663
+          ]
+        },
+        {
+          "seq": [
+            531,
+            369,
+            525
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            7215
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4154,
+        "o_lat": 2116,
+        "d_lon": -4155,
+        "d_lat": 2122
+      },
+      "city": 0,
+      "n_routes": 15,
+      "n_patterns": 7,
+      "lcs_sep_score_max": 0.5454545454545454,
+      "patterns": [
+        {
+          "seq": [
+            197,
+            219,
+            108,
+            290,
+            38,
+            37,
+            264,
+            104
+          ],
+          "count": 6,
+          "rep_route_ids": [
+            204,
+            263,
+            297
+          ]
+        },
+        {
+          "seq": [
+            197,
+            219,
+            108,
+            142,
+            226,
+            300,
+            259,
+            130,
+            264,
+            104
+          ],
+          "count": 3,
+          "rep_route_ids": [
+            243,
+            566,
+            1900
+          ]
+        },
+        {
+          "seq": [
+            197,
+            219,
+            108,
+            226,
+            300,
+            259,
+            130,
+            264,
+            104
+          ],
+          "count": 2,
+          "rep_route_ids": [
+            1658,
+            1721
+          ]
+        },
+        {
+          "seq": [
+            197,
+            219,
+            108,
+            226,
+            300,
+            259,
+            130,
+            264,
+            104,
+            260
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            30
+          ]
+        },
+        {
+          "seq": [
+            197,
+            219,
+            108,
+            290,
+            38,
+            37,
+            264,
+            104,
+            46
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            1041
+          ]
+        },
+        {
+          "seq": [
+            197,
+            219,
+            108,
+            142,
+            226,
+            300,
+            259,
+            130,
+            264,
+            104,
+            46
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            2049
+          ]
+        },
+        {
+          "seq": [
+            197,
+            219,
+            108,
+            290,
+            38,
+            37,
+            264,
+            104,
+            260
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            2056
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4154,
+        "o_lat": 2116,
+        "d_lon": -4155,
+        "d_lat": 2121
+      },
+      "city": 0,
+      "n_routes": 10,
+      "n_patterns": 7,
+      "lcs_sep_score_max": 0.8181818181818181,
+      "patterns": [
+        {
+          "seq": [
+            197,
+            219,
+            108,
+            290,
+            38,
+            37,
+            264,
+            104
+          ],
+          "count": 3,
+          "rep_route_ids": [
+            186,
+            568,
+            991
+          ]
+        },
+        {
+          "seq": [
+            197,
+            219,
+            108,
+            290,
+            38,
+            37,
+            264
+          ],
+          "count": 2,
+          "rep_route_ids": [
+            6,
+            583
+          ]
+        },
+        {
+          "seq": [
+            197,
+            219,
+            108,
+            290,
+            38,
+            37,
+            264,
+            165
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            1172
+          ]
+        },
+        {
+          "seq": [
+            197,
+            219,
+            108,
+            226,
+            300,
+            259,
+            130,
+            264
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            1350
+          ]
+        },
+        {
+          "seq": [
+            197,
+            219,
+            108,
+            142,
+            226,
+            300,
+            259,
+            130,
+            264,
+            104
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            1425
+          ]
+        },
+        {
+          "seq": [
+            153,
+            18,
+            219,
+            16,
+            173,
+            59,
+            300,
+            259,
+            130,
+            264,
+            104
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            1550
+          ]
+        },
+        {
+          "seq": [
+            197,
+            219,
+            108,
+            226,
+            300,
+            259,
+            130,
+            264,
+            104
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            1898
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4146,
+        "o_lat": 2002,
+        "d_lon": -4146,
+        "d_lat": 2002
+      },
+      "city": 1,
+      "n_routes": 8,
+      "n_patterns": 7,
+      "lcs_sep_score_max": 1.0,
+      "patterns": [
+        {
+          "seq": [
+            531
+          ],
+          "count": 2,
+          "rep_route_ids": [
+            4029,
+            5622
+          ]
+        },
+        {
+          "seq": [
+            531,
+            525
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            3126
+          ]
+        },
+        {
+          "seq": [
+            337,
+            531
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            4828
+          ]
+        },
+        {
+          "seq": [
+            525,
+            369
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            4991
+          ]
+        },
+        {
+          "seq": [
+            369,
+            531
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            5783
+          ]
+        },
+        {
+          "seq": [
+            369,
+            525,
+            428
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            6067
+          ]
+        },
+        {
+          "seq": [
+            369,
+            525
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            6246
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4145,
+        "o_lat": 2000,
+        "d_lon": -4146,
+        "d_lat": 2003
+      },
+      "city": 1,
+      "n_routes": 31,
+      "n_patterns": 6,
+      "lcs_sep_score_max": 0.75,
+      "patterns": [
+        {
+          "seq": [
+            429,
+            337,
+            317
+          ],
+          "count": 14,
+          "rep_route_ids": [
+            2294,
+            2600,
+            2648
+          ]
+        },
+        {
+          "seq": [
+            429,
+            337,
+            531
+          ],
+          "count": 13,
+          "rep_route_ids": [
+            2329,
+            2399,
+            2518
+          ]
+        },
+        {
+          "seq": [
+            336,
+            429,
+            337,
+            317
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            3480
+          ]
+        },
+        {
+          "seq": [
+            545,
+            429,
+            337,
+            317
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            6038
+          ]
+        },
+        {
+          "seq": [
+            545,
+            337,
+            531
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            6671
+          ]
+        },
+        {
+          "seq": [
+            466,
+            429,
+            337,
+            531
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            6741
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4153,
+        "o_lat": 2000,
+        "d_lon": -4152,
+        "d_lat": 2000
+      },
+      "city": 1,
+      "n_routes": 14,
+      "n_patterns": 6,
+      "lcs_sep_score_max": 0.8,
+      "patterns": [
+        {
+          "seq": [
+            508,
+            358,
+            549
+          ],
+          "count": 7,
+          "rep_route_ids": [
+            2284,
+            2722,
+            3656
+          ]
+        },
+        {
+          "seq": [
+            358,
+            549
+          ],
+          "count": 3,
+          "rep_route_ids": [
+            2323,
+            5041,
+            6926
+          ]
+        },
+        {
+          "seq": [
+            508,
+            358,
+            549,
+            419
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            2379
+          ]
+        },
+        {
+          "seq": [
+            358,
+            549,
+            494,
+            549,
+            419
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            3839
+          ]
+        },
+        {
+          "seq": [
+            358,
+            549,
+            494
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            6267
+          ]
+        },
+        {
+          "seq": [
+            508,
+            358
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            7255
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4151,
+        "o_lat": 2000,
+        "d_lon": -4151,
+        "d_lat": 1999
+      },
+      "city": 1,
+      "n_routes": 12,
+      "n_patterns": 6,
+      "lcs_sep_score_max": 0.75,
+      "patterns": [
+        {
+          "seq": [
+            505,
+            486
+          ],
+          "count": 6,
+          "rep_route_ids": [
+            3961,
+            5026,
+            5883
+          ]
+        },
+        {
+          "seq": [
+            486,
+            485,
+            486
+          ],
+          "count": 2,
+          "rep_route_ids": [
+            4037,
+            6907
+          ]
+        },
+        {
+          "seq": [
+            505,
+            486,
+            485,
+            486
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            2734
+          ]
+        },
+        {
+          "seq": [
+            505,
+            486,
+            445
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            3219
+          ]
+        },
+        {
+          "seq": [
+            486
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            3368
+          ]
+        },
+        {
+          "seq": [
+            505,
+            486,
+            485,
+            443
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            5356
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4155,
+        "o_lat": 2120,
+        "d_lon": -4154,
+        "d_lat": 2116
+      },
+      "city": 0,
+      "n_routes": 10,
+      "n_patterns": 6,
+      "lcs_sep_score_max": 0.8181818181818181,
+      "patterns": [
+        {
+          "seq": [
+            37,
+            177,
+            188,
+            164,
+            142,
+            219,
+            172,
+            197
+          ],
+          "count": 3,
+          "rep_route_ids": [
+            225,
+            811,
+            1423
+          ]
+        },
+        {
+          "seq": [
+            135,
+            37,
+            177,
+            188,
+            164,
+            142,
+            219,
+            172,
+            197
+          ],
+          "count": 3,
+          "rep_route_ids": [
+            317,
+            1167,
+            1265
+          ]
+        },
+        {
+          "seq": [
+            135,
+            264,
+            310,
+            191,
+            24,
+            290,
+            142,
+            219,
+            172,
+            197
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            535
+          ]
+        },
+        {
+          "seq": [
+            264,
+            310,
+            191,
+            24,
+            290,
+            142,
+            219,
+            197
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            918
+          ]
+        },
+        {
+          "seq": [
+            135,
+            264,
+            310,
+            191,
+            24,
+            290,
+            164,
+            299,
+            213,
+            172,
+            197
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            1727
+          ]
+        },
+        {
+          "seq": [
+            37,
+            177,
+            188,
+            164,
+            142,
+            219,
+            197
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            2149
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4150,
+        "o_lat": 2003,
+        "d_lon": -4150,
+        "d_lat": 1998
+      },
+      "city": 1,
+      "n_routes": 10,
+      "n_patterns": 6,
+      "lcs_sep_score_max": 0.4285714285714286,
+      "patterns": [
+        {
+          "seq": [
+            416,
+            323,
+            455,
+            556,
+            396
+          ],
+          "count": 5,
+          "rep_route_ids": [
+            2497,
+            2792,
+            4011
+          ]
+        },
+        {
+          "seq": [
+            416,
+            323,
+            455,
+            556,
+            332
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            2817
+          ]
+        },
+        {
+          "seq": [
+            424,
+            416,
+            323,
+            455,
+            556,
+            373,
+            485
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            5562
+          ]
+        },
+        {
+          "seq": [
+            416,
+            323,
+            455,
+            556,
+            373,
+            480
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            6761
+          ]
+        },
+        {
+          "seq": [
+            424,
+            416,
+            323,
+            455,
+            556,
+            373,
+            480
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            7212
+          ]
+        },
+        {
+          "seq": [
+            416,
+            323,
+            455,
+            556,
+            373
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            7460
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4150,
+        "o_lat": 2000,
+        "d_lon": -4151,
+        "d_lat": 2000
+      },
+      "city": 1,
+      "n_routes": 9,
+      "n_patterns": 6,
+      "lcs_sep_score_max": 1.0,
+      "patterns": [
+        {
+          "seq": [
+            505
+          ],
+          "count": 4,
+          "rep_route_ids": [
+            4169,
+            6777,
+            6848
+          ]
+        },
+        {
+          "seq": [
+            486,
+            505
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            2377
+          ]
+        },
+        {
+          "seq": [
+            412,
+            455,
+            505,
+            486
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            3309
+          ]
+        },
+        {
+          "seq": [
+            505,
+            486
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            5043
+          ]
+        },
+        {
+          "seq": [
+            455,
+            505
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            6738
+          ]
+        },
+        {
+          "seq": [
+            444,
+            455,
+            486
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            7292
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4152,
+        "o_lat": 1999,
+        "d_lon": -4152,
+        "d_lat": 1999
+      },
+      "city": 1,
+      "n_routes": 8,
+      "n_patterns": 6,
+      "lcs_sep_score_max": 1.0,
+      "patterns": [
+        {
+          "seq": [
+            352,
+            347
+          ],
+          "count": 3,
+          "rep_route_ids": [
+            2666,
+            2864,
+            3202
+          ]
+        },
+        {
+          "seq": [
+            499,
+            392,
+            549,
+            494
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            2317
+          ]
+        },
+        {
+          "seq": [
+            347,
+            352
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            2760
+          ]
+        },
+        {
+          "seq": [
+            453,
+            352,
+            347
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            3485
+          ]
+        },
+        {
+          "seq": [
+            499,
+            347
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            4398
+          ]
+        },
+        {
+          "seq": [
+            392,
+            352,
+            347
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            5504
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4150,
+        "o_lat": 1998,
+        "d_lon": -4150,
+        "d_lat": 1999
+      },
+      "city": 1,
+      "n_routes": 8,
+      "n_patterns": 6,
+      "lcs_sep_score_max": 1.0,
+      "patterns": [
+        {
+          "seq": [
+            432,
+            485
+          ],
+          "count": 3,
+          "rep_route_ids": [
+            2586,
+            2646,
+            5016
+          ]
+        },
+        {
+          "seq": [
+            432,
+            485,
+            486
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            2438
+          ]
+        },
+        {
+          "seq": [
+            432,
+            328,
+            331,
+            444
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            2797
+          ]
+        },
+        {
+          "seq": [
+            514,
+            430,
+            329
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            3207
+          ]
+        },
+        {
+          "seq": [
+            514,
+            351,
+            485
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            4056
+          ]
+        },
+        {
+          "seq": [
+            492,
+            329
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            4421
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4152,
+        "o_lat": 2000,
+        "d_lon": -4153,
+        "d_lat": 2000
+      },
+      "city": 1,
+      "n_routes": 8,
+      "n_patterns": 6,
+      "lcs_sep_score_max": 0.75,
+      "patterns": [
+        {
+          "seq": [
+            549,
+            358,
+            508
+          ],
+          "count": 2,
+          "rep_route_ids": [
+            2776,
+            4630
+          ]
+        },
+        {
+          "seq": [
+            494,
+            549,
+            358
+          ],
+          "count": 2,
+          "rep_route_ids": [
+            4344,
+            6403
+          ]
+        },
+        {
+          "seq": [
+            419,
+            549,
+            358,
+            508
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            4047
+          ]
+        },
+        {
+          "seq": [
+            549,
+            358
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            5266
+          ]
+        },
+        {
+          "seq": [
+            358,
+            508
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            5305
+          ]
+        },
+        {
+          "seq": [
+            358,
+            549,
+            392,
+            508
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            6385
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4162,
+        "o_lat": 2115,
+        "d_lon": -4163,
+        "d_lat": 2115
+      },
+      "city": 0,
+      "n_routes": 7,
+      "n_patterns": 6,
+      "lcs_sep_score_max": 1.0,
+      "patterns": [
+        {
+          "seq": [
+            146,
+            232
+          ],
+          "count": 2,
+          "rep_route_ids": [
+            509,
+            1418
+          ]
+        },
+        {
+          "seq": [
+            292,
+            276,
+            232
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            93
+          ]
+        },
+        {
+          "seq": [
+            205,
+            292,
+            276,
+            232
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            489
+          ]
+        },
+        {
+          "seq": [
+            276,
+            232
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            515
+          ]
+        },
+        {
+          "seq": [
+            292,
+            276
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            1017
+          ]
+        },
+        {
+          "seq": [
+            146,
+            232,
+            276
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            1183
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4152,
+        "o_lat": 2000,
+        "d_lon": -4152,
+        "d_lat": 1999
+      },
+      "city": 1,
+      "n_routes": 7,
+      "n_patterns": 6,
+      "lcs_sep_score_max": 1.0,
+      "patterns": [
+        {
+          "seq": [
+            549,
+            494
+          ],
+          "count": 2,
+          "rep_route_ids": [
+            5048,
+            6673
+          ]
+        },
+        {
+          "seq": [
+            453,
+            432,
+            464
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            2514
+          ]
+        },
+        {
+          "seq": [
+            453,
+            352,
+            347
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            2619
+          ]
+        },
+        {
+          "seq": [
+            549,
+            352,
+            512
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            3278
+          ]
+        },
+        {
+          "seq": [
+            358,
+            549,
+            453,
+            352,
+            347
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            5367
+          ]
+        },
+        {
+          "seq": [
+            453,
+            352,
+            347,
+            464
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            6057
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4152,
+        "o_lat": 2000,
+        "d_lon": -4151,
+        "d_lat": 1999
+      },
+      "city": 1,
+      "n_routes": 6,
+      "n_patterns": 6,
+      "lcs_sep_score_max": 1.0,
+      "patterns": [
+        {
+          "seq": [
+            517,
+            419,
+            453,
+            432,
+            464,
+            443
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            2435
+          ]
+        },
+        {
+          "seq": [
+            494,
+            393,
+            533,
+            486
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            2984
+          ]
+        },
+        {
+          "seq": [
+            549,
+            494,
+            512
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            3681
+          ]
+        },
+        {
+          "seq": [
+            517,
+            505,
+            533,
+            486,
+            445
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            3804
+          ]
+        },
+        {
+          "seq": [
+            549,
+            494,
+            393
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            4756
+          ]
+        },
+        {
+          "seq": [
+            494,
+            512,
+            445,
+            486,
+            485
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            5341
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4150,
+        "o_lat": 1999,
+        "d_lon": -4151,
+        "d_lat": 1999
+      },
+      "city": 1,
+      "n_routes": 6,
+      "n_patterns": 6,
+      "lcs_sep_score_max": 1.0,
+      "patterns": [
+        {
+          "seq": [
+            485,
+            486
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            2609
+          ]
+        },
+        {
+          "seq": [
+            485,
+            486,
+            445,
+            486
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            3248
+          ]
+        },
+        {
+          "seq": [
+            444,
+            556,
+            486
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            3391
+          ]
+        },
+        {
+          "seq": [
+            329,
+            485,
+            486
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            3618
+          ]
+        },
+        {
+          "seq": [
+            486
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            4148
+          ]
+        },
+        {
+          "seq": [
+            485
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            4887
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4152,
+        "o_lat": 2000,
+        "d_lon": -4152,
+        "d_lat": 2003
+      },
+      "city": 1,
+      "n_routes": 51,
+      "n_patterns": 5,
+      "lcs_sep_score_max": 0.33333333333333337,
+      "patterns": [
+        {
+          "seq": [
+            549,
+            419,
+            348,
+            439,
+            360
+          ],
+          "count": 33,
+          "rep_route_ids": [
+            2535,
+            2548,
+            2654
+          ]
+        },
+        {
+          "seq": [
+            494,
+            549,
+            419,
+            348,
+            439,
+            360
+          ],
+          "count": 12,
+          "rep_route_ids": [
+            3259,
+            3393,
+            3475
+          ]
+        },
+        {
+          "seq": [
+            419,
+            348,
+            439,
+            360
+          ],
+          "count": 3,
+          "rep_route_ids": [
+            3982,
+            4551,
+            5708
+          ]
+        },
+        {
+          "seq": [
+            537,
+            419,
+            348,
+            439,
+            360
+          ],
+          "count": 2,
+          "rep_route_ids": [
+            4932,
+            7410
+          ]
+        },
+        {
+          "seq": [
+            517,
+            419,
+            348,
+            439,
+            360
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            5442
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4152,
+        "o_lat": 2003,
+        "d_lon": -4152,
+        "d_lat": 2000
+      },
+      "city": 1,
+      "n_routes": 27,
+      "n_patterns": 5,
+      "lcs_sep_score_max": 0.6666666666666667,
+      "patterns": [
+        {
+          "seq": [
+            360,
+            383,
+            453,
+            549
+          ],
+          "count": 15,
+          "rep_route_ids": [
+            3268,
+            3510,
+            3732
+          ]
+        },
+        {
+          "seq": [
+            360,
+            383,
+            453
+          ],
+          "count": 8,
+          "rep_route_ids": [
+            2508,
+            2576,
+            2798
+          ]
+        },
+        {
+          "seq": [
+            360,
+            383,
+            419,
+            517
+          ],
+          "count": 2,
+          "rep_route_ids": [
+            5190,
+            6409
+          ]
+        },
+        {
+          "seq": [
+            360,
+            383,
+            419
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            5003
+          ]
+        },
+        {
+          "seq": [
+            360,
+            383,
+            453,
+            352,
+            512,
+            494
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            6725
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4152,
+        "o_lat": 2000,
+        "d_lon": -4152,
+        "d_lat": 2000
+      },
+      "city": 1,
+      "n_routes": 10,
+      "n_patterns": 5,
+      "lcs_sep_score_max": 1.0,
+      "patterns": [
+        {
+          "seq": [
+            549,
+            494
+          ],
+          "count": 3,
+          "rep_route_ids": [
+            3596,
+            5066,
+            7336
+          ]
+        },
+        {
+          "seq": [
+            494,
+            549
+          ],
+          "count": 3,
+          "rep_route_ids": [
+            4315,
+            5177,
+            5329
+          ]
+        },
+        {
+          "seq": [
+            453,
+            549,
+            494
+          ],
+          "count": 2,
+          "rep_route_ids": [
+            2295,
+            7105
+          ]
+        },
+        {
+          "seq": [
+            419,
+            517
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            2540
+          ]
+        },
+        {
+          "seq": [
+            419,
+            517,
+            549,
+            494
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            3939
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4150,
+        "o_lat": 2003,
+        "d_lon": -4151,
+        "d_lat": 1999
+      },
+      "city": 1,
+      "n_routes": 8,
+      "n_patterns": 5,
+      "lcs_sep_score_max": 0.4285714285714286,
+      "patterns": [
+        {
+          "seq": [
+            416,
+            323,
+            455,
+            556,
+            486
+          ],
+          "count": 3,
+          "rep_route_ids": [
+            3764,
+            3869,
+            6589
+          ]
+        },
+        {
+          "seq": [
+            416,
+            323,
+            455,
+            556,
+            486,
+            445
+          ],
+          "count": 2,
+          "rep_route_ids": [
+            4833,
+            7045
+          ]
+        },
+        {
+          "seq": [
+            416,
+            323,
+            455,
+            556,
+            486,
+            445,
+            486
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            3279
+          ]
+        },
+        {
+          "seq": [
+            424,
+            416,
+            323,
+            455,
+            556,
+            486
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            3648
+          ]
+        },
+        {
+          "seq": [
+            416,
+            323,
+            455,
+            556,
+            373,
+            485
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            7424
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4152,
+        "o_lat": 2003,
+        "d_lon": -4152,
+        "d_lat": 1999
+      },
+      "city": 1,
+      "n_routes": 8,
+      "n_patterns": 5,
+      "lcs_sep_score_max": 0.5,
+      "patterns": [
+        {
+          "seq": [
+            360,
+            383,
+            453,
+            352,
+            347
+          ],
+          "count": 3,
+          "rep_route_ids": [
+            3291,
+            5375,
+            5727
+          ]
+        },
+        {
+          "seq": [
+            360,
+            383,
+            453
+          ],
+          "count": 2,
+          "rep_route_ids": [
+            7263,
+            7272
+          ]
+        },
+        {
+          "seq": [
+            360,
+            383,
+            453,
+            352,
+            347,
+            512
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            5655
+          ]
+        },
+        {
+          "seq": [
+            360,
+            383,
+            453,
+            352,
+            347,
+            464
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            6335
+          ]
+        },
+        {
+          "seq": [
+            360,
+            383,
+            453,
+            432
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            6378
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4156,
+        "o_lat": 2123,
+        "d_lon": -4158,
+        "d_lat": 2124
+      },
+      "city": 0,
+      "n_routes": 6,
+      "n_patterns": 5,
+      "lcs_sep_score_max": 1.0,
+      "patterns": [
+        {
+          "seq": [
+            46,
+            277,
+            8,
+            88
+          ],
+          "count": 2,
+          "rep_route_ids": [
+            572,
+            1105
+          ]
+        },
+        {
+          "seq": [
+            25,
+            46,
+            15,
+            315,
+            63,
+            114,
+            50,
+            116
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            232
+          ]
+        },
+        {
+          "seq": [
+            46,
+            25,
+            10
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            1128
+          ]
+        },
+        {
+          "seq": [
+            46,
+            25,
+            10,
+            101
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            1510
+          ]
+        },
+        {
+          "seq": [
+            15,
+            315,
+            63,
+            114,
+            50,
+            116,
+            88
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            1816
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4156,
+        "o_lat": 1998,
+        "d_lon": -4157,
+        "d_lat": 2001
+      },
+      "city": 1,
+      "n_routes": 6,
+      "n_patterns": 5,
+      "lcs_sep_score_max": 0.6666666666666667,
+      "patterns": [
+        {
+          "seq": [
+            365,
+            345,
+            367,
+            543,
+            325
+          ],
+          "count": 2,
+          "rep_route_ids": [
+            4631,
+            7266
+          ]
+        },
+        {
+          "seq": [
+            356,
+            345,
+            367,
+            543
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            2774
+          ]
+        },
+        {
+          "seq": [
+            345,
+            367,
+            543,
+            325
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            4340
+          ]
+        },
+        {
+          "seq": [
+            484,
+            440,
+            452,
+            356,
+            345,
+            367
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            4627
+          ]
+        },
+        {
+          "seq": [
+            452,
+            356,
+            345,
+            367,
+            543,
+            325
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            6348
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4150,
+        "o_lat": 2000,
+        "d_lon": -4151,
+        "d_lat": 1999
+      },
+      "city": 1,
+      "n_routes": 6,
+      "n_patterns": 5,
+      "lcs_sep_score_max": 1.0,
+      "patterns": [
+        {
+          "seq": [
+            455,
+            556,
+            486
+          ],
+          "count": 2,
+          "rep_route_ids": [
+            4370,
+            6877
+          ]
+        },
+        {
+          "seq": [
+            486
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            2905
+          ]
+        },
+        {
+          "seq": [
+            505,
+            486
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            3775
+          ]
+        },
+        {
+          "seq": [
+            455,
+            556,
+            373,
+            485
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            4152
+          ]
+        },
+        {
+          "seq": [
+            505,
+            486,
+            485
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            4885
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4152,
+        "o_lat": 2001,
+        "d_lon": -4152,
+        "d_lat": 1999
+      },
+      "city": 1,
+      "n_routes": 6,
+      "n_patterns": 5,
+      "lcs_sep_score_max": 0.75,
+      "patterns": [
+        {
+          "seq": [
+            383,
+            453,
+            432,
+            464
+          ],
+          "count": 2,
+          "rep_route_ids": [
+            3647,
+            7369
+          ]
+        },
+        {
+          "seq": [
+            383,
+            453,
+            352,
+            347
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            3446
+          ]
+        },
+        {
+          "seq": [
+            383,
+            453,
+            352
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            5054
+          ]
+        },
+        {
+          "seq": [
+            517,
+            419,
+            453
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            5162
+          ]
+        },
+        {
+          "seq": [
+            383,
+            453,
+            352,
+            499
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            6854
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4151,
+        "o_lat": 1999,
+        "d_lon": -4150,
+        "d_lat": 2003
+      },
+      "city": 1,
+      "n_routes": 5,
+      "n_patterns": 5,
+      "lcs_sep_score_max": 0.625,
+      "patterns": [
+        {
+          "seq": [
+            485,
+            432,
+            328,
+            331,
+            444,
+            505,
+            539,
+            416
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            2369
+          ]
+        },
+        {
+          "seq": [
+            445,
+            486,
+            556,
+            444,
+            505,
+            539,
+            416
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            2702
+          ]
+        },
+        {
+          "seq": [
+            486,
+            556,
+            444,
+            505,
+            539,
+            416,
+            424
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            3012
+          ]
+        },
+        {
+          "seq": [
+            486,
+            533,
+            505,
+            539,
+            416
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            3093
+          ]
+        },
+        {
+          "seq": [
+            485,
+            556,
+            444,
+            505,
+            539,
+            416,
+            424
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            5743
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4151,
+        "o_lat": 1999,
+        "d_lon": -4151,
+        "d_lat": 1998
+      },
+      "city": 1,
+      "n_routes": 5,
+      "n_patterns": 5,
+      "lcs_sep_score_max": 1.0,
+      "patterns": [
+        {
+          "seq": [
+            486,
+            485,
+            432,
+            373,
+            480,
+            514,
+            480
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            2581
+          ]
+        },
+        {
+          "seq": [
+            485,
+            432,
+            373,
+            480
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            3423
+          ]
+        },
+        {
+          "seq": [
+            445,
+            486,
+            485,
+            530,
+            528
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            3695
+          ]
+        },
+        {
+          "seq": [
+            485,
+            432,
+            373,
+            480,
+            514,
+            480
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            3921
+          ]
+        },
+        {
+          "seq": [
+            443,
+            560
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            7403
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4153,
+        "o_lat": 2003,
+        "d_lon": -4152,
+        "d_lat": 1999
+      },
+      "city": 1,
+      "n_routes": 5,
+      "n_patterns": 5,
+      "lcs_sep_score_max": 0.5,
+      "patterns": [
+        {
+          "seq": [
+            489,
+            360,
+            383,
+            453
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            2623
+          ]
+        },
+        {
+          "seq": [
+            489,
+            360,
+            383,
+            453,
+            352,
+            347
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            2909
+          ]
+        },
+        {
+          "seq": [
+            360,
+            383,
+            453,
+            549,
+            494
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            3491
+          ]
+        },
+        {
+          "seq": [
+            489,
+            360,
+            383,
+            453,
+            549,
+            494
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            4508
+          ]
+        },
+        {
+          "seq": [
+            360,
+            383,
+            453,
+            352
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            6797
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4151,
+        "o_lat": 1998,
+        "d_lon": -4153,
+        "d_lat": 1998
+      },
+      "city": 1,
+      "n_routes": 5,
+      "n_patterns": 5,
+      "lcs_sep_score_max": 1.0,
+      "patterns": [
+        {
+          "seq": [
+            560,
+            558,
+            342,
+            318
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            2728
+          ]
+        },
+        {
+          "seq": [
+            485,
+            560,
+            558,
+            342,
+            318
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            5487
+          ]
+        },
+        {
+          "seq": [
+            480,
+            541,
+            559,
+            479
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            6467
+          ]
+        },
+        {
+          "seq": [
+            371,
+            464,
+            397,
+            482,
+            479,
+            344
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            6532
+          ]
+        },
+        {
+          "seq": [
+            560,
+            558,
+            342
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            6849
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4150,
+        "o_lat": 2003,
+        "d_lon": -4150,
+        "d_lat": 2000
+      },
+      "city": 1,
+      "n_routes": 26,
+      "n_patterns": 4,
+      "lcs_sep_score_max": 0.4,
+      "patterns": [
+        {
+          "seq": [
+            416,
+            323,
+            455
+          ],
+          "count": 18,
+          "rep_route_ids": [
+            2340,
+            2871,
+            2936
+          ]
+        },
+        {
+          "seq": [
+            416,
+            323,
+            455,
+            505
+          ],
+          "count": 6,
+          "rep_route_ids": [
+            3748,
+            4674,
+            4814
+          ]
+        },
+        {
+          "seq": [
+            416,
+            323,
+            455,
+            505,
+            539
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            4790
+          ]
+        },
+        {
+          "seq": [
+            416,
+            323,
+            455,
+            486
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            6238
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4151,
+        "o_lat": 1997,
+        "d_lon": -4150,
+        "d_lat": 1997
+      },
+      "city": 1,
+      "n_routes": 18,
+      "n_patterns": 4,
+      "lcs_sep_score_max": 0.6666666666666667,
+      "patterns": [
+        {
+          "seq": [
+            333,
+            514
+          ],
+          "count": 8,
+          "rep_route_ids": [
+            2928,
+            3508,
+            4035
+          ]
+        },
+        {
+          "seq": [
+            449,
+            333,
+            514
+          ],
+          "count": 5,
+          "rep_route_ids": [
+            2539,
+            5413,
+            5584
+          ]
+        },
+        {
+          "seq": [
+            449,
+            333
+          ],
+          "count": 4,
+          "rep_route_ids": [
+            2869,
+            5937,
+            6545
+          ]
+        },
+        {
+          "seq": [
+            333,
+            487
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            4942
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4151,
+        "o_lat": 1999,
+        "d_lon": -4152,
+        "d_lat": 1994
+      },
+      "city": 1,
+      "n_routes": 17,
+      "n_patterns": 4,
+      "lcs_sep_score_max": 0.2222222222222222,
+      "patterns": [
+        {
+          "seq": [
+            486,
+            485,
+            560,
+            558,
+            449,
+            359,
+            380,
+            403,
+            421
+          ],
+          "count": 6,
+          "rep_route_ids": [
+            2470,
+            3071,
+            4348
+          ]
+        },
+        {
+          "seq": [
+            485,
+            560,
+            558,
+            449,
+            359,
+            380,
+            403,
+            421
+          ],
+          "count": 5,
+          "rep_route_ids": [
+            2319,
+            2924,
+            5070
+          ]
+        },
+        {
+          "seq": [
+            486,
+            485,
+            560,
+            558,
+            449,
+            359,
+            380,
+            403
+          ],
+          "count": 4,
+          "rep_route_ids": [
+            2300,
+            3218,
+            4356
+          ]
+        },
+        {
+          "seq": [
+            485,
+            560,
+            558,
+            449,
+            359,
+            380,
+            403,
+            421,
+            376
+          ],
+          "count": 2,
+          "rep_route_ids": [
+            3680,
+            4018
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4146,
+        "o_lat": 2003,
+        "d_lon": -4146,
+        "d_lat": 2001
+      },
+      "city": 1,
+      "n_routes": 16,
+      "n_patterns": 4,
+      "lcs_sep_score_max": 0.6666666666666667,
+      "patterns": [
+        {
+          "seq": [
+            319
+          ],
+          "count": 8,
+          "rep_route_ids": [
+            3104,
+            5063,
+            5267
+          ]
+        },
+        {
+          "seq": [
+            319,
+            400
+          ],
+          "count": 3,
+          "rep_route_ids": [
+            2440,
+            2558,
+            4624
+          ]
+        },
+        {
+          "seq": [
+            561,
+            319,
+            400
+          ],
+          "count": 3,
+          "rep_route_ids": [
+            3922,
+            3983,
+            4706
+          ]
+        },
+        {
+          "seq": [
+            561,
+            319
+          ],
+          "count": 2,
+          "rep_route_ids": [
+            3954,
+            6200
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4152,
+        "o_lat": 1999,
+        "d_lon": -4152,
+        "d_lat": 2003
+      },
+      "city": 1,
+      "n_routes": 14,
+      "n_patterns": 4,
+      "lcs_sep_score_max": 0.4285714285714286,
+      "patterns": [
+        {
+          "seq": [
+            347,
+            352,
+            537,
+            419,
+            348,
+            439,
+            360
+          ],
+          "count": 9,
+          "rep_route_ids": [
+            2712,
+            2885,
+            2955
+          ]
+        },
+        {
+          "seq": [
+            494,
+            549,
+            419,
+            348,
+            439,
+            360
+          ],
+          "count": 3,
+          "rep_route_ids": [
+            2970,
+            3686,
+            4404
+          ]
+        },
+        {
+          "seq": [
+            537,
+            419,
+            348,
+            439,
+            360
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            2572
+          ]
+        },
+        {
+          "seq": [
+            347,
+            352,
+            549,
+            419,
+            348,
+            439,
+            360
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            4665
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4150,
+        "o_lat": 1995,
+        "d_lon": -4150,
+        "d_lat": 1994
+      },
+      "city": 1,
+      "n_routes": 13,
+      "n_patterns": 4,
+      "lcs_sep_score_max": 0.6666666666666667,
+      "patterns": [
+        {
+          "seq": [
+            471,
+            477,
+            534,
+            415
+          ],
+          "count": 7,
+          "rep_route_ids": [
+            3933,
+            4127,
+            4313
+          ]
+        },
+        {
+          "seq": [
+            534,
+            415
+          ],
+          "count": 2,
+          "rep_route_ids": [
+            3584,
+            6730
+          ]
+        },
+        {
+          "seq": [
+            471,
+            477,
+            534
+          ],
+          "count": 2,
+          "rep_route_ids": [
+            3728,
+            3902
+          ]
+        },
+        {
+          "seq": [
+            477,
+            534
+          ],
+          "count": 2,
+          "rep_route_ids": [
+            4889,
+            5245
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4151,
+        "o_lat": 1999,
+        "d_lon": -4152,
+        "d_lat": 1999
+      },
+      "city": 1,
+      "n_routes": 12,
+      "n_patterns": 4,
+      "lcs_sep_score_max": 0.5,
+      "patterns": [
+        {
+          "seq": [
+            485,
+            443,
+            347
+          ],
+          "count": 5,
+          "rep_route_ids": [
+            3808,
+            4187,
+            4478
+          ]
+        },
+        {
+          "seq": [
+            443,
+            347
+          ],
+          "count": 3,
+          "rep_route_ids": [
+            3284,
+            6167,
+            7117
+          ]
+        },
+        {
+          "seq": [
+            486,
+            485,
+            443,
+            347
+          ],
+          "count": 2,
+          "rep_route_ids": [
+            2386,
+            3806
+          ]
+        },
+        {
+          "seq": [
+            443,
+            347,
+            352
+          ],
+          "count": 2,
+          "rep_route_ids": [
+            3235,
+            5696
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4150,
+        "o_lat": 1998,
+        "d_lon": -4150,
+        "d_lat": 2003
+      },
+      "city": 1,
+      "n_routes": 12,
+      "n_patterns": 4,
+      "lcs_sep_score_max": 0.2857142857142857,
+      "patterns": [
+        {
+          "seq": [
+            331,
+            444,
+            505,
+            539,
+            416
+          ],
+          "count": 6,
+          "rep_route_ids": [
+            2747,
+            2886,
+            3807
+          ]
+        },
+        {
+          "seq": [
+            328,
+            331,
+            444,
+            505,
+            539,
+            416
+          ],
+          "count": 2,
+          "rep_route_ids": [
+            3112,
+            3706
+          ]
+        },
+        {
+          "seq": [
+            514,
+            327,
+            331,
+            444,
+            505,
+            539,
+            416
+          ],
+          "count": 2,
+          "rep_route_ids": [
+            4049,
+            6709
+          ]
+        },
+        {
+          "seq": [
+            399,
+            331,
+            444,
+            505,
+            539,
+            416
+          ],
+          "count": 2,
+          "rep_route_ids": [
+            4725,
+            7198
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4157,
+        "o_lat": 2001,
+        "d_lon": -4157,
+        "d_lat": 2002
+      },
+      "city": 1,
+      "n_routes": 11,
+      "n_patterns": 4,
+      "lcs_sep_score_max": 0.75,
+      "patterns": [
+        {
+          "seq": [
+            325,
+            543
+          ],
+          "count": 7,
+          "rep_route_ids": [
+            2615,
+            3752,
+            4585
+          ]
+        },
+        {
+          "seq": [
+            325,
+            384,
+            409
+          ],
+          "count": 2,
+          "rep_route_ids": [
+            2786,
+            6914
+          ]
+        },
+        {
+          "seq": [
+            325,
+            384,
+            409,
+            459
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            2464
+          ]
+        },
+        {
+          "seq": [
+            325,
+            384
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            3154
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4154,
+        "o_lat": 1995,
+        "d_lon": -4156,
+        "d_lat": 1998
+      },
+      "city": 1,
+      "n_routes": 11,
+      "n_patterns": 4,
+      "lcs_sep_score_max": 0.4285714285714286,
+      "patterns": [
+        {
+          "seq": [
+            523,
+            503,
+            434,
+            361,
+            334,
+            365,
+            345
+          ],
+          "count": 5,
+          "rep_route_ids": [
+            2759,
+            4458,
+            6496
+          ]
+        },
+        {
+          "seq": [
+            523,
+            503,
+            434,
+            361,
+            334,
+            365
+          ],
+          "count": 4,
+          "rep_route_ids": [
+            3822,
+            4739,
+            5216
+          ]
+        },
+        {
+          "seq": [
+            523,
+            503,
+            334,
+            365,
+            345
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            4218
+          ]
+        },
+        {
+          "seq": [
+            523,
+            503,
+            334,
+            365
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            4382
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4146,
+        "o_lat": 2003,
+        "d_lon": -4145,
+        "d_lat": 2000
+      },
+      "city": 1,
+      "n_routes": 10,
+      "n_patterns": 4,
+      "lcs_sep_score_max": 0.5,
+      "patterns": [
+        {
+          "seq": [
+            561,
+            319,
+            400
+          ],
+          "count": 4,
+          "rep_route_ids": [
+            4195,
+            4210,
+            6013
+          ]
+        },
+        {
+          "seq": [
+            319,
+            400,
+            545
+          ],
+          "count": 3,
+          "rep_route_ids": [
+            4314,
+            4611,
+            4900
+          ]
+        },
+        {
+          "seq": [
+            319,
+            400
+          ],
+          "count": 2,
+          "rep_route_ids": [
+            3036,
+            3053
+          ]
+        },
+        {
+          "seq": [
+            319,
+            400,
+            545,
+            336
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            6357
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4152,
+        "o_lat": 2117,
+        "d_lon": -4156,
+        "d_lat": 2118
+      },
+      "city": 0,
+      "n_routes": 9,
+      "n_patterns": 4,
+      "lcs_sep_score_max": 0.5555555555555556,
+      "patterns": [
+        {
+          "seq": [
+            257,
+            186,
+            289,
+            219,
+            108,
+            290,
+            38,
+            188
+          ],
+          "count": 5,
+          "rep_route_ids": [
+            1302,
+            1508,
+            1951
+          ]
+        },
+        {
+          "seq": [
+            186,
+            289,
+            219,
+            108,
+            290,
+            38,
+            188
+          ],
+          "count": 2,
+          "rep_route_ids": [
+            83,
+            1754
+          ]
+        },
+        {
+          "seq": [
+            186,
+            289,
+            219,
+            189,
+            219,
+            108,
+            290,
+            38,
+            188
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            1993
+          ]
+        },
+        {
+          "seq": [
+            186,
+            289,
+            219,
+            117,
+            221,
+            122,
+            161,
+            94,
+            188
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            2163
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4157,
+        "o_lat": 2002,
+        "d_lon": -4158,
+        "d_lat": 2002
+      },
+      "city": 1,
+      "n_routes": 9,
+      "n_patterns": 4,
+      "lcs_sep_score_max": 1.0,
+      "patterns": [
+        {
+          "seq": [
+            459
+          ],
+          "count": 5,
+          "rep_route_ids": [
+            2752,
+            4483,
+            5010
+          ]
+        },
+        {
+          "seq": [
+            325,
+            384,
+            409,
+            459
+          ],
+          "count": 2,
+          "rep_route_ids": [
+            3662,
+            7104
+          ]
+        },
+        {
+          "seq": [
+            384,
+            409,
+            459
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            2995
+          ]
+        },
+        {
+          "seq": [
+            543,
+            384
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            5175
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4148,
+        "o_lat": 1999,
+        "d_lon": -4146,
+        "d_lat": 2003
+      },
+      "city": 1,
+      "n_routes": 9,
+      "n_patterns": 4,
+      "lcs_sep_score_max": 0.33333333333333337,
+      "patterns": [
+        {
+          "seq": [
+            460,
+            467,
+            544,
+            400,
+            337,
+            317
+          ],
+          "count": 4,
+          "rep_route_ids": [
+            5631,
+            5748,
+            6602
+          ]
+        },
+        {
+          "seq": [
+            467,
+            544,
+            400,
+            337,
+            317
+          ],
+          "count": 2,
+          "rep_route_ids": [
+            3198,
+            5093
+          ]
+        },
+        {
+          "seq": [
+            460,
+            467,
+            544,
+            400,
+            337,
+            531
+          ],
+          "count": 2,
+          "rep_route_ids": [
+            6216,
+            6969
+          ]
+        },
+        {
+          "seq": [
+            467,
+            544,
+            400,
+            337,
+            531
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            6762
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4153,
+        "o_lat": 1999,
+        "d_lon": -4152,
+        "d_lat": 1999
+      },
+      "city": 1,
+      "n_routes": 8,
+      "n_patterns": 4,
+      "lcs_sep_score_max": 1.0,
+      "patterns": [
+        {
+          "seq": [
+            392,
+            352
+          ],
+          "count": 5,
+          "rep_route_ids": [
+            3059,
+            3524,
+            3765
+          ]
+        },
+        {
+          "seq": [
+            392,
+            352,
+            347
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            3308
+          ]
+        },
+        {
+          "seq": [
+            482,
+            499
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            3612
+          ]
+        },
+        {
+          "seq": [
+            414
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            4791
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4150,
+        "o_lat": 1998,
+        "d_lon": -4151,
+        "d_lat": 1999
+      },
+      "city": 1,
+      "n_routes": 7,
+      "n_patterns": 4,
+      "lcs_sep_score_max": 0.6666666666666667,
+      "patterns": [
+        {
+          "seq": [
+            432,
+            485,
+            486
+          ],
+          "count": 4,
+          "rep_route_ids": [
+            3583,
+            6034,
+            7144
+          ]
+        },
+        {
+          "seq": [
+            514,
+            351,
+            485
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            6539
+          ]
+        },
+        {
+          "seq": [
+            485
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            6726
+          ]
+        },
+        {
+          "seq": [
+            485,
+            486
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            7481
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4163,
+        "o_lat": 2115,
+        "d_lon": -4162,
+        "d_lat": 2115
+      },
+      "city": 0,
+      "n_routes": 6,
+      "n_patterns": 4,
+      "lcs_sep_score_max": 0.75,
+      "patterns": [
+        {
+          "seq": [
+            276,
+            176
+          ],
+          "count": 2,
+          "rep_route_ids": [
+            983,
+            2008
+          ]
+        },
+        {
+          "seq": [
+            232,
+            276,
+            176
+          ],
+          "count": 2,
+          "rep_route_ids": [
+            1304,
+            1946
+          ]
+        },
+        {
+          "seq": [
+            232,
+            276,
+            176,
+            292,
+            205
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            664
+          ]
+        },
+        {
+          "seq": [
+            232,
+            276,
+            232,
+            146
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            1219
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4151,
+        "o_lat": 1999,
+        "d_lon": -4150,
+        "d_lat": 2000
+      },
+      "city": 1,
+      "n_routes": 6,
+      "n_patterns": 4,
+      "lcs_sep_score_max": 0.6,
+      "patterns": [
+        {
+          "seq": [
+            485,
+            486,
+            505,
+            455,
+            412
+          ],
+          "count": 3,
+          "rep_route_ids": [
+            2400,
+            4114,
+            6856
+          ]
+        },
+        {
+          "seq": [
+            486,
+            505,
+            455,
+            412
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            4053
+          ]
+        },
+        {
+          "seq": [
+            485,
+            486,
+            505
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            4451
+          ]
+        },
+        {
+          "seq": [
+            486,
+            505
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            5310
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4146,
+        "o_lat": 1999,
+        "d_lon": -4146,
+        "d_lat": 2003
+      },
+      "city": 1,
+      "n_routes": 6,
+      "n_patterns": 4,
+      "lcs_sep_score_max": 0.5,
+      "patterns": [
+        {
+          "seq": [
+            320,
+            544,
+            400,
+            337,
+            531
+          ],
+          "count": 2,
+          "rep_route_ids": [
+            2512,
+            4385
+          ]
+        },
+        {
+          "seq": [
+            420,
+            320,
+            544,
+            400,
+            337,
+            531
+          ],
+          "count": 2,
+          "rep_route_ids": [
+            4102,
+            4361
+          ]
+        },
+        {
+          "seq": [
+            544,
+            400,
+            337,
+            531
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            2993
+          ]
+        },
+        {
+          "seq": [
+            544,
+            400,
+            337,
+            317
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            6837
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4156,
+        "o_lat": 1999,
+        "d_lon": -4157,
+        "d_lat": 2003
+      },
+      "city": 1,
+      "n_routes": 6,
+      "n_patterns": 4,
+      "lcs_sep_score_max": 0.6666666666666667,
+      "patterns": [
+        {
+          "seq": [
+            345,
+            367,
+            543,
+            325,
+            384,
+            409,
+            459
+          ],
+          "count": 2,
+          "rep_route_ids": [
+            3452,
+            4532
+          ]
+        },
+        {
+          "seq": [
+            367,
+            543,
+            325,
+            384,
+            409,
+            459
+          ],
+          "count": 2,
+          "rep_route_ids": [
+            4576,
+            7462
+          ]
+        },
+        {
+          "seq": [
+            345,
+            367,
+            543,
+            557,
+            368,
+            459
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            2934
+          ]
+        },
+        {
+          "seq": [
+            452,
+            356,
+            345,
+            367,
+            543
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            4748
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4150,
+        "o_lat": 1999,
+        "d_lon": -4150,
+        "d_lat": 2000
+      },
+      "city": 1,
+      "n_routes": 6,
+      "n_patterns": 4,
+      "lcs_sep_score_max": 0.8,
+      "patterns": [
+        {
+          "seq": [
+            485,
+            486,
+            505,
+            455,
+            412
+          ],
+          "count": 2,
+          "rep_route_ids": [
+            3264,
+            7008
+          ]
+        },
+        {
+          "seq": [
+            485,
+            486,
+            505
+          ],
+          "count": 2,
+          "rep_route_ids": [
+            3549,
+            6449
+          ]
+        },
+        {
+          "seq": [
+            486
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            3722
+          ]
+        },
+        {
+          "seq": [
+            485,
+            486
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            4789
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4158,
+        "o_lat": 2125,
+        "d_lon": -4158,
+        "d_lat": 2124
+      },
+      "city": 0,
+      "n_routes": 5,
+      "n_patterns": 4,
+      "lcs_sep_score_max": 1.0,
+      "patterns": [
+        {
+          "seq": [
+            57,
+            64,
+            88
+          ],
+          "count": 2,
+          "rep_route_ids": [
+            2032,
+            2072
+          ]
+        },
+        {
+          "seq": [
+            57,
+            64,
+            88,
+            116,
+            50
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            609
+          ]
+        },
+        {
+          "seq": [
+            57,
+            64,
+            88,
+            157
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            691
+          ]
+        },
+        {
+          "seq": [
+            77
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            1337
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4158,
+        "o_lat": 2124,
+        "d_lon": -4159,
+        "d_lat": 2125
+      },
+      "city": 0,
+      "n_routes": 5,
+      "n_patterns": 4,
+      "lcs_sep_score_max": 0.6666666666666667,
+      "patterns": [
+        {
+          "seq": [
+            10,
+            101,
+            77,
+            45
+          ],
+          "count": 2,
+          "rep_route_ids": [
+            1134,
+            1533
+          ]
+        },
+        {
+          "seq": [
+            77,
+            45
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            1596
+          ]
+        },
+        {
+          "seq": [
+            114,
+            10,
+            101,
+            77,
+            45
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            1606
+          ]
+        },
+        {
+          "seq": [
+            114,
+            63,
+            10,
+            101,
+            77,
+            45
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            1790
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4152,
+        "o_lat": 2003,
+        "d_lon": -4153,
+        "d_lat": 2001
+      },
+      "city": 1,
+      "n_routes": 5,
+      "n_patterns": 4,
+      "lcs_sep_score_max": 0.75,
+      "patterns": [
+        {
+          "seq": [
+            360,
+            383,
+            419
+          ],
+          "count": 2,
+          "rep_route_ids": [
+            2898,
+            7006
+          ]
+        },
+        {
+          "seq": [
+            360,
+            383,
+            419,
+            508
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            2700
+          ]
+        },
+        {
+          "seq": [
+            360,
+            489,
+            442,
+            411
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            3929
+          ]
+        },
+        {
+          "seq": [
+            360,
+            383,
+            419,
+            411
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            6402
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4146,
+        "o_lat": 2002,
+        "d_lon": -4150,
+        "d_lat": 1998
+      },
+      "city": 1,
+      "n_routes": 5,
+      "n_patterns": 4,
+      "lcs_sep_score_max": 0.4444444444444444,
+      "patterns": [
+        {
+          "seq": [
+            525,
+            369,
+            319,
+            400,
+            429,
+            363,
+            330
+          ],
+          "count": 2,
+          "rep_route_ids": [
+            4956,
+            5279
+          ]
+        },
+        {
+          "seq": [
+            319,
+            400,
+            429,
+            363,
+            330,
+            373,
+            480,
+            514
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            2810
+          ]
+        },
+        {
+          "seq": [
+            319,
+            400,
+            429,
+            363,
+            330
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            5243
+          ]
+        },
+        {
+          "seq": [
+            531,
+            561,
+            319,
+            400,
+            429,
+            363,
+            330,
+            430,
+            396
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            5277
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4154,
+        "o_lat": 1995,
+        "d_lon": -4152,
+        "d_lat": 1997
+      },
+      "city": 1,
+      "n_routes": 5,
+      "n_patterns": 4,
+      "lcs_sep_score_max": 0.5,
+      "patterns": [
+        {
+          "seq": [
+            523,
+            503,
+            339,
+            338
+          ],
+          "count": 2,
+          "rep_route_ids": [
+            3724,
+            4317
+          ]
+        },
+        {
+          "seq": [
+            523,
+            503,
+            339
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            4420
+          ]
+        },
+        {
+          "seq": [
+            523,
+            503
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            4810
+          ]
+        },
+        {
+          "seq": [
+            523,
+            503,
+            339,
+            341
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            6232
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4145,
+        "o_lat": 1994,
+        "d_lon": -4143,
+        "d_lat": 1996
+      },
+      "city": 1,
+      "n_routes": 74,
+      "n_patterns": 3,
+      "lcs_sep_score_max": 0.4,
+      "patterns": [
+        {
+          "seq": [
+            527,
+            378,
+            354
+          ],
+          "count": 47,
+          "rep_route_ids": [
+            2588,
+            2607,
+            2737
+          ]
+        },
+        {
+          "seq": [
+            340,
+            527,
+            378,
+            354
+          ],
+          "count": 15,
+          "rep_route_ids": [
+            2935,
+            3591,
+            3956
+          ]
+        },
+        {
+          "seq": [
+            522,
+            340,
+            527,
+            378,
+            354
+          ],
+          "count": 12,
+          "rep_route_ids": [
+            2967,
+            4022,
+            4120
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4143,
+        "o_lat": 1999,
+        "d_lon": -4146,
+        "d_lat": 2003
+      },
+      "city": 1,
+      "n_routes": 44,
+      "n_patterns": 3,
+      "lcs_sep_score_max": 0.4,
+      "patterns": [
+        {
+          "seq": [
+            466,
+            429,
+            337,
+            531
+          ],
+          "count": 22,
+          "rep_route_ids": [
+            2439,
+            2818,
+            2891
+          ]
+        },
+        {
+          "seq": [
+            466,
+            429,
+            337,
+            317
+          ],
+          "count": 17,
+          "rep_route_ids": [
+            2392,
+            2490,
+            3124
+          ]
+        },
+        {
+          "seq": [
+            366,
+            466,
+            429,
+            337,
+            531
+          ],
+          "count": 5,
+          "rep_route_ids": [
+            2684,
+            2973,
+            6254
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4144,
+        "o_lat": 2000,
+        "d_lon": -4146,
+        "d_lat": 2003
+      },
+      "city": 1,
+      "n_routes": 30,
+      "n_patterns": 3,
+      "lcs_sep_score_max": 0.4,
+      "patterns": [
+        {
+          "seq": [
+            466,
+            429,
+            337,
+            531
+          ],
+          "count": 19,
+          "rep_route_ids": [
+            2677,
+            3099,
+            3381
+          ]
+        },
+        {
+          "seq": [
+            466,
+            429,
+            337,
+            317
+          ],
+          "count": 10,
+          "rep_route_ids": [
+            3017,
+            3585,
+            3760
+          ]
+        },
+        {
+          "seq": [
+            366,
+            466,
+            429,
+            337,
+            317
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            7338
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4146,
+        "o_lat": 2003,
+        "d_lon": -4144,
+        "d_lat": 2000
+      },
+      "city": 1,
+      "n_routes": 23,
+      "n_patterns": 3,
+      "lcs_sep_score_max": 0.33333333333333337,
+      "patterns": [
+        {
+          "seq": [
+            561,
+            319,
+            400,
+            466
+          ],
+          "count": 20,
+          "rep_route_ids": [
+            2790,
+            2791,
+            2834
+          ]
+        },
+        {
+          "seq": [
+            561,
+            319,
+            400
+          ],
+          "count": 2,
+          "rep_route_ids": [
+            2312,
+            5013
+          ]
+        },
+        {
+          "seq": [
+            319,
+            400,
+            466
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            5579
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4151,
+        "o_lat": 1997,
+        "d_lon": -4151,
+        "d_lat": 1997
+      },
+      "city": 1,
+      "n_routes": 23,
+      "n_patterns": 3,
+      "lcs_sep_score_max": 0.6666666666666667,
+      "patterns": [
+        {
+          "seq": [
+            449,
+            333
+          ],
+          "count": 15,
+          "rep_route_ids": [
+            2314,
+            3877,
+            4117
+          ]
+        },
+        {
+          "seq": [
+            333,
+            449
+          ],
+          "count": 6,
+          "rep_route_ids": [
+            4168,
+            4201,
+            4850
+          ]
+        },
+        {
+          "seq": [
+            449,
+            333,
+            487
+          ],
+          "count": 2,
+          "rep_route_ids": [
+            2626,
+            5358
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4157,
+        "o_lat": 1998,
+        "d_lon": -4152,
+        "d_lat": 1998
+      },
+      "city": 1,
+      "n_routes": 11,
+      "n_patterns": 3,
+      "lcs_sep_score_max": 0.33333333333333337,
+      "patterns": [
+        {
+          "seq": [
+            433,
+            345,
+            440,
+            344,
+            318,
+            559
+          ],
+          "count": 9,
+          "rep_route_ids": [
+            2405,
+            2685,
+            3292
+          ]
+        },
+        {
+          "seq": [
+            433,
+            345,
+            440,
+            344,
+            318,
+            559,
+            558
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            5849
+          ]
+        },
+        {
+          "seq": [
+            433,
+            345,
+            440,
+            344,
+            318,
+            559,
+            371,
+            464,
+            397
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            6055
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4157,
+        "o_lat": 2001,
+        "d_lon": -4157,
+        "d_lat": 2003
+      },
+      "city": 1,
+      "n_routes": 11,
+      "n_patterns": 3,
+      "lcs_sep_score_max": 0.75,
+      "patterns": [
+        {
+          "seq": [
+            325,
+            543
+          ],
+          "count": 9,
+          "rep_route_ids": [
+            2587,
+            2949,
+            3035
+          ]
+        },
+        {
+          "seq": [
+            325,
+            384,
+            409,
+            459
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            4915
+          ]
+        },
+        {
+          "seq": [
+            325,
+            423,
+            367,
+            543
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            7113
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4152,
+        "o_lat": 1999,
+        "d_lon": -4153,
+        "d_lat": 1999
+      },
+      "city": 1,
+      "n_routes": 11,
+      "n_patterns": 3,
+      "lcs_sep_score_max": 0.6666666666666667,
+      "patterns": [
+        {
+          "seq": [
+            352,
+            392
+          ],
+          "count": 7,
+          "rep_route_ids": [
+            4289,
+            4927,
+            5525
+          ]
+        },
+        {
+          "seq": [
+            347,
+            352,
+            392
+          ],
+          "count": 3,
+          "rep_route_ids": [
+            3477,
+            5750,
+            6928
+          ]
+        },
+        {
+          "seq": [
+            347,
+            499,
+            392
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            4601
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4148,
+        "o_lat": 2120,
+        "d_lon": -4153,
+        "d_lat": 2118
+      },
+      "city": 0,
+      "n_routes": 10,
+      "n_patterns": 3,
+      "lcs_sep_score_max": 0.4,
+      "patterns": [
+        {
+          "seq": [
+            200,
+            148,
+            42
+          ],
+          "count": 7,
+          "rep_route_ids": [
+            73,
+            282,
+            1011
+          ]
+        },
+        {
+          "seq": [
+            200,
+            148,
+            42,
+            24,
+            300
+          ],
+          "count": 2,
+          "rep_route_ids": [
+            890,
+            1064
+          ]
+        },
+        {
+          "seq": [
+            200,
+            148,
+            42,
+            24
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            1284
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4150,
+        "o_lat": 2000,
+        "d_lon": -4150,
+        "d_lat": 2003
+      },
+      "city": 1,
+      "n_routes": 10,
+      "n_patterns": 3,
+      "lcs_sep_score_max": 0.5,
+      "patterns": [
+        {
+          "seq": [
+            505,
+            539,
+            416
+          ],
+          "count": 7,
+          "rep_route_ids": [
+            4028,
+            4121,
+            4901
+          ]
+        },
+        {
+          "seq": [
+            444,
+            505,
+            539,
+            416
+          ],
+          "count": 2,
+          "rep_route_ids": [
+            6583,
+            6919
+          ]
+        },
+        {
+          "seq": [
+            539,
+            416
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            3538
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4153,
+        "o_lat": 2118,
+        "d_lon": -4148,
+        "d_lat": 2120
+      },
+      "city": 0,
+      "n_routes": 8,
+      "n_patterns": 3,
+      "lcs_sep_score_max": 0.33333333333333337,
+      "patterns": [
+        {
+          "seq": [
+            191,
+            253,
+            204,
+            53,
+            200
+          ],
+          "count": 5,
+          "rep_route_ids": [
+            43,
+            533,
+            938
+          ]
+        },
+        {
+          "seq": [
+            253,
+            204,
+            53,
+            200
+          ],
+          "count": 2,
+          "rep_route_ids": [
+            92,
+            2003
+          ]
+        },
+        {
+          "seq": [
+            226,
+            191,
+            253,
+            204,
+            53,
+            200
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            1861
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4154,
+        "o_lat": 2118,
+        "d_lon": -4148,
+        "d_lat": 2120
+      },
+      "city": 0,
+      "n_routes": 8,
+      "n_patterns": 3,
+      "lcs_sep_score_max": 0.2857142857142857,
+      "patterns": [
+        {
+          "seq": [
+            226,
+            191,
+            253,
+            204,
+            53,
+            200
+          ],
+          "count": 4,
+          "rep_route_ids": [
+            330,
+            1103,
+            1694
+          ]
+        },
+        {
+          "seq": [
+            164,
+            226,
+            191,
+            253,
+            204,
+            53,
+            200
+          ],
+          "count": 3,
+          "rep_route_ids": [
+            350,
+            913,
+            1639
+          ]
+        },
+        {
+          "seq": [
+            191,
+            253,
+            204,
+            53,
+            200
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            2278
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4145,
+        "o_lat": 1994,
+        "d_lon": -4143,
+        "d_lat": 1993
+      },
+      "city": 1,
+      "n_routes": 8,
+      "n_patterns": 3,
+      "lcs_sep_score_max": 0.33333333333333337,
+      "patterns": [
+        {
+          "seq": [
+            522,
+            340,
+            522
+          ],
+          "count": 4,
+          "rep_route_ids": [
+            4055,
+            5072,
+            6070
+          ]
+        },
+        {
+          "seq": [
+            340,
+            522
+          ],
+          "count": 3,
+          "rep_route_ids": [
+            4642,
+            5193,
+            6138
+          ]
+        },
+        {
+          "seq": [
+            374,
+            340,
+            522
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            3337
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4160,
+        "o_lat": 2114,
+        "d_lon": -4163,
+        "d_lat": 2113
+      },
+      "city": 0,
+      "n_routes": 7,
+      "n_patterns": 3,
+      "lcs_sep_score_max": 0.25,
+      "patterns": [
+        {
+          "seq": [
+            198,
+            129,
+            34
+          ],
+          "count": 5,
+          "rep_route_ids": [
+            14,
+            118,
+            378
+          ]
+        },
+        {
+          "seq": [
+            242,
+            198,
+            129,
+            34
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            141
+          ]
+        },
+        {
+          "seq": [
+            247,
+            198,
+            129,
+            34
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            678
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4150,
+        "o_lat": 1999,
+        "d_lon": -4150,
+        "d_lat": 2003
+      },
+      "city": 1,
+      "n_routes": 7,
+      "n_patterns": 3,
+      "lcs_sep_score_max": 0.4285714285714286,
+      "patterns": [
+        {
+          "seq": [
+            444,
+            505,
+            539,
+            416
+          ],
+          "count": 5,
+          "rep_route_ids": [
+            2807,
+            3338,
+            5071
+          ]
+        },
+        {
+          "seq": [
+            485,
+            486,
+            556,
+            444,
+            505,
+            539,
+            416
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            5224
+          ]
+        },
+        {
+          "seq": [
+            444,
+            505,
+            539,
+            416,
+            424
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            7005
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4146,
+        "o_lat": 2003,
+        "d_lon": -4147,
+        "d_lat": 2002
+      },
+      "city": 1,
+      "n_routes": 7,
+      "n_patterns": 3,
+      "lcs_sep_score_max": 1.0,
+      "patterns": [
+        {
+          "seq": [
+            319,
+            369,
+            525
+          ],
+          "count": 5,
+          "rep_route_ids": [
+            2914,
+            5677,
+            6785
+          ]
+        },
+        {
+          "seq": [
+            531,
+            481
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            4073
+          ]
+        },
+        {
+          "seq": [
+            561,
+            531,
+            481
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            6826
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4157,
+        "o_lat": 2001,
+        "d_lon": -4154,
+        "d_lat": 1995
+      },
+      "city": 1,
+      "n_routes": 7,
+      "n_patterns": 3,
+      "lcs_sep_score_max": 0.16666666666666663,
+      "patterns": [
+        {
+          "seq": [
+            423,
+            365,
+            364,
+            362,
+            326
+          ],
+          "count": 3,
+          "rep_route_ids": [
+            3080,
+            4204,
+            4980
+          ]
+        },
+        {
+          "seq": [
+            423,
+            365,
+            364,
+            362,
+            326,
+            434
+          ],
+          "count": 3,
+          "rep_route_ids": [
+            4807,
+            5825,
+            6395
+          ]
+        },
+        {
+          "seq": [
+            543,
+            423,
+            365,
+            364,
+            362,
+            326
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            5544
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4152,
+        "o_lat": 2000,
+        "d_lon": -4151,
+        "d_lat": 2000
+      },
+      "city": 1,
+      "n_routes": 7,
+      "n_patterns": 3,
+      "lcs_sep_score_max": 0.75,
+      "patterns": [
+        {
+          "seq": [
+            549,
+            505
+          ],
+          "count": 5,
+          "rep_route_ids": [
+            3562,
+            3888,
+            4088
+          ]
+        },
+        {
+          "seq": [
+            537,
+            419,
+            549,
+            505
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            3411
+          ]
+        },
+        {
+          "seq": [
+            517,
+            505
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            5005
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4143,
+        "o_lat": 1999,
+        "d_lon": -4148,
+        "d_lat": 1999
+      },
+      "city": 1,
+      "n_routes": 7,
+      "n_patterns": 3,
+      "lcs_sep_score_max": 0.19999999999999996,
+      "patterns": [
+        {
+          "seq": [
+            466,
+            429,
+            363,
+            542
+          ],
+          "count": 4,
+          "rep_route_ids": [
+            3932,
+            4979,
+            5289
+          ]
+        },
+        {
+          "seq": [
+            466,
+            429,
+            363,
+            330,
+            542
+          ],
+          "count": 2,
+          "rep_route_ids": [
+            5614,
+            7243
+          ]
+        },
+        {
+          "seq": [
+            366,
+            466,
+            429,
+            363,
+            542
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            4422
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4161,
+        "o_lat": 2114,
+        "d_lon": -4156,
+        "d_lat": 2117
+      },
+      "city": 0,
+      "n_routes": 6,
+      "n_patterns": 3,
+      "lcs_sep_score_max": 0.19999999999999996,
+      "patterns": [
+        {
+          "seq": [
+            160,
+            198,
+            247,
+            242,
+            151,
+            145,
+            76,
+            170,
+            161,
+            94
+          ],
+          "count": 4,
+          "rep_route_ids": [
+            631,
+            754,
+            1262
+          ]
+        },
+        {
+          "seq": [
+            160,
+            198,
+            247,
+            242,
+            151,
+            145,
+            76,
+            170,
+            161
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            469
+          ]
+        },
+        {
+          "seq": [
+            160,
+            198,
+            247,
+            242,
+            151,
+            145,
+            76,
+            170
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            2181
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4155,
+        "o_lat": 2119,
+        "d_lon": -4152,
+        "d_lat": 2117
+      },
+      "city": 0,
+      "n_routes": 6,
+      "n_patterns": 3,
+      "lcs_sep_score_max": 0.33333333333333337,
+      "patterns": [
+        {
+          "seq": [
+            188,
+            164,
+            142,
+            219,
+            16,
+            257,
+            186,
+            257
+          ],
+          "count": 3,
+          "rep_route_ids": [
+            530,
+            1851,
+            2135
+          ]
+        },
+        {
+          "seq": [
+            188,
+            164,
+            142,
+            219,
+            16,
+            257
+          ],
+          "count": 2,
+          "rep_route_ids": [
+            1818,
+            2226
+          ]
+        },
+        {
+          "seq": [
+            188,
+            164,
+            142,
+            219,
+            16,
+            257,
+            186,
+            257,
+            186
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            1254
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4156,
+        "o_lat": 2123,
+        "d_lon": -4156,
+        "d_lat": 2123
+      },
+      "city": 0,
+      "n_routes": 6,
+      "n_patterns": 3,
+      "lcs_sep_score_max": 0.75,
+      "patterns": [
+        {
+          "seq": [
+            46
+          ],
+          "count": 4,
+          "rep_route_ids": [
+            622,
+            1623,
+            1857
+          ]
+        },
+        {
+          "seq": [
+            46,
+            25
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            704
+          ]
+        },
+        {
+          "seq": [
+            46,
+            9,
+            25,
+            46
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            1480
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4156,
+        "o_lat": 2118,
+        "d_lon": -4152,
+        "d_lat": 2117
+      },
+      "city": 0,
+      "n_routes": 6,
+      "n_patterns": 3,
+      "lcs_sep_score_max": 0.25,
+      "patterns": [
+        {
+          "seq": [
+            188,
+            164,
+            142,
+            219,
+            16,
+            257
+          ],
+          "count": 4,
+          "rep_route_ids": [
+            834,
+            1504,
+            1717
+          ]
+        },
+        {
+          "seq": [
+            188,
+            164,
+            142,
+            219,
+            16,
+            257,
+            186
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            1854
+          ]
+        },
+        {
+          "seq": [
+            188,
+            164,
+            142,
+            219,
+            16,
+            257,
+            186,
+            257
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            2134
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4143,
+        "o_lat": 2000,
+        "d_lon": -4146,
+        "d_lat": 2003
+      },
+      "city": 1,
+      "n_routes": 6,
+      "n_patterns": 3,
+      "lcs_sep_score_max": 0.5714285714285714,
+      "patterns": [
+        {
+          "seq": [
+            466,
+            429,
+            337,
+            531
+          ],
+          "count": 4,
+          "rep_route_ids": [
+            3076,
+            3604,
+            3889
+          ]
+        },
+        {
+          "seq": [
+            466,
+            429,
+            337,
+            317
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            2332
+          ]
+        },
+        {
+          "seq": [
+            448,
+            450,
+            366,
+            466,
+            429,
+            337,
+            531
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            6178
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4152,
+        "o_lat": 2002,
+        "d_lon": -4152,
+        "d_lat": 2000
+      },
+      "city": 1,
+      "n_routes": 6,
+      "n_patterns": 3,
+      "lcs_sep_score_max": 0.25,
+      "patterns": [
+        {
+          "seq": [
+            383,
+            453,
+            549
+          ],
+          "count": 4,
+          "rep_route_ids": [
+            3340,
+            4977,
+            6745
+          ]
+        },
+        {
+          "seq": [
+            360,
+            383,
+            453,
+            549
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            2335
+          ]
+        },
+        {
+          "seq": [
+            383,
+            453,
+            549,
+            494
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            6742
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4157,
+        "o_lat": 2003,
+        "d_lon": -4157,
+        "d_lat": 2001
+      },
+      "city": 1,
+      "n_routes": 6,
+      "n_patterns": 3,
+      "lcs_sep_score_max": 0.75,
+      "patterns": [
+        {
+          "seq": [
+            459,
+            409,
+            384,
+            325
+          ],
+          "count": 4,
+          "rep_route_ids": [
+            3404,
+            3900,
+            5165
+          ]
+        },
+        {
+          "seq": [
+            459,
+            368,
+            557,
+            543
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            2462
+          ]
+        },
+        {
+          "seq": [
+            543,
+            325
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            4590
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4156,
+        "o_lat": 1999,
+        "d_lon": -4155,
+        "d_lat": 1998
+      },
+      "city": 1,
+      "n_routes": 6,
+      "n_patterns": 3,
+      "lcs_sep_score_max": 0.7142857142857143,
+      "patterns": [
+        {
+          "seq": [
+            452,
+            440
+          ],
+          "count": 4,
+          "rep_route_ids": [
+            3131,
+            4118,
+            5507
+          ]
+        },
+        {
+          "seq": [
+            457,
+            452,
+            440
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            3644
+          ]
+        },
+        {
+          "seq": [
+            452,
+            440,
+            484,
+            394,
+            463,
+            484,
+            440
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            5754
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4150,
+        "o_lat": 2003,
+        "d_lon": -4150,
+        "d_lat": 1999
+      },
+      "city": 1,
+      "n_routes": 6,
+      "n_patterns": 3,
+      "lcs_sep_score_max": 0.33333333333333337,
+      "patterns": [
+        {
+          "seq": [
+            416,
+            323,
+            455,
+            556
+          ],
+          "count": 4,
+          "rep_route_ids": [
+            4419,
+            5648,
+            5690
+          ]
+        },
+        {
+          "seq": [
+            416,
+            323,
+            455,
+            556,
+            373,
+            485
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            5599
+          ]
+        },
+        {
+          "seq": [
+            424,
+            416,
+            323,
+            455,
+            556
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            6519
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4156,
+        "o_lat": 2121,
+        "d_lon": -4160,
+        "d_lat": 2121
+      },
+      "city": 0,
+      "n_routes": 5,
+      "n_patterns": 3,
+      "lcs_sep_score_max": 0.18181818181818177,
+      "patterns": [
+        {
+          "seq": [
+            260,
+            84,
+            307,
+            268,
+            126,
+            86,
+            96,
+            109,
+            30,
+            304
+          ],
+          "count": 2,
+          "rep_route_ids": [
+            25,
+            1178
+          ]
+        },
+        {
+          "seq": [
+            260,
+            84,
+            307,
+            268,
+            126,
+            86,
+            96,
+            109,
+            30,
+            304,
+            175
+          ],
+          "count": 2,
+          "rep_route_ids": [
+            720,
+            2166
+          ]
+        },
+        {
+          "seq": [
+            260,
+            84,
+            307,
+            268,
+            126,
+            86,
+            96,
+            109,
+            30
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            1461
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4159,
+        "o_lat": 2115,
+        "d_lon": -4163,
+        "d_lat": 2113
+      },
+      "city": 0,
+      "n_routes": 5,
+      "n_patterns": 3,
+      "lcs_sep_score_max": 0.8333333333333334,
+      "patterns": [
+        {
+          "seq": [
+            209,
+            242,
+            198,
+            129,
+            34
+          ],
+          "count": 3,
+          "rep_route_ids": [
+            34,
+            531,
+            1144
+          ]
+        },
+        {
+          "seq": [
+            283,
+            271,
+            115,
+            34
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            209
+          ]
+        },
+        {
+          "seq": [
+            145,
+            209,
+            242,
+            198,
+            129,
+            34
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            1248
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4160,
+        "o_lat": 2115,
+        "d_lon": -4163,
+        "d_lat": 2113
+      },
+      "city": 0,
+      "n_routes": 5,
+      "n_patterns": 3,
+      "lcs_sep_score_max": 0.8,
+      "patterns": [
+        {
+          "seq": [
+            209,
+            242,
+            198,
+            129,
+            34
+          ],
+          "count": 2,
+          "rep_route_ids": [
+            432,
+            2110
+          ]
+        },
+        {
+          "seq": [
+            155,
+            271,
+            115,
+            34
+          ],
+          "count": 2,
+          "rep_route_ids": [
+            1255,
+            1446
+          ]
+        },
+        {
+          "seq": [
+            271,
+            115,
+            34
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            1595
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4154,
+        "o_lat": 2116,
+        "d_lon": -4156,
+        "d_lat": 2123
+      },
+      "city": 0,
+      "n_routes": 5,
+      "n_patterns": 3,
+      "lcs_sep_score_max": 0.09090909090909094,
+      "patterns": [
+        {
+          "seq": [
+            197,
+            219,
+            108,
+            142,
+            226,
+            300,
+            259,
+            130,
+            264,
+            104,
+            46
+          ],
+          "count": 3,
+          "rep_route_ids": [
+            464,
+            780,
+            2047
+          ]
+        },
+        {
+          "seq": [
+            197,
+            219,
+            108,
+            226,
+            300,
+            259,
+            130,
+            264,
+            104,
+            46
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            897
+          ]
+        },
+        {
+          "seq": [
+            197,
+            219,
+            108,
+            226,
+            300,
+            259,
+            130,
+            264,
+            104,
+            46,
+            15
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            1949
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4158,
+        "o_lat": 2124,
+        "d_lon": -4157,
+        "d_lat": 2125
+      },
+      "city": 0,
+      "n_routes": 5,
+      "n_patterns": 3,
+      "lcs_sep_score_max": 0.4,
+      "patterns": [
+        {
+          "seq": [
+            88,
+            8,
+            57
+          ],
+          "count": 3,
+          "rep_route_ids": [
+            762,
+            1149,
+            1352
+          ]
+        },
+        {
+          "seq": [
+            157,
+            88,
+            8,
+            57
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            1889
+          ]
+        },
+        {
+          "seq": [
+            88,
+            116,
+            88,
+            8,
+            57
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            2180
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4156,
+        "o_lat": 2000,
+        "d_lon": -4157,
+        "d_lat": 2001
+      },
+      "city": 1,
+      "n_routes": 5,
+      "n_patterns": 3,
+      "lcs_sep_score_max": 0.6666666666666667,
+      "patterns": [
+        {
+          "seq": [
+            367,
+            543
+          ],
+          "count": 2,
+          "rep_route_ids": [
+            2589,
+            5692
+          ]
+        },
+        {
+          "seq": [
+            367,
+            543,
+            325
+          ],
+          "count": 2,
+          "rep_route_ids": [
+            2738,
+            3299
+          ]
+        },
+        {
+          "seq": [
+            367,
+            346,
+            325
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            7487
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4157,
+        "o_lat": 2002,
+        "d_lon": -4157,
+        "d_lat": 2003
+      },
+      "city": 1,
+      "n_routes": 5,
+      "n_patterns": 3,
+      "lcs_sep_score_max": 0.8,
+      "patterns": [
+        {
+          "seq": [
+            459
+          ],
+          "count": 3,
+          "rep_route_ids": [
+            2657,
+            5330,
+            6259
+          ]
+        },
+        {
+          "seq": [
+            543,
+            325,
+            384,
+            409,
+            459
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            7049
+          ]
+        },
+        {
+          "seq": [
+            384,
+            409,
+            459
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            7193
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4151,
+        "o_lat": 1999,
+        "d_lon": -4150,
+        "d_lat": 1999
+      },
+      "city": 1,
+      "n_routes": 5,
+      "n_patterns": 3,
+      "lcs_sep_score_max": 1.0,
+      "patterns": [
+        {
+          "seq": [
+            486,
+            485
+          ],
+          "count": 3,
+          "rep_route_ids": [
+            2877,
+            5988,
+            7204
+          ]
+        },
+        {
+          "seq": [
+            486,
+            556,
+            444
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            2845
+          ]
+        },
+        {
+          "seq": [
+            443,
+            485
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            3699
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4146,
+        "o_lat": 2002,
+        "d_lon": -4149,
+        "d_lat": 1998
+      },
+      "city": 1,
+      "n_routes": 5,
+      "n_patterns": 3,
+      "lcs_sep_score_max": 0.2857142857142857,
+      "patterns": [
+        {
+          "seq": [
+            525,
+            369,
+            319,
+            400,
+            429,
+            363,
+            330
+          ],
+          "count": 2,
+          "rep_route_ids": [
+            3341,
+            7250
+          ]
+        },
+        {
+          "seq": [
+            531,
+            561,
+            319,
+            400,
+            429,
+            363,
+            330
+          ],
+          "count": 2,
+          "rep_route_ids": [
+            4661,
+            7342
+          ]
+        },
+        {
+          "seq": [
+            369,
+            319,
+            400,
+            429,
+            363,
+            330
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            3553
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4154,
+        "o_lat": 1995,
+        "d_lon": -4157,
+        "d_lat": 1997
+      },
+      "city": 1,
+      "n_routes": 5,
+      "n_patterns": 3,
+      "lcs_sep_score_max": 0.33333333333333337,
+      "patterns": [
+        {
+          "seq": [
+            523,
+            503,
+            434,
+            361,
+            334,
+            365
+          ],
+          "count": 3,
+          "rep_route_ids": [
+            5001,
+            5354,
+            5669
+          ]
+        },
+        {
+          "seq": [
+            434,
+            361,
+            334,
+            365
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            3459
+          ]
+        },
+        {
+          "seq": [
+            326,
+            434,
+            361,
+            334,
+            365
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            4086
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4152,
+        "o_lat": 2001,
+        "d_lon": -4152,
+        "d_lat": 2003
+      },
+      "city": 1,
+      "n_routes": 5,
+      "n_patterns": 3,
+      "lcs_sep_score_max": 0.25,
+      "patterns": [
+        {
+          "seq": [
+            348,
+            439,
+            360
+          ],
+          "count": 3,
+          "rep_route_ids": [
+            3646,
+            5349,
+            5796
+          ]
+        },
+        {
+          "seq": [
+            413,
+            348,
+            439,
+            360
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            4143
+          ]
+        },
+        {
+          "seq": [
+            419,
+            348,
+            439,
+            360
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            6862
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4146,
+        "o_lat": 2003,
+        "d_lon": -4143,
+        "d_lat": 1998
+      },
+      "city": 1,
+      "n_routes": 89,
+      "n_patterns": 2,
+      "lcs_sep_score_max": 0.25,
+      "patterns": [
+        {
+          "seq": [
+            561,
+            319,
+            400,
+            466
+          ],
+          "count": 79,
+          "rep_route_ids": [
+            2342,
+            2347,
+            2455
+          ]
+        },
+        {
+          "seq": [
+            319,
+            400,
+            466
+          ],
+          "count": 10,
+          "rep_route_ids": [
+            3004,
+            3144,
+            3281
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4145,
+        "o_lat": 1993,
+        "d_lon": -4145,
+        "d_lat": 1994
+      },
+      "city": 1,
+      "n_routes": 67,
+      "n_patterns": 2,
+      "lcs_sep_score_max": 0.33333333333333337,
+      "patterns": [
+        {
+          "seq": [
+            522,
+            340,
+            527
+          ],
+          "count": 63,
+          "rep_route_ids": [
+            2321,
+            2370,
+            2461
+          ]
+        },
+        {
+          "seq": [
+            522,
+            340
+          ],
+          "count": 4,
+          "rep_route_ids": [
+            3143,
+            4602,
+            4700
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4146,
+        "o_lat": 2003,
+        "d_lon": -4143,
+        "d_lat": 1999
+      },
+      "city": 1,
+      "n_routes": 50,
+      "n_patterns": 2,
+      "lcs_sep_score_max": 0.25,
+      "patterns": [
+        {
+          "seq": [
+            561,
+            319,
+            400,
+            466
+          ],
+          "count": 44,
+          "rep_route_ids": [
+            2534,
+            2595,
+            2902
+          ]
+        },
+        {
+          "seq": [
+            319,
+            400,
+            466
+          ],
+          "count": 6,
+          "rep_route_ids": [
+            2761,
+            3521,
+            3569
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4145,
+        "o_lat": 1994,
+        "d_lon": -4145,
+        "d_lat": 1993
+      },
+      "city": 1,
+      "n_routes": 31,
+      "n_patterns": 2,
+      "lcs_sep_score_max": 0.33333333333333337,
+      "patterns": [
+        {
+          "seq": [
+            527,
+            340,
+            522
+          ],
+          "count": 20,
+          "rep_route_ids": [
+            2803,
+            3389,
+            3782
+          ]
+        },
+        {
+          "seq": [
+            340,
+            522
+          ],
+          "count": 11,
+          "rep_route_ids": [
+            2307,
+            2316,
+            3133
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4143,
+        "o_lat": 1998,
+        "d_lon": -4146,
+        "d_lat": 2003
+      },
+      "city": 1,
+      "n_routes": 26,
+      "n_patterns": 2,
+      "lcs_sep_score_max": 0.25,
+      "patterns": [
+        {
+          "seq": [
+            466,
+            429,
+            337,
+            531
+          ],
+          "count": 18,
+          "rep_route_ids": [
+            2493,
+            3107,
+            3192
+          ]
+        },
+        {
+          "seq": [
+            466,
+            429,
+            337,
+            317
+          ],
+          "count": 8,
+          "rep_route_ids": [
+            3658,
+            4160,
+            4691
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4157,
+        "o_lat": 1998,
+        "d_lon": -4151,
+        "d_lat": 1997
+      },
+      "city": 1,
+      "n_routes": 21,
+      "n_patterns": 2,
+      "lcs_sep_score_max": 0.11111111111111116,
+      "patterns": [
+        {
+          "seq": [
+            433,
+            345,
+            440,
+            344,
+            318,
+            559,
+            558,
+            449
+          ],
+          "count": 20,
+          "rep_route_ids": [
+            2668,
+            2766,
+            2882
+          ]
+        },
+        {
+          "seq": [
+            433,
+            345,
+            440,
+            344,
+            318,
+            559,
+            558,
+            449,
+            333
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            3494
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4152,
+        "o_lat": 2003,
+        "d_lon": -4152,
+        "d_lat": 2001
+      },
+      "city": 1,
+      "n_routes": 19,
+      "n_patterns": 2,
+      "lcs_sep_score_max": 0.33333333333333337,
+      "patterns": [
+        {
+          "seq": [
+            360,
+            383
+          ],
+          "count": 18,
+          "rep_route_ids": [
+            2422,
+            3007,
+            3588
+          ]
+        },
+        {
+          "seq": [
+            360,
+            383,
+            413
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            6954
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4157,
+        "o_lat": 2001,
+        "d_lon": -4158,
+        "d_lat": 2002
+      },
+      "city": 1,
+      "n_routes": 18,
+      "n_patterns": 2,
+      "lcs_sep_score_max": 0.5,
+      "patterns": [
+        {
+          "seq": [
+            325,
+            384,
+            409,
+            459
+          ],
+          "count": 11,
+          "rep_route_ids": [
+            2395,
+            2560,
+            3010
+          ]
+        },
+        {
+          "seq": [
+            325,
+            384
+          ],
+          "count": 7,
+          "rep_route_ids": [
+            2476,
+            5014,
+            6137
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4151,
+        "o_lat": 1992,
+        "d_lon": -4151,
+        "d_lat": 1994
+      },
+      "city": 1,
+      "n_routes": 17,
+      "n_patterns": 2,
+      "lcs_sep_score_max": 0.5,
+      "patterns": [
+        {
+          "seq": [
+            377,
+            415
+          ],
+          "count": 13,
+          "rep_route_ids": [
+            2349,
+            2550,
+            2746
+          ]
+        },
+        {
+          "seq": [
+            377,
+            403
+          ],
+          "count": 4,
+          "rep_route_ids": [
+            4417,
+            4450,
+            5603
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4153,
+        "o_lat": 2003,
+        "d_lon": -4152,
+        "d_lat": 2003
+      },
+      "city": 1,
+      "n_routes": 17,
+      "n_patterns": 2,
+      "lcs_sep_score_max": 0.5,
+      "patterns": [
+        {
+          "seq": [
+            360
+          ],
+          "count": 14,
+          "rep_route_ids": [
+            2526,
+            2950,
+            3526
+          ]
+        },
+        {
+          "seq": [
+            489,
+            360
+          ],
+          "count": 3,
+          "rep_route_ids": [
+            2428,
+            3041,
+            6508
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4150,
+        "o_lat": 1996,
+        "d_lon": -4150,
+        "d_lat": 1994
+      },
+      "city": 1,
+      "n_routes": 16,
+      "n_patterns": 2,
+      "lcs_sep_score_max": 0.25,
+      "patterns": [
+        {
+          "seq": [
+            471,
+            477,
+            534,
+            415
+          ],
+          "count": 14,
+          "rep_route_ids": [
+            2599,
+            3205,
+            3305
+          ]
+        },
+        {
+          "seq": [
+            471,
+            477,
+            534
+          ],
+          "count": 2,
+          "rep_route_ids": [
+            5734,
+            6068
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4150,
+        "o_lat": 2003,
+        "d_lon": -4150,
+        "d_lat": 2001
+      },
+      "city": 1,
+      "n_routes": 15,
+      "n_patterns": 2,
+      "lcs_sep_score_max": 0.33333333333333337,
+      "patterns": [
+        {
+          "seq": [
+            416,
+            323
+          ],
+          "count": 13,
+          "rep_route_ids": [
+            2516,
+            3574,
+            3576
+          ]
+        },
+        {
+          "seq": [
+            416,
+            323,
+            516
+          ],
+          "count": 2,
+          "rep_route_ids": [
+            4677,
+            6722
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4144,
+        "o_lat": 1993,
+        "d_lon": -4145,
+        "d_lat": 1993
+      },
+      "city": 1,
+      "n_routes": 12,
+      "n_patterns": 2,
+      "lcs_sep_score_max": 0.5,
+      "patterns": [
+        {
+          "seq": [
+            522
+          ],
+          "count": 11,
+          "rep_route_ids": [
+            2695,
+            2705,
+            3659
+          ]
+        },
+        {
+          "seq": [
+            340,
+            522
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            7443
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4151,
+        "o_lat": 1992,
+        "d_lon": -4150,
+        "d_lat": 1994
+      },
+      "city": 1,
+      "n_routes": 11,
+      "n_patterns": 2,
+      "lcs_sep_score_max": 0.33333333333333337,
+      "patterns": [
+        {
+          "seq": [
+            377,
+            415,
+            534
+          ],
+          "count": 7,
+          "rep_route_ids": [
+            3257,
+            3844,
+            5228
+          ]
+        },
+        {
+          "seq": [
+            377,
+            415
+          ],
+          "count": 4,
+          "rep_route_ids": [
+            2585,
+            4192,
+            6256
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4154,
+        "o_lat": 2003,
+        "d_lon": -4155,
+        "d_lat": 2003
+      },
+      "city": 1,
+      "n_routes": 10,
+      "n_patterns": 2,
+      "lcs_sep_score_max": 0.5,
+      "patterns": [
+        {
+          "seq": [
+            489,
+            407
+          ],
+          "count": 9,
+          "rep_route_ids": [
+            2617,
+            3457,
+            3586
+          ]
+        },
+        {
+          "seq": [
+            489
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            5409
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4145,
+        "o_lat": 1993,
+        "d_lon": -4143,
+        "d_lat": 1993
+      },
+      "city": 1,
+      "n_routes": 10,
+      "n_patterns": 2,
+      "lcs_sep_score_max": 0.6666666666666667,
+      "patterns": [
+        {
+          "seq": [
+            522,
+            340,
+            522
+          ],
+          "count": 9,
+          "rep_route_ids": [
+            4318,
+            4438,
+            4449
+          ]
+        },
+        {
+          "seq": [
+            522
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            5285
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4151,
+        "o_lat": 1992,
+        "d_lon": -4150,
+        "d_lat": 1995
+      },
+      "city": 1,
+      "n_routes": 9,
+      "n_patterns": 2,
+      "lcs_sep_score_max": 0.25,
+      "patterns": [
+        {
+          "seq": [
+            377,
+            415,
+            534
+          ],
+          "count": 7,
+          "rep_route_ids": [
+            2433,
+            3090,
+            3776
+          ]
+        },
+        {
+          "seq": [
+            377,
+            415,
+            534,
+            477
+          ],
+          "count": 2,
+          "rep_route_ids": [
+            4785,
+            7414
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4150,
+        "o_lat": 1995,
+        "d_lon": -4151,
+        "d_lat": 1994
+      },
+      "city": 1,
+      "n_routes": 9,
+      "n_patterns": 2,
+      "lcs_sep_score_max": 0.5,
+      "patterns": [
+        {
+          "seq": [
+            534,
+            415
+          ],
+          "count": 6,
+          "rep_route_ids": [
+            2446,
+            2811,
+            3840
+          ]
+        },
+        {
+          "seq": [
+            471,
+            477,
+            534,
+            415
+          ],
+          "count": 3,
+          "rep_route_ids": [
+            2729,
+            3803,
+            4952
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4151,
+        "o_lat": 1993,
+        "d_lon": -4150,
+        "d_lat": 1994
+      },
+      "city": 1,
+      "n_routes": 9,
+      "n_patterns": 2,
+      "lcs_sep_score_max": 0.33333333333333337,
+      "patterns": [
+        {
+          "seq": [
+            377,
+            415,
+            534
+          ],
+          "count": 8,
+          "rep_route_ids": [
+            2529,
+            3399,
+            3836
+          ]
+        },
+        {
+          "seq": [
+            415,
+            534
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            7346
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4143,
+        "o_lat": 1993,
+        "d_lon": -4145,
+        "d_lat": 1994
+      },
+      "city": 1,
+      "n_routes": 9,
+      "n_patterns": 2,
+      "lcs_sep_score_max": 0.5,
+      "patterns": [
+        {
+          "seq": [
+            527
+          ],
+          "count": 8,
+          "rep_route_ids": [
+            3109,
+            3410,
+            4371
+          ]
+        },
+        {
+          "seq": [
+            527,
+            340
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            3664
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4158,
+        "o_lat": 1998,
+        "d_lon": -4151,
+        "d_lat": 1997
+      },
+      "city": 1,
+      "n_routes": 8,
+      "n_patterns": 2,
+      "lcs_sep_score_max": 0.11111111111111116,
+      "patterns": [
+        {
+          "seq": [
+            433,
+            345,
+            440,
+            344,
+            318,
+            559,
+            558,
+            449
+          ],
+          "count": 7,
+          "rep_route_ids": [
+            2326,
+            2947,
+            2969
+          ]
+        },
+        {
+          "seq": [
+            433,
+            345,
+            440,
+            344,
+            318,
+            559,
+            558,
+            341,
+            449
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            3887
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4155,
+        "o_lat": 2003,
+        "d_lon": -4154,
+        "d_lat": 2003
+      },
+      "city": 1,
+      "n_routes": 8,
+      "n_patterns": 2,
+      "lcs_sep_score_max": 0.33333333333333337,
+      "patterns": [
+        {
+          "seq": [
+            407,
+            489
+          ],
+          "count": 7,
+          "rep_route_ids": [
+            2716,
+            2944,
+            3833
+          ]
+        },
+        {
+          "seq": [
+            500,
+            407,
+            489
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            3676
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4150,
+        "o_lat": 2003,
+        "d_lon": -4150,
+        "d_lat": 2002
+      },
+      "city": 1,
+      "n_routes": 8,
+      "n_patterns": 2,
+      "lcs_sep_score_max": 1.0,
+      "patterns": [
+        {
+          "seq": [
+            416,
+            323
+          ],
+          "count": 7,
+          "rep_route_ids": [
+            3687,
+            3739,
+            4506
+          ]
+        },
+        {
+          "seq": [
+            424,
+            520
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            3026
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4151,
+        "o_lat": 2001,
+        "d_lon": -4150,
+        "d_lat": 2003
+      },
+      "city": 1,
+      "n_routes": 7,
+      "n_patterns": 2,
+      "lcs_sep_score_max": 0.25,
+      "patterns": [
+        {
+          "seq": [
+            516,
+            324,
+            416
+          ],
+          "count": 6,
+          "rep_route_ids": [
+            2417,
+            2694,
+            3008
+          ]
+        },
+        {
+          "seq": [
+            516,
+            490,
+            324,
+            416
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            6227
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4152,
+        "o_lat": 2003,
+        "d_lon": -4153,
+        "d_lat": 2003
+      },
+      "city": 1,
+      "n_routes": 7,
+      "n_patterns": 2,
+      "lcs_sep_score_max": 0.5,
+      "patterns": [
+        {
+          "seq": [
+            360,
+            489
+          ],
+          "count": 5,
+          "rep_route_ids": [
+            2468,
+            2919,
+            4891
+          ]
+        },
+        {
+          "seq": [
+            360
+          ],
+          "count": 2,
+          "rep_route_ids": [
+            3260,
+            5357
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4156,
+        "o_lat": 2118,
+        "d_lon": -4155,
+        "d_lat": 2118
+      },
+      "city": 0,
+      "n_routes": 6,
+      "n_patterns": 2,
+      "lcs_sep_score_max": 0.33333333333333337,
+      "patterns": [
+        {
+          "seq": [
+            188,
+            164,
+            43
+          ],
+          "count": 5,
+          "rep_route_ids": [
+            26,
+            87,
+            773
+          ]
+        },
+        {
+          "seq": [
+            188,
+            164
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            981
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4159,
+        "o_lat": 2120,
+        "d_lon": -4160,
+        "d_lat": 2121
+      },
+      "city": 0,
+      "n_routes": 6,
+      "n_patterns": 2,
+      "lcs_sep_score_max": 0.25,
+      "patterns": [
+        {
+          "seq": [
+            180,
+            280,
+            304,
+            175
+          ],
+          "count": 5,
+          "rep_route_ids": [
+            212,
+            767,
+            1609
+          ]
+        },
+        {
+          "seq": [
+            180,
+            280,
+            304
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            1613
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4160,
+        "o_lat": 2121,
+        "d_lon": -4162,
+        "d_lat": 2120
+      },
+      "city": 0,
+      "n_routes": 6,
+      "n_patterns": 2,
+      "lcs_sep_score_max": 0.25,
+      "patterns": [
+        {
+          "seq": [
+            175,
+            82,
+            244,
+            166
+          ],
+          "count": 5,
+          "rep_route_ids": [
+            258,
+            343,
+            514
+          ]
+        },
+        {
+          "seq": [
+            175,
+            244,
+            166
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            506
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4152,
+        "o_lat": 1998,
+        "d_lon": -4151,
+        "d_lat": 1997
+      },
+      "city": 1,
+      "n_routes": 6,
+      "n_patterns": 2,
+      "lcs_sep_score_max": 0.5,
+      "patterns": [
+        {
+          "seq": [
+            559,
+            558,
+            449
+          ],
+          "count": 5,
+          "rep_route_ids": [
+            2802,
+            2962,
+            5479
+          ]
+        },
+        {
+          "seq": [
+            558,
+            449,
+            333,
+            487
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            3171
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4154,
+        "o_lat": 1995,
+        "d_lon": -4156,
+        "d_lat": 2000
+      },
+      "city": 1,
+      "n_routes": 6,
+      "n_patterns": 2,
+      "lcs_sep_score_max": 0.25,
+      "patterns": [
+        {
+          "seq": [
+            523,
+            503,
+            434,
+            361,
+            334,
+            365,
+            345,
+            367
+          ],
+          "count": 5,
+          "rep_route_ids": [
+            2938,
+            2991,
+            4617
+          ]
+        },
+        {
+          "seq": [
+            434,
+            361,
+            334,
+            365,
+            345,
+            367
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            6645
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4151,
+        "o_lat": 2003,
+        "d_lon": -4151,
+        "d_lat": 2001
+      },
+      "city": 1,
+      "n_routes": 6,
+      "n_patterns": 2,
+      "lcs_sep_score_max": 0.6666666666666667,
+      "patterns": [
+        {
+          "seq": [
+            324,
+            516
+          ],
+          "count": 5,
+          "rep_route_ids": [
+            3066,
+            4257,
+            4930
+          ]
+        },
+        {
+          "seq": [
+            426,
+            324,
+            490
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            4502
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4154,
+        "o_lat": 1995,
+        "d_lon": -4156,
+        "d_lat": 1997
+      },
+      "city": 1,
+      "n_routes": 6,
+      "n_patterns": 2,
+      "lcs_sep_score_max": 0.33333333333333337,
+      "patterns": [
+        {
+          "seq": [
+            523,
+            503,
+            434,
+            361,
+            334,
+            365
+          ],
+          "count": 5,
+          "rep_route_ids": [
+            3422,
+            4571,
+            6556
+          ]
+        },
+        {
+          "seq": [
+            523,
+            503,
+            334,
+            365
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            6662
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4156,
+        "o_lat": 2118,
+        "d_lon": -4155,
+        "d_lat": 2122
+      },
+      "city": 0,
+      "n_routes": 5,
+      "n_patterns": 2,
+      "lcs_sep_score_max": 0.16666666666666663,
+      "patterns": [
+        {
+          "seq": [
+            188,
+            38,
+            37,
+            264,
+            104
+          ],
+          "count": 3,
+          "rep_route_ids": [
+            11,
+            332,
+            879
+          ]
+        },
+        {
+          "seq": [
+            188,
+            38,
+            37,
+            264,
+            104,
+            46
+          ],
+          "count": 2,
+          "rep_route_ids": [
+            689,
+            1140
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4148,
+        "o_lat": 2120,
+        "d_lon": -4151,
+        "d_lat": 2119
+      },
+      "city": 0,
+      "n_routes": 5,
+      "n_patterns": 2,
+      "lcs_sep_score_max": 0.33333333333333337,
+      "patterns": [
+        {
+          "seq": [
+            200,
+            148
+          ],
+          "count": 3,
+          "rep_route_ids": [
+            82,
+            1113,
+            1297
+          ]
+        },
+        {
+          "seq": [
+            200,
+            148,
+            42
+          ],
+          "count": 2,
+          "rep_route_ids": [
+            986,
+            1925
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4148,
+        "o_lat": 2124,
+        "d_lon": -4152,
+        "d_lat": 2124
+      },
+      "city": 0,
+      "n_routes": 5,
+      "n_patterns": 2,
+      "lcs_sep_score_max": 0.25,
+      "patterns": [
+        {
+          "seq": [
+            21,
+            13,
+            4
+          ],
+          "count": 4,
+          "rep_route_ids": [
+            108,
+            185,
+            1143
+          ]
+        },
+        {
+          "seq": [
+            21,
+            13,
+            4,
+            316
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            143
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4163,
+        "o_lat": 2113,
+        "d_lon": -4161,
+        "d_lat": 2118
+      },
+      "city": 0,
+      "n_routes": 5,
+      "n_patterns": 2,
+      "lcs_sep_score_max": 0.1428571428571429,
+      "patterns": [
+        {
+          "seq": [
+            35,
+            129,
+            249,
+            214,
+            183,
+            167
+          ],
+          "count": 3,
+          "rep_route_ids": [
+            908,
+            1021,
+            1094
+          ]
+        },
+        {
+          "seq": [
+            35,
+            129,
+            249,
+            214,
+            183,
+            167,
+            112
+          ],
+          "count": 2,
+          "rep_route_ids": [
+            864,
+            948
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4149,
+        "o_lat": 1996,
+        "d_lon": -4148,
+        "d_lat": 1997
+      },
+      "city": 1,
+      "n_routes": 5,
+      "n_patterns": 2,
+      "lcs_sep_score_max": 0.5,
+      "patterns": [
+        {
+          "seq": [
+            385,
+            509
+          ],
+          "count": 3,
+          "rep_route_ids": [
+            2327,
+            5488,
+            5652
+          ]
+        },
+        {
+          "seq": [
+            385
+          ],
+          "count": 2,
+          "rep_route_ids": [
+            4333,
+            7293
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4146,
+        "o_lat": 2003,
+        "d_lon": -4147,
+        "d_lat": 1999
+      },
+      "city": 1,
+      "n_routes": 5,
+      "n_patterns": 2,
+      "lcs_sep_score_max": 0.19999999999999996,
+      "patterns": [
+        {
+          "seq": [
+            319,
+            400,
+            429,
+            363
+          ],
+          "count": 4,
+          "rep_route_ids": [
+            2328,
+            3609,
+            4865
+          ]
+        },
+        {
+          "seq": [
+            319,
+            400,
+            429,
+            363,
+            330
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            6368
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4150,
+        "o_lat": 2003,
+        "d_lon": -4150,
+        "d_lat": 2003
+      },
+      "city": 1,
+      "n_routes": 5,
+      "n_patterns": 2,
+      "lcs_sep_score_max": 0.5,
+      "patterns": [
+        {
+          "seq": [
+            424,
+            416
+          ],
+          "count": 4,
+          "rep_route_ids": [
+            2382,
+            4609,
+            5077
+          ]
+        },
+        {
+          "seq": [
+            416,
+            424
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            5466
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4154,
+        "o_lat": 1995,
+        "d_lon": -4156,
+        "d_lat": 1999
+      },
+      "city": 1,
+      "n_routes": 5,
+      "n_patterns": 2,
+      "lcs_sep_score_max": 0.125,
+      "patterns": [
+        {
+          "seq": [
+            523,
+            503,
+            434,
+            361,
+            334,
+            365,
+            345
+          ],
+          "count": 3,
+          "rep_route_ids": [
+            2634,
+            3236,
+            6526
+          ]
+        },
+        {
+          "seq": [
+            523,
+            503,
+            434,
+            361,
+            334,
+            365,
+            345,
+            367
+          ],
+          "count": 2,
+          "rep_route_ids": [
+            5257,
+            7189
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4146,
+        "o_lat": 2001,
+        "d_lon": -4146,
+        "d_lat": 2003
+      },
+      "city": 1,
+      "n_routes": 5,
+      "n_patterns": 2,
+      "lcs_sep_score_max": 0.5,
+      "patterns": [
+        {
+          "seq": [
+            337,
+            531
+          ],
+          "count": 4,
+          "rep_route_ids": [
+            2641,
+            4366,
+            4548
+          ]
+        },
+        {
+          "seq": [
+            337,
+            317
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            5596
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4146,
+        "o_lat": 2000,
+        "d_lon": -4148,
+        "d_lat": 1999
+      },
+      "city": 1,
+      "n_routes": 5,
+      "n_patterns": 2,
+      "lcs_sep_score_max": 0.25,
+      "patterns": [
+        {
+          "seq": [
+            429,
+            363,
+            542
+          ],
+          "count": 3,
+          "rep_route_ids": [
+            2748,
+            5866,
+            6113
+          ]
+        },
+        {
+          "seq": [
+            429,
+            363,
+            330,
+            542
+          ],
+          "count": 2,
+          "rep_route_ids": [
+            4347,
+            5962
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4143,
+        "o_lat": 1998,
+        "d_lon": -4146,
+        "d_lat": 2002
+      },
+      "city": 1,
+      "n_routes": 5,
+      "n_patterns": 2,
+      "lcs_sep_score_max": 0.25,
+      "patterns": [
+        {
+          "seq": [
+            466,
+            429,
+            337
+          ],
+          "count": 3,
+          "rep_route_ids": [
+            5627,
+            7063,
+            7388
+          ]
+        },
+        {
+          "seq": [
+            466,
+            429,
+            337,
+            531
+          ],
+          "count": 2,
+          "rep_route_ids": [
+            2823,
+            3790
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4157,
+        "o_lat": 2001,
+        "d_lon": -4158,
+        "d_lat": 1998
+      },
+      "city": 1,
+      "n_routes": 5,
+      "n_patterns": 2,
+      "lcs_sep_score_max": 0.33333333333333337,
+      "patterns": [
+        {
+          "seq": [
+            325,
+            423,
+            356
+          ],
+          "count": 4,
+          "rep_route_ids": [
+            4982,
+            5298,
+            5499
+          ]
+        },
+        {
+          "seq": [
+            543,
+            423,
+            356
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            3170
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4155,
+        "o_lat": 1996,
+        "d_lon": -4156,
+        "d_lat": 1999
+      },
+      "city": 1,
+      "n_routes": 5,
+      "n_patterns": 2,
+      "lcs_sep_score_max": 0.19999999999999996,
+      "patterns": [
+        {
+          "seq": [
+            503,
+            334,
+            365,
+            345
+          ],
+          "count": 4,
+          "rep_route_ids": [
+            3214,
+            5836,
+            6620
+          ]
+        },
+        {
+          "seq": [
+            503,
+            334,
+            365,
+            345,
+            367
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            7439
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4156,
+        "o_lat": 1998,
+        "d_lon": -4151,
+        "d_lat": 1997
+      },
+      "city": 1,
+      "n_routes": 5,
+      "n_patterns": 2,
+      "lcs_sep_score_max": 0.125,
+      "patterns": [
+        {
+          "seq": [
+            433,
+            345,
+            440,
+            344,
+            318,
+            559,
+            558,
+            449
+          ],
+          "count": 3,
+          "rep_route_ids": [
+            3572,
+            5878,
+            7461
+          ]
+        },
+        {
+          "seq": [
+            345,
+            440,
+            344,
+            318,
+            559,
+            558,
+            449
+          ],
+          "count": 2,
+          "rep_route_ids": [
+            3895,
+            7366
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4157,
+        "o_lat": 2003,
+        "d_lon": -4156,
+        "d_lat": 1999
+      },
+      "city": 1,
+      "n_routes": 5,
+      "n_patterns": 2,
+      "lcs_sep_score_max": 0.8,
+      "patterns": [
+        {
+          "seq": [
+            459,
+            409,
+            384,
+            325,
+            423
+          ],
+          "count": 3,
+          "rep_route_ids": [
+            3631,
+            3841,
+            4217
+          ]
+        },
+        {
+          "seq": [
+            543,
+            423
+          ],
+          "count": 2,
+          "rep_route_ids": [
+            4319,
+            6383
+          ]
+        }
+      ]
+    },
+    {
+      "od_bin": {
+        "o_lon": -4149,
+        "o_lat": 1996,
+        "d_lon": -4149,
+        "d_lat": 1997
+      },
+      "city": 1,
+      "n_routes": 5,
+      "n_patterns": 2,
+      "lcs_sep_score_max": 0.5,
+      "patterns": [
+        {
+          "seq": [
+            385,
+            353
+          ],
+          "count": 4,
+          "rep_route_ids": [
+            3941,
+            4074,
+            5119
+          ]
+        },
+        {
+          "seq": [
+            385
+          ],
+          "count": 1,
+          "rep_route_ids": [
+            6805
+          ]
+        }
+      ]
+    }
+  ]
 }

@@ -548,6 +548,36 @@ PYTHONUNBUFFERED=1 python -u -m src.data.way_graph.build_way_graph_from_osm_pbf_
     --way_graph_npz "$OUT_WG/way_graph_osm_topo.npz"
 ```
 
+**(P1) Louvain per-city + region_seq 统计（Hierarchical: Region→Way 的第一步）**
+
+> 口径：Region 定义为每城的 Louvain 社区；先在每城诱导子图上跑（不要在双城全图上跑）。
+>
+> 输出：
+> - `way_regions_louvain_per_city_*.npz`：每个 way 的 region id（跨城做了 offset 合并）
+> - `region_seq_stats_*.json`：region 序列长度/回溯率/同 OD 多 pattern 统计
+
+```bash
+export OUT_REG="$OUT_BASE/W3c_way_regions_louvain"
+mkdir -p "$OUT_REG"
+
+PYTHONUNBUFFERED=1 python -u -m src.data.way_graph.build_way_regions_louvain_per_city \
+  --way_graph_npz "$OUT_WG/way_graph_osm_topo.npz" \
+  --way_routes_npz "$WAY_ROUTES_NPZ" \
+  --out_npz "$OUT_REG/way_regions_louvain_per_city_res0p2_seed0.npz" \
+  --out_json "$OUT_REG/way_regions_louvain_per_city_res0p2_seed0.json" \
+  --seed 0 --resolution 0.2 \
+  --fill_unknown_by_neighbor \
+  |& tee "$OUT_REG/run_build_way_regions_louvain_per_city.log"
+
+PYTHONUNBUFFERED=1 python -u -m src.data.way_graph.extract_region_seq_stats \
+  --way_routes_npz "$WAY_ROUTES_NPZ" \
+  --way_regions_npz "$OUT_REG/way_regions_louvain_per_city_res0p2_seed0.npz" \
+  --out_json "$OUT_REG/region_seq_stats_min5_max160.json" \
+  --out_npz "$OUT_REG/region_seq_min5_max160.npz" \
+  --min_hops 5 --max_way_len 160 \
+  |& tee "$OUT_REG/run_extract_region_seq_stats.log"
+```
+
 > [!NOTE]
 > 如果你跑的是 `bash run_way_casd_prep.sh`（单城市），目录命名是 `W1/W2/W3/W4`；
 > 训练命令里把 `W5_way_routes_labeled/W3_way_graph/W4_way_features` 分别替换为

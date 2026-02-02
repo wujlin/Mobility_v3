@@ -519,6 +519,35 @@ export WAY_GRAPH_NPZ="$OUT_BASE/W3_way_graph_strict/way_graph.npz"
 export WAY_FEATS_NPZ="$OUT_BASE/W4_way_features_sem/way_features.npz"
 ```
 
+**(可选 P0) 用 OSM 拓扑增强 way_graph（用于 Hierarchical / Louvain Region）**
+
+> 背景：仅用 GT transition 构建的 `way_graph.npz` 可能严重碎片化（largest CC 很小），会直接阻塞 Louvain/Region→Way 的层级规划。
+>
+> 口径：我们把“OSM 物理相连”（共享至少一个 OSM node）与“行为相连”（GT transitions）合并成新图。
+>
+> ⚠️ 常见踩坑：`.osm.pbf` **不在** `$RAW_ROOT/worldtrace/`，而在 `$RAW_ROOT/osm/`。
+
+```bash
+# OSM pbf（Detroit=Michigan, Columbus=Ohio；文件名不一致就先 ls 看一下）
+export OSM_MI="$RAW_ROOT/osm/michigan-latest.osm.pbf"
+export OSM_OH="$RAW_ROOT/osm/ohio-latest.osm.pbf"
+ls -lh "$OSM_MI" "$OSM_OH" || (echo ">>> Available pbfs:" && ls -lh "$RAW_ROOT/osm" | head)
+
+# 依赖：pyosmium（只需要装一次；推荐 conda-forge）
+python -c "import osmium; print('osmium ok')" \
+  || (echo ">>> Installing pyosmium..." && conda install -c conda-forge pyosmium -y)
+
+export OUT_WG="$OUT_BASE/W3b_way_graph_osm_topo"
+PYTHONUNBUFFERED=1 python -u -m src.data.way_graph.build_way_graph_from_osm_pbf_topology \
+  --way_routes_npz "$WAY_ROUTES_NPZ" \
+  --osm_pbf "$OSM_MI" \
+  --osm_pbf "$OSM_OH" \
+  --out_npz "$OUT_WG/way_graph_osm_topo.npz" \
+  |& tee "$OUT_WG/run_build_way_graph_osm_topo.log" \
+  && python -m src.data.way_graph.audit_way_graph_npz \
+    --way_graph_npz "$OUT_WG/way_graph_osm_topo.npz"
+```
+
 > [!NOTE]
 > 如果你跑的是 `bash run_way_casd_prep.sh`（单城市），目录命名是 `W1/W2/W3/W4`；
 > 训练命令里把 `W5_way_routes_labeled/W3_way_graph/W4_way_features` 分别替换为

@@ -252,39 +252,83 @@ def _connectivity_stats_from_adj(adj: Sequence[Set[int]], way_city: Optional[np.
     if city.size != M:
         return out
 
-    # root -> (city or -2 if mixed)
-    root_city: Dict[int, int] = {}
-    root_size: Dict[int, int] = {}
-    for i in range(M):
-        c = int(city[i])
-        r = int(roots[i])
-        root_size[r] = int(root_size.get(r, 0) + 1)
-        if r not in root_city:
-            root_city[r] = c
-        else:
-            if int(root_city[r]) != c:
-                root_city[r] = -2
+    def connectivity_induced(mask: np.ndarray) -> Dict[str, object]:
+        mask = np.asarray(mask, dtype=bool).reshape(-1)
+        if mask.size != M:
+            return {}
+        idxs = np.nonzero(mask)[0]
+        n = int(idxs.size)
+        if n <= 0:
+            return {
+                "n_connected_components_undirected": 0,
+                "largest_cc_n": 0,
+                "largest_cc_frac": float("nan"),
+                "isolated_deg0_n": 0,
+                "isolated_deg0_frac": float("nan"),
+            }
+
+        g2l = np.full((M,), -1, dtype=np.int64)
+        g2l[idxs] = np.arange(n, dtype=np.int64)
+        parent = np.arange(n, dtype=np.int64)
+        size = np.ones((n,), dtype=np.int64)
+        has_nbr = np.zeros((n,), dtype=bool)
+
+        def find(x: int) -> int:
+            xx = int(x)
+            while parent[xx] != xx:
+                parent[xx] = parent[parent[xx]]
+                xx = int(parent[xx])
+            return int(xx)
+
+        def union(a: int, b: int) -> None:
+            ra = find(int(a))
+            rb = find(int(b))
+            if ra == rb:
+                return
+            if int(size[ra]) < int(size[rb]):
+                ra, rb = rb, ra
+            parent[rb] = ra
+            size[ra] += size[rb]
+
+        for ug in idxs.tolist():
+            u = int(ug)
+            lu = int(g2l[u])
+            for vg in adj[u]:
+                v = int(vg)
+                if v < 0 or v >= M or (not bool(mask[v])):
+                    continue
+                lv = int(g2l[v])
+                if lu == lv:
+                    continue
+                has_nbr[lu] = True
+                has_nbr[lv] = True
+                union(lu, lv)
+
+        roots = np.asarray([find(i) for i in range(n)], dtype=np.int64)
+        uniq, inv = np.unique(roots, return_inverse=True)
+        comp_sizes = np.bincount(inv.astype(np.int64), minlength=int(uniq.size)).astype(np.int64)
+        n_comp = int(comp_sizes.size)
+        largest = int(comp_sizes.max()) if comp_sizes.size else 0
+        isolate_n = int(np.sum(~has_nbr))
+        return {
+            "n_connected_components_undirected": int(n_comp),
+            "largest_cc_n": int(largest),
+            "largest_cc_frac": float(largest / max(1, n)),
+            "isolated_deg0_n": int(isolate_n),
+            "isolated_deg0_frac": float(isolate_n / max(1, n)),
+        }
 
     per_city: Dict[str, object] = {}
     for c in sorted(set(int(x) for x in city.tolist() if int(x) >= 0)):
         mask = city == int(c)
-        n = int(np.sum(mask))
-        iso = int(np.sum((~has_nbr) & mask))
-        roots_c = [r for r, rc in root_city.items() if int(rc) == int(c)]
-        comp_n = int(len(roots_c))
-        largest_c = int(max((root_size.get(r, 0) for r in roots_c), default=0))
-        per_city[str(int(c))] = {
-            "n_ways": int(n),
-            "n_connected_components_undirected": int(comp_n),
-            "largest_cc_n": int(largest_c),
-            "largest_cc_frac": float(largest_c / max(1, n)),
-            "isolated_deg0_n": int(iso),
-            "isolated_deg0_frac": float(iso / max(1, n)),
-        }
+        stats = connectivity_induced(mask)
+        stats["n_ways"] = int(np.sum(mask))
+        per_city[str(int(c))] = stats
 
-    mixed = int(sum(1 for rc in root_city.values() if int(rc) == -2))
+    unknown_n = int(np.sum(city < 0))
     out["per_city"] = per_city
-    out["mixed_city_components_n"] = int(mixed)
+    out["unknown_city_n"] = int(unknown_n)
+    out["unknown_city_frac"] = float(unknown_n / max(1, M))
     return out
 
 
@@ -436,4 +480,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

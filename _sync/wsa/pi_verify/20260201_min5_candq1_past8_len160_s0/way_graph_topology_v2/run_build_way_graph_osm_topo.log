@@ -1,0 +1,27 @@
+{
+  "ok": true,
+  "out_npz": "_sync/wsa/pi_verify/20260201_min5_candq1_past8_len160_s0/way_graph_topology_v2/way_graph_osm_topo.npz",
+  "n_ways": 19551,
+  "n_edges_directed": 46133,
+  "osm_way_coverage_frac": 0.8796992481203008,
+  "largest_cc_frac": 0.46739297222648457,
+  "isolated_deg0_frac": 0.12229553475525548,
+  "per_city": {
+    "0": {
+      "n_connected_components_undirected": 5,
+      "largest_cc_n": 7944,
+      "largest_cc_frac": 0.9963627241941553,
+      "isolated_deg0_n": 0,
+      "isolated_deg0_frac": 0.0,
+      "n_ways": 7973
+    },
+    "1": {
+      "n_connected_components_undirected": 9,
+      "largest_cc_n": 7278,
+      "largest_cc_frac": 0.9945340256900792,
+      "isolated_deg0_n": 0,
+      "isolated_deg0_frac": 0.0,
+      "n_ways": 7318
+    }
+  }
+}

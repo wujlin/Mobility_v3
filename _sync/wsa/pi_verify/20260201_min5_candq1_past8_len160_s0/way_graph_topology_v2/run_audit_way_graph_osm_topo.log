@@ -1,0 +1,7 @@
+[way_graph] _sync/wsa/pi_verify/20260201_min5_candq1_past8_len160_s0/way_graph_topology_v2/way_graph_osm_topo.npz
+[ways] 19551 edges_directed=46133
+[out_deg] p50=2.0 p90=4.0 max=17
+[connectivity] n_cc=2466 largest_cc=46.7% isolated=12.2%
+[per_city] unknown_frac=21.8% conflicts=0
+  [city 0] n_ways=7973 largest_cc=99.6% isolated=0.0% n_cc=5
+  [city 1] n_ways=7318 largest_cc=99.5% isolated=0.0% n_cc=9

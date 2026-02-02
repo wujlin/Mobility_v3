@@ -578,6 +578,22 @@ PYTHONUNBUFFERED=1 python -u -m src.data.way_graph.extract_region_seq_stats \
   |& tee "$OUT_REG/run_extract_region_seq_stats.log"
 ```
 
+**(P1b) Corridor diversity：用 coarse OD bin 聚合 region_seq（替代“精确 start_way/dest_way”）**
+
+> 口径：精确 OD（start_way,dest_way）非常稀疏（平均每 OD 约 1 条），会把 diversity 压成 0。
+> 改用 `od_bin_deg=0.02`（约 2km）聚合，再统计每个 OD bin 内 region_seq pattern 的多样性。
+
+```bash
+PYTHONUNBUFFERED=1 python -u -m src.data.way_graph.scan_multimodal_od_bin_region_seq \
+  --way_routes_npz "$WAY_ROUTES_NPZ" \
+  --region_seq_npz "$OUT_REG/region_seq_min5_max160.npz" \
+  --out_json "$OUT_REG/odbin02_regionseq_multimodal.json" \
+  --od_bin_deg 0.02 \
+  --min_routes_per_bin 5 \
+  --min_od_km 1.0 \
+  |& tee "$OUT_REG/run_odbin02_regionseq_multimodal.log"
+```
+
 > [!NOTE]
 > 如果你跑的是 `bash run_way_casd_prep.sh`（单城市），目录命名是 `W1/W2/W3/W4`；
 > 训练命令里把 `W5_way_routes_labeled/W3_way_graph/W4_way_features` 分别替换为

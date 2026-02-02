@@ -52,3 +52,11 @@ Thumbs.db
 _tmp/
 opinion_pi.md
 opinion_pi.md
+
+# WSL CLI Artifacts (Do not commit)
+--*
+OUT_SKEL_SAMPLE1=*
+*.bak
+debug_*.py
+fix_*.py
+essay/

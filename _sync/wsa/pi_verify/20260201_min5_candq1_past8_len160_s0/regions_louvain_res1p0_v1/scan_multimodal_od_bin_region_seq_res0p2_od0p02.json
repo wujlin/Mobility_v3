@@ -1,0 +1,92 @@
+{
+  "ok": true,
+  "task": "scan_multimodal_od_bin_region_seq",
+  "created_at": "2026-02-02T16:43:33.356359+08:00",
+  "cfg": {
+    "od_bin_deg": 0.02,
+    "min_od_km": 1.0,
+    "min_routes_per_bin": 5,
+    "max_sigs_per_bin": 32,
+    "max_rep_routes_per_sig": 3,
+    "max_out_bins": 200,
+    "lcs_sep_thr": 0.5,
+    "lcs_max_patterns": 6
+  },
+  "inputs": {
+    "way_routes_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD1_waydata_rustbelt_seed0_strict_v1/W5_way_routes_strict/way_routes_strict_masklen0.npz",
+    "region_seq_npz": "_sync/wsa/pi_verify/20260201_min5_candq1_past8_len160_s0/regions_louvain_v1/region_seq_min5_max160.npz"
+  },
+  "n_routes_in_region_seq_npz": 5022,
+  "skipped_short_od": 0,
+  "skipped_oob": 0,
+  "od_km": {
+    "looks_deg": true,
+    "p50": 5490.703003343448,
+    "p90": 10199.144352041092
+  },
+  "od_bins": {
+    "n_bins": 4672,
+    "routes_per_bin": {
+      "p50": 1.0,
+      "p90": 1.0,
+      "p95": 1.0,
+      "max": 32
+    },
+    "n_bins_ge_min_routes": 14
+  },
+  "multimodal": {
+    "n_bins_multi": 0,
+    "frac_multi_over_ge_min": 0.0,
+    "n_bins_sep_lcs": 0,
+    "frac_sep_over_multi": 0.0
+  },
+  "uniq_patterns_per_bin_ge_min": {
+    "p50": 1.0,
+    "p90": 1.0,
+    "p95": 1.0,
+    "max": 1
+  },
+  "per_city": {
+    "0": {
+      "n_od_bins": 1361,
+      "routes_per_bin": {
+        "p50": 1.0,
+        "p90": 1.0,
+        "p95": 1.0,
+        "max": 16
+      },
+      "n_bins_ge_min_routes": 1,
+      "multimodal_bins": {
+        "n_bins_multi": 0,
+        "frac_multi_over_ge_min": 0.0
+      },
+      "uniq_patterns_per_bin_ge_min": {
+        "p50": 1.0,
+        "p90": 1.0,
+        "p95": 1.0,
+        "max": 1
+      }
+    },
+    "1": {
+      "n_od_bins": 3311,
+      "routes_per_bin": {
+        "p50": 1.0,
+        "p90": 1.0,
+        "p95": 1.0,
+        "max": 32
+      },
+      "n_bins_ge_min_routes": 13,
+      "multimodal_bins": {
+        "n_bins_multi": 0,
+        "frac_multi_over_ge_min": 0.0
+      },
+      "uniq_patterns_per_bin_ge_min": {
+        "p50": 1.0,
+        "p90": 1.0,
+        "p95": 1.0,
+        "max": 1
+      }
+    }
+  },
+  "top_multimodal_bins": []
+}

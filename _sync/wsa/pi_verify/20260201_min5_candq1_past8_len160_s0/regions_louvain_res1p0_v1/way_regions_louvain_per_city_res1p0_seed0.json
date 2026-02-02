@@ -1,0 +1,55 @@
+{
+  "ok": true,
+  "task": "build_way_regions_louvain_per_city",
+  "created_at": "2026-02-02T16:21:15.020230+08:00",
+  "cfg": {
+    "seed": 0,
+    "resolution": 1.0,
+    "min_component_size": 2,
+    "keep_only_largest_cc": false,
+    "directed_region_edges": false,
+    "fill_unknown_by_neighbor": true
+  },
+  "inputs": {
+    "way_graph_npz": "_sync/wsa/pi_verify/20260201_min5_candq1_past8_len160_s0/way_graph_topology_v2/way_graph_osm_topo.npz",
+    "way_routes_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD1_waydata_rustbelt_seed0_strict_v1/W5_way_routes_strict/way_routes_strict_masklen0.npz"
+  },
+  "n_ways": 19551,
+  "unknown_city_n": 4260,
+  "unknown_city_frac": 0.21789166794537365,
+  "route_city_conflicts": 0,
+  "filled_unknown_by_neighbor_n": 948,
+  "n_regions": 154,
+  "per_city": {
+    "0": {
+      "n_ways": 7973,
+      "n_connected_components_undirected": 5,
+      "largest_cc_n": 7944,
+      "largest_cc_frac": 0.9963627241941553,
+      "n_regions": 77,
+      "region_size": {
+        "p50": 106,
+        "p90": 156,
+        "p95": 177,
+        "max": 224
+      },
+      "assigned_frac": 1.0,
+      "region_id_offset": 0
+    },
+    "1": {
+      "n_ways": 7318,
+      "n_connected_components_undirected": 9,
+      "largest_cc_n": 7278,
+      "largest_cc_frac": 0.9945340256900792,
+      "n_regions": 77,
+      "region_size": {
+        "p50": 94,
+        "p90": 159,
+        "p95": 176,
+        "max": 203
+      },
+      "assigned_frac": 1.0,
+      "region_id_offset": 77
+    }
+  }
+}

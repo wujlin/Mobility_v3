@@ -599,6 +599,10 @@ class WayDecoder(nn.Module):
         route_cond: Dict[str, torch.Tensor],
         start_way: torch.Tensor,  # (B,)
         dest_way: torch.Tensor,  # (B,)
+        way_region: Optional[torch.Tensor] = None,  # (n_ways,) long, optional
+        region_seq: Optional[List[List[int]]] = None,  # len=B, optional
+        region_constraint_mode: str = "strict",
+        region_constraint_fallback: str = "unconstrained",
         beam_size: int = 5,
         max_len: Optional[int] = None,
         max_candidates: Optional[int] = None,
@@ -613,6 +617,38 @@ class WayDecoder(nn.Module):
         out: List[List[int]] = []
         device = latent_tokens.device
 
+        use_region_constraint = (way_region is not None) and (region_seq is not None)
+        if use_region_constraint and int(len(region_seq)) != int(B):
+            raise ValueError(f"region_seq length mismatch: got {len(region_seq)}, expect {B}")
+        mode = str(region_constraint_mode or "").strip().lower()
+        if mode and mode not in {"strict"}:
+            raise ValueError(f"unsupported region_constraint_mode: {region_constraint_mode!r}")
+        fallback = str(region_constraint_fallback or "").strip().lower()
+        if fallback and fallback not in {"unconstrained", "stop"}:
+            raise ValueError(f"unsupported region_constraint_fallback: {region_constraint_fallback!r}")
+
+        def _compress_consecutive_py(seq: List[int]) -> List[int]:
+            out: List[int] = []
+            last: Optional[int] = None
+            for x in seq:
+                xx = int(x)
+                if last is None or xx != int(last):
+                    out.append(xx)
+                    last = xx
+            return out
+
+        def _prepare_region_seq(seq: List[int], *, start_region: int, dest_region: int) -> List[int]:
+            s = [int(x) for x in seq if int(x) >= 0]
+            s = _compress_consecutive_py(s)
+            if not s:
+                s = [int(start_region), int(dest_region)]
+            if int(s[0]) != int(start_region):
+                s = [int(start_region)] + s
+            if int(s[-1]) != int(dest_region):
+                s = s + [int(dest_region)]
+            s = _compress_consecutive_py(s)
+            return s
+
         for b in range(B):
             sw = int(start_way[b].item())
             dw = int(dest_way[b].item())
@@ -624,14 +660,19 @@ class WayDecoder(nn.Module):
                 dow=route_cond_b["dow"],
                 route_city=route_cond_b["route_city"],
             )
-            beams: List[Tuple[List[int], float]] = [([sw], 0.0)]
+            region_path: Optional[List[int]] = None
+            if use_region_constraint and way_region is not None and region_seq is not None:
+                sr = int(way_region[int(sw)].item())
+                dr = int(way_region[int(dw)].item()) if int(dw) >= 0 else int(sr)
+                region_path = _prepare_region_seq(list(region_seq[int(b)]), start_region=sr, dest_region=dr)
+            beams: List[Tuple[List[int], float, int]] = [([sw], 0.0, 0)]  # (path, score, region_ptr)
 
             for _step in range(max_len):
-                new_beams: List[Tuple[List[int], float]] = []
+                new_beams: List[Tuple[List[int], float, int]] = []
                 all_finished = True
-                for path, score in beams:
+                for path, score, rptr in beams:
                     if path and self.is_dest_reached(path[-1], dw):
-                        new_beams.append((path, score))
+                        new_beams.append((path, score, int(rptr)))
                         continue
                     all_finished = False
                     cand_full = self.get_succ_candidates(path[-1])
@@ -646,6 +687,30 @@ class WayDecoder(nn.Module):
                         candidate_policy=candidate_policy,
                         include_dest_if_successor=include_dest_if_successor,
                     )
+                    if region_path is not None and way_region is not None:
+                        if way_region.device != cand.device:
+                            raise ValueError(f"way_region must be on same device as candidates: {way_region.device} vs {cand.device}")
+                        cur_way = int(path[-1])
+                        cur_reg = int(way_region[cur_way].item())
+                        rr = int(rptr)
+                        while rr + 1 < int(len(region_path)) and int(cur_reg) == int(region_path[rr + 1]):
+                            rr += 1
+                        allow0 = int(region_path[rr])
+                        allow1 = int(region_path[rr + 1]) if rr + 1 < int(len(region_path)) else None
+                        cand_reg = way_region[cand]
+                        m = cand_reg == int(allow0)
+                        if allow1 is not None:
+                            m = m | (cand_reg == int(allow1))
+                        cand_f = cand[m]
+                        # keep direct successor-to-dest if present
+                        if int(dw) >= 0 and bool((cand == int(dw)).any().item()) and (not bool((cand_f == int(dw)).any().item())):
+                            cand_f = torch.cat([cand_f, torch.tensor([int(dw)], dtype=cand.dtype, device=cand.device)], dim=0)
+                        if int(cand_f.numel()) > 0:
+                            cand = cand_f
+                            rptr = rr
+                        else:
+                            if fallback == "stop":
+                                continue
                     C = int(cand.numel())
                     if C <= 0:
                         continue
@@ -701,7 +766,13 @@ class WayDecoder(nn.Module):
                     topk = min(beam_size, int(logp.numel()))
                     vals, ids = torch.topk(logp, k=topk, dim=-1)
                     for lp, j in zip(vals.tolist(), ids.tolist()):
-                        new_beams.append((path + [int(cand[j].item())], score + float(lp)))
+                        nxt = int(cand[j].item())
+                        new_rptr = int(rptr)
+                        if region_path is not None and way_region is not None:
+                            nxt_reg = int(way_region[int(nxt)].item())
+                            while new_rptr + 1 < int(len(region_path)) and int(nxt_reg) == int(region_path[new_rptr + 1]):
+                                new_rptr += 1
+                        new_beams.append((path + [nxt], score + float(lp), int(new_rptr)))
 
                 if all_finished:
                     break
@@ -721,6 +792,10 @@ class WayDecoder(nn.Module):
         route_cond: Dict[str, torch.Tensor],
         start_way: torch.Tensor,  # (B,)
         dest_way: torch.Tensor,  # (B,)
+        way_region: Optional[torch.Tensor] = None,  # (n_ways,) long, optional
+        region_seq: Optional[List[List[int]]] = None,  # len=B, optional
+        region_constraint_mode: str = "strict",
+        region_constraint_fallback: str = "unconstrained",
         max_len: Optional[int] = None,
         max_candidates: Optional[int] = None,
         candidate_policy: str = "first",
@@ -733,6 +808,38 @@ class WayDecoder(nn.Module):
         out: List[List[int]] = []
         device = latent_tokens.device
 
+        use_region_constraint = (way_region is not None) and (region_seq is not None)
+        if use_region_constraint and int(len(region_seq)) != int(B):
+            raise ValueError(f"region_seq length mismatch: got {len(region_seq)}, expect {B}")
+        mode = str(region_constraint_mode or "").strip().lower()
+        if mode and mode not in {"strict"}:
+            raise ValueError(f"unsupported region_constraint_mode: {region_constraint_mode!r}")
+        fallback = str(region_constraint_fallback or "").strip().lower()
+        if fallback and fallback not in {"unconstrained", "stop"}:
+            raise ValueError(f"unsupported region_constraint_fallback: {region_constraint_fallback!r}")
+
+        def _compress_consecutive_py(seq: List[int]) -> List[int]:
+            out: List[int] = []
+            last: Optional[int] = None
+            for x in seq:
+                xx = int(x)
+                if last is None or xx != int(last):
+                    out.append(xx)
+                    last = xx
+            return out
+
+        def _prepare_region_seq(seq: List[int], *, start_region: int, dest_region: int) -> List[int]:
+            s = [int(x) for x in seq if int(x) >= 0]
+            s = _compress_consecutive_py(s)
+            if not s:
+                s = [int(start_region), int(dest_region)]
+            if int(s[0]) != int(start_region):
+                s = [int(start_region)] + s
+            if int(s[-1]) != int(dest_region):
+                s = s + [int(dest_region)]
+            s = _compress_consecutive_py(s)
+            return s
+
         for b in range(B):
             sw = int(start_way[b].item())
             dw = int(dest_way[b].item())
@@ -744,6 +851,13 @@ class WayDecoder(nn.Module):
                 dow=route_cond_b["dow"],
                 route_city=route_cond_b["route_city"],
             )
+
+            region_path: Optional[List[int]] = None
+            region_ptr = 0
+            if use_region_constraint and way_region is not None and region_seq is not None:
+                sr = int(way_region[int(sw)].item())
+                dr = int(way_region[int(dw)].item()) if int(dw) >= 0 else int(sr)
+                region_path = _prepare_region_seq(list(region_seq[int(b)]), start_region=sr, dest_region=dr)
 
             path: List[int] = [sw]
             for step_idx in range(max_len):
@@ -761,6 +875,27 @@ class WayDecoder(nn.Module):
                     candidate_policy=candidate_policy,
                     include_dest_if_successor=include_dest_if_successor,
                 )
+                if region_path is not None and way_region is not None:
+                    if way_region.device != cand.device:
+                        raise ValueError(f"way_region must be on same device as candidates: {way_region.device} vs {cand.device}")
+                    cur_way = int(path[-1])
+                    cur_reg = int(way_region[cur_way].item())
+                    while region_ptr + 1 < int(len(region_path)) and int(cur_reg) == int(region_path[region_ptr + 1]):
+                        region_ptr += 1
+                    allow0 = int(region_path[region_ptr])
+                    allow1 = int(region_path[region_ptr + 1]) if region_ptr + 1 < int(len(region_path)) else None
+                    cand_reg = way_region[cand]
+                    m = cand_reg == int(allow0)
+                    if allow1 is not None:
+                        m = m | (cand_reg == int(allow1))
+                    cand_f = cand[m]
+                    if int(dw) >= 0 and bool((cand == int(dw)).any().item()) and (not bool((cand_f == int(dw)).any().item())):
+                        cand_f = torch.cat([cand_f, torch.tensor([int(dw)], dtype=cand.dtype, device=cand.device)], dim=0)
+                    if int(cand_f.numel()) > 0:
+                        cand = cand_f
+                    else:
+                        if fallback == "stop":
+                            break
                 C = int(cand.numel())
                 if C <= 0:
                     break

@@ -1,0 +1,62 @@
+{
+  "ok": true,
+  "city": 1,
+  "bin": "[60,+)",
+  "which": "beam",
+  "n_total_in_bin": 12,
+  "n_baseline_success_constrained_fail": 1,
+  "rows": [
+    {
+      "route_id": 4569,
+      "city": 1,
+      "gt_hops": 69,
+      "bin": "[60,+)",
+      "baseline": {
+        "success": true,
+        "hit_wall": false,
+        "dead_end": false,
+        "has_loop": false,
+        "hops": 69,
+        "jaccard": 0.971830985915493,
+        "len_m": 12852.44892692566,
+        "len_ratio": 0.9999242225216854,
+        "dtw_m": 45.15283926338053,
+        "frechet_m": 22.818494831613958,
+        "final_error_m": 106.89537581469017
+      },
+      "constrained": {
+        "success": false,
+        "hit_wall": true,
+        "dead_end": false,
+        "has_loop": true,
+        "hops": 160,
+        "jaccard": 0.3473684210526316,
+        "len_m": 27113.16314792633,
+        "len_ratio": 2.10941188990034,
+        "dtw_m": 284405.0696404398,
+        "frechet_m": 4210.08580741499,
+        "final_error_m": 4302.1153546351925
+      },
+      "constrained_region_seq": [
+        83,
+        78,
+        89,
+        107,
+        82
+      ],
+      "gt_constrained_success": false,
+      "gt_constrained_region_seq": [
+        83,
+        78,
+        89,
+        107,
+        82
+      ]
+    }
+  ],
+  "inputs": {
+    "baseline_json": "_sync/wsa/pi_verify/20260202_region_constraint_diagnose_s0/eval/per_route_baseline_n200pc.json",
+    "constrained_json": "_sync/wsa/pi_verify/20260202_region_constraint_diagnose_s0/eval/per_route_regionAR_strict_destreg_n200pc.json",
+    "gt_constrained_json": "_sync/wsa/pi_verify/20260202_region_constraint_diagnose_s0/eval/per_route_regionGT_strict_destreg_n200pc.json"
+  }
+}

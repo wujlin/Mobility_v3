@@ -1,0 +1,331 @@
+{
+  "ok": true,
+  "task": "audit_region_trace_alignment",
+  "created_at": "2026-02-03T01:01:51.233214+08:00",
+  "cfg": {
+    "min_hops": 5,
+    "max_way_len": 160,
+    "bins": [
+      "[5,10)",
+      "[10,20)",
+      "[20,30)",
+      "[30,40)",
+      "[40,60)",
+      "[60,+)"
+    ]
+  },
+  "inputs": {
+    "way_routes_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD1_waydata_rustbelt_seed0_strict_v1/W5_way_routes_strict/way_routes_strict_masklen0.npz",
+    "way_regions_npz": "_sync/wsa/pi_verify/20260201_min5_candq1_past8_len160_s0/regions_louvain_res1p0_v1/way_regions_louvain_per_city_res1p0_seed0.npz"
+  },
+  "overall": {
+    "n": 5022,
+    "region_seq_len": {
+      "n": 5022,
+      "p25": 2.0,
+      "p50": 2.0,
+      "p75": 4.0,
+      "p95": 6.0,
+      "max": 10.0
+    },
+    "compression_ratio_way_over_region": {
+      "n": 5022,
+      "p25": 7.5,
+      "p50": 9.666666666666666,
+      "p75": 13.0,
+      "p95": 18.666666666666668,
+      "max": 46.0
+    },
+    "backtrack_rate": 0.028275587415372363
+  },
+  "per_city": {
+    "0": {
+      "overall": {
+        "n": 1394,
+        "region_seq_len": {
+          "n": 1394,
+          "p25": 2.0,
+          "p50": 3.0,
+          "p75": 5.0,
+          "p95": 7.0,
+          "max": 10.0
+        },
+        "compression_ratio_way_over_region": {
+          "n": 1394,
+          "p25": 8.0,
+          "p50": 11.0,
+          "p75": 14.191666666666666,
+          "p95": 22.0,
+          "max": 46.0
+        },
+        "backtrack_rate": 0.04878048780487805
+      },
+      "bins": {
+        "[5,10)": {
+          "n": 121,
+          "region_seq_len": {
+            "n": 121,
+            "p25": 1.0,
+            "p50": 1.0,
+            "p75": 2.0,
+            "p95": 2.0,
+            "max": 3.0
+          },
+          "compression_ratio_way_over_region": {
+            "n": 121,
+            "p25": 5.0,
+            "p50": 7.0,
+            "p75": 8.0,
+            "p95": 10.0,
+            "max": 10.0
+          },
+          "backtrack_rate": 0.0
+        },
+        "[10,20)": {
+          "n": 237,
+          "region_seq_len": {
+            "n": 237,
+            "p25": 1.0,
+            "p50": 2.0,
+            "p75": 2.0,
+            "p95": 3.0,
+            "max": 4.0
+          },
+          "compression_ratio_way_over_region": {
+            "n": 237,
+            "p25": 7.5,
+            "p50": 10.0,
+            "p75": 15.0,
+            "p95": 19.0,
+            "max": 20.0
+          },
+          "backtrack_rate": 0.02531645569620253
+        },
+        "[20,30)": {
+          "n": 219,
+          "region_seq_len": {
+            "n": 219,
+            "p25": 2.0,
+            "p50": 2.0,
+            "p75": 3.0,
+            "p95": 4.0,
+            "max": 5.0
+          },
+          "compression_ratio_way_over_region": {
+            "n": 219,
+            "p25": 9.0,
+            "p50": 12.0,
+            "p75": 14.0,
+            "p95": 24.19999999999999,
+            "max": 30.0
+          },
+          "backtrack_rate": 0.0273972602739726
+        },
+        "[30,40)": {
+          "n": 263,
+          "region_seq_len": {
+            "n": 263,
+            "p25": 2.0,
+            "p50": 3.0,
+            "p75": 4.0,
+            "p95": 5.0,
+            "max": 7.0
+          },
+          "compression_ratio_way_over_region": {
+            "n": 263,
+            "p25": 9.25,
+            "p50": 11.333333333333334,
+            "p75": 16.25,
+            "p95": 19.0,
+            "max": 40.0
+          },
+          "backtrack_rate": 0.034220532319391636
+        },
+        "[40,60)": {
+          "n": 425,
+          "region_seq_len": {
+            "n": 425,
+            "p25": 3.0,
+            "p50": 5.0,
+            "p75": 6.0,
+            "p95": 8.0,
+            "max": 10.0
+          },
+          "compression_ratio_way_over_region": {
+            "n": 425,
+            "p25": 8.666666666666666,
+            "p50": 11.0,
+            "p75": 14.0,
+            "p95": 23.399999999999977,
+            "max": 46.0
+          },
+          "backtrack_rate": 0.07529411764705882
+        },
+        "[60,+)": {
+          "n": 129,
+          "region_seq_len": {
+            "n": 129,
+            "p25": 4.0,
+            "p50": 5.0,
+            "p75": 6.0,
+            "p95": 8.0,
+            "max": 10.0
+          },
+          "compression_ratio_way_over_region": {
+            "n": 129,
+            "p25": 10.428571428571429,
+            "p50": 13.4,
+            "p75": 16.8,
+            "p95": 30.4333333333333,
+            "max": 44.0
+          },
+          "backtrack_rate": 0.11627906976744186
+        }
+      }
+    },
+    "1": {
+      "overall": {
+        "n": 3628,
+        "region_seq_len": {
+          "n": 3628,
+          "p25": 2.0,
+          "p50": 2.0,
+          "p75": 3.0,
+          "p95": 6.0,
+          "max": 10.0
+        },
+        "compression_ratio_way_over_region": {
+          "n": 3628,
+          "p25": 7.0,
+          "p50": 9.333333333333334,
+          "p75": 12.0,
+          "p95": 17.0,
+          "max": 37.0
+        },
+        "backtrack_rate": 0.020396912899669238
+      },
+      "bins": {
+        "[5,10)": {
+          "n": 704,
+          "region_seq_len": {
+            "n": 704,
+            "p25": 1.0,
+            "p50": 1.0,
+            "p75": 2.0,
+            "p95": 2.0,
+            "max": 4.0
+          },
+          "compression_ratio_way_over_region": {
+            "n": 704,
+            "p25": 5.0,
+            "p50": 7.0,
+            "p75": 9.0,
+            "p95": 10.0,
+            "max": 10.0
+          },
+          "backtrack_rate": 0.009943181818181818
+        },
+        "[10,20)": {
+          "n": 993,
+          "region_seq_len": {
+            "n": 993,
+            "p25": 1.0,
+            "p50": 2.0,
+            "p75": 2.0,
+            "p95": 3.0,
+            "max": 5.0
+          },
+          "compression_ratio_way_over_region": {
+            "n": 993,
+            "p25": 6.0,
+            "p50": 8.0,
+            "p75": 11.0,
+            "p95": 17.0,
+            "max": 20.0
+          },
+          "backtrack_rate": 0.022155085599194362
+        },
+        "[20,30)": {
+          "n": 807,
+          "region_seq_len": {
+            "n": 807,
+            "p25": 2.0,
+            "p50": 2.0,
+            "p75": 3.0,
+            "p95": 4.0,
+            "max": 6.0
+          },
+          "compression_ratio_way_over_region": {
+            "n": 807,
+            "p25": 8.666666666666666,
+            "p50": 12.0,
+            "p75": 14.0,
+            "p95": 22.0,
+            "max": 29.0
+          },
+          "backtrack_rate": 0.024783147459727387
+        },
+        "[30,40)": {
+          "n": 445,
+          "region_seq_len": {
+            "n": 445,
+            "p25": 2.0,
+            "p50": 3.0,
+            "p75": 4.0,
+            "p95": 5.0,
+            "max": 7.0
+          },
+          "compression_ratio_way_over_region": {
+            "n": 445,
+            "p25": 9.0,
+            "p50": 11.0,
+            "p75": 16.0,
+            "p95": 18.0,
+            "max": 37.0
+          },
+          "backtrack_rate": 0.017977528089887642
+        },
+        "[40,60)": {
+          "n": 498,
+          "region_seq_len": {
+            "n": 498,
+            "p25": 4.0,
+            "p50": 5.0,
+            "p75": 6.0,
+            "p95": 7.0,
+            "max": 8.0
+          },
+          "compression_ratio_way_over_region": {
+            "n": 498,
+            "p25": 9.0,
+            "p50": 10.6,
+            "p75": 12.9375,
+            "p95": 18.941666666666627,
+            "max": 26.5
+          },
+          "backtrack_rate": 0.030120481927710843
+        },
+        "[60,+)": {
+          "n": 181,
+          "region_seq_len": {
+            "n": 181,
+            "p25": 6.0,
+            "p50": 7.0,
+            "p75": 7.0,
+            "p95": 8.0,
+            "max": 10.0
+          },
+          "compression_ratio_way_over_region": {
+            "n": 181,
+            "p25": 9.571428571428571,
+            "p50": 10.333333333333334,
+            "p75": 12.142857142857142,
+            "p95": 13.6,
+            "max": 16.5
+          },
+          "backtrack_rate": 0.011049723756906077
+        }
+      }
+    }
+  }
+}

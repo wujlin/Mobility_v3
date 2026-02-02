@@ -253,7 +253,7 @@ class Cfg:
 
     region_constraint: str  # "none" | "gt" | "ar"
     region_constraint_mode: str  # only "strict" for now
-    region_constraint_fallback: str  # "unconstrained" | "stop"
+    region_constraint_fallback: str  # "unconstrained" | "dest_region" | "stop"
 
     region_ar_max_len: int  # only used when region_constraint=ar
 
@@ -487,7 +487,7 @@ def main() -> None:
     p.add_argument("--region_ar_ckpt", type=Path, default=None, help="Required when --region_constraint=ar.")
     p.add_argument("--region_ar_max_len", type=int, default=16, help="Max region_seq length for Region AR greedy rollout.")
     p.add_argument("--region_constraint_mode", choices=["strict", "relaxed"], default="strict")
-    p.add_argument("--region_constraint_fallback", choices=["unconstrained", "stop"], default="unconstrained")
+    p.add_argument("--region_constraint_fallback", choices=["unconstrained", "dest_region", "stop"], default="unconstrained")
     p.add_argument("--out_per_route_json", type=Path, default=None, help="Optional: dump per-route records for diff analysis.")
 
     p.add_argument(
@@ -1121,7 +1121,7 @@ def main() -> None:
             "bins": [b[2] for b in _hops_bins()],
             "latent_source": "gt=oracle (GT->AE.encode->Decoder); flow=Flow.sample->Decoder (generation).",
             "sample_select": "When n_samples_per_route>1: first=use sample0; best=prefer success then min(DTW, Fréchet).",
-            "region_constraint": "If enabled: use Region seq to filter way candidates by target region (strict mode).",
+            "region_constraint": "If enabled: use Region seq to filter way candidates by target region (modes: strict/relaxed; fallback: unconstrained/dest_region/stop).",
         },
     }
 

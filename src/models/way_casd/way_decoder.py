@@ -626,7 +626,7 @@ class WayDecoder(nn.Module):
         if mode and mode not in {"strict", "relaxed"}:
             raise ValueError(f"unsupported region_constraint_mode: {region_constraint_mode!r}")
         fallback = str(region_constraint_fallback or "").strip().lower()
-        if fallback and fallback not in {"unconstrained", "stop"}:
+        if fallback and fallback not in {"unconstrained", "stop", "dest_region"}:
             raise ValueError(f"unsupported region_constraint_fallback: {region_constraint_fallback!r}")
 
         def _compress_consecutive_py(seq: List[int]) -> List[int]:
@@ -723,6 +723,12 @@ class WayDecoder(nn.Module):
                         else:
                             if fallback == "stop":
                                 continue
+                            if fallback == "dest_region":
+                                dest_reg = int(way_region[int(dw)].item()) if int(dw) >= 0 else -1
+                                if dest_reg >= 0:
+                                    cand_dest = cand[cand_reg == int(dest_reg)]
+                                    if int(cand_dest.numel()) > 0:
+                                        cand = cand_dest
                     C = int(cand.numel())
                     if C <= 0:
                         continue
@@ -828,7 +834,7 @@ class WayDecoder(nn.Module):
         if mode and mode not in {"strict", "relaxed"}:
             raise ValueError(f"unsupported region_constraint_mode: {region_constraint_mode!r}")
         fallback = str(region_constraint_fallback or "").strip().lower()
-        if fallback and fallback not in {"unconstrained", "stop"}:
+        if fallback and fallback not in {"unconstrained", "stop", "dest_region"}:
             raise ValueError(f"unsupported region_constraint_fallback: {region_constraint_fallback!r}")
 
         def _compress_consecutive_py(seq: List[int]) -> List[int]:
@@ -919,6 +925,12 @@ class WayDecoder(nn.Module):
                     else:
                         if fallback == "stop":
                             break
+                        if fallback == "dest_region":
+                            dest_reg = int(way_region[int(dw)].item()) if int(dw) >= 0 else -1
+                            if dest_reg >= 0:
+                                cand_dest = cand[cand_reg == int(dest_reg)]
+                                if int(cand_dest.numel()) > 0:
+                                    cand = cand_dest
                 C = int(cand.numel())
                 if C <= 0:
                     break
@@ -1026,7 +1038,7 @@ class WayDecoder(nn.Module):
             if region_adj.device != device:
                 raise ValueError(f"region_adj must be on same device as latent_tokens: {region_adj.device} vs {device}")
         fallback = str(region_constraint_fallback or "").strip().lower()
-        if fallback and fallback not in {"unconstrained", "stop"}:
+        if fallback and fallback not in {"unconstrained", "stop", "dest_region"}:
             raise ValueError(f"unsupported region_constraint_fallback: {region_constraint_fallback!r}")
 
         def _compress_consecutive_py(seq: List[int]) -> List[int]:
@@ -1150,6 +1162,9 @@ class WayDecoder(nn.Module):
                     neigh0 = region_adj[allow0_safe[:, None], cand_reg] & (allow0[:, None] >= 0)
                     neigh1 = region_adj[allow1_safe[:, None], cand_reg] & (allow1[:, None] >= 0)
                     m = m | (cand_mask & neigh0) | (cand_mask & neigh1)
+                # Keep direct successor-to-dest if present (match non-batched behavior).
+                dest = dw[keep]
+                m = m | (cand_mask & (cand_way == dest[:, None]))
 
                 # If empty after masking: fallback.
                 row_has = m.any(dim=1)
@@ -1168,6 +1183,14 @@ class WayDecoder(nn.Module):
                     cand_way = cand_way[good]
                     cand_mask = m[good]
                     B2 = int(keep.numel())
+                elif fallback == "dest_region":
+                    dest_reg = way_region[dw[keep]]  # (B2,)
+                    has_dest_reg = (dest_reg >= 0)[:, None]
+                    m_dest = cand_mask & has_dest_reg & (cand_reg == dest_reg[:, None])
+                    row_has_dest = m_dest.any(dim=1)
+                    m2 = torch.where(row_has[:, None], m, m_dest)
+                    row_has2 = row_has | row_has_dest
+                    cand_mask = torch.where(row_has2[:, None], m2, cand_mask)
                 else:
                     cand_mask = torch.where(row_has[:, None], m, cand_mask)
 
@@ -1282,7 +1305,7 @@ class WayDecoder(nn.Module):
             if region_adj.device != device:
                 raise ValueError(f"region_adj must be on same device as latent_tokens: {region_adj.device} vs {device}")
         fallback = str(region_constraint_fallback or "").strip().lower()
-        if fallback and fallback not in {"unconstrained", "stop"}:
+        if fallback and fallback not in {"unconstrained", "stop", "dest_region"}:
             raise ValueError(f"unsupported region_constraint_fallback: {region_constraint_fallback!r}")
 
         def _compress_consecutive_py(seq: List[int]) -> List[int]:
@@ -1418,6 +1441,10 @@ class WayDecoder(nn.Module):
                     neigh0 = region_adj[allow0_safe[:, None], cand_reg] & (allow0[:, None] >= 0)
                     neigh1 = region_adj[allow1_safe[:, None], cand_reg] & (allow1[:, None] >= 0)
                     m = m | (cand_mask & neigh0) | (cand_mask & neigh1)
+                # Keep direct successor-to-dest if present.
+                route_ids_t = torch.tensor(route_ids, dtype=torch.long, device=device)
+                dest = dest_way[route_ids_t]
+                m = m | (cand_mask & (cand_way == dest[:, None]))
                 row_has = m.any(dim=1)
                 if fallback == "stop":
                     good = torch.nonzero(row_has, as_tuple=False).reshape(-1)
@@ -1432,6 +1459,14 @@ class WayDecoder(nn.Module):
                     path_list = [path_list[int(i)] for i in good.tolist()]
                     score_list = [score_list[int(i)] for i in good.tolist()]
                     T = int(cand_way.shape[0])
+                elif fallback == "dest_region":
+                    dest_reg = way_region[dest]  # (T,)
+                    has_dest_reg = (dest_reg >= 0)[:, None]
+                    m_dest = cand_mask & has_dest_reg & (cand_reg == dest_reg[:, None])
+                    row_has_dest = m_dest.any(dim=1)
+                    m2 = torch.where(row_has[:, None], m, m_dest)
+                    row_has2 = row_has | row_has_dest
+                    cand_mask = torch.where(row_has2[:, None], m2, cand_mask)
                 else:
                     cand_mask = torch.where(row_has[:, None], m, cand_mask)
 

@@ -1,0 +1,7 @@
+[res=0.005] c0: nR=2814 p50=3 | c1: nR=2445 p50=3
+[res=0.01] c0: nR=983 p50=7 | c1: nR=853 p50=7
+[res=0.02] c0: nR=934 p50=7 | c1: nR=812 p50=8
+[res=0.05] c0: nR=340 p50=20 | c1: nR=798 p50=8
+[res=0.1] c0: nR=322 p50=19 | c1: nR=263 p50=22
+[res=0.2] c0: nR=317 p50=20 | c1: nR=245 p50=24
+[OK] saved: _sync/wsa/pi_verify/20260201_min5_candq1_past8_len160_s0/regions_louvain_sweep_v1/sweep_resolutions_seed0.json

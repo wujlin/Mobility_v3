@@ -602,6 +602,7 @@ class WayDecoder(nn.Module):
         dest_way: torch.Tensor,  # (B,)
         way_region: Optional[torch.Tensor] = None,  # (n_ways,) long, optional
         region_seq: Optional[List[List[int]]] = None,  # len=B, optional
+        region_adj: Optional[torch.Tensor] = None,  # (R,R) bool, optional (required for relaxed mode)
         region_constraint_mode: str = "strict",
         region_constraint_fallback: str = "unconstrained",
         beam_size: int = 5,
@@ -622,7 +623,7 @@ class WayDecoder(nn.Module):
         if use_region_constraint and int(len(region_seq)) != int(B):
             raise ValueError(f"region_seq length mismatch: got {len(region_seq)}, expect {B}")
         mode = str(region_constraint_mode or "").strip().lower()
-        if mode and mode not in {"strict"}:
+        if mode and mode not in {"strict", "relaxed"}:
             raise ValueError(f"unsupported region_constraint_mode: {region_constraint_mode!r}")
         fallback = str(region_constraint_fallback or "").strip().lower()
         if fallback and fallback not in {"unconstrained", "stop"}:
@@ -691,6 +692,11 @@ class WayDecoder(nn.Module):
                     if region_path is not None and way_region is not None:
                         if way_region.device != cand.device:
                             raise ValueError(f"way_region must be on same device as candidates: {way_region.device} vs {cand.device}")
+                        if mode == "relaxed":
+                            if region_adj is None:
+                                raise ValueError("region_adj is required for region_constraint_mode='relaxed'")
+                            if region_adj.device != cand.device:
+                                raise ValueError(f"region_adj must be on same device as candidates: {region_adj.device} vs {cand.device}")
                         cur_way = int(path[-1])
                         cur_reg = int(way_region[cur_way].item())
                         rr = int(rptr)
@@ -702,6 +708,11 @@ class WayDecoder(nn.Module):
                         m = cand_reg == int(allow0)
                         if allow1 is not None:
                             m = m | (cand_reg == int(allow1))
+                        if mode == "relaxed" and region_adj is not None:
+                            if int(allow0) >= 0:
+                                m = m | region_adj[int(allow0), cand_reg]
+                            if allow1 is not None and int(allow1) >= 0:
+                                m = m | region_adj[int(allow1), cand_reg]
                         cand_f = cand[m]
                         # keep direct successor-to-dest if present
                         if int(dw) >= 0 and bool((cand == int(dw)).any().item()) and (not bool((cand_f == int(dw)).any().item())):
@@ -795,6 +806,7 @@ class WayDecoder(nn.Module):
         dest_way: torch.Tensor,  # (B,)
         way_region: Optional[torch.Tensor] = None,  # (n_ways,) long, optional
         region_seq: Optional[List[List[int]]] = None,  # len=B, optional
+        region_adj: Optional[torch.Tensor] = None,  # (R,R) bool, optional (required for relaxed mode)
         region_constraint_mode: str = "strict",
         region_constraint_fallback: str = "unconstrained",
         max_len: Optional[int] = None,
@@ -813,7 +825,7 @@ class WayDecoder(nn.Module):
         if use_region_constraint and int(len(region_seq)) != int(B):
             raise ValueError(f"region_seq length mismatch: got {len(region_seq)}, expect {B}")
         mode = str(region_constraint_mode or "").strip().lower()
-        if mode and mode not in {"strict"}:
+        if mode and mode not in {"strict", "relaxed"}:
             raise ValueError(f"unsupported region_constraint_mode: {region_constraint_mode!r}")
         fallback = str(region_constraint_fallback or "").strip().lower()
         if fallback and fallback not in {"unconstrained", "stop"}:
@@ -879,6 +891,11 @@ class WayDecoder(nn.Module):
                 if region_path is not None and way_region is not None:
                     if way_region.device != cand.device:
                         raise ValueError(f"way_region must be on same device as candidates: {way_region.device} vs {cand.device}")
+                    if mode == "relaxed":
+                        if region_adj is None:
+                            raise ValueError("region_adj is required for region_constraint_mode='relaxed'")
+                        if region_adj.device != cand.device:
+                            raise ValueError(f"region_adj must be on same device as candidates: {region_adj.device} vs {cand.device}")
                     cur_way = int(path[-1])
                     cur_reg = int(way_region[cur_way].item())
                     while region_ptr + 1 < int(len(region_path)) and int(cur_reg) == int(region_path[region_ptr + 1]):
@@ -889,6 +906,11 @@ class WayDecoder(nn.Module):
                     m = cand_reg == int(allow0)
                     if allow1 is not None:
                         m = m | (cand_reg == int(allow1))
+                    if mode == "relaxed" and region_adj is not None:
+                        if int(allow0) >= 0:
+                            m = m | region_adj[int(allow0), cand_reg]
+                        if allow1 is not None and int(allow1) >= 0:
+                            m = m | region_adj[int(allow1), cand_reg]
                     cand_f = cand[m]
                     if int(dw) >= 0 and bool((cand == int(dw)).any().item()) and (not bool((cand_f == int(dw)).any().item())):
                         cand_f = torch.cat([cand_f, torch.tensor([int(dw)], dtype=cand.dtype, device=cand.device)], dim=0)
@@ -970,6 +992,7 @@ class WayDecoder(nn.Module):
         dest_way: torch.Tensor,  # (B,)
         way_region: Optional[torch.Tensor] = None,  # (n_ways,) long, optional (same device as latent_tokens)
         region_seq: Optional[List[List[int]]] = None,  # len=B, optional
+        region_adj: Optional[torch.Tensor] = None,  # (R,R) bool, optional (required for relaxed mode)
         region_constraint_mode: str = "strict",
         region_constraint_fallback: str = "unconstrained",
         max_len: Optional[int] = None,
@@ -995,8 +1018,13 @@ class WayDecoder(nn.Module):
         if use_region_constraint and way_region is not None and way_region.device != device:
             raise ValueError(f"way_region must be on same device as latent_tokens: {way_region.device} vs {device}")
         mode = str(region_constraint_mode or "").strip().lower()
-        if mode and mode not in {"strict"}:
+        if mode and mode not in {"strict", "relaxed"}:
             raise ValueError(f"unsupported region_constraint_mode: {region_constraint_mode!r}")
+        if use_region_constraint and mode == "relaxed":
+            if region_adj is None:
+                raise ValueError("region_adj is required for region_constraint_mode='relaxed'")
+            if region_adj.device != device:
+                raise ValueError(f"region_adj must be on same device as latent_tokens: {region_adj.device} vs {device}")
         fallback = str(region_constraint_fallback or "").strip().lower()
         if fallback and fallback not in {"unconstrained", "stop"}:
             raise ValueError(f"unsupported region_constraint_fallback: {region_constraint_fallback!r}")
@@ -1116,6 +1144,12 @@ class WayDecoder(nn.Module):
                 m = cand_mask & (cand_reg == allow0[:, None])
                 has1 = (allow1 >= 0)[:, None]
                 m = m | (cand_mask & has1 & (cand_reg == allow1[:, None]))
+                if mode == "relaxed" and region_adj is not None:
+                    allow0_safe = torch.where(allow0 >= 0, allow0, torch.zeros_like(allow0))
+                    allow1_safe = torch.where(allow1 >= 0, allow1, torch.zeros_like(allow1))
+                    neigh0 = region_adj[allow0_safe[:, None], cand_reg] & (allow0[:, None] >= 0)
+                    neigh1 = region_adj[allow1_safe[:, None], cand_reg] & (allow1[:, None] >= 0)
+                    m = m | (cand_mask & neigh0) | (cand_mask & neigh1)
 
                 # If empty after masking: fallback.
                 row_has = m.any(dim=1)
@@ -1215,6 +1249,7 @@ class WayDecoder(nn.Module):
         dest_way: torch.Tensor,  # (B,)
         way_region: Optional[torch.Tensor] = None,  # (n_ways,) long, optional
         region_seq: Optional[List[List[int]]] = None,  # len=B, optional
+        region_adj: Optional[torch.Tensor] = None,  # (R,R) bool, optional (required for relaxed mode)
         region_constraint_mode: str = "strict",
         region_constraint_fallback: str = "unconstrained",
         beam_size: int = 5,
@@ -1239,8 +1274,13 @@ class WayDecoder(nn.Module):
         if use_region_constraint and way_region is not None and way_region.device != device:
             raise ValueError(f"way_region must be on same device as latent_tokens: {way_region.device} vs {device}")
         mode = str(region_constraint_mode or "").strip().lower()
-        if mode and mode not in {"strict"}:
+        if mode and mode not in {"strict", "relaxed"}:
             raise ValueError(f"unsupported region_constraint_mode: {region_constraint_mode!r}")
+        if use_region_constraint and mode == "relaxed":
+            if region_adj is None:
+                raise ValueError("region_adj is required for region_constraint_mode='relaxed'")
+            if region_adj.device != device:
+                raise ValueError(f"region_adj must be on same device as latent_tokens: {region_adj.device} vs {device}")
         fallback = str(region_constraint_fallback or "").strip().lower()
         if fallback and fallback not in {"unconstrained", "stop"}:
             raise ValueError(f"unsupported region_constraint_fallback: {region_constraint_fallback!r}")
@@ -1372,6 +1412,12 @@ class WayDecoder(nn.Module):
                 m = cand_mask & (cand_reg == allow0[:, None])
                 has1 = (allow1 >= 0)[:, None]
                 m = m | (cand_mask & has1 & (cand_reg == allow1[:, None]))
+                if mode == "relaxed" and region_adj is not None:
+                    allow0_safe = torch.where(allow0 >= 0, allow0, torch.zeros_like(allow0))
+                    allow1_safe = torch.where(allow1 >= 0, allow1, torch.zeros_like(allow1))
+                    neigh0 = region_adj[allow0_safe[:, None], cand_reg] & (allow0[:, None] >= 0)
+                    neigh1 = region_adj[allow1_safe[:, None], cand_reg] & (allow1[:, None] >= 0)
+                    m = m | (cand_mask & neigh0) | (cand_mask & neigh1)
                 row_has = m.any(dim=1)
                 if fallback == "stop":
                     good = torch.nonzero(row_has, as_tuple=False).reshape(-1)

@@ -486,8 +486,9 @@ def main() -> None:
     p.add_argument("--way_regions_npz", type=Path, default=None, help="Required when --region_constraint != none.")
     p.add_argument("--region_ar_ckpt", type=Path, default=None, help="Required when --region_constraint=ar.")
     p.add_argument("--region_ar_max_len", type=int, default=16, help="Max region_seq length for Region AR greedy rollout.")
-    p.add_argument("--region_constraint_mode", choices=["strict"], default="strict")
+    p.add_argument("--region_constraint_mode", choices=["strict", "relaxed"], default="strict")
     p.add_argument("--region_constraint_fallback", choices=["unconstrained", "stop"], default="unconstrained")
+    p.add_argument("--out_per_route_json", type=Path, default=None, help="Optional: dump per-route records for diff analysis.")
 
     p.add_argument(
         "--city_grid_meta",
@@ -539,6 +540,7 @@ def main() -> None:
     region_ar_model: Optional[RegionARModel] = None
     region_ar_adj: Optional[torch.Tensor] = None
     region_ar_meta: Optional[dict] = None
+    region_adj_t: Optional[torch.Tensor] = None
 
     if str(cfg.region_constraint) != "none":
         if args.way_regions_npz is None:
@@ -550,6 +552,15 @@ def main() -> None:
             raise SystemExit("[FATAL] way_regions_npz missing key: way_region")
         way_region_np = np.asarray(wr["way_region"], dtype=np.int64).reshape(-1)
         way_region_t = torch.as_tensor(way_region_np, dtype=torch.long, device=device)
+
+        if str(cfg.region_constraint_mode) == "relaxed" and str(cfg.region_constraint) != "ar":
+            # For relaxed mode under GT-derived region_seq, we still need region adjacency.
+            _rc, _rs, radj, _rrep = _load_region_ar_meta(
+                way_regions_npz=Path(args.way_regions_npz),
+                way_features_npz=Path(args.way_features_npz),
+                coord_scale=1024.0,
+            )
+            region_adj_t = radj.to(device=device)
 
         if str(cfg.region_constraint) == "ar":
             if args.region_ar_ckpt is None:
@@ -570,6 +581,7 @@ def main() -> None:
             )
             region_ar_meta = rrep
             region_ar_adj = radj.to(device=device)
+            region_adj_t = region_ar_adj
             region_ar_model = RegionARModel(
                 cfg=RegionARCfg(
                     d_model=int(cfg_ar.get("d_model", 256)),
@@ -796,10 +808,11 @@ def main() -> None:
                 z_use = flow.sample(route_cond=route_cond_use, solver_steps=cfg.flow_solver_steps)
 
             region_seq_use: Optional[List[List[int]]] = None
+            region_routes: Optional[List[List[int]]] = None
             if str(cfg.region_constraint) != "none":
                 if way_region_np is None or way_region_t is None:
                     raise RuntimeError("region_constraint enabled but way_region is missing")
-                region_routes: List[List[int]] = []
+                region_routes = []
                 if str(cfg.region_constraint) == "gt":
                     for seq in gt_b:
                         region_routes.append(_region_seq_from_way_seq(seq, way_region_np))
@@ -843,6 +856,7 @@ def main() -> None:
                 dest_way=dw_use,
                 way_region=way_region_t,
                 region_seq=region_seq_use,
+                region_adj=region_adj_t,
                 region_constraint_mode=str(cfg.region_constraint_mode),
                 region_constraint_fallback=str(cfg.region_constraint_fallback),
                 max_len=int(cfg.max_decode_len),
@@ -862,6 +876,7 @@ def main() -> None:
                     dest_way=dw_use,
                     way_region=way_region_t,
                     region_seq=region_seq_use,
+                    region_adj=region_adj_t,
                     region_constraint_mode=str(cfg.region_constraint_mode),
                     region_constraint_fallback=str(cfg.region_constraint_fallback),
                     beam_size=int(cfg.beam_size),
@@ -985,6 +1000,8 @@ def main() -> None:
                     "dest_way_len_m": float(way_len_m[int(dw_b[bi])]) if 0 <= int(dw_b[bi]) < int(way_len_m.size) else float("nan"),
                     "greedy": mg,
                 }
+                if region_routes is not None:
+                    rec["region_seq"] = [int(x) for x in region_routes[int(bi)]]
                 if mb is not None:
                     rec["beam"] = mb
                 per_route.append(rec)
@@ -1112,6 +1129,27 @@ def main() -> None:
     out_json.parent.mkdir(parents=True, exist_ok=True)
     out_json.write_text(json.dumps(out, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     print(f"[OK] saved: {out_json}")
+
+    if args.out_per_route_json is not None:
+        out_rec = Path(args.out_per_route_json)
+        out_rec.parent.mkdir(parents=True, exist_ok=True)
+        out_rec.write_text(
+            json.dumps(
+                {
+                    "ok": True,
+                    "task": str(out.get("task", "")),
+                    "created_at": str(out.get("created_at", "")),
+                    "cfg": dict(out.get("cfg", {})),
+                    "inputs": dict(out.get("inputs", {})),
+                    "per_route": per_route,
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        print(f"[OK] saved: {out_rec}")
 
 
 if __name__ == "__main__":

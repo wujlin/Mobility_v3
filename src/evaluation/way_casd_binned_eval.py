@@ -723,6 +723,13 @@ def main() -> None:
         if pick.size == 0:
             continue
 
+        print(
+            f"[city{int(city)}] start n_routes={int(pick.size)} "
+            f"latent_source={str(cfg.latent_source)} region_constraint={str(cfg.region_constraint)} "
+            f"compare_beam={bool(cfg.compare_beam)}",
+            flush=True,
+        )
+
         # Preload per-route arrays.
         start_way = routes.start_way[pick].astype(np.int64, copy=False)
         dest_way = routes.dest_way[pick].astype(np.int64, copy=False)
@@ -744,6 +751,7 @@ def main() -> None:
         B = int(pick.size)
         for i0 in range(0, B, 64):
             i1 = min(B, i0 + 64)
+            print(f"[city{int(city)}] batch {int(i0)}:{int(i1)}/{int(B)}", flush=True)
             gt_b = gt_seqs[i0:i1]
             rid_b = pick[i0:i1].astype(np.int64, copy=False)
             sw_b = start_way[i0:i1]
@@ -827,7 +835,7 @@ def main() -> None:
                     for _k in range(int(K)):
                         region_seq_use.append(list(rs))
 
-            greedy = ae.decoder.greedy_decode(
+            greedy = ae.decoder.greedy_decode_batched(
                 way_embedder=ae.way_enc,
                 latent_tokens=z_use,
                 route_cond=route_cond_use,
@@ -846,7 +854,7 @@ def main() -> None:
 
             beam: Optional[List[List[int]]] = None
             if bool(cfg.compare_beam):
-                beam = ae.decoder.beam_search(
+                beam = ae.decoder.beam_search_batched(
                     way_embedder=ae.way_enc,
                     latent_tokens=z_use,
                     route_cond=route_cond_use,

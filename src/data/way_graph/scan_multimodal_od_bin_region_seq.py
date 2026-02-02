@@ -88,6 +88,89 @@ def _update_sig_table(
         del sigs[s_min]
 
 
+def _read_json(path: Path) -> dict:
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _parse_city_kv(spec: str) -> Tuple[int, Path]:
+    s = str(spec or "").strip()
+    if "=" in s:
+        k, v = s.split("=", 1)
+    elif ":" in s:
+        k, v = s.split(":", 1)
+    else:
+        raise ValueError(f"Bad spec (expect CITY=PATH): {spec!r}")
+    city = int(str(k).strip())
+    path = Path(str(v).strip()).expanduser()
+    return city, path
+
+
+def _decode_meta(meta_obj: object) -> Optional[dict]:
+    if meta_obj is None:
+        return None
+    if isinstance(meta_obj, np.ndarray):
+        if meta_obj.size != 1:
+            return None
+        meta_obj = meta_obj.item()
+    return meta_obj if isinstance(meta_obj, dict) else None
+
+
+def _grid_bbox_from_meta(meta: dict) -> Optional[Tuple[int, int, float, float, float, float]]:
+    grid = meta.get("grid", {}) if isinstance(meta, dict) else {}
+    if not isinstance(grid, dict):
+        return None
+    H = grid.get("H", None)
+    W = grid.get("W", None)
+    bbox = grid.get("bbox", None)
+    if not isinstance(bbox, dict):
+        return None
+    try:
+        H_i = int(H)
+        W_i = int(W)
+        min_lon = float(bbox["min_lon"])
+        min_lat = float(bbox["min_lat"])
+        max_lon = float(bbox["max_lon"])
+        max_lat = float(bbox["max_lat"])
+    except Exception:
+        return None
+    if H_i <= 0 or W_i <= 0:
+        return None
+    return (H_i, W_i, min_lon, min_lat, max_lon, max_lat)
+
+
+def _meta_from_city_grid_meta(path: Path) -> dict:
+    if str(path).endswith(".npz"):
+        wf = np.load(str(path), allow_pickle=True)
+        meta = _decode_meta(wf.get("meta", None))
+        if meta is None:
+            raise ValueError(f"{path} missing meta (need meta.grid.H/W/bbox).")
+    else:
+        meta = _read_json(path)
+
+    if _grid_bbox_from_meta(meta) is None:
+        if isinstance(meta, dict) and ("H" in meta) and ("W" in meta) and ("bbox" in meta):
+            meta = {"grid": {"H": meta["H"], "W": meta["W"], "bbox": meta["bbox"]}}
+    if _grid_bbox_from_meta(meta) is None:
+        raise ValueError(f"{path} missing grid meta (need grid.H/grid.W/grid.bbox).")
+    return meta
+
+
+def _grid_yx_to_latlon(y: float, x: float, *, meta: dict) -> Tuple[float, float]:
+    bb = _grid_bbox_from_meta(meta)
+    if bb is None:
+        raise ValueError("meta missing grid bbox")
+    H, W, min_lon, min_lat, max_lon, max_lat = bb
+    lon = float(min_lon + (float(x) / float(W)) * (max_lon - min_lon))
+    lat = float(max_lat - (float(y) / float(H)) * (max_lat - min_lat))
+    return lat, lon
+
+
+def _require_city_meta(city_meta: Dict[int, dict], cities: List[int]) -> None:
+    missing = [int(c) for c in cities if int(c) not in city_meta]
+    if missing:
+        raise SystemExit(f"[FATAL] missing --city_grid_meta for cities={missing} (need osm_road_prob_meta.json for OD bins).")
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description="Scan coarse OD bins and measure region_seq corridor diversity.")
     ap.add_argument("--way_routes_npz", type=Path, required=True)
@@ -101,6 +184,13 @@ def main() -> None:
     ap.add_argument("--max_out_bins", type=int, default=200)
     ap.add_argument("--lcs_sep_thr", type=float, default=0.50, help="Mark a bin as 'separated' if max LCS-dist >= this.")
     ap.add_argument("--lcs_max_patterns", type=int, default=6, help="Only compute LCS over top-K patterns by count.")
+    ap.add_argument(
+        "--city_grid_meta",
+        type=str,
+        action="append",
+        default=[],
+        help="Per-city grid meta for yx->latlon conversion, format CITY=PATH (osm_road_prob_meta.json or single-city way_features.npz).",
+    )
     args = ap.parse_args()
 
     cfg = Cfg(
@@ -119,9 +209,20 @@ def main() -> None:
     missing = sorted(list(need - set(routes.files)))
     if missing:
         raise SystemExit(f"[FATAL] way_routes_npz missing keys: {missing}")
-    start_pos = np.asarray(routes["start_pos"], dtype=np.float64).reshape(-1, 2)
-    dest_pos = np.asarray(routes["dest_pos"], dtype=np.float64).reshape(-1, 2)
+    start_pos = np.asarray(routes["start_pos"], dtype=np.float64).reshape(-1, 2)  # (y,x)
+    dest_pos = np.asarray(routes["dest_pos"], dtype=np.float64).reshape(-1, 2)  # (y,x)
     route_city = np.asarray(routes["route_city"], dtype=np.int64).reshape(-1)
+
+    cities_obs = sorted(set(int(x) for x in route_city.tolist()))
+    city_meta: Dict[int, dict] = {}
+    city_meta_src: Dict[int, str] = {}
+    for spec in list(args.city_grid_meta or []):
+        c, path = _parse_city_kv(str(spec))
+        if not path.exists():
+            raise SystemExit(f"[FATAL] file not found: {path}")
+        city_meta[int(c)] = _meta_from_city_grid_meta(path)
+        city_meta_src[int(c)] = str(path)
+    _require_city_meta(city_meta, cities_obs)
 
     seq = np.load(str(args.region_seq_npz), allow_pickle=True)
     need = {"route_id", "region_seq_ptr", "region_seq_idx"}
@@ -148,18 +249,22 @@ def main() -> None:
             skipped_oob += 1
             continue
 
-        o_lat, o_lon = float(start_pos[rid, 0]), float(start_pos[rid, 1])
-        d_lat, d_lon = float(dest_pos[rid, 0]), float(dest_pos[rid, 1])
-        # Heuristic sanity: if values look like degrees, use haversine; otherwise skip distance filter.
-        looks_deg = (abs(o_lat) <= 90 and abs(d_lat) <= 90 and abs(o_lon) <= 180 and abs(d_lon) <= 180)
-        od_km = float(haversine_m(o_lat, o_lon, d_lat, d_lon)) / 1000.0 if looks_deg else float("nan")
-        if looks_deg:
-            od_km_all.append(float(od_km))
-            if float(od_km) < float(cfg.min_od_km):
-                skipped_short_od += 1
-                continue
-
         city = int(route_city[rid])
+        meta = city_meta.get(int(city))
+        if meta is None:
+            raise SystemExit(f"[FATAL] missing city meta for city={city}")
+
+        oy, ox = float(start_pos[rid, 0]), float(start_pos[rid, 1])
+        dy, dx = float(dest_pos[rid, 0]), float(dest_pos[rid, 1])
+        o_lat, o_lon = _grid_yx_to_latlon(oy, ox, meta=meta)
+        d_lat, d_lon = _grid_yx_to_latlon(dy, dx, meta=meta)
+
+        od_km = float(haversine_m(o_lat, o_lon, d_lat, d_lon)) / 1000.0
+        od_km_all.append(float(od_km))
+        if float(od_km) < float(cfg.min_od_km):
+            skipped_short_od += 1
+            continue
+
         o_lon_bin = _bin_int(o_lon, cfg.od_bin_deg)
         o_lat_bin = _bin_int(o_lat, cfg.od_bin_deg)
         d_lon_bin = _bin_int(d_lon, cfg.od_bin_deg)
@@ -255,12 +360,16 @@ def main() -> None:
         "task": "scan_multimodal_od_bin_region_seq",
         "created_at": datetime.now(tz=TZ_SHANGHAI).isoformat(),
         "cfg": asdict(cfg),
-        "inputs": {"way_routes_npz": str(args.way_routes_npz), "region_seq_npz": str(args.region_seq_npz)},
+        "inputs": {
+            "way_routes_npz": str(args.way_routes_npz),
+            "region_seq_npz": str(args.region_seq_npz),
+            "city_grid_meta": city_meta_src,
+        },
         "n_routes_in_region_seq_npz": int(K),
         "skipped_short_od": int(skipped_short_od),
         "skipped_oob": int(skipped_oob),
         "od_km": {
-            "looks_deg": bool(len(od_km_all) > 0),
+            "units": "km",
             "p50": _p(np.asarray(od_km_all, dtype=np.float64), 50) if od_km_all else float("nan"),
             "p90": _p(np.asarray(od_km_all, dtype=np.float64), 90) if od_km_all else float("nan"),
         },
@@ -288,4 +397,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

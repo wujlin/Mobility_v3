@@ -1,0 +1,79 @@
+{
+  "ok": true,
+  "task": "extract_region_seq_stats",
+  "created_at": "2026-02-02T12:21:47.849176+08:00",
+  "cfg": {
+    "min_hops": 5,
+    "max_way_len": 160,
+    "compress_consecutive": true
+  },
+  "inputs": {
+    "way_routes_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD1_waydata_rustbelt_seed0_strict_v1/W5_way_routes_strict/way_routes_strict_masklen0.npz",
+    "way_regions_npz": "_sync/wsa/pi_verify/20260201_min5_candq1_past8_len160_s0/regions_louvain_v1/way_regions_louvain_per_city_res0p2_seed0.npz"
+  },
+  "n_routes_total": 7502,
+  "n_routes_kept": 5022,
+  "n_routes_with_missing_region": 0,
+  "region_seq_len": {
+    "p25": 2.0,
+    "p50": 4.0,
+    "p75": 6.0,
+    "p95": 9.0,
+    "max": 13
+  },
+  "backtrack_rate": 0.028076463560334528,
+  "od_diversity": {
+    "n_od": 3944,
+    "od_multi_frac": 0.0030425963488843813,
+    "uniq_patterns_per_od": {
+      "p50": 1,
+      "p90": 1,
+      "p95": 1,
+      "max": 2
+    }
+  },
+  "per_city": {
+    "0": {
+      "n_routes": 1394,
+      "region_seq_len": {
+        "p25": 3.0,
+        "p50": 5.0,
+        "p75": 7.0,
+        "p95": 10.0,
+        "max": 13
+      },
+      "backtrack_rate": 0.04232424677187949,
+      "od_diversity": {
+        "n_od": 1263,
+        "od_multi_frac": 0.00395882818685669,
+        "uniq_patterns_per_od": {
+          "p50": 1,
+          "p90": 1,
+          "p95": 1,
+          "max": 2
+        }
+      }
+    },
+    "1": {
+      "n_routes": 3628,
+      "region_seq_len": {
+        "p25": 2.0,
+        "p50": 3.0,
+        "p75": 5.0,
+        "p95": 8.0,
+        "max": 13
+      },
+      "backtrack_rate": 0.022601984564498346,
+      "od_diversity": {
+        "n_od": 2681,
+        "od_multi_frac": 0.0026109660574412533,
+        "uniq_patterns_per_od": {
+          "p50": 1,
+          "p90": 1,
+          "p95": 1,
+          "max": 2
+        }
+      }
+    }
+  }
+}

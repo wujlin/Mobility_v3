@@ -49,7 +49,17 @@ def main() -> None:
     ap.add_argument("--out_npz", type=Path, default=None, help="Optional: save region_seq.npz (CSR) for later modeling.")
     ap.add_argument("--min_hops", type=int, default=5)
     ap.add_argument("--max_way_len", type=int, default=160)
-    ap.add_argument("--no_compress_consecutive", action="store_true", help="If set, do NOT compress consecutive same-region steps.")
+    g = ap.add_mutually_exclusive_group()
+    g.add_argument(
+        "--compress_consecutive",
+        action="store_true",
+        help="Compress consecutive same-region steps (default behavior).",
+    )
+    g.add_argument(
+        "--no_compress_consecutive",
+        action="store_true",
+        help="If set, do NOT compress consecutive same-region steps.",
+    )
     args = ap.parse_args()
 
     cfg = Cfg(

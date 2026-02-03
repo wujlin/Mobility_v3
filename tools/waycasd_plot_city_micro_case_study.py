@@ -344,6 +344,66 @@ def _build_city_index(rep: dict) -> Dict[int, Dict[str, Any]]:
     return out
 
 
+def _per_route_to_oracle_decode_like(*, rep: dict, decode_key: str) -> dict:
+    """
+    Convert `src.evaluation.way_casd_binned_eval --out_per_route_json` output into a
+    minimal oracle-decode-like report so this plotting script can reuse the same
+    case-picking logic.
+    """
+    per_route = rep.get("per_route", []) or []
+    if not isinstance(per_route, list):
+        raise ValueError("rep.per_route must be a list")
+
+    cfg = dict(rep.get("cfg") or {})
+    # Normalize key name (this plotting script historically expects decode_guided_dest_alpha).
+    if "decode_guided_dest_alpha" not in cfg and "guided_dest_alpha" in cfg:
+        cfg["decode_guided_dest_alpha"] = cfg.get("guided_dest_alpha", 0.0)
+
+    per_city: Dict[int, Dict[str, Any]] = {}
+    for rec in per_route:
+        if not isinstance(rec, dict):
+            continue
+        city = int(rec.get("city", -1))
+        rid = rec.get("route_id", None)
+        if rid is None:
+            continue
+        rid_i = int(rid)
+        dec = rec.get(str(decode_key), None)
+        if not isinstance(dec, dict):
+            continue
+        succ = bool(dec.get("success", False))
+
+        pc = per_city.setdefault(city, {"city": int(city), "success_route_ids": [], "failures": []})
+        if succ:
+            pc["success_route_ids"].append(int(rid_i))
+        else:
+            gt_hops = int(rec.get("gt_hops", 0))
+            pred_hops = int(dec.get("hops", 0))
+            pc["failures"].append(
+                {
+                    "route_id": int(rid_i),
+                    "hit_wall": bool(dec.get("hit_wall", False)),
+                    "dead_end": bool(dec.get("dead_end", False)),
+                    "has_loop": bool(dec.get("has_loop", False)),
+                    "jaccard": float(dec.get("jaccard", 1.0)),
+                    # Not available in per-route eval; keep a large placeholder.
+                    "diverge_step": int(10**9),
+                    # For hard-case sorting.
+                    "gt_len": int(gt_hops + 1),
+                    "pred_len": int(pred_hops + 1),
+                }
+            )
+
+    return {
+        "ok": True,
+        "task": "oracle_decode_like_from_per_route",
+        "created_at": datetime.now(tz=TZ_SHANGHAI).isoformat(),
+        "cfg": cfg,
+        "inputs": rep.get("inputs") or {},
+        "per_city": [per_city[k] for k in sorted(per_city.keys())],
+    }
+
+
 @torch.no_grad()
 def _decode_one_oracle(
     *,
@@ -711,11 +771,32 @@ def main() -> None:
 
     greedy_json = Path(args.greedy_json) if args.greedy_json is not None else (eval_dir / "oracle_decode_greedy_n200.json")
     beam10_json = Path(args.beam10_json) if args.beam10_json is not None else (eval_dir / "oracle_decode_beam10_n200.json")
-    _require_file(greedy_json)
-    _require_file(beam10_json)
 
-    greedy_rep = _read_json(greedy_json)
-    beam10_rep = _read_json(beam10_json)
+    if greedy_json.exists() and beam10_json.exists():
+        _require_file(greedy_json)
+        _require_file(beam10_json)
+        greedy_rep = _read_json(greedy_json)
+        beam10_rep = _read_json(beam10_json)
+    else:
+        # Fallback: allow pointing to a binned-eval dir that contains per-route json.
+        per_route_path = eval_dir / "per_route_regionAR_relaxed_destreg_n200pc.json"
+        if not per_route_path.exists():
+            per_route_path = eval_dir / "per_route_regionGT_relaxed_destreg_n200pc.json"
+        if not per_route_path.exists():
+            # last resort: pick any per_route_*.json
+            cands = sorted(eval_dir.glob("per_route_*.json"))
+            if not cands:
+                raise SystemExit(
+                    "[FATAL] eval_dir must contain oracle_decode_greedy/beam10 json OR a per_route_*.json "
+                    f"(got: {eval_dir})"
+                )
+            per_route_path = cands[0]
+        _require_file(per_route_path)
+        rep = _read_json(per_route_path)
+        greedy_rep = _per_route_to_oracle_decode_like(rep=rep, decode_key="greedy")
+        beam10_rep = _per_route_to_oracle_decode_like(rep=rep, decode_key="beam")
+        greedy_json = per_route_path
+        beam10_json = per_route_path
 
     # Inputs: default from greedy json, can override explicitly.
     inputs = greedy_rep.get("inputs") or {}

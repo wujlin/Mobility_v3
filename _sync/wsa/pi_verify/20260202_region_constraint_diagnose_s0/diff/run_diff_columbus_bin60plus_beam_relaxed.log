@@ -1,0 +1,2 @@
+[OK] city=1 bin=[60,+) which=beam baseline_success_constrained_fail=0/12
+[OK] saved: _sync/wsa/pi_verify/20260202_region_constraint_diagnose_s0/diff/columbus_bin60plus_beam_baselineSucc_constrainedFail_relaxed.json

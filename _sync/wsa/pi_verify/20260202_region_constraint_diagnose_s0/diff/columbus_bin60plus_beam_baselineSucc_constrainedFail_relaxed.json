@@ -1,0 +1,14 @@
+{
+  "ok": true,
+  "city": 1,
+  "bin": "[60,+)",
+  "which": "beam",
+  "n_total_in_bin": 12,
+  "n_baseline_success_constrained_fail": 0,
+  "rows": [],
+  "inputs": {
+    "baseline_json": "_sync/wsa/pi_verify/20260202_region_constraint_diagnose_s0/eval/per_route_baseline_n200pc.json",
+    "constrained_json": "_sync/wsa/pi_verify/20260202_region_constraint_diagnose_s0/eval_relaxed/per_route_regionAR_relaxed_destreg_n200pc.json",
+    "gt_constrained_json": "_sync/wsa/pi_verify/20260202_region_constraint_diagnose_s0/eval_relaxed/per_route_regionGT_relaxed_destreg_n200pc.json"
+  }
+}

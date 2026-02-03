@@ -511,6 +511,11 @@ def main() -> None:
     p.add_argument("--region_constraint_mode", choices=["strict", "relaxed"], default="strict")
     p.add_argument("--region_constraint_fallback", choices=["unconstrained", "dest_region", "stop"], default="unconstrained")
     p.add_argument("--out_per_route_json", type=Path, default=None, help="Optional: dump per-route records for diff analysis.")
+    p.add_argument(
+        "--dump_way_seqs",
+        action="store_true",
+        help="When dumping per-route json, also include GT/predicted way sequences (can be larger).",
+    )
 
     p.add_argument(
         "--city_grid_meta",
@@ -1006,7 +1011,11 @@ def main() -> None:
                         }
                     )
                 else:
+                    k_sel = 0
                     mg = mg_list[0]
+                if bool(args.dump_way_seqs):
+                    mg = dict(mg)
+                    mg["pred_way_ids"] = [int(x) for x in g_samples[int(k_sel)]]
 
                 mb: Optional[Dict[str, object]] = None
                 if b_samples is not None:
@@ -1030,7 +1039,11 @@ def main() -> None:
                             }
                         )
                     else:
+                        k_sel = 0
                         mb = mb_list[0]
+                    if bool(args.dump_way_seqs):
+                        mb = dict(mb)
+                        mb["pred_way_ids"] = [int(x) for x in b_samples[int(k_sel)]]
 
                 rec: Dict[str, Any] = {
                     "route_id": int(rid),
@@ -1041,6 +1054,10 @@ def main() -> None:
                     "dest_way_len_m": float(way_len_m[int(dw_b[bi])]) if 0 <= int(dw_b[bi]) < int(way_len_m.size) else float("nan"),
                     "greedy": mg,
                 }
+                if bool(args.dump_way_seqs):
+                    rec["gt_way_ids"] = [int(x) for x in gt]
+                    rec["start_way"] = int(sw_b[bi])
+                    rec["dest_way"] = int(dw_b[bi])
                 if region_routes is not None:
                     rec["region_seq"] = [int(x) for x in region_routes[int(bi)]]
                 if mb is not None:

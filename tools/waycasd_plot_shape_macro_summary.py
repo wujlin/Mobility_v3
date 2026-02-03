@@ -11,6 +11,7 @@ if str(_REPO_ROOT) not in sys.path:
 
 import argparse
 import json
+from contextlib import nullcontext
 from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -203,14 +204,6 @@ def main() -> None:
     if ref_bins is None:
         raise SystemExit("[FATAL] no methods provided")
 
-    # Plot
-    if args.style == "paper":
-        paper_style()
-
-    n_rows = len(args.cities or [])
-    n_cols = len(metrics)
-    fig, axes = plt.subplots(n_rows, n_cols, figsize=(float(args.fig_w), float(args.fig_h)), squeeze=False)
-
     color_cycle = [
         OKABE_ITO["black"],
         OKABE_ITO["vermillion"],
@@ -218,56 +211,61 @@ def main() -> None:
         OKABE_ITO["blue"],
         OKABE_ITO["orange"],
         OKABE_ITO["sky_blue"],
-        OKABE_ITO["purple"],
+        OKABE_ITO.get("reddish_purple", OKABE_ITO["gray"]),
     ]
     marker_cycle = ["o", "s", "^", "D", "v", "P", "X"]
-    x = np.arange(len(ref_bins), dtype=np.float64)
 
-    legend_handles = []
-    legend_labels = []
-    for mi, m in enumerate(methods):
-        c = color_cycle[int(mi) % len(color_cycle)]
-        mk = marker_cycle[int(mi) % len(marker_cycle)]
-        legend_handles.append(plt.Line2D([0], [0], color=c, marker=mk, lw=2.0))
-        legend_labels.append(str(m.name))
+    with paper_style() if args.style == "paper" else nullcontext():
+        n_rows = len(args.cities or [])
+        n_cols = len(metrics)
+        fig, axes = plt.subplots(n_rows, n_cols, figsize=(float(args.fig_w), float(args.fig_h)), squeeze=False)
 
-    panel = 0
-    for ri, city in enumerate(args.cities or []):
-        city_title = city_names.get(int(city), f"city{int(city)}")
-        for ci, metric in enumerate(metrics):
-            ax = axes[ri][ci]
-            for mi, m in enumerate(methods):
-                c = color_cycle[int(mi) % len(color_cycle)]
-                mk = marker_cycle[int(mi) % len(marker_cycle)]
-                y = np.asarray(m.per_city[int(city)][str(metric)], dtype=np.float64)
-                ax.plot(x, y, color=c, marker=mk, lw=2.0, ms=5.5, alpha=0.95)
-            ax.set_xticks(x)
-            ax.set_xticklabels(ref_bins, rotation=0)
-            ax.grid(True, axis="y", alpha=0.25, lw=0.8)
-            ax.set_ylabel(_metric_label(str(metric)))
-            if ri == 0:
-                ax.set_title(_metric_label(str(metric)))
-            if ci == 0:
-                ax.text(0.02, 0.96, city_title, transform=ax.transAxes, ha="left", va="top", fontsize=10)
-            if str(metric).endswith("_rate") or str(metric) == "success_rate":
-                ax.set_ylim(-0.02, 1.02)
+        x = np.arange(len(ref_bins), dtype=np.float64)
+        legend_handles = []
+        legend_labels = []
+        for mi, m in enumerate(methods):
+            c = color_cycle[int(mi) % len(color_cycle)]
+            mk = marker_cycle[int(mi) % len(marker_cycle)]
+            legend_handles.append(plt.Line2D([0], [0], color=c, marker=mk, lw=2.0))
+            legend_labels.append(str(m.name))
 
-            add_panel_label(ax, chr(ord("a") + int(panel)))
-            panel += 1
+        panel = 0
+        for ri, city in enumerate(args.cities or []):
+            city_title = city_names.get(int(city), f"city{int(city)}")
+            for ci, metric in enumerate(metrics):
+                ax = axes[ri][ci]
+                for mi, m in enumerate(methods):
+                    c = color_cycle[int(mi) % len(color_cycle)]
+                    mk = marker_cycle[int(mi) % len(marker_cycle)]
+                    y = np.asarray(m.per_city[int(city)][str(metric)], dtype=np.float64)
+                    ax.plot(x, y, color=c, marker=mk, lw=2.0, ms=5.5, alpha=0.95)
+                ax.set_xticks(x)
+                ax.set_xticklabels(ref_bins, rotation=0)
+                ax.grid(True, axis="y", alpha=0.25, lw=0.8)
+                ax.set_ylabel(_metric_label(str(metric)))
+                if ri == 0:
+                    ax.set_title(_metric_label(str(metric)))
+                if ci == 0:
+                    ax.text(0.02, 0.96, city_title, transform=ax.transAxes, ha="left", va="top", fontsize=10)
+                if str(metric).endswith("_rate") or str(metric) == "success_rate":
+                    ax.set_ylim(-0.02, 1.02)
 
-    fig.legend(
-        legend_handles,
-        legend_labels,
-        loc="lower center",
-        ncol=min(len(legend_labels), 4),
-        frameon=False,
-        bbox_to_anchor=(0.5, -0.02),
-    )
-    fig.tight_layout(rect=(0.0, 0.06, 1.0, 1.0))
+                add_panel_label(ax, chr(ord("a") + int(panel)))
+                panel += 1
 
-    save_figure(fig, out_dir / f"shape_by_hops_{decode}_{stat}.png")
-    save_figure(fig, out_dir / f"shape_by_hops_{decode}_{stat}.pdf")
-    plt.close(fig)
+        fig.legend(
+            legend_handles,
+            legend_labels,
+            loc="lower center",
+            ncol=min(len(legend_labels), 4),
+            frameon=False,
+            bbox_to_anchor=(0.5, -0.02),
+        )
+        fig.tight_layout(rect=(0.0, 0.06, 1.0, 1.0))
+
+        save_figure(fig, out_dir / f"shape_by_hops_{decode}_{stat}.png")
+        save_figure(fig, out_dir / f"shape_by_hops_{decode}_{stat}.pdf")
+        plt.close(fig)
 
     # Write a compact extracted summary (for tables / quick diff).
     summary: Dict[str, Any] = {
@@ -288,4 +286,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

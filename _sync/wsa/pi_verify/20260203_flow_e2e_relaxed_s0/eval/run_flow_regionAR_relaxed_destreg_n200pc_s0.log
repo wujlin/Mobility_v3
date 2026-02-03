@@ -1,23 +1,16 @@
 /home/jinlin/miniconda3/envs/dpl/lib/python3.11/site-packages/torch/nn/modules/transformer.py:392: UserWarning: enable_nested_tensor is True, but self.use_nested_tensor is False because encoder_layer.norm_first was True
   warnings.warn(
-Traceback (most recent call last):
-  File "<frozen runpy>", line 198, in _run_module_as_main
-  File "<frozen runpy>", line 88, in _run_code
-  File "/home/jinlin/projects/Mobility_v3/src/evaluation/way_casd_binned_eval.py", line 1156, in <module>
-    main()
-  File "/home/jinlin/miniconda3/envs/dpl/lib/python3.11/site-packages/torch/utils/_contextlib.py", line 120, in decorate_context
-    return func(*args, **kwargs)
-           ^^^^^^^^^^^^^^^^^^^^^
-  File "/home/jinlin/projects/Mobility_v3/src/evaluation/way_casd_binned_eval.py", line 690, in main
-    ckpt_f = torch.load(str(args.flow_ckpt), map_location=device)
-             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/home/jinlin/miniconda3/envs/dpl/lib/python3.11/site-packages/torch/serialization.py", line 1484, in load
-    with _open_file_like(f, "rb") as opened_file:
-         ^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/home/jinlin/miniconda3/envs/dpl/lib/python3.11/site-packages/torch/serialization.py", line 759, in _open_file_like
-    return _open_file(name_or_buffer, mode)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/home/jinlin/miniconda3/envs/dpl/lib/python3.11/site-packages/torch/serialization.py", line 740, in __init__
-    super().__init__(open(name, mode))
-                     ^^^^^^^^^^^^^^^^
-IsADirectoryError: [Errno 21] Is a directory: '.'
+[city0] start n_routes=200 latent_source=flow region_constraint=ar compare_beam=True
+[city0] batch 0:64/200
+[city0] batch 64:128/200
+[city0] batch 128:192/200
+[city0] batch 192:200/200
+[city0] done=200 routes
+[city1] start n_routes=200 latent_source=flow region_constraint=ar compare_beam=True
+[city1] batch 0:64/200
+[city1] batch 64:128/200
+[city1] batch 128:192/200
+[city1] batch 192:200/200
+[city1] done=200 routes
+[OK] saved: _sync/wsa/pi_verify/20260203_flow_e2e_relaxed_s0/eval/binned_flow_regionAR_relaxed_destreg_n200pc_s0.json
+[OK] saved: _sync/wsa/pi_verify/20260203_flow_e2e_relaxed_s0/eval/per_route_flow_regionAR_relaxed_destreg_n200pc_s0.json

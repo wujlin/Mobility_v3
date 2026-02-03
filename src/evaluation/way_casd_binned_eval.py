@@ -280,6 +280,23 @@ def _region_seq_from_way_seq(way_seq: List[int], way_region_np: np.ndarray) -> L
     return _compress_consecutive_int(reg)
 
 
+def _pad_int_seqs(*, seqs: List[List[int]], device: torch.device) -> torch.Tensor:
+    """
+    Pad variable-length int sequences to a dense LongTensor with -1 padding.
+    Returns: (B,Smax) long on device.
+    """
+    B = int(len(seqs))
+    if B == 0:
+        return torch.zeros((0, 1), dtype=torch.long, device=device)
+    maxL = max(1, max(int(len(s)) for s in seqs))
+    pad = torch.full((B, int(maxL)), -1, dtype=torch.long, device=device)
+    for i, s in enumerate(seqs):
+        if not s:
+            continue
+        pad[i, : int(len(s))] = torch.as_tensor(s, dtype=torch.long, device=device)
+    return pad
+
+
 def _load_region_ar_meta(*, way_regions_npz: Path, way_features_npz: Path, coord_scale: float) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, Dict[str, object]]:
     """
     Build Region AR meta tensors:
@@ -483,7 +500,12 @@ def main() -> None:
         default="none",
         help="none=baseline; gt=use GT-derived region_seq; ar=use Region AR predicted region_seq.",
     )
-    p.add_argument("--way_regions_npz", type=Path, default=None, help="Required when --region_constraint != none.")
+    p.add_argument(
+        "--way_regions_npz",
+        type=Path,
+        default=None,
+        help="Required when --region_constraint != none, or when Flow ckpt enables region_seq conditioning.",
+    )
     p.add_argument("--region_ar_ckpt", type=Path, default=None, help="Required when --region_constraint=ar.")
     p.add_argument("--region_ar_max_len", type=int, default=16, help="Max region_seq length for Region AR greedy rollout.")
     p.add_argument("--region_constraint_mode", choices=["strict", "relaxed"], default="strict")
@@ -701,6 +723,10 @@ def main() -> None:
             dropout=float(flow_cfg_dict.get("dropout", 0.1)),
             noise_sigma=float(flow_cfg_dict.get("noise_sigma", 1.0)),
             solver_steps=int(flow_cfg_dict.get("solver_steps", 20)),
+            cond_inject=str(flow_cfg_dict.get("cond_inject", "add")),
+            use_region_seq=bool(flow_cfg_dict.get("use_region_seq", False)),
+            n_regions=int(flow_cfg_dict.get("n_regions", 154)),
+            region_max_len=int(flow_cfg_dict.get("region_max_len", 16)),
         )
         if int(flow_cfg.d_model) != int(ae.cfg.d_model) or int(flow_cfg.n_latent) != int(ae.cfg.n_latent):
             raise SystemExit(
@@ -710,6 +736,14 @@ def main() -> None:
         flow = LatentFlowMatching(cfg=flow_cfg, cond_cfg=ae.decoder.cond_enc.cfg).to(device)
         flow.load_state_dict(f_state, strict=False)
         flow.eval()
+        if bool(flow.cfg.use_region_seq) and way_region_np is None:
+            if args.way_regions_npz is None:
+                raise SystemExit("[FATAL] Flow ckpt requires region_seq conditioning, so --way_regions_npz is required.")
+            wr = np.load(str(Path(args.way_regions_npz)), allow_pickle=True)
+            if "way_region" not in wr.files:
+                raise SystemExit("[FATAL] way_regions_npz missing key: way_region")
+            way_region_np = np.asarray(wr["way_region"], dtype=np.int64).reshape(-1)
+            way_region_t = torch.as_tensor(way_region_np, dtype=torch.long, device=device)
 
     max_candidates = int(cfg.decode_max_candidates)
     if max_candidates < 0:
@@ -783,40 +817,26 @@ def main() -> None:
             sw_t = torch.as_tensor(sw_b, dtype=torch.long, device=device)
             dw_t = torch.as_tensor(dw_b, dtype=torch.long, device=device)
 
+            # Sample multiplicity for Flow.
             K = 1
-            z_use: torch.Tensor
-            route_cond_use: Dict[str, torch.Tensor]
-            sw_use: torch.Tensor
-            dw_use: torch.Tensor
-            if str(cfg.latent_source) == "gt":
-                maxL = int(max(len(x) for x in gt_b))
-                pad = np.full((int(i1 - i0), maxL), -1, dtype=np.int64)
-                for j, seq in enumerate(gt_b):
-                    pad[j, : len(seq)] = np.asarray(seq, dtype=np.int64)
-                way_pad_t = torch.as_tensor(pad, dtype=torch.long, device=device)
-                z_use, _ = ae.encode(way_pad_t)
-                route_cond_use = route_cond
-                sw_use = sw_t
-                dw_use = dw_t
-            else:
+            route_cond_use: Dict[str, torch.Tensor] = route_cond
+            sw_use: torch.Tensor = sw_t
+            dw_use: torch.Tensor = dw_t
+            if str(cfg.latent_source) == "flow":
                 if flow is None:
                     raise SystemExit("[FATAL] latent_source=flow but Flow is not loaded (missing --flow_ckpt?)")
                 K = int(max(1, int(cfg.n_samples_per_route)))
                 route_cond_use = {k: v.repeat_interleave(K, dim=0) for k, v in route_cond.items()}
                 sw_use = sw_t.repeat_interleave(K, dim=0)
                 dw_use = dw_t.repeat_interleave(K, dim=0)
-                z_use = flow.sample(route_cond=route_cond_use, solver_steps=cfg.flow_solver_steps)
 
+            # Build region_seq once if needed by decoder constraint or by Flow conditioning.
             region_seq_use: Optional[List[List[int]]] = None
-            region_routes: Optional[List[List[int]]] = None
-            if str(cfg.region_constraint) != "none":
+            if (str(cfg.region_constraint) != "none") or (flow is not None and bool(flow.cfg.use_region_seq)):
                 if way_region_np is None or way_region_t is None:
-                    raise RuntimeError("region_constraint enabled but way_region is missing")
-                region_routes = []
-                if str(cfg.region_constraint) == "gt":
-                    for seq in gt_b:
-                        region_routes.append(_region_seq_from_way_seq(seq, way_region_np))
-                elif str(cfg.region_constraint) == "ar":
+                    raise RuntimeError("region_seq required but way_region is missing (need --way_regions_npz).")
+                region_routes: List[List[int]] = []
+                if str(cfg.region_constraint) == "ar":
                     if region_ar_model is None or region_ar_adj is None:
                         raise RuntimeError("region_constraint=ar but region_ar_model is not loaded")
                     for bi in range(int(i1 - i0)):
@@ -840,13 +860,34 @@ def main() -> None:
                             )
                         )
                 else:
-                    raise RuntimeError(f"unknown region_constraint: {cfg.region_constraint!r}")
+                    for seq in gt_b:
+                        region_routes.append(_region_seq_from_way_seq(seq, way_region_np))
 
-                # Replicate per route for flow sampling (K per route).
-                region_seq_use = []
+                region_seq_rep: List[List[int]] = []
                 for rs in region_routes:
                     for _k in range(int(K)):
-                        region_seq_use.append(list(rs))
+                        region_seq_rep.append(list(rs))
+
+                # Flow conditioning (if enabled in ckpt).
+                if flow is not None and bool(flow.cfg.use_region_seq):
+                    route_cond_use["region_seq_pad"] = _pad_int_seqs(seqs=region_seq_rep, device=device)
+
+                # Decoder constraint uses the same replicated region_seq.
+                if str(cfg.region_constraint) != "none":
+                    region_seq_use = region_seq_rep
+
+            # Encode GT -> latent, or sample from Flow.
+            if str(cfg.latent_source) == "gt":
+                maxL = int(max(len(x) for x in gt_b))
+                pad = np.full((int(i1 - i0), maxL), -1, dtype=np.int64)
+                for j, seq in enumerate(gt_b):
+                    pad[j, : len(seq)] = np.asarray(seq, dtype=np.int64)
+                way_pad_t = torch.as_tensor(pad, dtype=torch.long, device=device)
+                z_use, _ = ae.encode(way_pad_t)
+            else:
+                if flow is None:
+                    raise SystemExit("[FATAL] latent_source=flow but Flow is not loaded (missing --flow_ckpt?)")
+                z_use = flow.sample(route_cond=route_cond_use, solver_steps=cfg.flow_solver_steps)
 
             greedy = ae.decoder.greedy_decode_batched(
                 way_embedder=ae.way_enc,

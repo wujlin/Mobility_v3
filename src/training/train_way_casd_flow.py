@@ -50,6 +50,12 @@ class TrainCfg:
     dropout: float
     noise_sigma: float
     solver_steps: int
+    cond_inject: str
+    use_region_seq: bool
+    n_regions: int
+    region_max_len: int
+    region_seq_npz: Optional[str]
+    way_regions_npz: Optional[str]
 
 
 def _set_seed(seed: int) -> None:
@@ -156,9 +162,67 @@ def _infer_decoder_past_n_layers_from_state(state: Dict[str, torch.Tensor]) -> O
     return None
 
 
-def _to_device(batch: Dict[str, object], device: torch.device) -> Dict[str, object]:
+class RegionSeqLookup:
+    """
+    Lightweight CSR-backed lookup for region_seq by route_id.
+
+    Expects region_seq_npz produced by src.data.way_graph.extract_region_seq_stats (--out_npz).
+    Keys:
+      - route_id: (N,) int64
+      - region_seq_ptr: (N+1,) int64
+      - region_seq_idx: (total,) int32/64
+      - region_seq_len: (N,) int32
+    """
+
+    def __init__(self, *, region_seq_npz: Path) -> None:
+        data = np.load(str(region_seq_npz), allow_pickle=True)
+        need = {"route_id", "region_seq_ptr", "region_seq_idx", "region_seq_len"}
+        missing = sorted(list(need - set(data.files)))
+        if missing:
+            raise ValueError(f"region_seq_npz missing keys: {missing}")
+        self.route_id = np.asarray(data["route_id"], dtype=np.int64).reshape(-1)
+        self.ptr = np.asarray(data["region_seq_ptr"], dtype=np.int64).reshape(-1)
+        self.idx = np.asarray(data["region_seq_idx"], dtype=np.int64).reshape(-1)
+        self.len = np.asarray(data["region_seq_len"], dtype=np.int64).reshape(-1)
+
+        rid_max = int(np.max(self.route_id)) if self.route_id.size else -1
+        self.rid_to_row = np.full((rid_max + 1,), -1, dtype=np.int64)
+        for row, rid in enumerate(self.route_id.tolist()):
+            rr = int(rid)
+            if 0 <= rr < self.rid_to_row.size:
+                self.rid_to_row[rr] = np.int64(row)
+
+        meta = data["meta"] if "meta" in data.files else None
+        self.meta = meta.item() if meta is not None else None
+
+    def padded(self, *, route_id: torch.Tensor) -> torch.Tensor:
+        rid = route_id.detach().cpu().numpy().astype(np.int64, copy=False).reshape(-1)
+        if rid.size == 0:
+            return torch.zeros((0, 1), dtype=torch.long)
+        if int(np.max(rid)) >= int(self.rid_to_row.size):
+            raise KeyError("region_seq lookup route_id out of range (region_seq_npz was built from a different routes set).")
+        row = self.rid_to_row[rid]
+        if int(np.any(row < 0)):
+            bad = int(rid[int(np.where(row < 0)[0][0])])
+            raise KeyError(f"region_seq missing for route_id={bad} (filter mismatch?)")
+
+        lens = self.len[row].astype(np.int64, copy=False)
+        maxL = int(np.max(lens)) if lens.size else 1
+        maxL = max(1, int(maxL))
+        pad = np.full((int(rid.size), int(maxL)), -1, dtype=np.int64)
+        for i, r in enumerate(row.tolist()):
+            L = int(lens[i])
+            s = int(self.ptr[int(r)])
+            pad[int(i), :L] = self.idx[s : s + L]
+        return torch.as_tensor(pad, dtype=torch.long)
+
+
+def _to_device(batch: Dict[str, object], device: torch.device, *, region_seq: Optional[RegionSeqLookup] = None) -> Dict[str, object]:
     way_seq_pad = batch["way_seq_pad"].to(device)
     route_cond = {k: v.to(device) for k, v in batch["route_cond"].items()}
+    if region_seq is not None:
+        rpad = region_seq.padded(route_id=batch["route_id"])  # (B,S) long, -1 padded
+        route_cond["region_seq_pad"] = rpad.to(device)
     # Flow training only needs encoder latents + route_cond; moving transitions to GPU is wasted.
     return {"way_seq_pad": way_seq_pad, "route_cond": route_cond}
 
@@ -170,13 +234,14 @@ def train_epoch(
     loader: DataLoader,
     opt: torch.optim.Optimizer,
     device: torch.device,
+    region_seq: Optional[RegionSeqLookup] = None,
 ) -> Dict[str, float]:
     flow.train()
     total_loss = 0.0
     total_batches = 0
 
     for batch in loader:
-        b = _to_device(batch, device)
+        b = _to_device(batch, device, region_seq=region_seq)
         with torch.no_grad():
             z1, _ = encoder.encode(b["way_seq_pad"])
         opt.zero_grad(set_to_none=True)
@@ -191,12 +256,19 @@ def train_epoch(
 
 
 @torch.no_grad()
-def eval_epoch(*, encoder: WayCASDAutoEncoder, flow: LatentFlowMatching, loader: DataLoader, device: torch.device) -> Dict[str, float]:
+def eval_epoch(
+    *,
+    encoder: WayCASDAutoEncoder,
+    flow: LatentFlowMatching,
+    loader: DataLoader,
+    device: torch.device,
+    region_seq: Optional[RegionSeqLookup] = None,
+) -> Dict[str, float]:
     flow.eval()
     total_loss = 0.0
     total_batches = 0
     for batch in loader:
-        b = _to_device(batch, device)
+        b = _to_device(batch, device, region_seq=region_seq)
         z1, _ = encoder.encode(b["way_seq_pad"])
         loss, _stats = flow.compute_loss(z1=z1, route_cond=b["route_cond"])
         total_loss += float(loss.item())
@@ -234,6 +306,11 @@ def build_argparser() -> argparse.ArgumentParser:
     p.add_argument("--dropout", type=float, default=0.1)
     p.add_argument("--noise_sigma", type=float, default=1.0)
     p.add_argument("--solver_steps", type=int, default=20)
+    p.add_argument("--cond_inject", type=str, default="add", choices=["add", "xattn"], help="How to inject conditions into latent tokens.")
+    p.add_argument("--use_region_seq", action="store_true", help="If set, condition Flow on coarse region_seq (from --region_seq_npz).")
+    p.add_argument("--region_seq_npz", type=Path, default=None, help="region_seq_min*.npz from extract_region_seq_stats.py (required when --use_region_seq).")
+    p.add_argument("--way_regions_npz", type=Path, default=None, help="way_regions_louvain_per_city*.npz (to infer n_regions; recommended).")
+    p.add_argument("--region_max_len", type=int, default=16, help="Max positional embedding length for region_seq tokens.")
 
     # Long-run training ergonomics
     p.add_argument("--resume_ckpt", type=Path, default=None, help="Optional: resume from ckpt_last.pt/ckpt_best.pt.")
@@ -247,6 +324,39 @@ def main() -> None:
     args = build_argparser().parse_args()
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
+
+    use_region_seq = bool(args.use_region_seq)
+    region_seq_npz = Path(args.region_seq_npz) if args.region_seq_npz is not None else None
+    way_regions_npz = Path(args.way_regions_npz) if args.way_regions_npz is not None else None
+    cond_inject = str(args.cond_inject)
+    region_max_len = int(args.region_max_len)
+
+    n_regions = 154
+    if use_region_seq:
+        if region_seq_npz is None:
+            raise SystemExit("[FATAL] --use_region_seq requires --region_seq_npz.")
+        if way_regions_npz is not None:
+            reg = np.load(str(way_regions_npz), allow_pickle=True)
+            meta = reg["meta"] if "meta" in reg.files else None
+            meta_dict = None
+            if meta is not None:
+                try:
+                    meta_dict = meta.item()
+                except Exception:
+                    meta_dict = None
+            if isinstance(meta_dict, dict) and "n_regions" in meta_dict:
+                n_regions = int(meta_dict["n_regions"])
+            elif "way_region" in reg.files:
+                wr = np.asarray(reg["way_region"], dtype=np.int64).reshape(-1)
+                n_regions = int(np.max(wr)) + 1 if wr.size else 1
+        else:
+            log.warning("use_region_seq enabled but --way_regions_npz is missing; inferring n_regions from region_seq_npz (may undercount).")
+            rs = np.load(str(region_seq_npz), allow_pickle=True)
+            if "region_seq_idx" not in rs.files:
+                raise SystemExit("[FATAL] region_seq_npz missing key: region_seq_idx")
+            ridx = np.asarray(rs["region_seq_idx"], dtype=np.int64).reshape(-1)
+            ridx = ridx[ridx >= 0]
+            n_regions = int(np.max(ridx)) + 1 if ridx.size else 1
 
     cfg = TrainCfg(
         batch_size=int(args.batch_size),
@@ -269,6 +379,12 @@ def main() -> None:
         dropout=float(args.dropout),
         noise_sigma=float(args.noise_sigma),
         solver_steps=int(args.solver_steps),
+        cond_inject=str(cond_inject),
+        use_region_seq=bool(use_region_seq),
+        n_regions=int(n_regions),
+        region_max_len=int(region_max_len),
+        region_seq_npz=(str(region_seq_npz) if region_seq_npz is not None else None),
+        way_regions_npz=(str(way_regions_npz) if way_regions_npz is not None else None),
     )
 
     _set_seed(cfg.seed)
@@ -298,6 +414,19 @@ def main() -> None:
         max_candidates=int(cfg.max_candidates),
         tz_offset_hours=float(cfg.tz_offset_hours),
     )
+
+    region_seq_lookup: Optional[RegionSeqLookup] = None
+    if bool(cfg.use_region_seq):
+        if region_seq_npz is None:
+            raise SystemExit("[FATAL] use_region_seq enabled but region_seq_npz is missing.")
+        region_seq_lookup = RegionSeqLookup(region_seq_npz=Path(region_seq_npz))
+        if isinstance(region_seq_lookup.meta, dict) and isinstance(region_seq_lookup.meta.get("cfg", None), dict):
+            mc = region_seq_lookup.meta["cfg"]
+            if int(mc.get("min_hops", cfg.min_hops)) != int(cfg.min_hops) or int(mc.get("max_way_len", cfg.max_way_len)) != int(cfg.max_way_len):
+                log.warning(
+                    f"region_seq_npz filter mismatch: meta(min_hops={mc.get('min_hops')}, max_way_len={mc.get('max_way_len')}) "
+                    f"vs train(min_hops={cfg.min_hops}, max_way_len={cfg.max_way_len})"
+                )
 
     pin = bool(device.type == "cuda")
     num_workers = max(0, int(cfg.num_workers))
@@ -406,6 +535,10 @@ def main() -> None:
             dropout=float(cfg.dropout),
             noise_sigma=float(cfg.noise_sigma),
             solver_steps=int(cfg.solver_steps),
+            cond_inject=str(cfg.cond_inject),
+            use_region_seq=bool(cfg.use_region_seq),
+            n_regions=int(cfg.n_regions),
+            region_max_len=int(cfg.region_max_len),
         ),
         cond_cfg=ConditionEncoderCfg(d_model=int(cfg.d_model), coord_scale=1024.0),
     ).to(device)
@@ -460,7 +593,7 @@ def main() -> None:
         log.info(f"resume_ckpt={args.resume_ckpt} start_epoch={start_epoch} best_val_loss={best} best_epoch={best_epoch}")
 
     if not np.isfinite(best) or best == float("inf"):
-        va0 = eval_epoch(encoder=ae, flow=flow, loader=val_loader, device=device)
+        va0 = eval_epoch(encoder=ae, flow=flow, loader=val_loader, device=device, region_seq=region_seq_lookup)
         best = float(va0["loss"])
         best_epoch = int(start_epoch - 1)
         log.info(f"init best_val_loss={best:.6f} from current weights (epoch={best_epoch})")
@@ -481,8 +614,8 @@ def main() -> None:
     early_stop_patience = max(0, int(args.early_stop_patience))
 
     for epoch in range(int(start_epoch), int(cfg.n_epochs) + 1):
-        tr = train_epoch(encoder=ae, flow=flow, loader=train_loader, opt=opt, device=device)
-        va = eval_epoch(encoder=ae, flow=flow, loader=val_loader, device=device)
+        tr = train_epoch(encoder=ae, flow=flow, loader=train_loader, opt=opt, device=device, region_seq=region_seq_lookup)
+        va = eval_epoch(encoder=ae, flow=flow, loader=val_loader, device=device, region_seq=region_seq_lookup)
         history.append({"epoch": int(epoch), "train": tr, "val": va})
         log.info(f"epoch={epoch} train_loss={tr['loss']:.4f} val_loss={va['loss']:.4f}")
 
@@ -564,6 +697,8 @@ def main() -> None:
             "way_graph_npz": str(args.way_graph_npz),
             "way_features_npz": str(args.way_features_npz),
             "ae_ckpt": str(args.ae_ckpt),
+            "region_seq_npz": (str(args.region_seq_npz) if args.region_seq_npz is not None else None),
+            "way_regions_npz": (str(args.way_regions_npz) if args.way_regions_npz is not None else None),
         },
         "out_dir": str(out_dir),
         "best_val_loss": float(best),

@@ -12,6 +12,7 @@ if str(_REPO_ROOT) not in sys.path:
 import argparse
 import csv
 import json
+import math
 from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -27,6 +28,7 @@ import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
 
 from src.data.way_graph.way_sequence_dataset import load_way_routes_npz
+from src.evaluation.shape_metrics import dtw_distance, frechet_distance
 from src.models.way_casd.way_casd import WayCASDAECfg, WayCASDAutoEncoder
 from src.models.way_casd.way_encoder import load_way_features_from_npz
 from src.plot_style import OKABE_ITO, add_panel_label, paper_style, save_figure
@@ -197,6 +199,135 @@ class Case:
 
     start_pos_yx: Tuple[float, float]
     dest_pos_yx: Tuple[float, float]
+
+
+def _decode_meta(meta_obj: object) -> Optional[dict]:
+    if meta_obj is None:
+        return None
+    if isinstance(meta_obj, np.ndarray):
+        if meta_obj.size != 1:
+            return None
+        meta_obj = meta_obj.item()
+    return meta_obj if isinstance(meta_obj, dict) else None
+
+
+def _grid_bbox_from_meta(meta: dict) -> Optional[Tuple[int, int, float, float, float, float]]:
+    grid = meta.get("grid", {}) if isinstance(meta, dict) else {}
+    if not isinstance(grid, dict):
+        return None
+    H = grid.get("H", None)
+    W = grid.get("W", None)
+    bbox = grid.get("bbox", None)
+    if not isinstance(bbox, dict):
+        return None
+    try:
+        H_i = int(H)
+        W_i = int(W)
+        min_lon = float(bbox["min_lon"])
+        min_lat = float(bbox["min_lat"])
+        max_lon = float(bbox["max_lon"])
+        max_lat = float(bbox["max_lat"])
+    except Exception:
+        return None
+    if H_i <= 0 or W_i <= 0:
+        return None
+    return (H_i, W_i, min_lon, min_lat, max_lon, max_lat)
+
+
+def _meta_from_city_grid_meta(path: Path) -> dict:
+    """
+    Load a per-city grid meta from:
+      - osm_road_prob_meta.json (recommended), or
+      - a single-city way_features.npz (meta.grid.* must exist).
+    """
+    if str(path).endswith(".npz"):
+        wf = np.load(str(path), allow_pickle=True)
+        meta = _decode_meta(wf.get("meta", None))
+        if meta is None:
+            raise ValueError(f"{path} missing meta (need meta.grid.H/W/bbox).")
+    else:
+        meta = _read_json(path)
+
+    # Normalize: allow meta with bbox/H/W at root by wrapping into meta['grid'].
+    if _grid_bbox_from_meta(meta) is None:
+        if isinstance(meta, dict) and ("H" in meta) and ("W" in meta) and ("bbox" in meta):
+            meta = {"grid": {"H": meta["H"], "W": meta["W"], "bbox": meta["bbox"]}}
+    if _grid_bbox_from_meta(meta) is None:
+        raise ValueError(f"{path} missing grid meta (need grid.H/grid.W/grid.bbox).")
+    return meta
+
+
+def _parse_city_kv(spec: str) -> Tuple[int, Path]:
+    s = str(spec or "").strip()
+    if "=" in s:
+        k, v = s.split("=", 1)
+    elif ":" in s:
+        k, v = s.split(":", 1)
+    else:
+        raise ValueError(f"Bad spec (expect CITY=PATH): {spec!r}")
+    city = int(str(k).strip())
+    path = Path(str(v).strip()).expanduser()
+    return city, path
+
+
+def _grid_yx_to_xy_m(y: np.ndarray, x: np.ndarray, *, meta: dict) -> np.ndarray:
+    """
+    Convert grid y/x to local planar meters via bbox (equirectangular).
+    Output: (N,2) [x_m, y_m]
+    """
+    bb = _grid_bbox_from_meta(meta)
+    if bb is None:
+        raise ValueError("meta missing grid bbox")
+    H, W, min_lon, min_lat, max_lon, max_lat = bb
+    y = np.asarray(y, dtype=np.float64)
+    x = np.asarray(x, dtype=np.float64)
+    lon = min_lon + (x / float(W)) * (max_lon - min_lon)
+    lat = max_lat - (y / float(H)) * (max_lat - min_lat)
+
+    lat0 = 0.5 * (min_lat + max_lat)
+    lon0 = 0.5 * (min_lon + max_lon)
+    r = 6371000.0
+    lat_r = np.deg2rad(lat)
+    lon_r = np.deg2rad(lon)
+    lat0_r = math.radians(float(lat0))
+    lon0_r = math.radians(float(lon0))
+    x_m = (lon_r - lon0_r) * math.cos(lat0_r) * r
+    y_m = (lat_r - lat0_r) * r
+    return np.stack([x_m, y_m], axis=1).astype(np.float64, copy=False)
+
+
+def _jaccard(a: List[int], b: List[int]) -> float:
+    sa = set(int(x) for x in a)
+    sb = set(int(x) for x in b)
+    if not sa and not sb:
+        return 1.0
+    if not sa or not sb:
+        return 0.0
+    return float(len(sa & sb)) / float(len(sa | sb))
+
+
+def _sum_way_len_m(way_len_m: np.ndarray, seq: List[int]) -> float:
+    if not seq:
+        return float("nan")
+    ids = np.asarray([int(x) for x in seq], dtype=np.int64)
+    ids = ids[(ids >= 0) & (ids < int(way_len_m.size))]
+    if ids.size == 0:
+        return float("nan")
+    return float(np.sum(way_len_m[ids].astype(np.float64, copy=False)))
+
+
+def _fmt_maybe_km(meters: Optional[float]) -> str:
+    if meters is None:
+        return "n/a"
+    try:
+        v = float(meters)
+    except Exception:
+        return "n/a"
+    if not np.isfinite(v):
+        return "n/a"
+    if abs(v) >= 10000.0:
+        return f"{v/1000.0:.1f}km"
+    return f"{v:.0f}m"
 
 
 def _build_city_index(rep: dict) -> Dict[int, Dict[str, Any]]:
@@ -547,6 +678,18 @@ def build_argparser() -> argparse.ArgumentParser:
         default=None,
         help="Optional per-route granularity metrics csv (from tools/waycasd_eval_granularity_stats.py). If omitted, will try <eval_dir>/metrics/waycasd_eval_granularity_routes.csv.",
     )
+    p.add_argument(
+        "--city_grid_meta",
+        type=str,
+        action="append",
+        default=None,
+        help="Optional: CITY=PATH to osm_road_prob_meta.json (or single-city way_features.npz with meta.grid.*). Used to compute Fréchet/DTW in meters for micro annotations.",
+    )
+    p.add_argument(
+        "--no_shape_metrics",
+        action="store_true",
+        help="Disable shape metrics in annotations (Jaccard/Len ratio/Fréchet/DTW).",
+    )
 
     p.add_argument("--beam_size", type=int, default=10)
     p.add_argument("--city_name", type=str, nargs="*", default=["0:Detroit", "1:Columbus"])
@@ -612,6 +755,15 @@ def main() -> None:
         else (eval_dir / "metrics" / "waycasd_eval_granularity_routes.csv")
     )
     gran = _load_granularity_routes_csv(Path(gran_csv))
+
+    meta_by_city: Dict[int, dict] = {}
+    for spec in (args.city_grid_meta or []) if not bool(args.no_shape_metrics) else []:
+        try:
+            city, p = _parse_city_kv(str(spec))
+            _require_file(p)
+            meta_by_city[int(city)] = _meta_from_city_grid_meta(p)
+        except Exception as e:
+            raise SystemExit(f"[FATAL] bad --city_grid_meta {spec!r}: {e}")
 
     # Build AE (infer decoder cfg from state dict; keep consistent with eval scripts).
     way_features = load_way_features_from_npz(Path(way_features_npz), device=device)
@@ -773,19 +925,45 @@ def main() -> None:
                         err_line = f"Err@dest: G={float(g_err):.0f}{unit}, B10={float(b_err):.0f}{unit}"
                     except Exception:
                         err_line = ""
+
+                text_lines = [
+                    f"GT hops: {int(c.gt_hops)}",
+                    f"Dest way: {dest_len:.0f}m",
+                    f"Avg way: {avg_len:.0f}m",
+                ]
+                if err_line:
+                    text_lines.append(err_line)
+
+                if not bool(args.no_shape_metrics):
+                    gt_len = _sum_way_len_m(way_len_m, c.gt_way_ids)
+                    g_len = _sum_way_len_m(way_len_m, c.greedy_way_ids)
+                    b_len = _sum_way_len_m(way_len_m, c.beam_way_ids)
+                    denom = gt_len if (np.isfinite(gt_len) and float(gt_len) > 0) else float("nan")
+                    g_ratio = (g_len / denom) if np.isfinite(g_len) and np.isfinite(denom) else float("nan")
+                    b_ratio = (b_len / denom) if np.isfinite(b_len) and np.isfinite(denom) else float("nan")
+                    text_lines.append(
+                        f"Len/GT: G={g_ratio:.2f}, B10={b_ratio:.2f} | J: G={_jaccard(c.gt_way_ids, c.greedy_way_ids):.2f}, B10={_jaccard(c.gt_way_ids, c.beam_way_ids):.2f}"
+                    )
+                    meta = meta_by_city.get(int(city), None)
+                    if meta is not None:
+                        gt_m = _grid_yx_to_xy_m(gt_y, gt_x, meta=meta)
+                        g_m = _grid_yx_to_xy_m(g_y, g_x, meta=meta)
+                        b_m = _grid_yx_to_xy_m(b_y, b_x, meta=meta)
+                        fre_g = frechet_distance(gt_m, g_m)
+                        fre_b = frechet_distance(gt_m, b_m)
+                        dtw_g = dtw_distance(gt_m, g_m)
+                        dtw_b = dtw_distance(gt_m, b_m)
+                        text_lines.append(
+                            f"Fréchet: G={_fmt_maybe_km(fre_g)}, B10={_fmt_maybe_km(fre_b)} | DTW: G={_fmt_maybe_km(dtw_g)}, B10={_fmt_maybe_km(dtw_b)}"
+                        )
                 ax.text(
                     0.98,
                     0.02,
-                    (
-                        f"GT hops: {int(c.gt_hops)}\n"
-                        f"Dest way: {dest_len:.0f}m\n"
-                        f"Avg way: {avg_len:.0f}m"
-                        + (f"\n{err_line}" if err_line else "")
-                    ),
+                    "\n".join(text_lines),
                     transform=ax.transAxes,
                     ha="right",
                     va="bottom",
-                    fontsize=9,
+                    fontsize=8,
                     color="#222222",
                     bbox=dict(boxstyle="round,pad=0.2", facecolor="white", edgecolor="none", alpha=0.75),
                     zorder=10,

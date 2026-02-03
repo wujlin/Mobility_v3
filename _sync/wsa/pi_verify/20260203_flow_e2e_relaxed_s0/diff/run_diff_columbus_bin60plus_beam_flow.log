@@ -1,0 +1,16 @@
+Traceback (most recent call last):
+  File "/home/jinlin/projects/Mobility_v3/tools/waycasd_diff_region_constraint_failures.py", line 139, in <module>
+    main()
+  File "/home/jinlin/projects/Mobility_v3/tools/waycasd_diff_region_constraint_failures.py", line 63, in main
+    base = _read_json(Path(args.baseline_json))
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jinlin/projects/Mobility_v3/tools/waycasd_diff_region_constraint_failures.py", line 10, in _read_json
+    return json.loads(path.read_text(encoding="utf-8"))
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jinlin/miniconda3/envs/dpl/lib/python3.11/pathlib.py", line 1058, in read_text
+    with self.open(mode='r', encoding=encoding, errors=errors) as f:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jinlin/miniconda3/envs/dpl/lib/python3.11/pathlib.py", line 1044, in open
+    return io.open(self, mode, buffering, encoding, errors, newline)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+FileNotFoundError: [Errno 2] No such file or directory: '_sync/wsa/pi_verify/20260203_flow_e2e_relaxed_s0/eval/per_route_flow_baseline_n200pc_s0.json'

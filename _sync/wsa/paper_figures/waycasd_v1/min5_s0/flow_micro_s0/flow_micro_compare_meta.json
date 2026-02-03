@@ -1,0 +1,30 @@
+{
+  "ok": true,
+  "task": "waycasd_plot_flow_micro_compare",
+  "created_at": "2026-02-03T23:54:06.669018+08:00",
+  "decode": "beam",
+  "baseline": "Flow+RegionAR(old)",
+  "methods": [
+    {
+      "name": "Flow+RegionAR(old)",
+      "path": "_sync/wsa/pi_verify/20260203_flow_micro_seqdump_s0/per_route_flow_old_seqdump_s0.json"
+    },
+    {
+      "name": "Flow+RegionSeq(add)",
+      "path": "_sync/wsa/pi_verify/20260203_flow_micro_seqdump_s0/per_route_flow_add_seqdump_s0.json"
+    },
+    {
+      "name": "Flow+RegionSeq(xattn)",
+      "path": "_sync/wsa/pi_verify/20260203_flow_micro_seqdump_s0/per_route_flow_xattn_seqdump_s0.json"
+    }
+  ],
+  "picked": {
+    "0:easy": 1166,
+    "0:improved": 1663,
+    "0:hard": 1524,
+    "1:easy": 3608,
+    "1:improved": 5195,
+    "1:hard": 6461
+  },
+  "way_features_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD1_waydata_rustbelt_seed0_strict_v1/W4_way_features_sem/way_features.npz"
+}

@@ -1,0 +1,11 @@
+usage: build_way_regions_louvain_per_city.py [-h] --way_graph_npz
+                                             WAY_GRAPH_NPZ --way_routes_npz
+                                             WAY_ROUTES_NPZ --out_npz OUT_NPZ
+                                             [--out_json OUT_JSON]
+                                             [--seed SEED]
+                                             [--resolution RESOLUTION]
+                                             [--min_component_size MIN_COMPONENT_SIZE]
+                                             [--keep_only_largest_cc]
+                                             [--directed_region_edges]
+                                             [--fill_unknown_by_neighbor]
+build_way_regions_louvain_per_city.py: error: argument --seed: invalid int value: ''

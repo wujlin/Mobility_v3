@@ -1,0 +1,12 @@
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "/home/jinlin/projects/Mobility_v3/src/data/way_graph/extract_region_seq_stats.py", line 213, in <module>
+    main()
+  File "/home/jinlin/projects/Mobility_v3/src/data/way_graph/extract_region_seq_stats.py", line 82, in main
+    reg_data = np.load(str(args.way_regions_npz), allow_pickle=True)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jinlin/miniconda3/envs/dpl/lib/python3.11/site-packages/numpy/lib/_npyio_impl.py", line 451, in load
+    fid = stack.enter_context(open(os.fspath(file), "rb"))
+                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+FileNotFoundError: [Errno 2] No such file or directory: '_sync/wsa/pi_verify/20260204_E3_regions_res2p0_s/regions/way_regions_louvain_per_city_res2p0_seed.npz'

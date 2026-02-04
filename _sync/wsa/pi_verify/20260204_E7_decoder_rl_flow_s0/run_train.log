@@ -1,0 +1,47 @@
+2026-02-04 13:57:55,863 - INFO - device=cuda
+2026-02-04 13:57:55,869 - INFO - routes: total=5022 train=4520 val=502 min_hops=5 max_way_len=160
+/home/jinlin/miniconda3/envs/dpl/lib/python3.11/site-packages/torch/nn/modules/transformer.py:392: UserWarning: enable_nested_tensor is True, but self.use_nested_tensor is False because encoder_layer.norm_first was True
+  warnings.warn(
+2026-02-04 13:57:56,028 - INFO - trainable_params(decoder)=1984257
+2026-02-04 13:57:56,063 - INFO - loaded flow: cond_inject=xattn use_region_seq=True solver_steps=20
+2026-02-04 13:58:25,194 - INFO - epoch=1 step=20 loss=-1.6195 r=0.0618 succ=0.188 dist=0.000 loop=0.500 ent=7.502
+2026-02-04 13:58:53,459 - INFO - epoch=1 step=40 loss=-1.7606 r=-0.0822 succ=0.062 dist=0.000 loop=0.656 ent=13.404
+2026-02-04 13:59:21,409 - INFO - epoch=1 step=60 loss=-1.8911 r=0.1277 succ=0.250 dist=0.000 loop=0.562 ent=9.688
+2026-02-04 13:59:49,348 - INFO - epoch=1 step=80 loss=-2.7206 r=-0.0038 succ=0.156 dist=0.000 loop=0.688 ent=15.634
+2026-02-04 14:00:17,228 - INFO - epoch=1 step=100 loss=-1.1868 r=-0.0025 succ=0.156 dist=0.000 loop=0.562 ent=12.453
+2026-02-04 14:00:44,904 - INFO - epoch=1 step=120 loss=-1.9780 r=0.0920 succ=0.188 dist=0.000 loop=0.438 ent=7.170
+2026-02-04 14:01:12,585 - INFO - epoch=1 step=140 loss=-0.4914 r=0.0250 succ=0.156 dist=0.000 loop=0.625 ent=9.017
+2026-02-04 14:01:29,418 - INFO - epoch=1 train(loss=-1.9768, r=0.0465, succ=0.173) val(loss=-2.1489, r=0.0576, succ=0.179)
+2026-02-04 14:01:57,019 - INFO - epoch=2 step=20 loss=-1.0503 r=-0.1128 succ=0.031 dist=0.000 loop=0.594 ent=9.523
+2026-02-04 14:02:24,956 - INFO - epoch=2 step=40 loss=-2.6142 r=0.1139 succ=0.219 dist=0.000 loop=0.500 ent=11.640
+2026-02-04 14:02:53,042 - INFO - epoch=2 step=60 loss=-2.3721 r=0.0464 succ=0.188 dist=0.000 loop=0.531 ent=9.937
+2026-02-04 14:03:20,460 - INFO - epoch=2 step=80 loss=-2.5032 r=0.0559 succ=0.188 dist=0.000 loop=0.562 ent=11.153
+2026-02-04 14:03:47,142 - INFO - epoch=2 step=100 loss=-1.2641 r=-0.0070 succ=0.094 dist=0.000 loop=0.500 ent=8.511
+2026-02-04 14:04:14,969 - INFO - epoch=2 step=120 loss=-2.7359 r=-0.0722 succ=0.094 dist=0.000 loop=0.562 ent=15.887
+2026-02-04 14:04:42,277 - INFO - epoch=2 step=140 loss=-2.4624 r=0.0210 succ=0.156 dist=0.000 loop=0.594 ent=10.361
+2026-02-04 14:04:58,580 - INFO - epoch=2 train(loss=-2.0264, r=0.0592, succ=0.177) val(loss=-2.2856, r=0.0589, succ=0.177)
+2026-02-04 14:05:26,710 - INFO - epoch=3 step=20 loss=-2.2816 r=0.0468 succ=0.156 dist=0.000 loop=0.438 ent=9.269
+2026-02-04 14:05:54,145 - INFO - epoch=3 step=40 loss=-1.9822 r=0.0903 succ=0.219 dist=0.000 loop=0.594 ent=9.905
+2026-02-04 14:06:21,994 - INFO - epoch=3 step=60 loss=-3.9513 r=0.1506 succ=0.281 dist=0.000 loop=0.562 ent=11.476
+2026-02-04 14:06:49,332 - INFO - epoch=3 step=80 loss=-3.0819 r=0.0546 succ=0.188 dist=0.000 loop=0.500 ent=12.490
+2026-02-04 14:07:17,522 - INFO - epoch=3 step=100 loss=-1.7432 r=0.1885 succ=0.281 dist=0.000 loop=0.469 ent=7.453
+2026-02-04 14:07:45,306 - INFO - epoch=3 step=120 loss=-3.1079 r=0.0171 succ=0.156 dist=0.000 loop=0.531 ent=13.127
+2026-02-04 14:08:12,905 - INFO - epoch=3 step=140 loss=-1.8642 r=-0.0676 succ=0.062 dist=0.000 loop=0.562 ent=12.408
+2026-02-04 14:08:29,453 - INFO - epoch=3 train(loss=-1.9618, r=0.0640, succ=0.183) val(loss=-2.1256, r=0.0719, succ=0.194)
+2026-02-04 14:08:57,306 - INFO - epoch=4 step=20 loss=-1.5522 r=0.0108 succ=0.125 dist=0.000 loop=0.562 ent=9.219
+2026-02-04 14:09:25,134 - INFO - epoch=4 step=40 loss=-1.2474 r=0.0885 succ=0.188 dist=0.000 loop=0.562 ent=7.496
+2026-02-04 14:09:53,037 - INFO - epoch=4 step=60 loss=-1.1954 r=0.1463 succ=0.250 dist=0.000 loop=0.406 ent=7.653
+2026-02-04 14:10:20,624 - INFO - epoch=4 step=80 loss=-1.7360 r=0.0294 succ=0.125 dist=0.000 loop=0.500 ent=9.395
+2026-02-04 14:10:48,054 - INFO - epoch=4 step=100 loss=-1.5481 r=0.1318 succ=0.219 dist=0.000 loop=0.438 ent=6.641
+2026-02-04 14:11:15,788 - INFO - epoch=4 step=120 loss=-2.8293 r=0.1266 succ=0.250 dist=0.000 loop=0.469 ent=10.402
+2026-02-04 14:11:42,784 - INFO - epoch=4 step=140 loss=-1.3196 r=0.0460 succ=0.156 dist=0.000 loop=0.469 ent=8.840
+2026-02-04 14:11:58,932 - INFO - epoch=4 train(loss=-2.1003, r=0.0729, succ=0.189) val(loss=-2.2976, r=0.0897, succ=0.206)
+2026-02-04 14:12:26,172 - INFO - epoch=5 step=20 loss=-1.3867 r=0.1597 succ=0.281 dist=0.000 loop=0.438 ent=9.095
+2026-02-04 14:12:53,676 - INFO - epoch=5 step=40 loss=-4.5314 r=0.0805 succ=0.219 dist=0.000 loop=0.562 ent=16.292
+2026-02-04 14:13:21,200 - INFO - epoch=5 step=60 loss=0.3454 r=-0.0142 succ=0.094 dist=0.000 loop=0.469 ent=9.796
+2026-02-04 14:13:48,464 - INFO - epoch=5 step=80 loss=-0.8261 r=0.0200 succ=0.125 dist=0.000 loop=0.469 ent=7.088
+2026-02-04 14:14:16,134 - INFO - epoch=5 step=100 loss=-1.9918 r=0.1447 succ=0.250 dist=0.000 loop=0.562 ent=8.936
+2026-02-04 14:14:42,560 - INFO - epoch=5 step=120 loss=-2.3887 r=0.0497 succ=0.156 dist=0.000 loop=0.500 ent=8.730
+2026-02-04 14:15:10,014 - INFO - epoch=5 step=140 loss=-2.6280 r=0.2962 succ=0.375 dist=0.000 loop=0.375 ent=6.507
+2026-02-04 14:15:26,700 - INFO - epoch=5 train(loss=-1.9284, r=0.0792, succ=0.190) val(loss=-2.0282, r=0.0906, succ=0.201)
+2026-02-04 14:15:26,799 - INFO - saved: _sync/wsa/pi_verify/20260204_E7_decoder_rl_flow_s0/report.json

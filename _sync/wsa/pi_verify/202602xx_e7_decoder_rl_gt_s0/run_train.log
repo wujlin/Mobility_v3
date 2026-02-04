@@ -1,0 +1,16 @@
+2026-02-04 13:37:33,006 - INFO - device=cuda
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "/home/jinlin/projects/Mobility_v3/src/training/train_way_casd_decoder_rl.py", line 867, in <module>
+    main()
+  File "/home/jinlin/projects/Mobility_v3/src/training/train_way_casd_decoder_rl.py", line 597, in main
+    routes = load_way_routes_npz(Path(args.way_routes_npz))
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jinlin/projects/Mobility_v3/src/data/way_graph/way_sequence_dataset.py", line 28, in load_way_routes_npz
+    data = np.load(str(path), allow_pickle=True)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jinlin/miniconda3/envs/dpl/lib/python3.11/site-packages/numpy/lib/_npyio_impl.py", line 451, in load
+    fid = stack.enter_context(open(os.fspath(file), "rb"))
+                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+FileNotFoundError: [Errno 2] No such file or directory: '/home/jinlin/data/geoexplicit_data/way_routes_v1.npz'

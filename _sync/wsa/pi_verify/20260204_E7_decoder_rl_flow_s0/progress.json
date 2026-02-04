@@ -1,0 +1,19 @@
+{
+  "ok": true,
+  "task": "train_way_casd_decoder_rl",
+  "created_at": "2026-02-04T14:15:26.757314+08:00",
+  "epoch": 5,
+  "train": {
+    "loss": -1.928437109459454,
+    "reward_mean": 0.07920591936538547,
+    "success_rate": 0.1899207746478873
+  },
+  "val": {
+    "loss": -2.0282326377928257,
+    "reward_mean": 0.09063913661520928,
+    "success_rate": 0.20081676170229912
+  },
+  "best_score": 0.09063913661520928,
+  "best_epoch": 5,
+  "baseline_ema": 0.0
+}

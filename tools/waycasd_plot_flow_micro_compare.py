@@ -88,6 +88,57 @@ def _fmt_km(m: Optional[float]) -> str:
     return f"{v:.0f}m"
 
 
+def _first_loop_segment(seq: Sequence[int]) -> Optional[Tuple[int, int]]:
+    first: Dict[int, int] = {}
+    for i, x in enumerate(seq):
+        xx = int(x)
+        if xx in first:
+            return int(first[xx]), int(i)
+        first[xx] = int(i)
+    return None
+
+
+def _add_direction_arrows(
+    ax,
+    x: np.ndarray,
+    y: np.ndarray,
+    *,
+    color: str,
+    n_arrows: int = 2,
+    size: float = 9.0,
+    lw: float = 1.2,
+    alpha: float = 0.9,
+    zorder: int = 7,
+) -> None:
+    x = np.asarray(x, dtype=np.float64).reshape(-1)
+    y = np.asarray(y, dtype=np.float64).reshape(-1)
+    if x.size < 3 or y.size < 3:
+        return
+    n = int(x.size)
+    fracs = [0.35, 0.65] if int(n_arrows) >= 2 else [0.5]
+    idxs: List[int] = []
+    for f in fracs[: int(n_arrows)]:
+        i = int(max(0, min(n - 2, round(float(f) * float(n - 2)))))
+        if i not in idxs:
+            idxs.append(int(i))
+    for i in idxs:
+        ax.annotate(
+            "",
+            xy=(float(x[i + 1]), float(y[i + 1])),
+            xytext=(float(x[i]), float(y[i])),
+            arrowprops=dict(
+                arrowstyle="-|>",
+                color=str(color),
+                lw=float(lw),
+                alpha=float(alpha),
+                mutation_scale=float(size),
+                shrinkA=0.0,
+                shrinkB=0.0,
+            ),
+            zorder=int(zorder),
+        )
+
+
 @dataclass(frozen=True)
 class RouteRecord:
     route_id: int
@@ -177,6 +228,10 @@ def build_argparser() -> argparse.ArgumentParser:
     p.add_argument("--bg_s", type=float, default=0.8)
     p.add_argument("--corridor_alpha", type=float, default=0.20, help="Alpha for corridor region highlight.")
     p.add_argument("--corridor_draw", action="store_true", help="If set, overlay region corridor (region_seq) when available.")
+    p.add_argument("--no_arrows", action="store_true", help="Disable direction arrows on trajectories.")
+    p.add_argument("--arrow_n", type=int, default=2, help="Number of direction arrows per trajectory.")
+    p.add_argument("--arrow_size", type=float, default=9.0, help="Arrow size (mutation_scale).")
+    p.add_argument("--no_loop_overlay", action="store_true", help="Disable overlay for detected loop segments.")
 
     # Case selection
     p.add_argument("--easy_min_hops", type=int, default=5)
@@ -238,6 +293,10 @@ def _plot_one_case(
     reg_cy: Optional[np.ndarray],
     corridor_draw: bool,
     corridor_alpha: float,
+    no_arrows: bool,
+    arrow_n: int,
+    arrow_size: float,
+    no_loop_overlay: bool,
     pad_frac: float,
     bg_alpha: float,
     bg_s: float,
@@ -301,10 +360,33 @@ def _plot_one_case(
 
     # Trajectories
     ln_gt = ax.plot(gt_x, gt_y, color=OKABE_ITO["blue"], lw=2.4, ls="-", zorder=4)[0]
+    if not bool(no_arrows):
+        _add_direction_arrows(ax, gt_x, gt_y, color=OKABE_ITO["blue"], n_arrows=int(arrow_n), size=float(arrow_size), zorder=6)
+
+    any_loop = False
     for mi, (px, py) in enumerate(pred_xy):
         col = colors[int(mi) % len(colors)]
         ls = linestyles[int(mi) % len(linestyles)]
         ax.plot(px, py, color=col, lw=2.0, ls=ls, zorder=5)
+        if not bool(no_arrows):
+            _add_direction_arrows(ax, px, py, color=str(col), n_arrows=int(arrow_n), size=float(arrow_size), zorder=6)
+        if not bool(no_loop_overlay):
+            rr = rec_by_method[int(mi)][int(city)][int(rid)]
+            if bool(rr.has_loop):
+                seg = _first_loop_segment(rr.pred_way_ids)
+                if seg is not None:
+                    i0, i1 = seg
+                    if 0 <= i0 < i1 < int(px.size):
+                        ax.plot(
+                            px[i0 : i1 + 1],
+                            py[i0 : i1 + 1],
+                            color=OKABE_ITO["black"],
+                            lw=2.2,
+                            ls="--",
+                            alpha=0.85,
+                            zorder=7,
+                        )
+                        any_loop = True
 
     mk_o = ax.scatter([sx], [sy], s=80, c="#000000", marker="o", edgecolors="white", linewidths=0.8, zorder=6)
     mk_d = ax.scatter([dx], [dy], s=90, c="#000000", marker="*", edgecolors="white", linewidths=0.8, zorder=6)
@@ -346,6 +428,9 @@ def _plot_one_case(
         ls = linestyles[int(mi) % len(linestyles)]
         handles.append(Line2D([0], [0], color=c, lw=2.0, ls=ls))
         labels.append(str(name))
+    if any_loop:
+        handles.append(Line2D([0], [0], color=OKABE_ITO["black"], lw=2.2, ls="--"))
+        labels.append("Loop segment")
     if bool(corridor_draw) and way_region is not None:
         handles.append(Line2D([0], [0], color=OKABE_ITO["gray"], lw=3.0, ls="-", alpha=0.35))
         labels.append("Corridor (region_seq)")
@@ -549,6 +634,10 @@ def main() -> None:
                     reg_cy=reg_cy,
                     corridor_draw=bool(args.corridor_draw),
                     corridor_alpha=float(args.corridor_alpha),
+                    no_arrows=bool(args.no_arrows),
+                    arrow_n=int(args.arrow_n),
+                    arrow_size=float(args.arrow_size),
+                    no_loop_overlay=bool(args.no_loop_overlay),
                     pad_frac=float(args.pad_frac),
                     bg_alpha=float(args.bg_alpha),
                     bg_s=float(args.bg_s),
@@ -601,13 +690,19 @@ def main() -> None:
                         reg_cy=reg_cy,
                         corridor_draw=bool(args.corridor_draw),
                         corridor_alpha=float(args.corridor_alpha),
+                        no_arrows=bool(args.no_arrows),
+                        arrow_n=int(args.arrow_n),
+                        arrow_size=float(args.arrow_size),
+                        no_loop_overlay=bool(args.no_loop_overlay),
                         pad_frac=float(args.pad_frac),
                         bg_alpha=float(args.bg_alpha),
                         bg_s=float(args.bg_s),
                         colors=colors,
                         linestyles=linestyles,
                     )
-                    fig.legend(handles=h, labels=lab, loc="lower center", bbox_to_anchor=(0.5, 0.02), ncol=3, frameon=False)
+                    fig.legend(
+                        handles=h, labels=lab, loc="lower center", bbox_to_anchor=(0.5, 0.02), ncol=min(len(lab), 4), frameon=False
+                    )
                     out_png = out_dir / f"flow_case_city{int(city)}_{str(cat)}_{int(ii)}_rid{int(rid)}_{decode}.png"
                     out_pdf = out_dir / f"flow_case_city{int(city)}_{str(cat)}_{int(ii)}_rid{int(rid)}_{decode}.pdf"
                     save_figure(fig, out_png, dpi=300)

@@ -96,6 +96,63 @@ def _first_repeat_step(seq: List[int]) -> Optional[int]:
     return None
 
 
+def _first_loop_segment(seq: List[int]) -> Optional[Tuple[int, int]]:
+    """
+    Return the first detected loop segment as (start_idx, end_idx), inclusive.
+    Definition: when a way id repeats, loop is the slice from its first occurrence
+    to the repeat position.
+    """
+    first: Dict[int, int] = {}
+    for i, x in enumerate(seq):
+        xx = int(x)
+        if xx in first:
+            return int(first[xx]), int(i)
+        first[xx] = int(i)
+    return None
+
+
+def _add_direction_arrows(
+    ax,
+    x: np.ndarray,
+    y: np.ndarray,
+    *,
+    color: str,
+    n_arrows: int = 2,
+    size: float = 9.0,
+    lw: float = 1.2,
+    alpha: float = 0.9,
+    zorder: int = 7,
+) -> None:
+    x = np.asarray(x, dtype=np.float64).reshape(-1)
+    y = np.asarray(y, dtype=np.float64).reshape(-1)
+    if x.size < 3 or y.size < 3:
+        return
+    n = int(x.size)
+    # Place arrows away from endpoints to avoid covering O/D markers.
+    fracs = [0.35, 0.65] if int(n_arrows) >= 2 else [0.5]
+    idxs: List[int] = []
+    for f in fracs[: int(n_arrows)]:
+        i = int(max(0, min(n - 2, round(float(f) * float(n - 2)))))
+        if i not in idxs:
+            idxs.append(int(i))
+    for i in idxs:
+        ax.annotate(
+            "",
+            xy=(float(x[i + 1]), float(y[i + 1])),
+            xytext=(float(x[i]), float(y[i])),
+            arrowprops=dict(
+                arrowstyle="-|>",
+                color=str(color),
+                lw=float(lw),
+                alpha=float(alpha),
+                mutation_scale=float(size),
+                shrinkA=0.0,
+                shrinkB=0.0,
+            ),
+            zorder=int(zorder),
+        )
+
+
 def _slice_csr(ptr: np.ndarray, idx: np.ndarray, u: int) -> np.ndarray:
     s = int(ptr[u])
     e = int(ptr[u + 1])
@@ -757,6 +814,10 @@ def build_argparser() -> argparse.ArgumentParser:
     p.add_argument("--pad_frac", type=float, default=0.2, help="Plot bbox padding for per-case view.")
     p.add_argument("--bg_alpha", type=float, default=0.4)
     p.add_argument("--bg_s", type=float, default=0.8, help="Way-center background marker size.")
+    p.add_argument("--no_arrows", action="store_true", help="Disable direction arrows on trajectories.")
+    p.add_argument("--arrow_n", type=int, default=2, help="Number of direction arrows per trajectory.")
+    p.add_argument("--arrow_size", type=float, default=9.0, help="Arrow size (mutation_scale).")
+    p.add_argument("--no_loop_overlay", action="store_true", help="Disable overlay for detected loop segments.")
     p.add_argument("--easy_min_hops", type=int, default=5, help="Easy-case filter: min GT hops (PI: 5).")
     p.add_argument("--easy_max_hops", type=int, default=20, help="Easy-case filter: max GT hops (PI: 20).")
     p.add_argument("--easy_max_detour", type=float, default=1.5, help="Easy-case filter: max GT detour over shortest (PI: 1.5).")
@@ -936,6 +997,7 @@ def main() -> None:
         fig, axes = plt.subplots(nrows=2, ncols=3, figsize=(12.6, 7.6), constrained_layout=True)
         panel = 0
         legend_handles = None
+        any_loop_overlay = False
 
         for r, city in enumerate(city_order):
             for cc, cat in enumerate(cat_order):
@@ -970,6 +1032,47 @@ def main() -> None:
                 ln_gt = ax.plot(gt_x, gt_y, color=OKABE_ITO["blue"], lw=2.4, ls="-", label="GT", zorder=3)[0]
                 ln_g = ax.plot(g_x, g_y, color=OKABE_ITO["vermillion"], lw=2.0, ls="--", label="Greedy", zorder=4)[0]
                 ln_b = ax.plot(b_x, b_y, color=OKABE_ITO["bluish_green"], lw=2.0, ls="-.", label="Beam-10", zorder=5)[0]
+
+                # Direction arrows
+                if not bool(args.no_arrows):
+                    _add_direction_arrows(ax, gt_x, gt_y, color=OKABE_ITO["blue"], n_arrows=int(args.arrow_n), size=float(args.arrow_size), zorder=6)
+                    _add_direction_arrows(
+                        ax, g_x, g_y, color=OKABE_ITO["vermillion"], n_arrows=int(args.arrow_n), size=float(args.arrow_size), zorder=6
+                    )
+                    _add_direction_arrows(
+                        ax, b_x, b_y, color=OKABE_ITO["bluish_green"], n_arrows=int(args.arrow_n), size=float(args.arrow_size), zorder=6
+                    )
+
+                # Loop segment overlay (if detected)
+                if not bool(args.no_loop_overlay):
+                    seg = _first_loop_segment(c.greedy_way_ids)
+                    if seg is not None:
+                        i0, i1 = seg
+                        if 0 <= i0 < i1 < int(g_x.size):
+                            ax.plot(
+                                g_x[i0 : i1 + 1],
+                                g_y[i0 : i1 + 1],
+                                color=OKABE_ITO["black"],
+                                lw=2.2,
+                                ls="--",
+                                alpha=0.85,
+                                zorder=7,
+                            )
+                            any_loop_overlay = True
+                    seg = _first_loop_segment(c.beam_way_ids)
+                    if seg is not None:
+                        i0, i1 = seg
+                        if 0 <= i0 < i1 < int(b_x.size):
+                            ax.plot(
+                                b_x[i0 : i1 + 1],
+                                b_y[i0 : i1 + 1],
+                                color=OKABE_ITO["black"],
+                                lw=2.2,
+                                ls="--",
+                                alpha=0.85,
+                                zorder=7,
+                            )
+                            any_loop_overlay = True
 
                 # O/D markers
                 mk_o = ax.scatter([sx], [sy], s=80, c="#000000", marker="o", edgecolors="white", linewidths=0.8, zorder=6, label="O")
@@ -1089,12 +1192,18 @@ def main() -> None:
                 markersize=6.0,
                 alpha=0.8,
             )
+            loop_handle = Line2D([0], [0], color=OKABE_ITO["black"], lw=2.2, ls="--") if bool(any_loop_overlay) else None
+            handles = [*legend_handles]
+            labels = ["GT", "Greedy", "Beam-10", "O", "D"]
+            if loop_handle is not None:
+                handles = [handles[0], handles[1], handles[2], loop_handle, handles[3], handles[4]]
+                labels = ["GT", "Greedy", "Beam-10", "Loop segment", "O", "D"]
             fig.legend(
-                handles=[*legend_handles, bg_handle],
-                labels=["GT", "Greedy", "Beam-10", "O", "D", "Road graph"],
+                handles=[*handles, bg_handle],
+                labels=[*labels, "Road graph"],
                 loc="lower center",
                 bbox_to_anchor=(0.5, 0.01),
-                ncol=6,
+                ncol=7 if loop_handle is not None else 6,
                 frameon=False,
             )
 

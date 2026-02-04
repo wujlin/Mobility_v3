@@ -257,6 +257,10 @@ class Cfg:
 
     region_ar_max_len: int  # only used when region_constraint=ar
 
+    anti_loop_k: int  # 0=disable hard mask; >0=exclude recently visited ways (last K)
+    anti_loop_penalty: float  # 0=disable soft penalty; >0=penalty for recently visited ways
+    anti_loop_penalty_k: int  # window size K for soft penalty
+
 
 def _compress_consecutive_int(seq: List[int]) -> List[int]:
     out: List[int] = []
@@ -516,6 +520,9 @@ def main() -> None:
         action="store_true",
         help="When dumping per-route json, also include GT/predicted way sequences (can be larger).",
     )
+    p.add_argument("--anti_loop_k", type=int, default=0, help="Hard anti-loop: exclude candidates visited in last K steps (0=disable).")
+    p.add_argument("--anti_loop_penalty", type=float, default=0.0, help="Soft anti-loop: subtract penalty from logits for recently visited ways (0=disable).")
+    p.add_argument("--anti_loop_penalty_k", type=int, default=4, help="Soft anti-loop window size K (only used when anti_loop_penalty>0).")
 
     p.add_argument(
         "--city_grid_meta",
@@ -548,6 +555,9 @@ def main() -> None:
         region_constraint_mode=str(args.region_constraint_mode),
         region_constraint_fallback=str(args.region_constraint_fallback),
         region_ar_max_len=int(args.region_ar_max_len),
+        anti_loop_k=max(0, int(args.anti_loop_k)),
+        anti_loop_penalty=max(0.0, float(args.anti_loop_penalty)),
+        anti_loop_penalty_k=max(0, int(args.anti_loop_penalty_k)),
     )
 
     device = torch.device(cfg.device if (cfg.device != "cuda" or torch.cuda.is_available()) else "cpu")
@@ -910,6 +920,9 @@ def main() -> None:
                 candidate_policy=str(cfg.decode_candidate_policy),
                 include_dest_if_successor=bool(cfg.decode_include_dest_if_successor),
                 guided_dest_alpha=float(cfg.guided_dest_alpha),
+                anti_loop_k=int(cfg.anti_loop_k),
+                anti_loop_penalty=float(cfg.anti_loop_penalty),
+                anti_loop_penalty_k=int(cfg.anti_loop_penalty_k),
             )
 
             beam: Optional[List[List[int]]] = None
@@ -931,6 +944,9 @@ def main() -> None:
                     candidate_policy=str(cfg.decode_candidate_policy),
                     include_dest_if_successor=bool(cfg.decode_include_dest_if_successor),
                     guided_dest_alpha=float(cfg.guided_dest_alpha),
+                    anti_loop_k=int(cfg.anti_loop_k),
+                    anti_loop_penalty=float(cfg.anti_loop_penalty),
+                    anti_loop_penalty_k=int(cfg.anti_loop_penalty_k),
                 )
 
             # Metrics per route.

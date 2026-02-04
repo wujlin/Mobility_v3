@@ -1012,6 +1012,9 @@ class WayDecoder(nn.Module):
         candidate_policy: str = "first",
         include_dest_if_successor: bool = False,
         guided_dest_alpha: float = 0.0,
+        anti_loop_k: int = 0,
+        anti_loop_penalty: float = 0.0,
+        anti_loop_penalty_k: int = 4,
     ) -> List[List[int]]:
         """
         Batched greedy decoding for speed.
@@ -1194,6 +1197,24 @@ class WayDecoder(nn.Module):
                 else:
                     cand_mask = torch.where(row_has[:, None], m, cand_mask)
 
+            # Anti-loop (hard mask): exclude candidates that revisit any of the last K visited ways.
+            # NOTE: avoid per-element `.item()` on GPU. We build a small CPU tensor of recent IDs then vectorize.
+            k_hard = int(anti_loop_k)
+            if k_hard > 0:
+                before = cand_mask.clone()
+                recent_cpu = torch.full((B2, k_hard), -1, dtype=torch.long)
+                for i, bi in enumerate(keep_ids):
+                    tail = paths[int(bi)][-k_hard:]
+                    if tail:
+                        recent_cpu[i, : int(len(tail))] = torch.as_tensor(tail, dtype=torch.long)
+                recent = recent_cpu.to(device=device)
+                hit = (cand_way.unsqueeze(-1) == recent[:, None, :])  # (B2,C,K)
+                bad = (hit.any(dim=-1)) & cand_mask  # (B2,C)
+                cand_mask = cand_mask & (~bad)
+                empty = ~cand_mask.any(dim=1)
+                if bool(empty.any().item()):
+                    cand_mask[empty] = before[empty]
+
             # Past context tensors (only if enabled).
             past_way_tensor: Optional[torch.Tensor] = None
             past_mask_tensor: Optional[torch.Tensor] = None
@@ -1241,6 +1262,21 @@ class WayDecoder(nn.Module):
                 except Exception:
                     pass
 
+            # Anti-loop (soft penalty): reduce logits for candidates that revisit recent ways.
+            # Same vectorization trick as hard mask to avoid `.item()` sync.
+            pen = float(anti_loop_penalty)
+            k_pen = int(anti_loop_penalty_k)
+            if (pen > 0.0) and (k_pen > 0):
+                recent_cpu = torch.full((B2, k_pen), -1, dtype=torch.long)
+                for i, bi in enumerate(keep_ids):
+                    tail = paths[int(bi)][-k_pen:]
+                    if tail:
+                        recent_cpu[i, : int(len(tail))] = torch.as_tensor(tail, dtype=torch.long)
+                recent = recent_cpu.to(device=device)
+                hit = (cand_way.unsqueeze(-1) == recent[:, None, :])  # (B2,C,K)
+                bad = (hit.any(dim=-1)) & cand_mask  # (B2,C)
+                logits = logits - bad.to(dtype=logits.dtype) * pen
+
             j = torch.argmax(logits, dim=-1)  # (B2,)
             nxt = cand_way[torch.arange(B2, device=device), j].to(dtype=torch.long)
 
@@ -1281,6 +1317,9 @@ class WayDecoder(nn.Module):
         candidate_policy: str = "first",
         include_dest_if_successor: bool = False,
         guided_dest_alpha: float = 0.0,
+        anti_loop_k: int = 0,
+        anti_loop_penalty: float = 0.0,
+        anti_loop_penalty_k: int = 4,
     ) -> List[List[int]]:
         """
         Batched beam search:
@@ -1470,6 +1509,24 @@ class WayDecoder(nn.Module):
                 else:
                     cand_mask = torch.where(row_has[:, None], m, cand_mask)
 
+            # Anti-loop (hard mask): exclude candidates that revisit any of the last K visited ways.
+            # NOTE: avoid per-element `.item()` on GPU. We build a small CPU tensor of recent IDs then vectorize.
+            k_hard = int(anti_loop_k)
+            if k_hard > 0:
+                before = cand_mask.clone()
+                recent_cpu = torch.full((T, k_hard), -1, dtype=torch.long)
+                for i, path in enumerate(path_list):
+                    tail = path[-k_hard:]
+                    if tail:
+                        recent_cpu[i, : int(len(tail))] = torch.as_tensor(tail, dtype=torch.long)
+                recent = recent_cpu.to(device=device)
+                hit = (cand_way.unsqueeze(-1) == recent[:, None, :])  # (T,C,K)
+                bad = (hit.any(dim=-1)) & cand_mask  # (T,C)
+                cand_mask = cand_mask & (~bad)
+                empty = ~cand_mask.any(dim=1)
+                if bool(empty.any().item()):
+                    cand_mask[empty] = before[empty]
+
             # past context per state
             past_way_tensor: Optional[torch.Tensor] = None
             past_mask_tensor: Optional[torch.Tensor] = None
@@ -1515,6 +1572,21 @@ class WayDecoder(nn.Module):
                     logits = logits - alpha * dist
                 except Exception:
                     pass
+
+            # Anti-loop (soft penalty): reduce logits for candidates that revisit recent ways.
+            # Same vectorization trick as hard mask to avoid `.item()` sync.
+            pen = float(anti_loop_penalty)
+            k_pen = int(anti_loop_penalty_k)
+            if (pen > 0.0) and (k_pen > 0):
+                recent_cpu = torch.full((T, k_pen), -1, dtype=torch.long)
+                for i, path in enumerate(path_list):
+                    tail = path[-k_pen:]
+                    if tail:
+                        recent_cpu[i, : int(len(tail))] = torch.as_tensor(tail, dtype=torch.long)
+                recent = recent_cpu.to(device=device)
+                hit = (cand_way.unsqueeze(-1) == recent[:, None, :])  # (T,C,K)
+                bad = (hit.any(dim=-1)) & cand_mask  # (T,C)
+                logits = logits - bad.to(dtype=logits.dtype) * pen
 
             logp = F.log_softmax(logits, dim=-1)
             topk = min(int(beam_size), int(logp.shape[1]))

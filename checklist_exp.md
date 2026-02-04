@@ -1,240 +1,152 @@
-# 实验 Checklist：物理约束轨迹扩散模型
-
-> [!IMPORTANT]
-> 任务定义与实验协议以 `docs/TASK_DEFINITION.md` 为唯一准则；本 checklist 仅作执行清单，若与其冲突以其为准。
-
-> **总目标**：从同一套真实车辆 GPS 轨迹出发，在同一个任务（条件轨迹分布）上，对比"纯数据序列预测 → 纯数据生成 → 引入物理约束的生成"，用微观 / 中观 / 宏观三个层级的指标，系统回答"物理约束 + 生成模型"到底带来了什么。
+# Way-CASD 实验计划 (2026-02-04)
 
 ---
 
-## 0. 总目标（先在脑子里锁死）
+## 已验证的核心洞见
 
-- [ ] 统一建模对象：学的是**条件轨迹分布** $P(\tau \mid o,d,t_0,\text{env})$，而不是单点预测
-- [ ] 对比三类模型能力：
-  1. 纯数据的**序列预测**（RNN/Transformer）
-  2. 纯数据的**轨迹扩散生成**（Diffusion）
-  3. 加入物理先验的**物理约束扩散生成**
-
----
-
-## 1. 数据准备层
-
-### 1.1 GPS 原始数据 → 路网对齐
-
-- [ ] 选定一个城市/区域，整理车辆 GPS 数据（至少包括 time, lat, lon, vehicle_id）
-- [ ] 进行 map-matching：
-  - [ ] 将轨迹投影到道路网络（得到 road_id, offset）
-- [ ] 选择统一坐标系：
-  - [ ] 例如投影到栅格 `(y, x)` 坐标系（和现有工程保持 `[y, x]` 约定）
-
-### 1.2 Trip 切分 & 条件变量
-
-- [ ] 定义 trip：同一车辆在较长停留间隔之间的一段连续行驶
-- [ ] 为每个 trip 提取条件：
-  - [ ] 起点位置 `o`（可为道路 / 区域 ID）
-  - [ ] 终点位置 `d`（最后停留位置）
-  - [ ] 出发时间 `t0`（小时 + 周几）
-  - [ ] 可选：简单环境特征（如当前全局流量 level）
-
-### 1.3 序列数据格式（对齐现有 Phase 4 结构）
-
-- [ ] 对每个 trip，构建时间序列：
-  - [ ] `pos[t] = [y, x]`
-  - [ ] `vel[t] = pos[t] - pos[t-1]`（注意与你现在仿真数据的定义一致）
-- [ ] （论文版）将轨迹重采样到固定 `dt_fixed`（例如 30s），并写死 gap/去重规则，避免 dt 语义不清
-- [ ] 定义滑动窗口：
-  - [ ] history 长度 H（例如 2–4 步）
-  - [ ] future 长度 F（例如 8–16 步）
-- [ ] 为每个窗口生成样本：
-  - [ ] obs: `[(pos, vel, nav)_t]_{t=t0..t0+H-1}`（nav 暂时可以先留空或用简单方向场）
-  - [ ] action: `[vel_{t0+H..t0+H+F-1}]`
-
-### 1.4 数据归一化 (Normalization) & 校验
-
-- [ ] **实现归一化逻辑**：
-  - [ ] POS: MinMax 到 [-1, 1] (基于此时数据集的 bbox)
-  - [ ] VEL: Z-Score (Mean=0, Std=1)
-  - [ ] NAV: Scale 到 [-1, 1] 左右
-- [ ] **向量方向校验**：
-  - [ ] 随机抽取 100 条轨迹，计算 `cos_sim(nav_direction, true_velocity)`
-  - [ ] 确保平均相似度 > 0，否则检查坐标变换旋转矩阵
+| 洞见 | Evidence | 结论 |
+|------|----------|------|
+| **past_k=16 有效** | Oracle [60,+): 76%→85.3% (+9pp), loop: 30%→14.7% | ✅ 历史窗口是真瓶颈 |
+| **Flow-compat 可用** | 旧Flow+新AE: [60,+)=44.1% vs baseline 38.2% (+6pp) | ✅ past16 decoder 本身更强 |
+| **K>4 无效** | K=6降到23.5%, K=8降到35.3% | ❌ K=4已是最优 |
+| **RL对AR敏感** | GT下44.1%, AR下32.4% (gap=11.7pp) | ⚠️ 需改进训练方式 |
+| **Multiscale失败** | Oracle从85%降到47% | ❌ 当前架构不可用 |
 
 ---
 
-## 2. 模型 A：纯数据序列预测 Baseline
+## 下一步实验计划（按优先级排序）
 
-### 2.1 模型设计
+### 🥇 实验1：E5 Flow 正确配置重训
 
-- [ ] 选择一个简单但可靠的 baseline：
-  - [ ] RNN/LSTM 或 Transformer encoder（时间维度）
-- [ ] 输入：
-  - [ ] 历史序列 obs（H 步）+ 条件向量 c = (o, d, t0, env)
-- [ ] 输出：
-  - [ ] 单步：下一步 `pos_{t+1}` 或 `vel_{t+1}`
-  - [ ] 多步：未来 F 步的位置/速度序列
+**背景**：E5 Flow-retrain v2 失败是因为配置错误（`region_seq_npz=null`），不是past_k的问题。E5 Flow-compat已经证明past16 decoder有效（+6pp）。
 
-### 2.2 训练
+**核心假设**：正确配置的Flow + past16 AE 应该能进一步提升。
 
-- [ ] 损失：
-  - [ ] 连续坐标：MSE（L2）
-  - [ ] 若离散栅格 / 道路 ID：交叉熵
-- [ ] 划分训练 / 验证 / 测试（按时间切分，避免泄漏）
+**行动**：
+```bash
+# 重训 Flow，确保以下配置正确
+python src/training/train_way_casd_flow.py \
+    --ae_ckpt W9_train_ae_min5_candq1_past16_len160_s0/ckpt_best.pt \
+    --use_region_seq \
+    --region_seq_npz <与W10相同的路径> \
+    --way_regions_npz <与W10相同的路径> \
+    --n_layers 6 \
+    --cond_inject xattn \
+    --out_dir W10_train_flow_past16_regionseq_xattn_s0
+```
 
-### 2.3 评估（给后面模型当对照）
+**检查点**：
+1. 训练前：确认 `report.json` 中 `region_seq_npz != null`
+2. 训练后：评测 `binned_E5_flow_v3.json`
 
-- [ ] 一步预测：
-  - [ ] Top-k accuracy（如果是离散）
-  - [ ] 平均 / 中位距离误差
-- [ ] 多步 rollout：
-  - [ ] 以模型预测作为下一步历史，滚动预测 H+F 步，画/统计误差随步数变化
+**预期结果**：
+- [60,+) success: 45-50%（比Flow-compat的44.1%略高，因为latent和decoder匹配）
+- 如果低于44%，说明有其他问题需要排查
 
----
-
-## 3. 模型 B：纯数据轨迹扩散生成（Data-only Diffusion）
-
-### 3.1 模型与数据对接
-
-- [ ] 使用你现有的 1D-UNet + DDPM 框架：
-  - [ ] act 序列 = future F 步 velocity（形状 `(F, 2)`）
-  - [ ] obs 展平为全局条件向量（`history * feature_dim`）
-- [ ] 条件：
-  - [ ] obs（历史局部状态）
-  - [ ] c = (o, d, t0, env) 作为额外 embedding 拼在 cond 上
-
-### 3.2 训练
-
-- [ ] 标准扩散训练：
-  - [ ] 在真实轨迹 action 上加噪声，训练 denoise 预测 ε 的 MSE loss
-- [ ] 使用你已经验证有效的条件注入方式（AdaLN/FiLM + CFG 结构，而不是简单加法）
-
-### 3.3 推理
-
-- [ ] 给定 (obs, c)，采样多条未来 F 步速度序列
-- [ ] 将这些速度 roll 到位置轨迹上
-
-### 3.4 评估
-
-- [ ] 微观：
-  - [ ] 与真实 future 序列对比：Fréchet / DTW / 平均距离误差（取多条 sample 的 best of K 或平均）
-- [ ] 中观：
-  - [ ] 对同一 (o,d,t0) 条件生成多条 sample，看真实 vs 生成的：
-    - [ ] 路径选择分布（经过哪些道路）
-    - [ ] 行程时间分布
-- [ ] 宏观：
-  - [ ] 基于大量生成轨迹，看位移长度分布、活动半径分布是否接近真实数据
+**验收标准**：[60,+) success ≥ 45%
 
 ---
 
-## 4. 模型 C：物理约束扩散生成（Physics-Informed Diffusion）
+### 🥈 实验2：E7 RL v2 — Region扰动训练
 
-> **方法论重点**：这是核心贡献所在
+**背景**：E7 RL在GT region下有效（44.1%），但在AR region下差（32.4%）。Gap=11.7pp说明RL过拟合了GT region。
 
-### 4.1 从真实轨迹估计"物理场"
+**核心假设**：如果训练时混入AR region或加噪声，decoder应该学会容忍region误差。
 
-- [ ] 基于 GPS + 路网，估计一个"经验速度 / 导航场"：
-  - [ ] 在每个道路 / 栅格点上，统计平均速度向量（方向 + 模长）
-  - [ ] 将其存成类似当前的 `nav_field` 格式 `(2, H, W)`，与坐标约定一致
-- [ ] 可选：用简单 PDE / 势场平滑这个经验场（比如解一个泊松方程得到光滑势场）
+**行动**：
 
-### 4.2 局部层：Nav Field 作为 Condition
+**方案A（推荐）：混合训练**
+```python
+# 修改 RL 训练代码
+def get_region_constraint(batch):
+    if random.random() < 0.5:
+        return batch["gt_region_seq"]      # 50% 用 GT
+    else:
+        return region_ar.sample(batch)     # 50% 用 AR 采样
+```
 
-> **变更**：放弃 Residual Learning，改用 Condition Learning
+**实现提示（当前代码接口）**：
+- `src/training/train_way_casd_decoder_rl.py` 已支持：
+  - `--region_constraint mix --region_mix_gt_prob 0.5 --region_ar_ckpt <ckpt>`
+  - `--region_noise_p 0.15`（train-only，可与 gt/mix 组合）
 
-- [ ] **实现 Nav Patch 提取器**：
-  - [ ] 给定当前位置 $pos$，从全局 Nav Field Crop 出 $K \times K$ 的局部区域
-- [ ] **修改 Diffusion 模型输入**：
-  - [ ] 增加一个 CNN Encoder 分支，处理 Nav Patch
-  - [ ] 将提取的 Nav Embedding 拼接到 global condition 中
-- [ ] **训练目标**：
-  - [ ] 保持直接预测 velocity (与 Model B 一致)
-  - [ ] 让模型通过 Attention/Concat 机制自动利用 Nav 信息
+**方案B：Region噪声注入**
+```python
+def perturb_region(region_seq, adj_matrix, p=0.15):
+    """以概率p将region替换为相邻region"""
+    perturbed = region_seq.clone()
+    for t in range(len(region_seq)):
+        if random.random() < p:
+            neighbors = adj_matrix[region_seq[t]].nonzero().squeeze(-1)
+            if len(neighbors) > 0:
+                perturbed[t] = neighbors[torch.randint(len(neighbors), (1,))]
+    return perturbed
+```
 
-### 4.3 宏观层：统计物理约束（可先简化）
+**检查点**：
+1. 使用实验1的最佳Flow checkpoint
+2. 同时评测 GT region 和 AR region 两个口径
 
-- [ ] 从真实 GPS 上，先离线估计几个简单的宏观指标（选一两个就够）：
-  - [ ] 例如：不同时间尺度 Δt 下的 MSD vs Δt 的幂律指数
-  - [ ] 不同距离城中心 r 的波动强度 vs r 的衰减型
-- [ ] 在训练 physics-informed diffusion 时，周期性地：
-  - [ ] 从模型当前参数生成一批轨迹样本
-  - [ ] 估计对应的宏观指标 α_gen
-  - [ ] 加一个简单正则：$\mathcal{L}_\text{macro} = \sum (\alpha_\text{gen} - \alpha_\text{data})^2$
-  - [ ] 总损失：`L = L_diff + λ * L_macro`
+**预期结果**：
+- AR region [60,+): 38-42%（从32.4%提升6-10pp）
+- GT region [60,+): 维持40%+（不应退化太多）
+- Gap缩小到5pp以内
 
-> [!TIP]
-> **实操建议**：先只做 **"PDE residual + nav_field condition"**，宏观约束可以作为后续扩展（避免一开始过重）。
-
-### 4.4 评估（对比 Data-only Diffusion）
-
-> [!CAUTION]
-> **统一评估标准**：所有输出（无论是 pos 还是 vel）都必须积分/转换为**位置序列**后，再计算下列指标。
-
-- [ ] 重复模型 B 的评估所有指标
-- [ ] 特别关注：
-  - [ ] 中观：路径效率（到达率、平均绕路率、平均速度）
-  - [ ] 宏观：统计物理指标是否明显更接近真实
-
-> [!NOTE]
-> `src/training/evaluate.py` 会输出 ADE/FDE + Fréchet/DTW（以及 MSD/Rog）；生成模型统一按 `mean/std/best-of-K` 聚合。
+**验收标准**：AR region [60,+) success ≥ 38%，GT/AR gap ≤ 6pp
 
 ---
 
-## 5. 统一的对比与消融（核心表格）
+### 🥉 实验3：past_k=24 验证（可选）
 
-最后需要有一张"谁比谁强"的结构清楚的对比。
+**背景**：past_k=16比past_k=8提升了9pp。如果继续增大，是否还有收益？
 
-### 5.1 模型版本（纵向）
+**核心假设**：past_k=24可能进一步提升Oracle上限，但边际收益可能递减。
 
-- [ ] Baseline-A：RNN/Transformer（预测）
-- [ ] Baseline-B：Data-only Diffusion（生成）
-- [ ] Baseline-C：CVAE（生成，多模态 baseline）
-- [ ] Model-C1：Physics-informed Diffusion（Nav Condition）
-- [ ] Model-C2：Physics-informed + Macro regularizer（如果做了的话）
+**行动**：
+```bash
+# 只训练AE，验证Oracle上限
+python src/training/train_way_casd_ae.py \
+    --decoder_past_k 24 \
+    --out_dir W9_train_ae_min5_candq1_past24_len160_s0
+```
 
-### 5.2 评价维度（横向）
+**检查点**：
+1. 只做Oracle评测（不需要训练Flow）
+2. 对比 past_k=8/16/24 的Oracle曲线
 
-- [ ] 微观：
-  - [ ] 单步 / 多步误差（距离、cos 相似度）
-- [ ] 中观：
-  - [ ] 行程时间分布、路径长度/绕路率、到达率
-- [ ] 宏观：
-  - [ ] 位移分布、活动半径分布、选定的标度律指标
+**预期结果**：
+- 如果 [60,+) Oracle > 88%：说明还有空间，值得继续
+- 如果 [60,+) Oracle ≈ 85%：说明已饱和，不再增大
 
----
-
-## 6. 实验结果记录模板
-
-### 6.1 微观指标结果
-
-| 模型 | 1-step MSE | 5-step MSE | 10-step MSE | Fréchet ↓ | DTW ↓ |
-|-----|-----------|-----------|------------|----------|-------|
-| Baseline-A (RNN) | | | | | |
-| Baseline-A (Transformer) | | | | | |
-| Baseline-B (Data-only Diffusion) | | | | | |
-| Baseline-C (CVAE) | | | | | |
-| Model-C1 (Nav Cond) | | | | | |
-| Model-C2 (+Macro Regularizer) | | | | | |
-
-### 6.2 中观指标结果
-
-| 模型 | 路径覆盖率 ↑ | 绕路率 ↓ | 行程时间 KL ↓ | 到达率 ↑ |
-|-----|------------|---------|--------------|---------|
-| Baseline-A | | | | |
-| Baseline-B | | | | |
-| Baseline-C | | | | |
-| Model-C1 | | | | |
-| Model-C2 | | | | |
-
-### 6.3 宏观指标结果
-
-| 模型 | MSD α 误差 ↓ | 位移分布 KL ↓ | 活动半径 KL ↓ |
-|-----|-------------|--------------|--------------|
-| Ground Truth | $\alpha_\text{data}$ | — | — |
-| Baseline-A | | | |
-| Baseline-B | | | |
-| Baseline-C | | | |
-| Model-C1 | | | |
-| Model-C2 | | | |
+**验收标准**：Oracle [60,+) success > 87%才值得后续投入
 
 ---
 
-*最后更新：2025-12-09*
+## 实验执行顺序
+
+```
+Day 1-2: 实验1（Flow重训）
+    └── 训练完成后立即评测
+    
+Day 2-3: 实验2（RL v2）
+    └── 基于实验1的checkpoint
+    └── 需要修改训练代码
+    
+Day 3（可选）: 实验3（past_k=24）
+    └── 只是验证上限，优先级低
+```
+
+---
+
+## 当前最佳配置（Baseline for comparison）
+
+| 组件 | 配置 | 来源 |
+|------|------|------|
+| AE | past_k=16, cand_query=True | E5 |
+| Flow | RegionSeq xattn (旧，待重训) | W10 |
+| Decode | beam=10, soft P=2.0, K=4 | E4 |
+| Region | ar, relaxed, dest_region fallback | 已验证 |
+
+**当前[60,+) success: 44.1%**（E5 Flow-compat）
+
+**目标：通过实验1+2达到 50%+**

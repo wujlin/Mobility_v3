@@ -15,6 +15,7 @@ from torch.utils.data import DataLoader, Subset
 
 from src.data.way_graph.way_sequence_dataset import WayRouteDataset, load_way_routes_npz, make_way_casd_collate_fn
 from src.models.way_casd.latent_flow import LatentFlowCfg, LatentFlowMatching
+from src.models.way_casd.region_ar import RegionARCfg, RegionARModel
 from src.models.way_casd.way_casd import WayCASDAECfg, WayCASDAutoEncoder
 from src.models.way_casd.way_encoder import load_way_features_from_npz
 
@@ -48,9 +49,12 @@ class TrainCfg:
     temperature: float
 
     # Region constraint (optional)
-    region_constraint: str  # {"none","gt"}
+    region_constraint: str  # {"none","gt","ar","mix"}
     region_constraint_mode: str  # {"strict","relaxed"}
     region_constraint_fallback: str  # {"unconstrained","stop","dest_region"}
+    region_ar_max_len: int
+    region_mix_gt_prob: float
+    region_noise_p: float  # train-only: replace some region ids with neighbors (when adj is available)
 
     # Anti-loop during sampling (optional)
     anti_loop_k: int
@@ -303,6 +307,187 @@ def _load_region_adj(*, way_regions_npz: Path) -> np.ndarray:
     return adj
 
 
+def _load_region_city_static(
+    *,
+    way_regions_npz: Path,
+    way_features_npz: Path,
+    coord_scale: float,
+    region_adj: np.ndarray,
+) -> Tuple[np.ndarray, np.ndarray]:
+    """
+    Build:
+      - region_city: (R,) int64
+      - region_static: (R,4) float32 = [centroid_y_norm, centroid_x_norm, log1p(n_ways), log1p(deg)]
+    """
+    wr = np.load(str(way_regions_npz), allow_pickle=True)
+    need = {"region_way_ptr", "region_way_idx", "meta"}
+    missing = sorted(list(need - set(wr.files)))
+    if missing:
+        raise SystemExit(f"[FATAL] way_regions_npz missing keys: {missing}")
+    region_way_ptr = np.asarray(wr["region_way_ptr"], dtype=np.int64).reshape(-1)
+    region_way_idx = np.asarray(wr["region_way_idx"], dtype=np.int64).reshape(-1)
+    meta_obj = wr.get("meta", None)
+    if isinstance(meta_obj, np.ndarray) and meta_obj.size == 1:
+        meta_obj = meta_obj.item()
+    meta = meta_obj if isinstance(meta_obj, dict) else None
+    if meta is None:
+        raise SystemExit("[FATAL] way_regions_npz missing meta (need per_city for region_city).")
+    per_city = meta.get("per_city", {})
+    if not isinstance(per_city, dict) or not per_city:
+        raise SystemExit("[FATAL] way_regions_npz meta missing per_city.")
+
+    R = int(region_way_ptr.size) - 1
+    region_city = np.full((R,), -1, dtype=np.int64)
+    for k, v in per_city.items():
+        try:
+            city = int(k)
+            off = int(v.get("region_id_offset", 0))
+            nr = int(v.get("n_regions", 0))
+        except Exception:
+            continue
+        if nr <= 0:
+            continue
+        region_city[off : off + nr] = int(city)
+
+    if int(np.sum(region_city < 0)) > 0:
+        raise SystemExit(f"[FATAL] region_city has unassigned entries: {int(np.sum(region_city < 0))}/{R}")
+
+    wf = np.load(str(way_features_npz), allow_pickle=True)
+    need_w = {"way_center_y", "way_center_x"}
+    missing_w = sorted(list(need_w - set(wf.files)))
+    if missing_w:
+        raise SystemExit(f"[FATAL] way_features_npz missing keys: {missing_w}")
+    way_center_y = np.asarray(wf["way_center_y"], dtype=np.float64).reshape(-1)
+    way_center_x = np.asarray(wf["way_center_x"], dtype=np.float64).reshape(-1)
+
+    coord_scale = float(coord_scale)
+    cent_y = np.zeros((R,), dtype=np.float64)
+    cent_x = np.zeros((R,), dtype=np.float64)
+    n_ways = np.zeros((R,), dtype=np.float64)
+    for r in range(R):
+        s = int(region_way_ptr[r])
+        e = int(region_way_ptr[r + 1])
+        ways = region_way_idx[s:e]
+        n = int(ways.size)
+        n_ways[r] = float(n)
+        if n <= 0:
+            continue
+        cent_y[r] = float(np.mean(way_center_y[ways]))
+        cent_x[r] = float(np.mean(way_center_x[ways]))
+
+    deg = region_adj.astype(np.int64).sum(axis=1).astype(np.float64) - 1.0  # exclude self-loop
+    deg = np.clip(deg, 0.0, None)
+    static = np.stack([cent_y / coord_scale, cent_x / coord_scale, np.log1p(n_ways), np.log1p(deg)], axis=1).astype(
+        np.float32, copy=False
+    )
+    return region_city, static
+
+
+@torch.no_grad()
+def _decode_region_seq_greedy(
+    *,
+    model: RegionARModel,
+    region_adj: torch.Tensor,
+    route_cond_1: Dict[str, torch.Tensor],
+    o_region: int,
+    d_region: int,
+    max_len: int,
+) -> List[int]:
+    seq: List[int] = [int(o_region)]
+    for _ in range(max(1, int(max_len)) - 1):
+        cur = int(seq[-1])
+        if cur == int(d_region):
+            break
+        x = torch.as_tensor(np.asarray(seq, dtype=np.int64)[None, :], dtype=torch.long, device=route_cond_1["route_city"].device)
+        logits = model(
+            region_seq_in=x,
+            o_region=torch.as_tensor([int(o_region)], dtype=torch.long, device=x.device),
+            d_region=torch.as_tensor([int(d_region)], dtype=torch.long, device=x.device),
+            route_cond=route_cond_1,
+        )
+        next_logits = logits[0, -1]  # (R,)
+        if bool(model.cfg.use_candidate_mask):
+            allowed = region_adj[int(cur)].clone()
+            if 0 <= int(cur) < int(allowed.numel()):
+                allowed[int(cur)] = False
+            if bool(allowed.sum().item() == 0):
+                allowed[int(cur)] = True
+            next_logits = next_logits.masked_fill(~allowed, -1e9)
+        nxt = int(torch.argmax(next_logits).item())
+        seq.append(int(nxt))
+    return _compress_consecutive(seq)
+
+
+def _perturb_region_seq(seq: List[int], *, region_adj: np.ndarray, p: float, rng: np.random.Generator) -> List[int]:
+    if (not seq) or (float(p) <= 0.0):
+        return list(seq)
+    if len(seq) <= 2:
+        return list(seq)
+    R = int(region_adj.shape[0])
+    out = list(int(x) for x in seq)
+    for t in range(1, len(out) - 1):
+        if rng.random() >= float(p):
+            continue
+        cur = int(out[t])
+        if cur < 0 or cur >= R:
+            continue
+        nbs = np.nonzero(region_adj[cur])[0].astype(np.int64, copy=False)
+        if nbs.size <= 1:
+            continue
+        # Exclude self if present (diag is True).
+        nbs = nbs[nbs != cur]
+        if nbs.size == 0:
+            continue
+        out[t] = int(rng.choice(nbs))
+    return _compress_consecutive(out)
+
+
+def _load_region_ar_model(
+    *,
+    region_ar_ckpt: Path,
+    way_regions_npz: Path,
+    way_features_npz: Path,
+    device: torch.device,
+    max_len: int,
+) -> Tuple[RegionARModel, torch.Tensor]:
+    ckpt = torch.load(str(region_ar_ckpt), map_location=device)
+    if not isinstance(ckpt, dict) or "model" not in ckpt:
+        raise SystemExit("[FATAL] unexpected region_ar_ckpt format (need dict with key 'model').")
+    cfg_ar = ckpt.get("cfg", {})
+    if not isinstance(cfg_ar, dict):
+        raise SystemExit("[FATAL] region_ar_ckpt missing cfg dict.")
+
+    coord_scale_ar = float(cfg_ar.get("coord_scale", 1024.0))
+    region_adj_np = _load_region_adj(way_regions_npz=Path(way_regions_npz))
+    region_city_np, region_static_np = _load_region_city_static(
+        way_regions_npz=Path(way_regions_npz),
+        way_features_npz=Path(way_features_npz),
+        coord_scale=coord_scale_ar,
+        region_adj=region_adj_np,
+    )
+    region_adj_t = torch.as_tensor(region_adj_np, dtype=torch.bool, device=device)
+
+    model = RegionARModel(
+        cfg=RegionARCfg(
+            d_model=int(cfg_ar.get("d_model", 256)),
+            n_heads=int(cfg_ar.get("n_heads", 8)),
+            n_layers=int(cfg_ar.get("n_layers", 4)),
+            dropout=float(cfg_ar.get("dropout", 0.1)),
+            max_len=int(cfg_ar.get("max_len", int(max_len))),
+            n_regions=int(region_city_np.size),
+            n_route_cities=int(cfg_ar.get("n_route_cities", 2)),
+            coord_scale=float(coord_scale_ar),
+            use_candidate_mask=bool(cfg_ar.get("use_candidate_mask", True)),
+        ),
+        region_city=torch.as_tensor(region_city_np, dtype=torch.long, device=device),
+        region_static=torch.as_tensor(region_static_np, dtype=torch.float32, device=device),
+        region_adj=region_adj_t,
+    ).to(device)
+    model.load_state_dict(ckpt["model"], strict=True)
+    model.eval()
+    return model, region_adj_t
+
+
 def _compress_consecutive(seq: List[int]) -> List[int]:
     out: List[int] = []
     last: Optional[int] = None
@@ -370,7 +555,16 @@ def build_argparser() -> argparse.ArgumentParser:
     p.add_argument("--decode_guided_dest_alpha", type=float, default=0.0)
     p.add_argument("--temperature", type=float, default=1.0)
 
-    p.add_argument("--region_constraint", type=str, default="none", choices=["none", "gt"])
+    p.add_argument("--region_constraint", type=str, default="none", choices=["none", "gt", "ar", "mix"])
+    p.add_argument("--region_ar_ckpt", type=Path, default=None, help="Required when --region_constraint in {ar,mix}.")
+    p.add_argument("--region_ar_max_len", type=int, default=16, help="Greedy rollout max_len for RegionAR (only for ar/mix).")
+    p.add_argument("--region_mix_gt_prob", type=float, default=0.5, help="For --region_constraint=mix: P(use GT region_seq) during TRAIN.")
+    p.add_argument(
+        "--region_noise_p",
+        type=float,
+        default=0.0,
+        help="Train-only: with prob p, replace a region token by a neighbor (requires --way_regions_npz).",
+    )
     p.add_argument("--region_constraint_mode", type=str, default="relaxed", choices=["strict", "relaxed"])
     p.add_argument("--region_constraint_fallback", type=str, default="dest_region", choices=["unconstrained", "stop", "dest_region"])
 
@@ -411,7 +605,10 @@ def _decode_and_reward(
     way_region_t: Optional[torch.Tensor],
     way_region_np: Optional[np.ndarray],
     region_adj_t: Optional[torch.Tensor],
+    region_adj_np: Optional[np.ndarray],
+    region_ar_model: Optional[RegionARModel],
     device: torch.device,
+    rng: np.random.Generator,
     baseline_ema: float,
     train: bool,
 ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, Dict[str, float], float]:
@@ -421,18 +618,80 @@ def _decode_and_reward(
     dest_way = route_cond["dest_way"]
     B = int(start_way.shape[0])
 
-    # Build region_seq from GT (if needed by constraint or by Flow conditioning).
-    region_seq: Optional[List[List[int]]] = None
-    if str(cfg.region_constraint) != "none":
+    # Build region_seq (for constraint and/or Flow conditioning).
+    need_region_seq = (str(cfg.region_constraint) != "none") or (flow is not None and bool(flow.cfg.use_region_seq))
+    region_seq_use: Optional[List[List[int]]] = None
+    if bool(need_region_seq):
         if way_region_np is None:
-            raise RuntimeError("region_constraint requires way_region_np (need --way_regions_npz).")
+            raise RuntimeError("region_seq requires way_region_np (need --way_regions_npz).")
+
+        # GT-derived region trace
         way_seq_pad = b["way_seq_pad"].detach().cpu().numpy().astype(np.int64, copy=False)
         way_seq_len = b["way_seq_len"].detach().cpu().numpy().astype(np.int64, copy=False)
-        region_seq = []
+        gt_region_seq: List[List[int]] = []
         for i in range(int(B)):
             L = int(way_seq_len[i])
             ws = [int(x) for x in way_seq_pad[i, :L].tolist() if int(x) >= 0]
-            region_seq.append(_region_seq_from_way_seq(ws, way_region_np))
+            gt_region_seq.append(_region_seq_from_way_seq(ws, way_region_np))
+
+        mode = str(cfg.region_constraint)
+        if mode == "none":
+            region_seq_use = gt_region_seq
+        elif mode == "gt":
+            region_seq_use = gt_region_seq
+        else:
+            if region_ar_model is None or region_adj_t is None:
+                raise RuntimeError("region_constraint=ar/mix requires region_ar_model and region_adj_t")
+
+            # AR-derived region seq
+            sw_np = start_way.detach().cpu().numpy().astype(np.int64, copy=False).reshape(-1)
+            dw_np = dest_way.detach().cpu().numpy().astype(np.int64, copy=False).reshape(-1)
+            ar_region_seq: List[List[int]] = []
+            for i in range(int(B)):
+                sw = int(sw_np[i])
+                dw = int(dw_np[i])
+                sr = int(way_region_np[sw]) if 0 <= sw < int(way_region_np.size) else 0
+                dr = int(way_region_np[dw]) if 0 <= dw < int(way_region_np.size) else int(sr)
+                route_cond_1 = {
+                    "start_pos": route_cond["start_pos"][i : i + 1],
+                    "dest_pos": route_cond["dest_pos"][i : i + 1],
+                    "hour": route_cond["hour"][i : i + 1],
+                    "dow": route_cond["dow"][i : i + 1],
+                    "route_city": route_cond["route_city"][i : i + 1],
+                }
+                ar_region_seq.append(
+                    _decode_region_seq_greedy(
+                        model=region_ar_model,
+                        region_adj=region_adj_t,
+                        route_cond_1=route_cond_1,
+                        o_region=int(sr),
+                        d_region=int(dr),
+                        max_len=int(cfg.region_ar_max_len),
+                    )
+                )
+
+            if mode == "ar":
+                region_seq_use = ar_region_seq
+            elif mode == "mix":
+                # Train: mix GT/AR; Val: use AR only for stable selection & deploy-like metric.
+                if not bool(train):
+                    region_seq_use = ar_region_seq
+                else:
+                    p_gt = float(cfg.region_mix_gt_prob)
+                    choose_gt = (rng.random(int(B)) < p_gt).reshape(-1)
+                    region_seq_use = []
+                    for i in range(int(B)):
+                        region_seq_use.append(gt_region_seq[i] if bool(choose_gt[i]) else ar_region_seq[i])
+            else:
+                raise ValueError(f"unsupported region_constraint: {mode!r}")
+
+        # Optional: region noise injection (train only).
+        if bool(train) and float(cfg.region_noise_p) > 0.0:
+            if region_adj_np is None:
+                raise RuntimeError("region_noise_p requires region_adj_np")
+            region_seq_use = [
+                _perturb_region_seq(rs, region_adj=region_adj_np, p=float(cfg.region_noise_p), rng=rng) for rs in (region_seq_use or [])
+            ]
 
     # Latent source.
     with torch.no_grad():
@@ -444,19 +703,11 @@ def _decode_and_reward(
             steps = cfg.flow_solver_steps
             steps_use = int(steps) if steps is not None else None
             if bool(flow.cfg.use_region_seq):
-                if region_seq is None:
-                    if way_region_np is None:
-                        raise RuntimeError("Flow requires region_seq conditioning, but way_region_np is missing.")
-                    way_seq_pad = b["way_seq_pad"].detach().cpu().numpy().astype(np.int64, copy=False)
-                    way_seq_len = b["way_seq_len"].detach().cpu().numpy().astype(np.int64, copy=False)
-                    region_seq = []
-                    for i in range(int(B)):
-                        L = int(way_seq_len[i])
-                        ws = [int(x) for x in way_seq_pad[i, :L].tolist() if int(x) >= 0]
-                        region_seq.append(_region_seq_from_way_seq(ws, way_region_np))
-                maxS = max(1, max(len(x) for x in region_seq))
+                if region_seq_use is None:
+                    raise RuntimeError("Flow requires region_seq conditioning, but region_seq is missing.")
+                maxS = max(1, max(len(x) for x in region_seq_use))
                 pad = torch.full((B, maxS), -1, dtype=torch.long, device=device)
-                for i, rs in enumerate(region_seq):
+                for i, rs in enumerate(region_seq_use):
                     if rs:
                         pad[i, : len(rs)] = torch.as_tensor(rs, dtype=torch.long, device=device)
                 route_cond = dict(route_cond)
@@ -470,8 +721,8 @@ def _decode_and_reward(
         route_cond=route_cond,
         start_way=start_way,
         dest_way=dest_way,
-        way_region=way_region_t,
-        region_seq=region_seq,
+        way_region=(way_region_t if str(cfg.region_constraint) != "none" else None),
+        region_seq=(region_seq_use if str(cfg.region_constraint) != "none" else None),
         region_adj=region_adj_t,
         region_constraint_mode=str(cfg.region_constraint_mode),
         region_constraint_fallback=str(cfg.region_constraint_fallback),
@@ -575,6 +826,9 @@ def main() -> None:
         region_constraint=str(args.region_constraint),
         region_constraint_mode=str(args.region_constraint_mode),
         region_constraint_fallback=str(args.region_constraint_fallback),
+        region_ar_max_len=int(args.region_ar_max_len),
+        region_mix_gt_prob=float(args.region_mix_gt_prob),
+        region_noise_p=float(args.region_noise_p),
         anti_loop_k=max(0, int(args.anti_loop_k)),
         anti_loop_penalty=max(0.0, float(args.anti_loop_penalty)),
         anti_loop_penalty_k=max(0, int(args.anti_loop_penalty_k)),
@@ -635,17 +889,33 @@ def main() -> None:
     way_region_np: Optional[np.ndarray] = None
     way_region_t: Optional[torch.Tensor] = None
     region_adj_t: Optional[torch.Tensor] = None
-    if str(cfg.region_constraint) != "none":
+    region_adj_np: Optional[np.ndarray] = None
+    region_ar_model: Optional[RegionARModel] = None
+    need_regions = (str(cfg.region_constraint) != "none") or (flow is not None and bool(flow.cfg.use_region_seq)) or (float(cfg.region_noise_p) > 0.0)
+    if bool(need_regions):
         if args.way_regions_npz is None:
-            raise SystemExit("[FATAL] --way_regions_npz is required when --region_constraint != none")
+            raise SystemExit("[FATAL] --way_regions_npz is required (need regions for constraint/flow/noise).")
         wr = np.load(str(Path(args.way_regions_npz)), allow_pickle=True)
         if "way_region" not in wr.files:
             raise SystemExit("[FATAL] way_regions_npz missing key: way_region")
         way_region_np = np.asarray(wr["way_region"], dtype=np.int64).reshape(-1)
         way_region_t = torch.as_tensor(way_region_np, dtype=torch.long, device=device)
-        if str(cfg.region_constraint_mode) == "relaxed":
-            adj = _load_region_adj(way_regions_npz=Path(args.way_regions_npz))
-            region_adj_t = torch.as_tensor(adj, dtype=torch.bool, device=device)
+        region_adj_np = _load_region_adj(way_regions_npz=Path(args.way_regions_npz))
+        region_adj_t = torch.as_tensor(region_adj_np, dtype=torch.bool, device=device)
+
+    if str(cfg.region_constraint) in {"ar", "mix"}:
+        if args.region_ar_ckpt is None:
+            raise SystemExit("[FATAL] --region_ar_ckpt is required when --region_constraint in {ar,mix}")
+        region_ar_model, region_adj_t2 = _load_region_ar_model(
+            region_ar_ckpt=Path(args.region_ar_ckpt),
+            way_regions_npz=Path(args.way_regions_npz),
+            way_features_npz=Path(args.way_features_npz),
+            device=device,
+            max_len=int(cfg.region_ar_max_len),
+        )
+        region_adj_t = region_adj_t2
+        if region_adj_np is None:
+            region_adj_np = region_adj_t2.detach().cpu().numpy().astype(bool, copy=False)
 
     # Collate for CE (optional). Keep it consistent with AE decoder_past_k.
     wg = np.load(str(args.way_graph_npz), allow_pickle=True)
@@ -695,6 +965,8 @@ def main() -> None:
     log_every = max(1, int(args.log_every))
 
     for epoch in range(1, int(cfg.n_epochs) + 1):
+        rng_tr = np.random.default_rng(int(cfg.seed) + 10007 * int(epoch))
+        rng_va = np.random.default_rng(int(cfg.seed) + 10007 * int(epoch) + 999_983)
         ae.train()
         total_loss = 0.0
         total_reward = 0.0
@@ -711,7 +983,10 @@ def main() -> None:
                 way_region_t=way_region_t,
                 way_region_np=way_region_np,
                 region_adj_t=region_adj_t,
+                region_adj_np=region_adj_np,
+                region_ar_model=region_ar_model,
                 device=device,
+                rng=rng_tr,
                 baseline_ema=baseline_ema,
                 train=True,
             )
@@ -747,14 +1022,17 @@ def main() -> None:
                     ae=ae,
                     flow=flow,
                     batch=batch,
-                    cfg=cfg,
-                    way_region_t=way_region_t,
-                    way_region_np=way_region_np,
-                    region_adj_t=region_adj_t,
-                    device=device,
-                    baseline_ema=baseline_ema,
-                    train=False,
-                )
+                cfg=cfg,
+                way_region_t=way_region_t,
+                way_region_np=way_region_np,
+                region_adj_t=region_adj_t,
+                region_adj_np=region_adj_np,
+                region_ar_model=region_ar_model,
+                device=device,
+                rng=rng_va,
+                baseline_ema=baseline_ema,
+                train=False,
+            )
                 v_loss += float(stats["loss"])
                 v_reward += float(stats["reward_mean"]) if np.isfinite(float(stats["reward_mean"])) else 0.0
                 v_succ += float(stats["success_rate"]) if np.isfinite(float(stats["success_rate"])) else 0.0
@@ -851,6 +1129,7 @@ def main() -> None:
             "ae_ckpt": str(args.ae_ckpt),
             "flow_ckpt": (str(args.flow_ckpt) if args.flow_ckpt is not None else None),
             "way_regions_npz": (str(args.way_regions_npz) if args.way_regions_npz is not None else None),
+            "region_ar_ckpt": (str(args.region_ar_ckpt) if getattr(args, "region_ar_ckpt", None) is not None else None),
         },
         "out_dir": str(out_dir),
         "best_score": float(best),

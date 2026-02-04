@@ -91,6 +91,7 @@ def main() -> None:
     p = argparse.ArgumentParser(description="Way-CASD audit: train split ratio + per-city outdeg/len distributions.")
     p.add_argument("--way_routes_npz", type=Path, required=True)
     p.add_argument("--way_graph_npz", type=Path, required=True)
+    p.add_argument("--way_regions_npz", type=Path, default=None, help="Optional: include per-city region granularity stats.")
     p.add_argument("--out_json", type=Path, required=True)
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--val_ratio", type=float, default=0.1)
@@ -103,6 +104,13 @@ def main() -> None:
     wg = np.load(str(args.way_graph_npz), allow_pickle=True)
     ptr = np.asarray(wg["way_adj_ptr"], dtype=np.int64).reshape(-1)
     outdeg_all = (ptr[1:] - ptr[:-1]).astype(np.int64, copy=False)
+
+    way_region: np.ndarray | None = None
+    if args.way_regions_npz is not None:
+        wr = np.load(str(Path(args.way_regions_npz)), allow_pickle=True)
+        if "way_region" not in wr.files:
+            raise SystemExit("[FATAL] way_regions_npz missing key: way_region")
+        way_region = np.asarray(wr["way_region"], dtype=np.int64).reshape(-1)
 
     route_ids_all = _route_ids_filtered(routes, max_way_len=int(cfg.max_way_len))
     n = int(route_ids_all.size)
@@ -134,7 +142,11 @@ def main() -> None:
         "task": "way_casd_city_data_audit",
         "created_at": datetime.now(tz=TZ_SHANGHAI).isoformat(),
         "cfg": asdict(cfg),
-        "inputs": {"way_routes_npz": str(args.way_routes_npz), "way_graph_npz": str(args.way_graph_npz)},
+        "inputs": {
+            "way_routes_npz": str(args.way_routes_npz),
+            "way_graph_npz": str(args.way_graph_npz),
+            "way_regions_npz": (str(args.way_regions_npz) if args.way_regions_npz is not None else None),
+        },
         "n_cities": int(n_cities),
         "splits": {},
     }
@@ -152,6 +164,23 @@ def main() -> None:
             toks = _flatten_way_tokens(routes, rids_c)
             uniq = np.unique(toks) if toks.size > 0 else np.zeros((0,), dtype=np.int64)
             deg = outdeg_all[uniq] if uniq.size > 0 else np.zeros((0,), dtype=np.int64)
+            dead_end = (deg <= 0).astype(np.float64, copy=False)
+
+            region_rep: Dict[str, object] | None = None
+            if way_region is not None and uniq.size > 0:
+                reg = way_region[uniq].astype(np.int64, copy=False)
+                reg = reg[reg >= 0]
+                if reg.size > 0:
+                    reg_ids, reg_counts = np.unique(reg, return_counts=True)
+                    region_rep = {
+                        "n_regions": int(reg_ids.size),
+                        "region_size_ways": {
+                            "p50": int(np.percentile(reg_counts, 50)) if reg_counts.size > 0 else None,
+                            "p90": int(np.percentile(reg_counts, 90)) if reg_counts.size > 0 else None,
+                            "max": int(reg_counts.max()) if reg_counts.size > 0 else None,
+                            "quantiles": _quantiles_int(reg_counts.astype(np.int64, copy=False)),
+                        },
+                    }
             split_rep["by_city"][c_str] = {
                 "n_routes": int(rids_c.size),
                 "route_len": {
@@ -166,6 +195,7 @@ def main() -> None:
                     "p90": int(np.percentile(deg, 90)) if deg.size > 0 else None,
                     "max": int(deg.max()) if deg.size > 0 else None,
                     "quantiles": _quantiles_int(deg),
+                    "dead_end_frac": float(np.mean(dead_end)) if dead_end.size > 0 else None,
                     "frac_gt2": float(np.mean((deg > 2).astype(np.float64))) if deg.size > 0 else None,
                     "frac_gt8": float(np.mean((deg > 8).astype(np.float64))) if deg.size > 0 else None,
                     "frac_gt32": float(np.mean((deg > 32).astype(np.float64))) if deg.size > 0 else None,
@@ -174,6 +204,7 @@ def main() -> None:
                     "n_tokens": int(toks.size),
                     "tokens_per_route_mean": float(toks.size) / float(max(1, rids_c.size)),
                 },
+                "regions": region_rep,
             }
         out["splits"][split_name] = split_rep
 
@@ -185,4 +216,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

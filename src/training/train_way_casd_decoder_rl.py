@@ -66,6 +66,10 @@ class TrainCfg:
     reward_dist: float
     penalty_len: float
     penalty_loop: float
+    penalty_turn: float
+    penalty_hit_wall: float
+    penalty_wall: float
+    wall_margin: int
     entropy_coef: float
     baseline: str  # {"mean","ema"}
     baseline_ema_beta: float
@@ -576,6 +580,10 @@ def build_argparser() -> argparse.ArgumentParser:
     p.add_argument("--reward_dist", type=float, default=1.0, help="Penalty weight for final dest distance in normalized coord.")
     p.add_argument("--penalty_len", type=float, default=0.002, help="Penalty per hop.")
     p.add_argument("--penalty_loop", type=float, default=0.0, help="Extra penalty if predicted path has a loop.")
+    p.add_argument("--penalty_turn", type=float, default=0.0, help="Penalty for sharp turns (mean 1-cos between consecutive step vectors).")
+    p.add_argument("--penalty_hit_wall", type=float, default=0.0, help="Extra penalty if decode hits max_len without success.")
+    p.add_argument("--penalty_wall", type=float, default=0.0, help="Penalty for being close to max_len when failed (scaled by --wall_margin).")
+    p.add_argument("--wall_margin", type=int, default=20, help="Margin steps for --penalty_wall (larger=weaker proximity penalty).")
     p.add_argument("--entropy_coef", type=float, default=0.01)
     p.add_argument("--baseline", type=str, default="mean", choices=["mean", "ema"])
     p.add_argument("--baseline_ema_beta", type=float, default=0.98)
@@ -752,8 +760,54 @@ def _decode_and_reward(
 
     hops = torch.as_tensor([max(0, len(p) - 1) for p in paths], device=device, dtype=torch.float32)
     has_loop = torch.as_tensor([1.0 if _has_loop(p) else 0.0 for p in paths], device=device, dtype=torch.float32)
+    hit_wall = ((hops >= float(cfg.max_decode_len)) & (success < 0.5)).to(dtype=torch.float32)
 
-    reward = float(cfg.reward_success) * success - float(cfg.reward_dist) * dist - float(cfg.penalty_len) * hops - float(cfg.penalty_loop) * has_loop
+    # Turn penalty: encourage smoother paths (optional).
+    turn_cost = torch.zeros((B,), device=device, dtype=torch.float32)
+    if float(cfg.penalty_turn) > 0.0:
+        maxT = max((len(p) for p in paths), default=0)
+        if maxT >= 3:
+            pad = torch.zeros((B, maxT), dtype=torch.long, device=device)
+            mask = torch.zeros((B, maxT), dtype=torch.bool, device=device)
+            for i, pth in enumerate(paths):
+                if not pth:
+                    continue
+                L = int(len(pth))
+                pad[i, :L] = torch.as_tensor(pth, dtype=torch.long, device=device)
+                mask[i, :L] = True
+            with torch.no_grad():
+                geom_all, _tier_all, _hw_all = ae.way_enc._lookup(pad)
+                centers = geom_all[..., :2].to(dtype=torch.float32) / float(coord_scale)
+            steps = centers[:, 1:, :] - centers[:, :-1, :]  # (B,T-1,2)
+            step_mask = mask[:, 1:] & mask[:, :-1]  # (B,T-1)
+            v1 = steps[:, :-1, :]
+            v2 = steps[:, 1:, :]
+            m = step_mask[:, :-1] & step_mask[:, 1:]
+            eps = 1e-6
+            dot = (v1 * v2).sum(dim=-1)
+            n1 = torch.norm(v1, dim=-1)
+            n2 = torch.norm(v2, dim=-1)
+            cos = (dot / (n1 * n2 + eps)).clamp(min=-1.0, max=1.0)
+            tc = (1.0 - cos) * m.to(dtype=torch.float32)
+            denom = m.sum(dim=-1).clamp(min=1).to(dtype=torch.float32)
+            turn_cost = tc.sum(dim=-1) / denom
+
+    # Wall proximity penalty: only for failures (optional).
+    wall_prox = torch.zeros((B,), device=device, dtype=torch.float32)
+    if float(cfg.penalty_wall) > 0.0:
+        margin = max(1, int(cfg.wall_margin))
+        wall_prox = torch.clamp((hops - (float(cfg.max_decode_len) - float(margin))) / float(margin), min=0.0, max=1.0)
+        wall_prox = wall_prox * (1.0 - success)
+
+    reward = (
+        float(cfg.reward_success) * success
+        - float(cfg.reward_dist) * dist
+        - float(cfg.penalty_len) * hops
+        - float(cfg.penalty_loop) * has_loop
+        - float(cfg.penalty_turn) * turn_cost
+        - float(cfg.penalty_hit_wall) * hit_wall
+        - float(cfg.penalty_wall) * wall_prox
+    )
 
     # Baseline for variance reduction.
     if str(cfg.baseline) == "ema":
@@ -792,6 +846,9 @@ def _decode_and_reward(
         "dist_mean": float(dist.detach().mean().item()) if dist.numel() else float("nan"),
         "hops_mean": float(hops.detach().mean().item()) if hops.numel() else float("nan"),
         "loop_rate": float(has_loop.detach().mean().item()) if has_loop.numel() else float("nan"),
+        "hit_wall_rate": float(hit_wall.detach().mean().item()) if hit_wall.numel() else float("nan"),
+        "turn_cost_mean": float(turn_cost.detach().mean().item()) if turn_cost.numel() else float("nan"),
+        "wall_prox_mean": float(wall_prox.detach().mean().item()) if wall_prox.numel() else float("nan"),
         "reward": _summarize_reward(reward),
     }
     return loss, reward.detach(), success.detach(), entropy_sum.detach(), stats, float(baseline_ema)
@@ -836,6 +893,10 @@ def main() -> None:
         reward_dist=float(args.reward_dist),
         penalty_len=float(args.penalty_len),
         penalty_loop=float(args.penalty_loop),
+        penalty_turn=float(args.penalty_turn),
+        penalty_hit_wall=float(args.penalty_hit_wall),
+        penalty_wall=float(args.penalty_wall),
+        wall_margin=int(args.wall_margin),
         entropy_coef=float(args.entropy_coef),
         baseline=str(args.baseline),
         baseline_ema_beta=float(args.baseline_ema_beta),

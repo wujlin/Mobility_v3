@@ -1,0 +1,4 @@
+[city=0] n_regions=116 p50=63 p90=121 assigned=100.0%
+[city=1] n_regions=103 p50=73 p90=120 assigned=100.0%
+[OK] saved: _sync/wsa/pi_verify/20260204_E3_regions_res2p0_s0/regions/way_regions_louvain_per_city_res2p0_seed0.npz (n_regions_total=219)
+[OK] saved: _sync/wsa/pi_verify/20260204_E3_regions_res2p0_s0/regions/way_regions_louvain_per_city_res2p0_seed0.json

@@ -31,6 +31,7 @@ TZ_SHANGHAI = timezone(timedelta(hours=8))
 class Cfg:
     seed: int
     val_ratio: float
+    min_hops: int
     max_way_len: int
 
 
@@ -82,8 +83,9 @@ def _flatten_way_tokens(routes, route_ids: np.ndarray) -> np.ndarray:
     return out
 
 
-def _route_ids_filtered(routes, max_way_len: int) -> np.ndarray:
-    keep = (routes.way_seq_len > 0) & (routes.way_seq_len <= int(max_way_len))
+def _route_ids_filtered(routes, *, min_hops: int, max_way_len: int) -> np.ndarray:
+    # Note: hops = (way_seq_len - 1). Keep consistent with training/eval filters.
+    keep = (routes.way_seq_len > 0) & ((routes.way_seq_len - 1) >= int(min_hops)) & (routes.way_seq_len <= int(max_way_len))
     return np.nonzero(keep)[0].astype(np.int64, copy=False)
 
 
@@ -95,10 +97,11 @@ def main() -> None:
     p.add_argument("--out_json", type=Path, required=True)
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--val_ratio", type=float, default=0.1)
+    p.add_argument("--min_hops", type=int, default=5)
     p.add_argument("--max_way_len", type=int, default=160)
     args = p.parse_args()
 
-    cfg = Cfg(seed=int(args.seed), val_ratio=float(args.val_ratio), max_way_len=int(args.max_way_len))
+    cfg = Cfg(seed=int(args.seed), val_ratio=float(args.val_ratio), min_hops=int(args.min_hops), max_way_len=int(args.max_way_len))
 
     routes = load_way_routes_npz(Path(args.way_routes_npz))
     wg = np.load(str(args.way_graph_npz), allow_pickle=True)
@@ -112,7 +115,7 @@ def main() -> None:
             raise SystemExit("[FATAL] way_regions_npz missing key: way_region")
         way_region = np.asarray(wr["way_region"], dtype=np.int64).reshape(-1)
 
-    route_ids_all = _route_ids_filtered(routes, max_way_len=int(cfg.max_way_len))
+    route_ids_all = _route_ids_filtered(routes, min_hops=int(cfg.min_hops), max_way_len=int(cfg.max_way_len))
     n = int(route_ids_all.size)
     if n < 2:
         raise SystemExit(f"Not enough routes after filter: n={n}")

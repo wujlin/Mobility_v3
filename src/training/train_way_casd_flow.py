@@ -25,6 +25,8 @@ from src.models.way_casd.conditions import ConditionEncoderCfg
 TZ_SHANGHAI = timezone(timedelta(hours=8))
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 log = logging.getLogger(__name__)
+_DEFAULT_D_MODEL = 256
+_DEFAULT_N_LAYERS = 6
 
 
 @dataclass(frozen=True)
@@ -299,9 +301,9 @@ def build_argparser() -> argparse.ArgumentParser:
     p.add_argument("--max_candidates", type=int, default=32)
     p.add_argument("--max_routes", type=int, default=None, help="Debug: cap number of routes (after filtering).")
 
-    p.add_argument("--d_model", type=int, default=256)
+    p.add_argument("--d_model", type=int, default=_DEFAULT_D_MODEL)
     p.add_argument("--n_latent", type=int, default=64)
-    p.add_argument("--n_layers", type=int, default=6)
+    p.add_argument("--n_layers", type=int, default=_DEFAULT_N_LAYERS)
     p.add_argument("--n_heads", type=int, default=8)
     p.add_argument("--dropout", type=float, default=0.1)
     p.add_argument("--noise_sigma", type=float, default=1.0)
@@ -311,6 +313,10 @@ def build_argparser() -> argparse.ArgumentParser:
     p.add_argument("--region_seq_npz", type=Path, default=None, help="region_seq_min*.npz from extract_region_seq_stats.py (required when --use_region_seq).")
     p.add_argument("--way_regions_npz", type=Path, default=None, help="way_regions_louvain_per_city*.npz (to infer n_regions; recommended).")
     p.add_argument("--region_max_len", type=int, default=16, help="Max positional embedding length for region_seq tokens.")
+
+    # Backward-compat aliases (some wrappers still use these names).
+    p.add_argument("--flow_n_layers", type=int, default=None, help="Deprecated alias for --n_layers.")
+    p.add_argument("--flow_n_hidden", type=int, default=None, help="Deprecated alias for --d_model.")
 
     # Long-run training ergonomics
     p.add_argument("--resume_ckpt", type=Path, default=None, help="Optional: resume from ckpt_last.pt/ckpt_best.pt.")
@@ -324,6 +330,18 @@ def main() -> None:
     args = build_argparser().parse_args()
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
+
+    # Normalize deprecated alias args.
+    if args.flow_n_layers is not None:
+        if int(args.n_layers) != int(_DEFAULT_N_LAYERS) and int(args.n_layers) != int(args.flow_n_layers):
+            raise SystemExit("[FATAL] Both --n_layers and --flow_n_layers are set with different values.")
+        log.warning("DEPRECATED arg: --flow_n_layers. Please use --n_layers instead.")
+        args.n_layers = int(args.flow_n_layers)
+    if args.flow_n_hidden is not None:
+        if int(args.d_model) != int(_DEFAULT_D_MODEL) and int(args.d_model) != int(args.flow_n_hidden):
+            raise SystemExit("[FATAL] Both --d_model and --flow_n_hidden are set with different values.")
+        log.warning("DEPRECATED arg: --flow_n_hidden. Please use --d_model instead.")
+        args.d_model = int(args.flow_n_hidden)
 
     use_region_seq = bool(args.use_region_seq)
     region_seq_npz = Path(args.region_seq_npz) if args.region_seq_npz is not None else None
@@ -488,6 +506,8 @@ def main() -> None:
             max_candidates=int(ae_cfg_dict.get("max_candidates", cfg.max_candidates)),
             max_len=int(ae_cfg_dict.get("max_len", cfg.max_way_len)),
             coord_scale=float(ae_cfg_dict.get("coord_scale", 1024.0)),
+            segment_size=int(ae_cfg_dict.get("segment_size", 10)),
+            segment_n_latent=int(ae_cfg_dict.get("segment_n_latent", 0)),
             decoder_use_dest_dist=bool(use_dest_dist),
             decoder_use_cross_attn=bool(use_cross_attn),
             decoder_use_step_emb=bool(use_step_emb),

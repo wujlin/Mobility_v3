@@ -40,6 +40,10 @@ class WayCASDAECfg:
     decoder_past_k: int = 8
     decoder_past_n_layers: int = 2
     decoder_past_n_heads: int = 4
+    # E8 (optional): multi-scale latent, reserving the last S latent tokens
+    # as segment summaries (mean-pooled from encoder tokens).
+    segment_size: int = 10
+    segment_n_latent: int = 0  # 0=disable; >0=overwrite last S latent tokens with segment tokens
 
 
 class WayCASDAutoEncoder(nn.Module):
@@ -79,6 +83,18 @@ class WayCASDAutoEncoder(nn.Module):
                 dropout=float(cfg.dropout),
             )
         )
+        self.segment_size = int(cfg.segment_size)
+        self.segment_n_latent = int(cfg.segment_n_latent)
+        if self.segment_n_latent > 0:
+            if self.segment_size <= 0:
+                raise ValueError("segment_n_latent>0 requires cfg.segment_size>0")
+            if self.segment_n_latent > int(cfg.n_latent):
+                raise ValueError("segment_n_latent must be <= n_latent (we overwrite the last S latent tokens).")
+            self.segment_pos_emb = nn.Embedding(int(self.segment_n_latent), int(cfg.d_model))
+            self.segment_ln = nn.LayerNorm(int(cfg.d_model))
+        else:
+            self.segment_pos_emb = None
+            self.segment_ln = None
         self.decoder = WayDecoder(
             cfg=WayDecoderCfg(
                 d_model=int(cfg.d_model),
@@ -111,6 +127,28 @@ class WayCASDAutoEncoder(nn.Module):
     def encode(self, way_seq_pad: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         tok, mask = self.way_enc(way_seq_pad)
         z = self.compress(tok, mask=mask)
+
+        # Optional: overwrite the last S latent tokens with per-segment summaries.
+        if self.segment_n_latent > 0 and self.segment_pos_emb is not None and self.segment_ln is not None:
+            B, K, D = tok.shape
+            S = int(self.segment_n_latent)
+            L = int(z.shape[1])
+            if S > L:
+                raise RuntimeError(f"segment_n_latent={S} > n_latent={L} (invalid cfg).")
+            seg = tok.new_zeros((B, S, D))
+            pos = torch.arange(int(K), device=tok.device, dtype=torch.long)[None, :]  # (1,K)
+            seg_id = (pos // int(self.segment_size)).clamp(max=S - 1)  # (1,K)
+            valid = mask.to(dtype=tok.dtype)  # (B,K)
+            for s in range(S):
+                m = valid * (seg_id == int(s)).to(dtype=tok.dtype)  # (B,K)
+                denom = m.sum(dim=1).clamp(min=1.0)  # (B,)
+                seg[:, int(s), :] = (tok * m[:, :, None]).sum(dim=1) / denom[:, None]
+
+            seg_pos = torch.arange(S, device=tok.device, dtype=torch.long)
+            seg = seg + self.segment_pos_emb(seg_pos)[None, :, :]
+            seg = self.segment_ln(seg)
+            # Keep length fixed: [global_latents, segment_latents]
+            z = torch.cat([z[:, : L - S, :], seg], dim=1)
         return z, mask
 
     def compute_loss(self, batch: Dict[str, torch.Tensor]) -> Tuple[torch.Tensor, Dict[str, float]]:

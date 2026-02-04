@@ -1297,6 +1297,319 @@ class WayDecoder(nn.Module):
 
         return paths
 
+    def sample_decode_batched(
+        self,
+        *,
+        way_embedder: nn.Module,
+        latent_tokens: torch.Tensor,  # (B,L,d_model)
+        route_cond: Dict[str, torch.Tensor],
+        start_way: torch.Tensor,  # (B,)
+        dest_way: torch.Tensor,  # (B,)
+        way_region: Optional[torch.Tensor] = None,  # (n_ways,) long, optional (same device as latent_tokens)
+        region_seq: Optional[List[List[int]]] = None,  # len=B, optional
+        region_adj: Optional[torch.Tensor] = None,  # (R,R) bool, optional (required for relaxed mode)
+        region_constraint_mode: str = "strict",
+        region_constraint_fallback: str = "unconstrained",
+        max_len: Optional[int] = None,
+        max_candidates: Optional[int] = None,
+        candidate_policy: str = "first",
+        include_dest_if_successor: bool = False,
+        guided_dest_alpha: float = 0.0,
+        temperature: float = 1.0,
+        anti_loop_k: int = 0,
+        anti_loop_penalty: float = 0.0,
+        anti_loop_penalty_k: int = 4,
+    ) -> Tuple[List[List[int]], torch.Tensor, torch.Tensor]:
+        """
+        Batched stochastic decoding (policy sampling) for RL.
+
+        Returns:
+          paths: python list of predicted way_id sequences (len=B)
+          logp_sum: (B,) sum of log-prob under the sampled actions
+          entropy_sum: (B,) sum of per-step categorical entropies (for entropy bonus)
+        """
+        max_len = int(max_len) if max_len is not None else int(self.cfg.max_len)
+        B = int(latent_tokens.shape[0])
+        device = latent_tokens.device
+
+        use_region_constraint = (way_region is not None) and (region_seq is not None)
+        if use_region_constraint and int(len(region_seq)) != int(B):
+            raise ValueError(f"region_seq length mismatch: got {len(region_seq)}, expect {B}")
+        if use_region_constraint and way_region is not None and way_region.device != device:
+            raise ValueError(f"way_region must be on same device as latent_tokens: {way_region.device} vs {device}")
+        mode = str(region_constraint_mode or "").strip().lower()
+        if mode and mode not in {"strict", "relaxed"}:
+            raise ValueError(f"unsupported region_constraint_mode: {region_constraint_mode!r}")
+        if use_region_constraint and mode == "relaxed":
+            if region_adj is None:
+                raise ValueError("region_adj is required for region_constraint_mode='relaxed'")
+            if region_adj.device != device:
+                raise ValueError(f"region_adj must be on same device as latent_tokens: {region_adj.device} vs {device}")
+        fallback = str(region_constraint_fallback or "").strip().lower()
+        if fallback and fallback not in {"unconstrained", "stop", "dest_region"}:
+            raise ValueError(f"unsupported region_constraint_fallback: {region_constraint_fallback!r}")
+
+        def _compress_consecutive_py(seq: List[int]) -> List[int]:
+            out: List[int] = []
+            last: Optional[int] = None
+            for x in seq:
+                xx = int(x)
+                if last is None or xx != int(last):
+                    out.append(xx)
+                    last = xx
+            return out
+
+        def _prepare_region_seq(seq: List[int], *, start_region: int, dest_region: int) -> List[int]:
+            s = [int(x) for x in seq if int(x) >= 0]
+            s = _compress_consecutive_py(s)
+            if not s:
+                s = [int(start_region), int(dest_region)]
+            if int(s[0]) != int(start_region):
+                s = [int(start_region)] + s
+            if int(s[-1]) != int(dest_region):
+                s = s + [int(dest_region)]
+            s = _compress_consecutive_py(s)
+            return s
+
+        # Precompute route-level conditioning once.
+        cond_emb = self.cond_enc(
+            start_pos=route_cond["start_pos"],
+            dest_pos=route_cond["dest_pos"],
+            hour=route_cond["hour"],
+            dow=route_cond["dow"],
+            route_city=route_cond["route_city"],
+        )
+
+        paths: List[List[int]] = [[int(x)] for x in start_way.to(dtype=torch.long).tolist()]
+        cur_way = start_way.to(dtype=torch.long, device=device).clone()
+        dw = dest_way.to(dtype=torch.long, device=device).clone()
+        active = (cur_way != dw)
+
+        logp_sum = torch.zeros((B,), dtype=torch.float32, device=device)
+        entropy_sum = torch.zeros((B,), dtype=torch.float32, device=device)
+
+        # Region constraint state (per route).
+        region_paths: Optional[List[List[int]]] = None
+        region_ptr: Optional[List[int]] = None
+        if use_region_constraint and way_region is not None and region_seq is not None:
+            region_paths = []
+            region_ptr = []
+            for b in range(B):
+                sw = int(cur_way[b].item())
+                dw_b = int(dw[b].item())
+                sr = int(way_region[int(sw)].item()) if 0 <= sw < int(way_region.numel()) else -1
+                dr = int(way_region[int(dw_b)].item()) if 0 <= dw_b < int(way_region.numel()) else int(sr)
+                region_paths.append(_prepare_region_seq(list(region_seq[int(b)]), start_region=sr, dest_region=dr))
+                region_ptr.append(0)
+
+        temp = float(temperature)
+        if not (temp > 0.0) or not math.isfinite(temp):
+            temp = 1.0
+
+        for step_idx in range(int(max_len)):
+            if not bool(active.any().item()):
+                break
+
+            active_ids = torch.nonzero(active, as_tuple=False).reshape(-1)
+            cand_list: List[torch.Tensor] = []
+            keep_ids: List[int] = []
+            for bi in active_ids.tolist():
+                cur = int(cur_way[int(bi)].item())
+                cand_full = self.get_succ_candidates(int(cur))
+                if int(cand_full.numel()) == 0:
+                    active[int(bi)] = False
+                    continue
+                cand = self._select_decode_candidates(
+                    way_embedder=way_embedder,
+                    cand_full=cand_full.to(device=device),
+                    dest_pos=route_cond["dest_pos"][int(bi) : int(bi) + 1],
+                    dest_way=int(dw[int(bi)].item()),
+                    max_candidates=max_candidates,
+                    candidate_policy=candidate_policy,
+                    include_dest_if_successor=include_dest_if_successor,
+                )
+                if int(cand.numel()) == 0:
+                    active[int(bi)] = False
+                    continue
+                cand_list.append(cand.to(dtype=torch.long, device=device))
+                keep_ids.append(int(bi))
+
+            if not keep_ids:
+                break
+
+            keep = torch.tensor(keep_ids, dtype=torch.long, device=device)
+            B2 = int(keep.numel())
+            Cmax = int(max(int(c.numel()) for c in cand_list))
+
+            cand_way = torch.zeros((B2, Cmax), dtype=torch.long, device=device)
+            cand_mask = torch.zeros((B2, Cmax), dtype=torch.bool, device=device)
+            for i, c in enumerate(cand_list):
+                n = int(c.numel())
+                cand_way[i, :n] = c
+                cand_mask[i, :n] = True
+
+            # Region constraint mask (same as greedy_decode_batched)
+            if region_paths is not None and region_ptr is not None and way_region is not None:
+                allow0 = torch.full((B2,), -1, dtype=torch.long, device=device)
+                allow1 = torch.full((B2,), -1, dtype=torch.long, device=device)
+                for i, bi in enumerate(keep_ids):
+                    cur = int(cur_way[int(bi)].item())
+                    cur_reg = int(way_region[int(cur)].item())
+                    rp = int(region_ptr[int(bi)])
+                    path = region_paths[int(bi)]
+                    while rp + 1 < int(len(path)) and int(cur_reg) == int(path[rp + 1]):
+                        rp += 1
+                    region_ptr[int(bi)] = int(rp)
+                    allow0[i] = int(path[rp]) if rp < int(len(path)) else int(cur_reg)
+                    allow1[i] = int(path[rp + 1]) if (rp + 1) < int(len(path)) else -1
+
+                cand_reg = way_region[cand_way]  # (B2,Cmax)
+                m = cand_mask & (cand_reg == allow0[:, None])
+                has1 = (allow1 >= 0)[:, None]
+                m = m | (cand_mask & has1 & (cand_reg == allow1[:, None]))
+                if mode == "relaxed" and region_adj is not None:
+                    allow0_safe = torch.where(allow0 >= 0, allow0, torch.zeros_like(allow0))
+                    allow1_safe = torch.where(allow1 >= 0, allow1, torch.zeros_like(allow1))
+                    neigh0 = region_adj[allow0_safe[:, None], cand_reg] & (allow0[:, None] >= 0)
+                    neigh1 = region_adj[allow1_safe[:, None], cand_reg] & (allow1[:, None] >= 0)
+                    m = m | (cand_mask & neigh0) | (cand_mask & neigh1)
+                dest = dw[keep]
+                m = m | (cand_mask & (cand_way == dest[:, None]))
+
+                row_has = m.any(dim=1)
+                if fallback == "stop":
+                    bad = torch.nonzero(~row_has, as_tuple=False).reshape(-1)
+                    for i in bad.tolist():
+                        active[int(keep_ids[int(i)])] = False
+
+                    good = torch.nonzero(row_has, as_tuple=False).reshape(-1)
+                    if int(good.numel()) == 0:
+                        break
+
+                    keep_ids = [keep_ids[int(i)] for i in good.tolist()]
+                    keep = keep[good]
+                    cand_way = cand_way[good]
+                    cand_mask = m[good]
+                    B2 = int(keep.numel())
+                    Cmax = int(cand_way.shape[1])
+                elif fallback == "dest_region":
+                    dest_reg = way_region[dw[keep]]  # (B2,)
+                    has_dest_reg = (dest_reg >= 0)[:, None]
+                    m_dest = cand_mask & has_dest_reg & (cand_reg == dest_reg[:, None])
+                    row_has_dest = m_dest.any(dim=1)
+                    m2 = torch.where(row_has[:, None], m, m_dest)
+                    row_has2 = row_has | row_has_dest
+                    cand_mask = torch.where(row_has2[:, None], m2, cand_mask)
+                else:
+                    cand_mask = torch.where(row_has[:, None], m, cand_mask)
+
+            # Anti-loop hard mask (vectorized)
+            k_hard = int(anti_loop_k)
+            if k_hard > 0:
+                before = cand_mask.clone()
+                recent_cpu = torch.full((B2, k_hard), -1, dtype=torch.long)
+                for i, bi in enumerate(keep_ids):
+                    tail = paths[int(bi)][-k_hard:]
+                    if tail:
+                        recent_cpu[i, : int(len(tail))] = torch.as_tensor(tail, dtype=torch.long)
+                recent = recent_cpu.to(device=device)
+                hit = (cand_way.unsqueeze(-1) == recent[:, None, :])
+                bad = (hit.any(dim=-1)) & cand_mask
+                cand_mask = cand_mask & (~bad)
+                empty = ~cand_mask.any(dim=1)
+                if bool(empty.any().item()):
+                    cand_mask[empty] = before[empty]
+
+            past_way_tensor: Optional[torch.Tensor] = None
+            past_mask_tensor: Optional[torch.Tensor] = None
+            if bool(self.use_past_context):
+                K = int(self.past_k)
+                past_way_tensor = torch.full((B2, K), -1, dtype=torch.long, device=device)
+                for i, bi in enumerate(keep_ids):
+                    path = paths[int(bi)]
+                    past_list = path[:-1][-K:] if len(path) > 1 else []
+                    off = K - len(past_list)
+                    for j, w in enumerate(past_list):
+                        past_way_tensor[i, off + j] = int(w)
+                past_mask_tensor = (past_way_tensor >= 0)
+
+            trans = {
+                "route_idx": torch.arange(B2, device=device, dtype=torch.long),
+                "cur_way": cur_way[keep],
+                "cand_way": cand_way,
+                "cand_mask": cand_mask,
+                "step": torch.full((B2,), int(step_idx), dtype=torch.long, device=device),
+            }
+            if past_way_tensor is not None:
+                trans["past_way"] = past_way_tensor
+                trans["past_mask"] = past_mask_tensor
+
+            logits = self.score_candidates(
+                way_embedder=way_embedder,
+                latent_tokens=latent_tokens[keep],
+                route_cond={k: v[keep] for k, v in route_cond.items()},
+                trans=trans,
+                cond_emb=cond_emb[keep],
+            )
+
+            alpha = float(guided_dest_alpha)
+            if abs(alpha) > 1e-12:
+                try:
+                    coord_scale = float(getattr(way_embedder, "coord_scale", self.coord_scale))
+                    dest = route_cond["dest_pos"][keep].to(dtype=torch.float32)
+                    if coord_scale > 0:
+                        dest = dest / coord_scale
+                    cand_geom, _tier, _hw = way_embedder._lookup(cand_way)
+                    cand_center = cand_geom[..., :2].to(dtype=torch.float32)
+                    dist = torch.norm(dest[:, None, :] - cand_center, dim=-1)  # (B2,C)
+                    logits = logits - alpha * dist
+                except Exception:
+                    pass
+
+            # Anti-loop soft penalty (vectorized)
+            pen = float(anti_loop_penalty)
+            k_pen = int(anti_loop_penalty_k)
+            if (pen > 0.0) and (k_pen > 0):
+                recent_cpu = torch.full((B2, k_pen), -1, dtype=torch.long)
+                for i, bi in enumerate(keep_ids):
+                    tail = paths[int(bi)][-k_pen:]
+                    if tail:
+                        recent_cpu[i, : int(len(tail))] = torch.as_tensor(tail, dtype=torch.long)
+                recent = recent_cpu.to(device=device)
+                hit = (cand_way.unsqueeze(-1) == recent[:, None, :])
+                bad = (hit.any(dim=-1)) & cand_mask
+                logits = logits - bad.to(dtype=logits.dtype) * pen
+
+            # Temperature sampling.
+            logits_t = logits / float(temp)
+            dist = torch.distributions.Categorical(logits=logits_t)
+            j = dist.sample()  # (B2,)
+            logp = F.log_softmax(logits_t, dim=-1)
+            lp = logp[torch.arange(B2, device=device), j]
+            ent = dist.entropy()
+
+            # Update accumulators.
+            logp_sum[keep] = logp_sum[keep] + lp
+            entropy_sum[keep] = entropy_sum[keep] + ent
+
+            nxt = cand_way[torch.arange(B2, device=device), j].to(dtype=torch.long)
+
+            for i, bi in enumerate(keep_ids):
+                w = int(nxt[int(i)].item())
+                paths[int(bi)].append(int(w))
+                cur_way[int(bi)] = int(w)
+                if int(w) == int(dw[int(bi)].item()):
+                    active[int(bi)] = False
+                if region_paths is not None and region_ptr is not None and way_region is not None:
+                    nr = int(way_region[int(w)].item())
+                    rp = int(region_ptr[int(bi)])
+                    path = region_paths[int(bi)]
+                    while rp + 1 < int(len(path)) and int(nr) == int(path[rp + 1]):
+                        rp += 1
+                    region_ptr[int(bi)] = int(rp)
+
+        return paths, logp_sum, entropy_sum
+
     @torch.no_grad()
     def beam_search_batched(
         self,

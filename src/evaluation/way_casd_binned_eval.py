@@ -692,6 +692,8 @@ def main() -> None:
             max_candidates=int(ae_cfg.get("max_candidates", 32)),
             max_len=int(ae_cfg.get("max_len", cfg.max_way_len)),
             coord_scale=float(ae_cfg.get("coord_scale", 1024.0)),
+            segment_size=int(ae_cfg.get("segment_size", 10)),
+            segment_n_latent=int(ae_cfg.get("segment_n_latent", 0)),
             decoder_use_dest_dist=bool(use_dest_dist),
             decoder_use_cross_attn=bool(use_cross_attn),
             decoder_n_cross_heads=int(ae_cfg.get("decoder_n_cross_heads", 4)),

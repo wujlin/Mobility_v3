@@ -59,6 +59,9 @@ class TrainCfg:
     decoder_past_k: int
     decoder_past_n_layers: int
     decoder_past_n_heads: int
+    # E8 (optional): multi-scale latent (segment tokens)
+    segment_size: int
+    segment_n_latent: int
 
 
 def _set_seed(seed: int) -> None:
@@ -181,6 +184,14 @@ def build_argparser() -> argparse.ArgumentParser:
     p.add_argument("--decoder_past_k", type=int, default=8, help="Number of past steps to include.")
     p.add_argument("--decoder_past_n_layers", type=int, default=2, help="Transformer layers for past encoder.")
     p.add_argument("--decoder_past_n_heads", type=int, default=4, help="Attention heads in past encoder.")
+    # E8: multi-scale latent (reserve last S latent tokens as segment summaries)
+    p.add_argument("--segment_size", type=int, default=10, help="Segment size for multi-scale latent (only used when --segment_n_latent>0).")
+    p.add_argument(
+        "--segment_n_latent",
+        type=int,
+        default=0,
+        help="E8: number of segment latent tokens to overwrite at the tail of z_enc (0=disable).",
+    )
 
     # Long-run training ergonomics
     p.add_argument("--resume_ckpt", type=Path, default=None, help="Optional: resume from ckpt_last.pt/ckpt_best.pt.")
@@ -232,6 +243,8 @@ def main() -> None:
         decoder_past_k=int(args.decoder_past_k),
         decoder_past_n_layers=int(args.decoder_past_n_layers),
         decoder_past_n_heads=int(args.decoder_past_n_heads),
+        segment_size=int(args.segment_size),
+        segment_n_latent=int(args.segment_n_latent),
     )
 
     _set_seed(cfg.seed)
@@ -295,6 +308,8 @@ def main() -> None:
             dropout=float(cfg.dropout),
             max_candidates=int(cfg.max_candidates),
             max_len=int(cfg.max_len),
+            segment_size=int(cfg.segment_size),
+            segment_n_latent=int(cfg.segment_n_latent),
             decoder_use_dest_dist=bool(cfg.decoder_use_dest_dist),
             decoder_use_cross_attn=bool(cfg.decoder_use_cross_attn),
             decoder_use_step_emb=bool(cfg.decoder_use_step_emb),

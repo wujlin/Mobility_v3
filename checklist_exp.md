@@ -1,175 +1,194 @@
-# Way-CASD 实验进展报告 (2026-02-04 更新)
+# Way-CASD 实验 Checklist
 
----
-
-## 📊 最新实验结果总览
-
-### 核心指标对比（Beam, [60,+) success）
-
-| 实验 | 配置 | [60,+) | hit_wall | loop | vs 基准 |
-|------|------|--------|----------|------|---------|
-| **E5 past16 Oracle** | past_k=16, GT latent | **85.3%** | 14.7% | 14.7% | Oracle上界 |
-| **E3 past24 Oracle** | past_k=24, GT latent | 55.9% | 44.1% | 41.2% | **-29.4pp** 🚨 |
-| **E1 Flow v3** | past16 + Flow(RegionSeq) | **50.0%** | 50.0% | 50.0% | **+5.9pp** ✅ |
-| E5 Flow-compat | 旧Flow + 新past16 AE | 44.1% | - | - | 上一轮最佳 |
-| E2 RL v2 (AR) | RL + Flow, AR约束 | 38.2% | 61.8% | 47.1% | **-11.8pp** ❌ |
-| E2 RL v2 (GT) | RL + Flow, GT约束 | 32.4% | 64.7% | 58.8% | **-17.6pp** ❌ |
-
----
-
-## 🔬 Non-trivial Insights
-
-### 1. E1 Flow v3 达到50%——Latent匹配的价值
-
-E1（past16 AE + 正确配置的Flow with RegionSeq xattn）达到**50.0%** [60,+)：
-- 比Flow-compat（44.1%）提升**+5.9pp**
-- 超过预设验收标准（≥45%）
-
-**洞见**：Flow与Decoder的latent分布匹配至关重要。旧Flow给新Decoder存在分布偏移，重训后匹配，效果更佳。
-
-### 2. past_k=24显著退步——Context Window存在甜点区 🚨
-
-past24 Oracle的[60,+)只有**55.9%**，远低于past16的**85.3%**（-29.4pp）。
-
-**分析**：
-- 更长的history窗口可能引入**无关噪声**（早期点与当前决策无关）
-- Transformer attention在更长序列上**稀释**，关键位置信号减弱
-- 24步context的组合空间更大，可能需要更深网络或更多数据
-
-**结论**：past_k=16是当前架构下的最优选择，**不建议进一步增加**。
-
-### 3. RL在GT约束下反而更差——Region引导的悖论 ⚠️
-
-| 约束 | [60,+) | 短桶[5,10) |
-|------|--------|-----------|
-| AR | 38.2% | 60.4% |
-| GT | 32.4% | 75.0% |
-
-GT在短桶更好，但**长桶更差**。
-
-**推测解释**：
-- 长程生成中一旦偏离GT region，后续GT约束变成**干扰而非引导**
-- RL的region mix训练让decoder学会在不确定时"保守前进"，AR下反而受益
-- 对长程生成，"模糊可调"的约束比"精确不容错"的约束**更鲁棒**
-
-### 4. RL当前设定无效——MLE仍是最优
-
-| 方法 | [60,+) | hit_wall | loop |
-|------|--------|----------|------|
-| E1 MLE | 50.0% | 50.0% | 50.0% |
-| E2 RL | 38.2% | 61.8% | 47.1% |
-
-RL让hit_wall恶化（+11.8pp），虽然loop略有改善（-2.9pp），但总体差11.8pp。
-
-**可能原因**：
-- Reward设计过于强调reach-dest而忽略path quality
-- Region mix引入额外不确定性，有限样本下难以收敛
-
-### 5. 城市差异显著——Columbus >> Detroit
-
-E1 per-city [60,+)：
-- Detroit: 40.9%
-- Columbus: **66.7%**（+25.8pp）
-
-**启示**：Columbus路网更规则，长程规划更易；论文应分城市报告。
-
----
-
-## 已验证的核心洞见（完整版）
-
-| 洞见 | Evidence | 结论 |
-|------|----------|------|
-| **past_k=16 有效** | Oracle [60,+): 76%→85.3% (+9pp) | ✅ 历史窗口是真瓶颈 |
-| **past_k=24 退步** | Oracle [60,+): 85.3%→55.9% (-29.4pp) | ❌ 存在甜点区，16是最优 |
-| **Flow重训有效** | [60,+): 44.1%→50.0% (+5.9pp) | ✅ Latent匹配重要 |
-| **K>4 无效** | K=6降到23.5%, K=8降到35.3% | ❌ K=4已是最优 |
-| **RL当前无效** | MLE 50% vs RL 38.2% (-11.8pp) | ❌ 需改进reward设计 |
-| **GT约束长程悖论** | GT 32.4% < AR 38.2% | ⚠️ 长程需要容错约束 |
-
----
-
-## 下一步实验建议（基于当前发现）
-
-### 🥇 方向1：攻克hit_wall（优先级最高）
-
-**问题**：E1的[60,+) hit_wall仍有50%，是主要瓶颈。
-
-**建议实验**：
-```bash
-# A) Guided Dest Alpha = 0.1~0.3
-python src/evaluation/way_casd_binned_eval.py \
-    --decode_guided_dest_alpha 0.2 \
-    --ae_ckpt W9 --flow_ckpt W11 ...
-
-# B) Past Context更深：n_layers=4
-# 需要重训AE：--decoder_past_n_layers=4（past_k保持16）
-
-# C) 候选扩展：decode_max_candidates=5
-python src/evaluation/way_casd_binned_eval.py \
-    --decode_max_candidates 5 \
-    --ae_ckpt W9 --flow_ckpt W11 ...
-```
-
-**预期**：hit_wall从50%降到35-40%，success提升到55-60%。
-
----
-
-### 🥈 方向2：RL Reward重设计
-
-**问题**：当前RL让hit_wall恶化（+11.8pp），reward设计有问题。
-
-**建议改进**：
-1. 增加`path_smoothness_reward`：惩罚急转弯
-2. 增加`wall_proximity_penalty`：接近max_len时惩罚
-3. 先在纯GT region下调通，再加region mix
-
-（实现提示：`src/training/train_way_casd_decoder_rl.py` 已支持 `--penalty_turn/--penalty_hit_wall/--penalty_wall/--wall_margin`，可用于快速验证 reward redesign。）
-
----
-
-### 🥉 方向3：分城市分析（论文价值）
-
-Columbus显著优于Detroit（66.7% vs 40.9%）。
-
-**建议分析**：
-1. 路网dead-end比例对比
-2. Region划分粒度差异
-3. 训练数据分布
-
-（实现提示：`src/evaluation/way_casd_city_data_audit.py` 已支持 `--way_regions_npz`，输出 dead_end_frac 与 region_size 分布。）
-
-**论文可作为：** "城市拓扑结构对长程路由生成的影响" 小节。
+> 目标：缩小 Oracle (85.3%) → Flow (50%) 的 35pp gap
+> 更新日期：2026-02-05
 
 ---
 
 ## 当前最佳配置
 
-| 组件 | 配置 | 来源 |
-|------|------|------|
-| **AE** | past_k=16, cand_query=True, len=160 | W9/E5 |
-| **Flow** | RegionSeq xattn, n_layers=6 | **W11 (新!)** |
-| **Decode** | beam=10, soft P=2.0, K=4 | E4 |
-| **Region** | AR, relaxed, dest_region fallback | 已验证 |
+```yaml
+AE: W9 (past_k=16, cand_query=True)
+Flow: W11 (RegionSeq xattn, n_layers=6)
+Decode: beam=10, soft P=2.0 K=4, maxcand=0
+Region: AR constraint, relaxed, dest_region fallback
+```
 
-**当前最佳 [60,+) success: 50.0%**（E1 Flow v3）
-
----
-
-## Checkpoints索引
-
-| 实验 | AE ckpt | Flow ckpt | Decoder ckpt |
-|------|---------|-----------|--------------|
-| E1 Flow v3 | W9 (past16) | **W11 (RegionSeq)** | same as AE |
-| E2 RL v2 | W12 (RL fine-tuned) | W11 | W12 |
-| E3 past24 | W13 (past24) | - | same as AE |
-| Baseline | W9 | W10 (旧) | same as AE |
+**当前性能**：
+| Metric | [60,+) Beam | Overall |
+|--------|------------|---------|
+| E1 Flow v3 | 50.0% | ~52% |
+| Oracle | 85.3% | ~92% |
+| **Gap** | **35.3pp** | **~40pp** |
 
 ---
 
-## 结论
+## 核心问题诊断
 
-1. **E1 Flow v3是当前最优配置**，[60,+) success=50.0%，比上轮+5.9pp
-2. **past_k=16是最优窗口**，24会显著退步（-29.4pp）
-3. **RL在当前设定下无效**（-11.8pp），需要redesign reward
-4. **GT约束长程反而不如AR**，说明长程需要容错机制
-5. **Columbus >> Detroit**（66.7% vs 40.9%），城市拓扑影响显著
+**关键发现**：短路线gap反而更大
+- [5,10): Oracle=100%, Flow=47.9%, Gap=52.1pp
+- [60,+): Oracle=85.3%, Flow=50.0%, Gap=35.3pp
+
+**结论**：问题不是"长路线更难"，而是 **Flow latent与GT latent存在系统性分布偏移**，Decoder对这种偏移不鲁棒。
+
+---
+
+## Phase E: Flow-Decoder Gap 攻坚
+
+### E1: Latent分布诊断 ⬜ 待执行
+**目标**：量化z_flow与z_gt的分布差异，验证假设
+
+**方法**：
+1. 对验证集的所有routes，分别获取：
+   - z_gt = AE.encode(route)
+   - z_flow = Flow.sample(condition)
+2. 计算统计指标：
+   - Per-sample MSE: ||z_flow - z_gt||²
+   - Per-token cosine similarity
+   - 按route_len分bin统计
+3. 可视化：t-SNE/PCA对比z_gt和z_flow分布
+
+**输出**：`_sync/wsa/pi_verify/E1_latent_diagnosis/`
+- `latent_stats.json`: MSE/cosine统计
+- `latent_tsne.png`: 可视化
+
+**预期**：
+- 如果z_flow和z_gt分布差异大 → 需要改进Flow
+- 如果z_flow和z_gt分布相近但decoder仍失败 → 需要Joint FT
+
+---
+
+### E2: Flow-Decoder Joint Fine-tuning ⬜ 待执行
+**目标**：让Decoder适应Flow生成的latent分布
+
+**方法**：
+```python
+# 核心思路：用Flow latent fine-tune decoder
+for batch in dataloader:
+    z_flow = flow.sample(route_cond)  # 生成latent
+    # Option A: Teacher forcing (GT next-token, 但用z_flow)
+    loss = decoder.compute_loss(z_enc=z_flow, way_seq=gt_seq)
+    # Option B: RL (让decoder在z_flow下学习到达dest)
+    loss = decoder_rl_loss(z_flow, batch)
+```
+
+**实验配置**：
+- 基于W9 AE + W11 Flow
+- Fine-tune decoder 10-20 epochs
+- 使用较小lr (1e-5) 防止灾难性遗忘
+
+**输出**：`_sync/wsa/pi_verify/E2_joint_finetune/`
+- `ckpt_joint.pt`: fine-tuned decoder
+- `binned_joint.json`: 评估结果
+
+**预期收益**：+10-15pp on [60,+)
+
+---
+
+### E3: CFG推理验证 ⬜ 可选
+**目标**：快速验证condition利用是否充分（成本低）
+
+**方法**：
+```python
+# 修改 LatentFlowMatching.sample()
+def sample_cfg(self, route_cond, cfg_scale=2.0):
+    # 训练时需要10%概率drop condition
+    v_uncond = self._v(z, t, empty_cond)
+    v_cond = self._v(z, t, route_cond)
+    v = v_uncond + cfg_scale * (v_cond - v_uncond)
+```
+
+**注意**：需要先重训Flow with condition dropout
+
+**预期收益**：+3-5pp（如果condition利用不充分）
+
+---
+
+## Phase D: 已完成实验总结
+
+### D1: Hit-Wall Sweep ✅
+| Config | [60,+) Beam | 结论 |
+|--------|------------|------|
+| alpha=0.0 (baseline) | 44.1% | baseline |
+| maxcand=0 | **47.1%** | **+3pp, 推荐长程** |
+| maxcand=5 | 41.2% | -2.9pp |
+| alpha=0.1/0.2/0.3 | 35.3% | 显著下降，不推荐 |
+
+**结论**：`decode_max_candidates=0` 对长程路线有正向作用
+
+### D2: RL Reward Redesign ✅
+- 新增penalties: turn=0.05, hit_wall=1.0, wall_prox=0.2, margin=20
+- [60,+) beam = 44.1% (与baseline持平)
+- **结论**：简单reward penalty无效，问题在latent质量
+
+### D3: City Audit ✅
+| City | n_routes | route_len p50 | route_len p90 |
+|------|----------|---------------|---------------|
+| Detroit | 1,394 | 35 | 60 |
+| Columbus | 3,628 | 22 | 50 |
+
+**结论**：Columbus路线显著更短，解释了per-city性能差异
+
+---
+
+## 放弃的实验方向
+
+| 实验 | 原因 |
+|------|------|
+| Latent Regularization | 治标。AE本身没问题（Oracle 85%），问题在Flow |
+| route_len_bin condition | 信息泄露。真实场景不知道目标长度 |
+| Curriculum Learning (短→长) | 方向错误。短路线gap反而更大，非复杂度问题 |
+| Multi-Scale Flow | 成本高。region_seq xattn已提供coarse信息 |
+
+---
+
+## 执行优先级
+
+```
+P0 (立即执行):
+  E1: Latent分布诊断 → 验证假设，指导后续方向
+  E2: Flow-Decoder Joint FT → 核心治本实验
+
+P1 (E2完成后):
+  根据E1/E2结果决定是否需要改进Flow本身
+
+P2 (可选):
+  E3: CFG推理 → 如果condition利用不充分
+```
+
+---
+
+## Partner执行指南
+
+### E1 执行步骤
+```bash
+# 1. 创建诊断脚本
+python src/evaluation/latent_diagnosis.py \
+  --ae_ckpt W9 \
+  --flow_ckpt W11 \
+  --n_routes 400 \
+  --output_dir _sync/wsa/pi_verify/E1_latent_diagnosis/
+
+# 2. 输出文件
+# - latent_stats.json: 统计指标
+# - latent_tsne.png: 可视化
+```
+
+### E2 执行步骤
+```bash
+# 1. Joint fine-tune
+python src/training/train_way_casd_decoder_joint.py \
+  --ae_ckpt W9 \
+  --flow_ckpt W11 \
+  --mode teacher_forcing \
+  --lr 1e-5 \
+  --n_epochs 20 \
+  --output_dir _sync/wsa/pi_verify/E2_joint_finetune/
+
+# 2. 评估
+python src/evaluation/way_casd_binned_eval.py \
+  --ae_ckpt E2_joint_finetune/ckpt_best.pt \
+  --flow_ckpt W11 \
+  --region_constraint ar \
+  ...
+```

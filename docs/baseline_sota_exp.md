@@ -204,18 +204,33 @@ eval: region_constraint=none
 
 ## 四、统一评估协议
 
-所有模型使用**完全相同的评估**：
+Baseline/SOTA 使用 `unified_binned_eval.py`（输出结构对齐 `way_casd_binned_eval.py`），Ours 继续用 `way_casd_binned_eval.py`：
 
 ```bash
-python src/evaluation/way_casd_binned_eval.py \
-  --model_type {baseline/sota/ours} \
-  --ckpt {model_ckpt} \
-  --n_routes 200 \
-  --min_hops 5 \
-  --max_way_len 160 \
-  --beam_size 10 \
-  --seed 0 \
-  --output {output_json}
+# Baseline/SOTA
+python -m src.evaluation.unified_binned_eval \
+  --method {shortest_path|rnn_ar|transformer_ar|gtg|difftraj} \
+  --ckpt {model_ckpt_if_needed} \
+  --way_routes_npz {WAY_ROUTES_NPZ} \
+  --way_graph_npz {WAY_GRAPH_NPZ} \
+  --way_features_npz {WAY_FEATS_NPZ} \
+  --n_routes 200 --min_hops 5 --max_way_len 160 --max_decode_len 160 \
+  --beam_size 10 --seed 0 \
+  --city_grid_meta 0={CITY0_META_JSON} --city_grid_meta 1={CITY1_META_JSON} \
+  --out_json {output_json}
+
+# Ours (Way-CASD)
+python -m src.evaluation.way_casd_binned_eval \
+  --way_routes_npz {WAY_ROUTES_NPZ} \
+  --way_graph_npz {WAY_GRAPH_NPZ} \
+  --way_features_npz {WAY_FEATS_NPZ} \
+  --ae_ckpt {AE_CKPT} \
+  --flow_ckpt {FLOW_CKPT} \
+  --latent_source flow \
+  --n_routes 200 --min_hops 5 --max_way_len 160 --max_decode_len 160 \
+  --beam_size 10 --seed 0 \
+  --city_grid_meta 0={CITY0_META_JSON} --city_grid_meta 1={CITY1_META_JSON} \
+  --out_json {output_json}
 ```
 
 **评估指标**：
@@ -272,14 +287,14 @@ A3: no latent        → 复用B3+region (0.5天)
 ```
 src/
   baselines/
-    shortest_path.py      # B1
     rnn_ar.py             # B2
     transformer_ar.py     # B3
   sota/
     gtg.py                # S1: GTG复现
     difftraj.py           # S2: DiffTraj复现
   evaluation/
-    unified_eval.py       # 统一评估接口
+    shortest_path_baseline.py  # B1（已有）
+    unified_binned_eval.py  # 统一评估接口（对齐 way_casd_binned_eval 输出）
 ```
 
 ---
@@ -288,36 +303,103 @@ src/
 
 ### B1: Shortest Path (最简单，先做)
 ```bash
-# 1. 实现
-# src/baselines/shortest_path.py (见上面的代码)
-
-# 2. 评估
-python src/evaluation/baseline_eval.py \
+# 无需训练：直接统一评估入口跑 shortest_path
+python -m src.evaluation.unified_binned_eval \
   --method shortest_path \
-  --way_graph_npz {path} \
-  --way_routes_npz {path} \
-  --output _sync/wsa/baselines/B1_shortest_path/results.json
+  --way_routes_npz {WAY_ROUTES_NPZ} \
+  --way_graph_npz {WAY_GRAPH_NPZ} \
+  --way_features_npz {WAY_FEATS_NPZ} \
+  --n_routes 200 --min_hops 5 --max_way_len 160 --max_decode_len 160 \
+  --beam_size 10 --seed 0 \
+  --city_grid_meta 0={CITY0_META_JSON} --city_grid_meta 1={CITY1_META_JSON} \
+  --out_json _sync/wsa/baselines/B1_shortest_path/results.json
 ```
 
 ### B2: RNN AR
 ```bash
 # 1. 训练
-python src/training/train_rnn_ar.py \
-  --way_routes_npz {path} \
-  --way_graph_npz {path} \
-  --way_features_npz {path} \
+python -m src.training.train_rnn_ar \
+  --way_routes_npz {WAY_ROUTES_NPZ} \
+  --way_graph_npz {WAY_GRAPH_NPZ} \
   --n_epochs 50 \
-  --output_dir _sync/wsa/baselines/B2_rnn_ar/
+  --out_dir _sync/wsa/baselines/B2_rnn_ar/
 
 # 2. 评估
-python src/evaluation/baseline_eval.py \
+python -m src.evaluation.unified_binned_eval \
   --method rnn_ar \
   --ckpt _sync/wsa/baselines/B2_rnn_ar/ckpt_best.pt \
-  ...
+  --way_routes_npz {WAY_ROUTES_NPZ} \
+  --way_graph_npz {WAY_GRAPH_NPZ} \
+  --way_features_npz {WAY_FEATS_NPZ} \
+  --n_routes 200 --min_hops 5 --max_way_len 160 --max_decode_len 160 \
+  --beam_size 10 --seed 0 \
+  --city_grid_meta 0={CITY0_META_JSON} --city_grid_meta 1={CITY1_META_JSON} \
+  --out_json _sync/wsa/baselines/B2_rnn_ar/results.json
+```
+
+### B3: Transformer AR
+```bash
+# 1. 训练
+python -m src.training.train_transformer_ar \
+  --way_routes_npz {WAY_ROUTES_NPZ} \
+  --way_graph_npz {WAY_GRAPH_NPZ} \
+  --n_epochs 50 \
+  --out_dir _sync/wsa/baselines/B3_transformer_ar/
+
+# 2. 评估
+python -m src.evaluation.unified_binned_eval \
+  --method transformer_ar \
+  --ckpt _sync/wsa/baselines/B3_transformer_ar/ckpt_best.pt \
+  --way_routes_npz {WAY_ROUTES_NPZ} \
+  --way_graph_npz {WAY_GRAPH_NPZ} \
+  --way_features_npz {WAY_FEATS_NPZ} \
+  --n_routes 200 --min_hops 5 --max_way_len 160 --max_decode_len 160 \
+  --beam_size 10 --seed 0 \
+  --city_grid_meta 0={CITY0_META_JSON} --city_grid_meta 1={CITY1_META_JSON} \
+  --out_json _sync/wsa/baselines/B3_transformer_ar/results.json
 ```
 
 ### S1: GTG
 ```bash
-# 需要先阅读原论文，复现核心算法
-# 关键：differentiable shortest path
+# 1. 训练（简化版：next-hop CE + learned edge cost）
+python -m src.training.train_gtg \
+  --way_routes_npz {WAY_ROUTES_NPZ} \
+  --way_graph_npz {WAY_GRAPH_NPZ} \
+  --n_epochs 50 \
+  --out_dir _sync/wsa/sota/S1_gtg/
+
+# 2. 评估（Dijkstra on learned cost）
+python -m src.evaluation.unified_binned_eval \
+  --method gtg \
+  --ckpt _sync/wsa/sota/S1_gtg/ckpt_best.pt \
+  --way_routes_npz {WAY_ROUTES_NPZ} \
+  --way_graph_npz {WAY_GRAPH_NPZ} \
+  --way_features_npz {WAY_FEATS_NPZ} \
+  --n_routes 200 --min_hops 5 --max_way_len 160 --max_decode_len 160 \
+  --beam_size 10 --seed 0 \
+  --city_grid_meta 0={CITY0_META_JSON} --city_grid_meta 1={CITY1_META_JSON} \
+  --out_json _sync/wsa/sota/S1_gtg/results.json
+```
+
+### S2: DiffTraj / Cardiff (简化)
+```bash
+# 1. 训练（在 way-center GPS 序列上做 diffusion）
+python -m src.training.train_difftraj \
+  --way_routes_npz {WAY_ROUTES_NPZ} \
+  --way_features_npz {WAY_FEATS_NPZ} \
+  --n_epochs 50 \
+  --out_dir _sync/wsa/sota/S2_difftraj/
+
+# 2. 评估（sample -> nearest-way snap；记录 disconnected_rate，并用阈值强制 fail）
+python -m src.evaluation.unified_binned_eval \
+  --method difftraj \
+  --ckpt _sync/wsa/sota/S2_difftraj/ckpt_best.pt \
+  --way_routes_npz {WAY_ROUTES_NPZ} \
+  --way_graph_npz {WAY_GRAPH_NPZ} \
+  --way_features_npz {WAY_FEATS_NPZ} \
+  --n_routes 200 --min_hops 5 --max_way_len 160 --max_decode_len 160 \
+  --beam_size 10 --seed 0 \
+  --difftraj_disconnected_fail 0.5 \
+  --city_grid_meta 0={CITY0_META_JSON} --city_grid_meta 1={CITY1_META_JSON} \
+  --out_json _sync/wsa/sota/S2_difftraj/results.json
 ```

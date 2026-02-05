@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
-from typing import Dict, List, Optional, Sequence, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 import torch
@@ -9,7 +9,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from src.models.way_casd.conditions import ConditionEncoder, ConditionEncoderCfg
-from src.utils.way_csr import build_candidate_row, slice_csr
+from src.utils.way_csr import slice_csr
 
 
 @dataclass(frozen=True)
@@ -241,4 +241,3 @@ class WayRNNAR(nn.Module):
 
     def ckpt_payload(self) -> Dict[str, object]:
         return {"cfg": asdict(self.cfg), "model_state_dict": self.state_dict_cpu()}
-

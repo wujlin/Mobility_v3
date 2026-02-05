@@ -149,9 +149,13 @@ def main() -> None:
     _require_file(Path(args.way_graph_npz))
     _require_file(Path(args.way_features_npz))
 
-    recs = _read_json(Path(args.per_route_json))
+    raw = _read_json(Path(args.per_route_json))
+    if isinstance(raw, dict) and isinstance(raw.get("per_route", None), list):
+        recs = raw["per_route"]
+    else:
+        recs = raw
     if not isinstance(recs, list):
-        raise SystemExit("[FATAL] per_route_json must be a JSON list (records).")
+        raise SystemExit("[FATAL] per_route_json must be a JSON list, or a dict with key 'per_route' as a list.")
 
     routes = load_way_routes_npz(Path(args.way_routes_npz))
     wg = np.load(str(args.way_graph_npz), allow_pickle=True)
@@ -361,4 +365,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

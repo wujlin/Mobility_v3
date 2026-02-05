@@ -2,236 +2,162 @@
 
 > 目标：为CascadeTraj论文构建清晰的corridor diversity叙事
 > 更新日期：2026-02-05
+> 状态：已审核，删除循环论证
 
 ---
 
-## 一、叙事主线（Problem → Insight → Method → Contribution）
+## 一、叙事主线（Problem → Hypothesis → Method → Validation）
 
-### 1. Problem: Route ≠ Shortest Path，但现有方法不知道"远离shortest path多少"
+### 1. Problem: Route ≠ Shortest Path
 
-**现实观察**：
-- 同一OD对，人们会选择多条不同的路线
-- 这些路线在空间上形成**若干"走廊"（corridors）**
-- 不同corridor反映不同的出行偏好（避堵、避风险、scenic route等）
+**可验证的观察**：
+- 同一OD对，人们选择多条不同的路线
+- 这些路线在空间上形成若干**走廊（corridors）**
+- 需要从数据验证：shortest path match rate是多少？
 
-**现有方法的缺陷**：
-- Shortest path：完全忽略corridor diversity
-- Learned cost + search (GTG)：只能学到"平均偏好"，输出单一路径
-- Diffusion in GPS space：生成多样性是"噪声多样性"而非"corridor多样性"
-- 纯AR序列生成：缺乏对corridor结构的建模
+**现有方法的局限**：
+- Shortest path / learned cost：输出单一路径
+- Diffusion in GPS space：多样性来源不明确（噪声？还是真正的route choice？）
 
-**核心问题**：
-> 如何生成**在corridor层面真正多样**的路线，而非仅在细节上抖动？
+### 2. Hypothesis（不是Insight）: 路线选择是层次化的
 
-### 2. Insight: Corridor = Coarse Structure, Route = Fine Execution
+**我们的建模假设**（需要验证，不是既定事实）：
+- 人的路线选择可能是层次化的：
+  1. 先选corridor（走北边还是南边？）
+  2. 再选具体route（哪条街道？）
 
-**关键洞见**：
-- 人的路线选择是**层次化**的：
-  1. **Corridor选择**（走高速还是走市区？走南边还是北边？）
-  2. **Route执行**（在选定corridor内，具体走哪些街道）
+**我们的proxy**：
+- 用region sequence近似corridor
+- **待验证**：region_seq是否是corridor的有效proxy？
 
-- 这种层次化结构在现有方法中**完全缺失**
-
-**我们的建模**：
-```
-Region Sequence ≈ Corridor (coarse)
-Way Sequence = Route (fine)
-```
-
-### 3. Method: Hierarchical Generation with Explicit Corridor Modeling
+### 3. Method: Region-Conditioned Generation
 
 **CascadeTraj架构**：
-1. **Corridor生成**：Region-level AR model预测corridor skeleton
-2. **Latent空间**：Flow Matching生成route latent（条件于corridor）
-3. **Route解码**：Graph-constrained AR decoder生成way sequence
+- Region AR：预测region sequence（corridor的proxy）
+- Flow Matching：生成route latent（条件于region）
+- AR Decoder：生成way sequence（graph约束）
 
-**为什么这样设计能捕捉corridor diversity？**
-- Region AR天然建模"选哪条走廊"
-- Flow Matching在**同一corridor内**生成多样的route latent
-- Decoder保证拓扑可行性
+### 4. Validation: 需要回答的问题
 
-### 4. Contribution: Corridor-Aware Metrics + Controllable Generation
+1. **Region是否是corridor的好proxy？**
+   - 方法：先用way sequence LCS聚类定义"GT corridor"
+   - 验证：同一GT corridor内的routes是否有相似的region_seq？
 
-**方法贡献**：
-- 首个显式建模corridor的route generation框架
-- Region hierarchy作为corridor的proxy
-
-**评估贡献**：
-- 提出corridor-aware evaluation metrics
-- 不仅看"路线是否正确"，还看"corridor分布是否正确"
-
-**应用贡献**：
-- 可控生成：指定corridor，生成该corridor内的多样路线
-- 流量估计：正确估计各corridor的流量份额
+2. **各方法的corridor分布是否与GT匹配？**
+   - 用独立定义的corridor（LCS聚类）评估所有方法
+   - 比较KL divergence
 
 ---
 
-## 二、Corridor Diversity 的量化定义
+## 二、Corridor的独立定义（避免循环论证）
 
-### 2.1 从文献中借鉴的框架
+### 关键原则
+> Corridor的定义**必须独立于**我们的region_seq，否则是循环论证
 
-**Corridor Diversity = Separation × Effective Number**
-
-| 维度 | 定义 | 文献来源 |
-|------|------|----------|
-| **Separation** | 不同corridor之间的距离 | APD (ML), CF/PS (transport) |
-| **Effective Number** | 有多少个真正不同的corridor | Entropy, k-paths (VLDB) |
-
-### 2.2 我们的可操作定义
+### 2.1 GT Corridor定义（基于way sequence）
 
 ```python
-# Step 1: 定义corridor
-corridor = cluster of routes sharing similar region_seq
+# Step 1: 对同一OD的所有GT routes，计算pairwise LCS similarity
+def lcs_similarity(route_a, route_b):
+    lcs_len = longest_common_subsequence(route_a, route_b)
+    return lcs_len / min(len(route_a), len(route_b))
 
-# Step 2: Separation (corridor间距离)
-separation = mean pairwise LCS distance between corridor prototypes
-
-# Step 3: Effective Number (均衡性)
-effective_k = exp(entropy of corridor traffic share)
-
-# Step 4: Combined metric
-corridor_diversity = separation × log(effective_k)
+# Step 2: 聚类得到corridors
+# 使用层次聚类或DBSCAN，threshold根据数据调整
+corridors = hierarchical_cluster(routes, similarity=lcs_similarity, threshold=0.5)
 ```
 
-### 2.3 为什么用LCS而非Hausdorff？
+### 2.2 验证Region是否是好的Corridor Proxy
 
-| 度量 | 优点 | 缺点 |
-|------|------|------|
-| Hausdorff | 不需要map matching | 对平行路/立交敏感 |
-| LCS (way seq) | 直接度量"走了哪条路" | 需要map matching |
-| **我们选择LCS** | 因为我们的模型直接在way sequence上生成 | |
+```python
+# 如果region_seq是好的corridor proxy，那么：
+# 同一corridor内的routes应该有相似的region_seq
 
----
-
-## 三、实验设计：证明Corridor Diversity
-
-### 3.1 RQ1: 现有方法有corridor diversity吗？
-
-**实验**：对比各方法在同一OD上生成K=10条路线
-
-| Method | Sample内APD | Corridor数 | Effective K |
-|--------|-------------|-----------|-------------|
-| Shortest Path | 0 | 1 | 1 |
-| GTG | 0 | 1 | 1 |
-| DiffTraj | ~high | ~1-2 | ~1-2 |
-| **CascadeTraj** | **high** | **3-5** | **3-4** |
-
-**预期结论**：只有CascadeTraj能生成真正不同的corridors
-
-### 3.2 RQ2: Corridor分布是否与GT匹配？
-
-**实验**：对比生成的corridor份额 vs GT数据中的corridor份额
-
-| Method | KL(gen || GT) | Corridor Coverage |
-|--------|---------------|-------------------|
-| DiffTraj | high | low |
-| **CascadeTraj** | **low** | **high** |
-
-### 3.3 RQ3: Corridor分布匹配度
-
-**实验**：对比生成的corridor份额分布 vs GT数据中的分布
-
-| Method | KL(gen || GT) | JS Divergence | Top-1 Corridor Match |
-|--------|---------------|---------------|---------------------|
-| Shortest Path | - | - | low |
-| DiffTraj | high | high | medium |
-| **CascadeTraj** | **low** | **low** | **high** |
-
-**预期结论**：CascadeTraj能自动生成与GT分布匹配的corridor，无需人为指定
+for corridor in gt_corridors:
+    region_seqs = [get_region_seq(route) for route in corridor.routes]
+    intra_corridor_region_similarity = mean_pairwise_similarity(region_seqs)
+    # 应该接近1.0
+```
 
 ---
 
-## 四、Introduction重写建议
+## 三、实验设计（去除预设结论）
 
-### 当前问题
-- "corridor"突然出现，没有铺垫
-- motivation是"previous works fail..."（防御式）
-- 没有数据支撑的claim
+### EXP1: Shortest Path Match Rate
+**问题**：GT数据中多少比例的路线与shortest path一致？
+**意义**：如果比例很低，证明问题non-trivial
 
-### 建议结构
+### EXP2: GT Corridor提取
+**问题**：同一OD的GT routes能聚类成多少个corridors？
+**方法**：LCS聚类
+**意义**：建立corridor diversity的ground truth
+
+### EXP3: Region作为Corridor Proxy的有效性
+**问题**：region_seq能否区分不同的GT corridors？
+**方法**：计算corridor内vs corridor间的region similarity
+**预期**：如果有效，intra-corridor similarity >> inter-corridor similarity
+
+### EXP4: 各方法的Corridor分布比较
+**问题**：各方法生成的routes的corridor分布与GT是否匹配？
+**方法**：
+1. 对每个OD，用GT corridors作为cluster centers
+2. 将生成的routes分配到最近的corridor
+3. 比较分布
+
+| Method | Corridor Coverage | KL(gen \|\| GT) |
+|--------|------------------|-----------------|
+| Shortest Path | ? | ? |
+| RNN AR | ? | ? |
+| DiffTraj | ? | ? |
+| CascadeTraj | ? | ? |
+
+---
+
+## 四、Introduction结构（修正版）
 
 ```
 P1: Route ≠ Shortest Path (data evidence)
-    - "In Detroit, only 23% of observed trips follow shortest path"
-    - "Same OD, multiple distinct corridors exist"
+    - "In Detroit, X% of observed trips deviate from shortest path"
+    - 具体数字来自EXP1
 
-P2: Why corridor matters
-    - Traffic planning needs corridor-level flow estimation
-    - Simulation needs corridor diversity for realism
+P2: Corridor matters for planning
+    - Traffic planning needs corridor-level flow
+    - Simulation needs corridor diversity
+
+P3: Current methods' limitation
+    - Single-output methods: cannot capture diversity
+    - Diffusion methods: diversity source unclear
     
-P3: Current methods fail to capture corridor
-    - Shortest path: single output
-    - Learned cost: single output (average preference)
-    - Diffusion: "noisy diversity" ≠ corridor diversity
+P4: Our hypothesis: Hierarchical route choice
+    - Corridor (coarse) + Route (fine)
+    - Region as corridor proxy（诚实说是hypothesis）
     
-P4: Our insight: Hierarchical decision
-    - Corridor choice (which main roads?)
-    - Route execution (which streets within corridor?)
+P5: CascadeTraj
+    - Region-conditioned hierarchical generation
     
-P5: Our method: CascadeTraj
-    - Region-level hierarchy models corridor
-    - Flow + AR decoder generates diverse routes
-    
-P6: Contributions (assertive)
-    - First corridor-aware route generation framework
-    - Novel corridor diversity metrics
-    - State-of-the-art on [60,+) route success rate
+P6: Contributions
+    - Hierarchical route generation framework
+    - Corridor-aware evaluation protocol
+    - Empirical validation on Detroit/Columbus
 ```
 
 ---
 
-## 五、Figure 1 建议（论文opening figure）
+## 五、Figure 1（需要真实数据）
 
-**一张图说清楚corridor diversity**：
+**展示corridor diversity的直观证据**：
+- 选一个OD，展示GT routes按corridor着色
+- 对比各方法的生成结果
 
-```
-[Left] GT routes from Detroit (same OD)
-       → 3 visible corridors (north, central, south)
-       → Color-coded by corridor
-
-[Middle] Existing methods
-       → Shortest path: 1 line
-       → GTG: 1 line (slightly different)
-       → DiffTraj: 10 lines but all in same corridor
-
-[Right] CascadeTraj (ours)
-       → 10 lines spanning all 3 corridors
-       → Correctly matches corridor distribution
-```
+**注意**：必须用EXP2的结果，不能人为画
 
 ---
 
-## 六、待验证的Claims（需要实验数据支撑）
+## 六、待完成的数据分析
 
-1. **"23% of trips follow shortest path"** → 需要从数据计算
-2. **"Existing methods collapse to 1-2 corridors"** → 需要baseline实验
-3. **"CascadeTraj correctly estimates corridor flow share"** → 需要KL实验
-
----
-
-## Partner执行指南
-
-### 数据分析任务
-```bash
-# 1. 计算shortest path match rate
-python src/evaluation/shortest_path_analysis.py \
-  --way_routes_npz ... \
-  --way_graph_npz ... \
-  --output corridor_analysis/shortest_match.json
-
-# 2. 提取GT corridor分布
-python src/evaluation/corridor_extraction.py \
-  --way_routes_npz ... \
-  --method lcs_cluster \
-  --n_clusters 5 \
-  --output corridor_analysis/gt_corridors.json
-```
-
-### Baseline corridor评估
-```bash
-# 对每个baseline，生成K=10 samples per OD，计算corridor metrics
-python src/evaluation/corridor_diversity_eval.py \
-  --method {shortest_path/gtg/difftraj/ours} \
-  --k_samples 10 \
-  --output corridor_analysis/{method}_corridor.json
-```
+| 任务 | 状态 | 负责 |
+|------|------|------|
+| EXP1: Shortest path match rate | ⬜ | Partner |
+| EXP2: GT corridor提取 (LCS聚类) | ⬜ | Partner |
+| EXP3: Region-corridor correspondence | ⬜ | Partner |
+| EXP4: 各方法corridor比较 | ⬜ 依赖baseline | Partner |

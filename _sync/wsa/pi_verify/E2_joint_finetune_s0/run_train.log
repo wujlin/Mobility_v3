@@ -1,0 +1,25 @@
+2026-02-05 09:10:49,643 - INFO - device=cuda
+2026-02-05 09:10:49,649 - INFO - routes: total=5022 train=4520 val=502 min_hops=5 max_way_len=160
+/home/jinlin/miniconda3/envs/dpl/lib/python3.11/site-packages/torch/nn/modules/transformer.py:392: UserWarning: enable_nested_tensor is True, but self.use_nested_tensor is False because encoder_layer.norm_first was True
+  warnings.warn(
+2026-02-05 09:10:58,078 - INFO - epoch=1 train_loss=0.392377 val_loss=0.334403 best=inf@0
+2026-02-05 09:11:05,331 - INFO - epoch=2 train_loss=0.296491 val_loss=0.284188 best=0.334403@1
+2026-02-05 09:11:12,592 - INFO - epoch=3 train_loss=0.257556 val_loss=0.253830 best=0.284188@2
+2026-02-05 09:11:19,878 - INFO - epoch=4 train_loss=0.239352 val_loss=0.239489 best=0.253830@3
+2026-02-05 09:11:27,407 - INFO - epoch=5 train_loss=0.231127 val_loss=0.231208 best=0.239489@4
+2026-02-05 09:11:35,019 - INFO - epoch=6 train_loss=0.225639 val_loss=0.229910 best=0.231208@5
+2026-02-05 09:11:42,707 - INFO - epoch=7 train_loss=0.220741 val_loss=0.225343 best=0.229910@6
+2026-02-05 09:11:50,453 - INFO - epoch=8 train_loss=0.215242 val_loss=0.224067 best=0.225343@7
+2026-02-05 09:11:58,312 - INFO - epoch=9 train_loss=0.212587 val_loss=0.217876 best=0.224067@8
+2026-02-05 09:12:06,149 - INFO - epoch=10 train_loss=0.211179 val_loss=0.217956 best=0.217876@9
+2026-02-05 09:12:14,106 - INFO - epoch=11 train_loss=0.207487 val_loss=0.217376 best=0.217876@9
+2026-02-05 09:12:22,192 - INFO - epoch=12 train_loss=0.204900 val_loss=0.218071 best=0.217376@11
+2026-02-05 09:12:30,192 - INFO - epoch=13 train_loss=0.203194 val_loss=0.216074 best=0.217376@11
+2026-02-05 09:12:38,330 - INFO - epoch=14 train_loss=0.201844 val_loss=0.211570 best=0.216074@13
+2026-02-05 09:12:46,470 - INFO - epoch=15 train_loss=0.199923 val_loss=0.212008 best=0.211570@14
+2026-02-05 09:12:54,572 - INFO - epoch=16 train_loss=0.199097 val_loss=0.208313 best=0.211570@14
+2026-02-05 09:13:02,817 - INFO - epoch=17 train_loss=0.197852 val_loss=0.206871 best=0.208313@16
+2026-02-05 09:13:10,997 - INFO - epoch=18 train_loss=0.195891 val_loss=0.208267 best=0.206871@17
+2026-02-05 09:13:19,224 - INFO - epoch=19 train_loss=0.195400 val_loss=0.207563 best=0.206871@17
+2026-02-05 09:13:27,515 - INFO - epoch=20 train_loss=0.194655 val_loss=0.205830 best=0.206871@17
+2026-02-05 09:13:27,545 - INFO - saved: _sync/wsa/pi_verify/E2_joint_finetune_s0/report.json

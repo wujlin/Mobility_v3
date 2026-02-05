@@ -221,7 +221,7 @@ class WayRNNAR(nn.Module):
                 topv, topi = torch.topk(logp, k=k, dim=-1)
                 for j in range(int(k)):
                     nxt = int(cand[0, int(topi[j])].item())
-                    new_beams.append((float(score + float(topv[j].item())), seq + [nxt], h2))
+                    new_beams.append((float(score + float(topv[j].item())), seq + [nxt], h2.clone()))
 
             new_beams.sort(key=lambda x: float(x[0]), reverse=True)
             beams = new_beams[: int(beam_size)]

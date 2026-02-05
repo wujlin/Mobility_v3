@@ -369,6 +369,7 @@ python -m src.training.train_gtg \
   --out_dir _sync/wsa/sota/S1_gtg/
 
 # 2. 评估（Dijkstra on learned cost）
+# 注：GTG 用 Dijkstra 做全局搜索，评估需 --decode_max_candidates 0（不限制邻居探索）
 python -m src.evaluation.unified_binned_eval \
   --method gtg \
   --ckpt _sync/wsa/sota/S1_gtg/ckpt_best.pt \
@@ -377,6 +378,7 @@ python -m src.evaluation.unified_binned_eval \
   --way_features_npz {WAY_FEATS_NPZ} \
   --n_routes 200 --min_hops 5 --max_way_len 160 --max_decode_len 160 \
   --beam_size 10 --seed 0 \
+  --decode_max_candidates 0 \
   --city_grid_meta 0={CITY0_META_JSON} --city_grid_meta 1={CITY1_META_JSON} \
   --out_json _sync/wsa/sota/S1_gtg/results.json
 ```

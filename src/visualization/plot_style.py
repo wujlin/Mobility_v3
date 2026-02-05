@@ -171,7 +171,7 @@ def add_panel_label(
     y: float = 1.0,
     dx: float = -42.0,
     dy: float = 4.0,
-    fontsize: float | None = None,
+    fontsize: float | str | None = None,
 ) -> mpl.text.Text:
     """
     在坐标轴左上角**外部**添加面板标签（a/b/c/d），并避免与 tick/title 冲突。
@@ -182,6 +182,9 @@ def add_panel_label(
       这样不会因为 y 轴 tick label 变长（如 1.00 / 12）而发生重叠
     """
 
+    # mpl.rcParams["axes.labelsize"] 可能是 "medium" 这类字符串；annotate 的 fontsize 支持 str/float。
+    _fs = fontsize if fontsize is not None else mpl.rcParams.get("axes.labelsize", 12.0)
+
     t = ax.annotate(
         str(label),
         xy=(x, y),
@@ -191,7 +194,7 @@ def add_panel_label(
         ha="left",
         va="top",
         fontweight="bold",
-        fontsize=fontsize or float(mpl.rcParams.get("axes.labelsize", 12.0)),
+        fontsize=_fs,
         color="black",
         annotation_clip=False,
     )

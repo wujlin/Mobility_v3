@@ -1,0 +1,47 @@
+2026-02-05 00:09:05,623 - INFO - device=cuda
+2026-02-05 00:09:05,629 - INFO - routes: total=5022 train=4520 val=502 min_hops=5 max_way_len=160
+/home/jinlin/miniconda3/envs/dpl/lib/python3.11/site-packages/torch/nn/modules/transformer.py:392: UserWarning: enable_nested_tensor is True, but self.use_nested_tensor is False because encoder_layer.norm_first was True
+  warnings.warn(
+2026-02-05 00:09:05,783 - INFO - trainable_params(decoder)=1984257
+2026-02-05 00:09:05,830 - INFO - loaded flow: cond_inject=xattn use_region_seq=True solver_steps=20
+2026-02-05 00:10:45,042 - INFO - epoch=1 step=20 loss=-2.9633 r=-0.0601 succ=0.312 dist=0.000 loop=0.438 ent=5.100
+2026-02-05 00:12:20,559 - INFO - epoch=1 step=40 loss=-1.6791 r=0.0083 succ=0.250 dist=0.000 loop=0.531 ent=8.044
+2026-02-05 00:13:51,550 - INFO - epoch=1 step=60 loss=-1.1873 r=0.1169 succ=0.281 dist=0.000 loop=0.375 ent=4.966
+2026-02-05 00:15:30,817 - INFO - epoch=1 step=80 loss=-7.3755 r=-0.1974 succ=0.219 dist=0.000 loop=0.531 ent=10.897
+2026-02-05 00:17:04,234 - INFO - epoch=1 step=100 loss=-6.1552 r=-0.0891 succ=0.312 dist=0.000 loop=0.438 ent=7.321
+2026-02-05 00:18:36,902 - INFO - epoch=1 step=120 loss=-5.7744 r=-0.3375 succ=0.219 dist=0.000 loop=0.688 ent=9.547
+2026-02-05 00:20:06,097 - INFO - epoch=1 step=140 loss=-1.3625 r=-0.0360 succ=0.250 dist=0.000 loop=0.594 ent=10.275
+2026-02-05 00:21:20,179 - INFO - epoch=1 train(loss=-5.1933, r=-0.1271, succ=0.228) val(loss=-5.2094, r=-0.1457, succ=0.220)
+2026-02-05 00:22:47,630 - INFO - epoch=2 step=20 loss=-2.3370 r=-0.0641 succ=0.188 dist=0.000 loop=0.469 ent=8.044
+2026-02-05 00:24:21,003 - INFO - epoch=2 step=40 loss=-0.8692 r=-0.0058 succ=0.250 dist=0.000 loop=0.469 ent=6.927
+2026-02-05 00:25:53,584 - INFO - epoch=2 step=60 loss=-2.0360 r=-0.0693 succ=0.219 dist=0.000 loop=0.594 ent=6.698
+2026-02-05 00:27:20,793 - INFO - epoch=2 step=80 loss=-5.7233 r=-0.1906 succ=0.156 dist=0.000 loop=0.562 ent=8.100
+2026-02-05 00:28:51,269 - INFO - epoch=2 step=100 loss=-6.0555 r=-0.2107 succ=0.156 dist=0.000 loop=0.469 ent=8.016
+2026-02-05 00:30:26,081 - INFO - epoch=2 step=120 loss=-4.8735 r=-0.0988 succ=0.250 dist=0.000 loop=0.531 ent=9.257
+2026-02-05 00:31:55,015 - INFO - epoch=2 step=140 loss=-5.1787 r=-0.2869 succ=0.219 dist=0.000 loop=0.562 ent=9.716
+2026-02-05 00:32:59,046 - INFO - epoch=2 train(loss=-4.3663, r=-0.0707, succ=0.245) val(loss=-4.5881, r=-0.0341, succ=0.245)
+2026-02-05 00:34:27,982 - INFO - epoch=3 step=20 loss=-4.1358 r=-0.1789 succ=0.125 dist=0.000 loop=0.469 ent=9.515
+2026-02-05 00:35:57,165 - INFO - epoch=3 step=40 loss=-8.3266 r=-0.1888 succ=0.188 dist=0.000 loop=0.594 ent=11.117
+2026-02-05 00:37:26,392 - INFO - epoch=3 step=60 loss=-4.9446 r=0.0860 succ=0.406 dist=0.000 loop=0.469 ent=7.293
+2026-02-05 00:38:59,111 - INFO - epoch=3 step=80 loss=-3.3982 r=-0.1648 succ=0.156 dist=0.000 loop=0.562 ent=7.150
+2026-02-05 00:40:24,214 - INFO - epoch=3 step=100 loss=0.8157 r=0.2674 succ=0.438 dist=0.000 loop=0.344 ent=6.667
+2026-02-05 00:41:50,628 - INFO - epoch=3 step=120 loss=-0.7635 r=0.0923 succ=0.312 dist=0.000 loop=0.531 ent=6.173
+2026-02-05 00:43:18,322 - INFO - epoch=3 step=140 loss=-3.1846 r=-0.1661 succ=0.156 dist=0.000 loop=0.469 ent=6.302
+2026-02-05 00:44:24,355 - INFO - epoch=3 train(loss=-4.3169, r=-0.0529, succ=0.252) val(loss=-3.9804, r=-0.0312, succ=0.256)
+2026-02-05 00:45:58,895 - INFO - epoch=4 step=20 loss=-10.1889 r=-0.0197 succ=0.344 dist=0.000 loop=0.438 ent=12.201
+2026-02-05 00:47:27,930 - INFO - epoch=4 step=40 loss=-4.3741 r=-0.2497 succ=0.188 dist=0.000 loop=0.531 ent=7.140
+2026-02-05 00:48:59,599 - INFO - epoch=4 step=60 loss=-6.4698 r=-0.0385 succ=0.344 dist=0.000 loop=0.500 ent=9.703
+2026-02-05 00:50:25,075 - INFO - epoch=4 step=80 loss=-7.2582 r=-0.1645 succ=0.219 dist=0.000 loop=0.594 ent=11.808
+2026-02-05 00:51:57,647 - INFO - epoch=4 step=100 loss=-7.2594 r=0.0470 succ=0.375 dist=0.000 loop=0.656 ent=11.293
+2026-02-05 00:52:37,066 - INFO - epoch=4 step=120 loss=-0.3349 r=0.1901 succ=0.375 dist=0.000 loop=0.469 ent=6.218
+2026-02-05 00:53:03,786 - INFO - epoch=4 step=140 loss=-5.8965 r=-0.0874 succ=0.188 dist=0.000 loop=0.406 ent=7.623
+2026-02-05 00:53:19,720 - INFO - epoch=4 train(loss=-4.7733, r=-0.0719, succ=0.243) val(loss=-4.1705, r=-0.0408, succ=0.240)
+2026-02-05 00:53:46,645 - INFO - epoch=5 step=20 loss=-4.1865 r=-0.1058 succ=0.219 dist=0.000 loop=0.375 ent=7.265
+2026-02-05 00:54:13,224 - INFO - epoch=5 step=40 loss=-4.8111 r=-0.1185 succ=0.219 dist=0.000 loop=0.656 ent=10.236
+2026-02-05 00:54:39,740 - INFO - epoch=5 step=60 loss=-0.9363 r=0.0946 succ=0.281 dist=0.000 loop=0.406 ent=5.977
+2026-02-05 00:55:06,840 - INFO - epoch=5 step=80 loss=-3.7080 r=-0.0488 succ=0.219 dist=0.000 loop=0.344 ent=6.671
+2026-02-05 00:55:34,474 - INFO - epoch=5 step=100 loss=-2.3925 r=0.0890 succ=0.344 dist=0.000 loop=0.406 ent=5.229
+2026-02-05 00:56:01,432 - INFO - epoch=5 step=120 loss=-2.7741 r=-0.0497 succ=0.156 dist=0.000 loop=0.344 ent=5.336
+2026-02-05 00:56:28,538 - INFO - epoch=5 step=140 loss=-5.9061 r=-0.0734 succ=0.250 dist=0.000 loop=0.344 ent=9.139
+2026-02-05 00:56:44,730 - INFO - epoch=5 train(loss=-4.5604, r=-0.0404, succ=0.252) val(loss=-4.5781, r=-0.0097, succ=0.273)
+2026-02-05 00:56:44,822 - INFO - saved: /home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD1_waydata_rustbelt_seed0_strict_v1/W14_train_decoder_rl_reward_gt_s0/report.json

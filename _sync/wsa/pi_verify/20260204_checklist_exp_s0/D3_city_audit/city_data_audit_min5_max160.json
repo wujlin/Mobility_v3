@@ -1,0 +1,358 @@
+{
+  "ok": true,
+  "task": "way_casd_city_data_audit",
+  "created_at": "2026-02-05T00:10:11.315477+08:00",
+  "cfg": {
+    "seed": 0,
+    "val_ratio": 0.1,
+    "min_hops": 5,
+    "max_way_len": 160
+  },
+  "inputs": {
+    "way_routes_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD1_waydata_rustbelt_seed0_strict_v1/W5_way_routes_strict/way_routes_strict_masklen0.npz",
+    "way_graph_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD1_waydata_rustbelt_seed0_strict_v1/W3_way_graph_strict/way_graph.npz",
+    "way_regions_npz": "/home/jinlin/projects/Mobility_v3/_sync/wsa/pi_verify/20260201_min5_candq1_past8_len160_s0/regions_louvain_res1p0_v1/way_regions_louvain_per_city_res1p0_seed0.npz"
+  },
+  "n_cities": 2,
+  "splits": {
+    "all": {
+      "n_routes": 5022,
+      "by_city": {
+        "0": {
+          "n_routes": 1394,
+          "route_len": {
+            "p50": 35,
+            "p90": 60,
+            "max": 132,
+            "quantiles": {
+              "p00": 6,
+              "p50": 35,
+              "p90": 60,
+              "p95": 65,
+              "p99": 81,
+              "p100": 132
+            }
+          },
+          "ways_used": 7931,
+          "outdeg": {
+            "p50": 1,
+            "p90": 2,
+            "max": 10,
+            "quantiles": {
+              "p00": 0,
+              "p50": 1,
+              "p90": 2,
+              "p95": 2,
+              "p99": 3,
+              "p100": 10
+            },
+            "dead_end_frac": 0.017526163157231118,
+            "frac_gt2": 0.04703063926364897,
+            "frac_gt8": 0.00012608750472828143,
+            "frac_gt32": 0.0
+          },
+          "tokens": {
+            "n_tokens": 49782,
+            "tokens_per_route_mean": 35.7116212338594
+          },
+          "regions": {
+            "n_regions": 75,
+            "region_size_ways": {
+              "p50": 107,
+              "p90": 157,
+              "max": 224,
+              "quantiles": {
+                "p00": 6,
+                "p50": 107,
+                "p90": 157,
+                "p95": 177,
+                "p99": 222,
+                "p100": 224
+              }
+            }
+          }
+        },
+        "1": {
+          "n_routes": 3628,
+          "route_len": {
+            "p50": 22,
+            "p90": 50,
+            "max": 91,
+            "quantiles": {
+              "p00": 6,
+              "p50": 22,
+              "p90": 50,
+              "p95": 60,
+              "p99": 73,
+              "p100": 91
+            }
+          },
+          "ways_used": 6981,
+          "outdeg": {
+            "p50": 1,
+            "p90": 2,
+            "max": 13,
+            "quantiles": {
+              "p00": 0,
+              "p50": 1,
+              "p90": 2,
+              "p95": 3,
+              "p99": 5,
+              "p100": 13
+            },
+            "dead_end_frac": 0.02965191233347658,
+            "frac_gt2": 0.09482882108580433,
+            "frac_gt8": 0.00028649190660363845,
+            "frac_gt32": 0.0
+          },
+          "tokens": {
+            "n_tokens": 93770,
+            "tokens_per_route_mean": 25.84619625137817
+          },
+          "regions": {
+            "n_regions": 72,
+            "region_size_ways": {
+              "p50": 97,
+              "p90": 156,
+              "max": 203,
+              "quantiles": {
+                "p00": 5,
+                "p50": 97,
+                "p90": 156,
+                "p95": 176,
+                "p99": 190,
+                "p100": 203
+              }
+            }
+          }
+        }
+      }
+    },
+    "train": {
+      "n_routes": 4520,
+      "by_city": {
+        "0": {
+          "n_routes": 1256,
+          "route_len": {
+            "p50": 35,
+            "p90": 60,
+            "max": 132,
+            "quantiles": {
+              "p00": 6,
+              "p50": 35,
+              "p90": 60,
+              "p95": 65,
+              "p99": 82,
+              "p100": 132
+            }
+          },
+          "ways_used": 7617,
+          "outdeg": {
+            "p50": 1,
+            "p90": 2,
+            "max": 10,
+            "quantiles": {
+              "p00": 0,
+              "p50": 1,
+              "p90": 2,
+              "p95": 2,
+              "p99": 3,
+              "p100": 10
+            },
+            "dead_end_frac": 0.017198372062491793,
+            "frac_gt2": 0.04896941052907969,
+            "frac_gt8": 0.0001312852829197847,
+            "frac_gt32": 0.0
+          },
+          "tokens": {
+            "n_tokens": 45017,
+            "tokens_per_route_mean": 35.84156050955414
+          },
+          "regions": {
+            "n_regions": 75,
+            "region_size_ways": {
+              "p50": 98,
+              "p90": 149,
+              "max": 224,
+              "quantiles": {
+                "p00": 6,
+                "p50": 98,
+                "p90": 149,
+                "p95": 169,
+                "p99": 220,
+                "p100": 224
+              }
+            }
+          }
+        },
+        "1": {
+          "n_routes": 3264,
+          "route_len": {
+            "p50": 22,
+            "p90": 50,
+            "max": 91,
+            "quantiles": {
+              "p00": 6,
+              "p50": 22,
+              "p90": 50,
+              "p95": 61,
+              "p99": 73,
+              "p100": 91
+            }
+          },
+          "ways_used": 6777,
+          "outdeg": {
+            "p50": 1,
+            "p90": 2,
+            "max": 13,
+            "quantiles": {
+              "p00": 0,
+              "p50": 1,
+              "p90": 2,
+              "p95": 3,
+              "p99": 5,
+              "p100": 13
+            },
+            "dead_end_frac": 0.027888446215139442,
+            "frac_gt2": 0.09738822487826472,
+            "frac_gt8": 0.00029511583296443856,
+            "frac_gt32": 0.0
+          },
+          "tokens": {
+            "n_tokens": 84161,
+            "tokens_per_route_mean": 25.784620098039216
+          },
+          "regions": {
+            "n_regions": 72,
+            "region_size_ways": {
+              "p50": 95,
+              "p90": 155,
+              "max": 197,
+              "quantiles": {
+                "p00": 5,
+                "p50": 95,
+                "p90": 155,
+                "p95": 169,
+                "p99": 187,
+                "p100": 197
+              }
+            }
+          }
+        }
+      }
+    },
+    "val": {
+      "n_routes": 502,
+      "by_city": {
+        "0": {
+          "n_routes": 138,
+          "route_len": {
+            "p50": 36,
+            "p90": 57,
+            "max": 79,
+            "quantiles": {
+              "p00": 6,
+              "p50": 36,
+              "p90": 57,
+              "p95": 61,
+              "p99": 75,
+              "p100": 79
+            }
+          },
+          "ways_used": 2543,
+          "outdeg": {
+            "p50": 1,
+            "p90": 2,
+            "max": 10,
+            "quantiles": {
+              "p00": 0,
+              "p50": 1,
+              "p90": 2,
+              "p95": 3,
+              "p99": 4,
+              "p100": 10
+            },
+            "dead_end_frac": 0.008651199370821865,
+            "frac_gt2": 0.08769170271333071,
+            "frac_gt8": 0.00039323633503735744,
+            "frac_gt32": 0.0
+          },
+          "tokens": {
+            "n_tokens": 4765,
+            "tokens_per_route_mean": 34.528985507246375
+          },
+          "regions": {
+            "n_regions": 64,
+            "region_size_ways": {
+              "p50": 38,
+              "p90": 72,
+              "max": 81,
+              "quantiles": {
+                "p00": 1,
+                "p50": 38,
+                "p90": 72,
+                "p95": 78,
+                "p99": 81,
+                "p100": 81
+              }
+            }
+          }
+        },
+        "1": {
+          "n_routes": 364,
+          "route_len": {
+            "p50": 23,
+            "p90": 50,
+            "max": 75,
+            "quantiles": {
+              "p00": 6,
+              "p50": 23,
+              "p90": 50,
+              "p95": 59,
+              "p99": 73,
+              "p100": 75
+            }
+          },
+          "ways_used": 2794,
+          "outdeg": {
+            "p50": 1,
+            "p90": 3,
+            "max": 13,
+            "quantiles": {
+              "p00": 0,
+              "p50": 1,
+              "p90": 3,
+              "p95": 4,
+              "p99": 5,
+              "p100": 13
+            },
+            "dead_end_frac": 0.01145311381531854,
+            "frac_gt2": 0.14065855404438082,
+            "frac_gt8": 0.0007158196134574087,
+            "frac_gt32": 0.0
+          },
+          "tokens": {
+            "n_tokens": 9609,
+            "tokens_per_route_mean": 26.39835164835165
+          },
+          "regions": {
+            "n_regions": 63,
+            "region_size_ways": {
+              "p50": 42,
+              "p90": 81,
+              "max": 115,
+              "quantiles": {
+                "p00": 4,
+                "p50": 42,
+                "p90": 81,
+                "p95": 88,
+                "p99": 106,
+                "p100": 115
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

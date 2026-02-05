@@ -1,0 +1,9 @@
+Traceback (most recent call last):
+  File "/home/jinlin/projects/Mobility_v3/tools/waycasd_analyze_hit_wall_spatial.py", line 367, in <module>
+    main()
+  File "/home/jinlin/projects/Mobility_v3/tools/waycasd_analyze_hit_wall_spatial.py", line 335, in main
+    add_panel_label(ax_start, panels[(int(city), 0)])
+  File "/home/jinlin/projects/Mobility_v3/src/visualization/plot_style.py", line 194, in add_panel_label
+    fontsize=fontsize or float(mpl.rcParams.get("axes.labelsize", 12.0)),
+                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ValueError: could not convert string to float: 'medium'

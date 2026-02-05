@@ -40,6 +40,42 @@ def _require_file(path: Path) -> None:
         raise SystemExit(f"[FATAL] not a file: {path}")
 
 
+def _per_route_to_oracle_decode_like(*, rep: dict, decode_key: str) -> dict:
+    """
+    Convert `src.evaluation.way_casd_binned_eval --out_per_route_json` output into a
+    minimal oracle-decode-like report so we can reuse the macro plotting logic.
+    """
+
+    per_route = rep.get("per_route", []) or []
+    if not isinstance(per_route, list):
+        raise ValueError("rep.per_route must be a list")
+
+    per_city: Dict[int, Dict[str, Any]] = {}
+    for rec in per_route:
+        if not isinstance(rec, dict):
+            continue
+        city = rec.get("city", None)
+        rid = rec.get("route_id", None)
+        dec = rec.get(str(decode_key), None)
+        if city is None or rid is None or not isinstance(dec, dict):
+            continue
+        city_i = int(city)
+        rid_i = int(rid)
+        ent = per_city.setdefault(city_i, {"city": city_i, "success_route_ids": [], "failures": []})
+        if bool(dec.get("success", False)):
+            ent["success_route_ids"].append(rid_i)
+        else:
+            ent["failures"].append({"route_id": rid_i})
+
+    return {
+        "ok": True,
+        "task": "oracle_decode_like_from_per_route",
+        "created_at": datetime.now(tz=TZ_SHANGHAI).isoformat(),
+        "inputs": rep.get("inputs") or {},
+        "per_city": [per_city[k] for k in sorted(per_city.keys())],
+    }
+
+
 def _build_city_index(rep: dict) -> Dict[int, Dict[str, Any]]:
     out: Dict[int, Dict[str, Any]] = {}
     for c in rep.get("per_city", []) or []:
@@ -97,6 +133,12 @@ def build_argparser() -> argparse.ArgumentParser:
     p.add_argument("--style", type=str, choices=["paper"], default="paper")
     p.add_argument("--greedy_json", type=Path, default=None)
     p.add_argument("--beam10_json", type=Path, default=None)
+    p.add_argument(
+        "--per_route_json",
+        type=Path,
+        default=None,
+        help="Optional: per-route json from way_casd_binned_eval.py (--out_per_route_json). If provided, will be used as input (greedy/beam extracted).",
+    )
     p.add_argument("--way_routes_npz", type=Path, default=None)
     p.add_argument("--way_features_npz", type=Path, default=None)
     p.add_argument("--city_name", type=str, nargs="*", default=["0:Detroit", "1:Columbus"])
@@ -111,12 +153,44 @@ def main() -> None:
     args = build_argparser().parse_args()
     eval_dir = Path(args.eval_dir)
 
+    per_route_json = Path(args.per_route_json) if args.per_route_json is not None else None
     greedy_json = Path(args.greedy_json) if args.greedy_json is not None else (eval_dir / "oracle_decode_greedy_n200.json")
     beam10_json = Path(args.beam10_json) if args.beam10_json is not None else (eval_dir / "oracle_decode_beam10_n200.json")
-    _require_file(greedy_json)
-    _require_file(beam10_json)
-    greedy_rep = _read_json(greedy_json)
-    beam10_rep = _read_json(beam10_json)
+
+    if per_route_json is not None:
+        _require_file(per_route_json)
+        raw = _read_json(per_route_json)
+        if isinstance(raw, list):
+            raw = {"per_route": raw}
+        if not isinstance(raw, dict):
+            raise SystemExit(f"[FATAL] bad per_route_json type: {type(raw)} (expect dict or list)")
+        greedy_rep = _per_route_to_oracle_decode_like(rep=raw, decode_key="greedy")
+        beam10_rep = _per_route_to_oracle_decode_like(rep=raw, decode_key="beam")
+        greedy_json = per_route_json
+        beam10_json = per_route_json
+    elif greedy_json.exists() and beam10_json.exists():
+        _require_file(greedy_json)
+        _require_file(beam10_json)
+        greedy_rep = _read_json(greedy_json)
+        beam10_rep = _read_json(beam10_json)
+    else:
+        cands = sorted(eval_dir.glob("per_route_*.json"))
+        if not cands:
+            raise SystemExit(
+                "[FATAL] eval_dir must contain oracle_decode_greedy/beam10 json OR a per_route_*.json "
+                f"(got: {eval_dir})"
+            )
+        per_route_json = cands[0]
+        _require_file(per_route_json)
+        raw = _read_json(per_route_json)
+        if isinstance(raw, list):
+            raw = {"per_route": raw}
+        if not isinstance(raw, dict):
+            raise SystemExit(f"[FATAL] bad per_route_json type: {type(raw)} (expect dict or list)")
+        greedy_rep = _per_route_to_oracle_decode_like(rep=raw, decode_key="greedy")
+        beam10_rep = _per_route_to_oracle_decode_like(rep=raw, decode_key="beam")
+        greedy_json = per_route_json
+        beam10_json = per_route_json
 
     inputs = greedy_rep.get("inputs") or {}
     way_routes_npz = Path(args.way_routes_npz) if args.way_routes_npz is not None else Path(inputs["way_routes_npz"])

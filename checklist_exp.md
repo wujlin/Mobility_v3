@@ -50,7 +50,7 @@ Region: AR constraint, relaxed, dest_region fallback
 
 **输出**：`_sync/wsa/pi_verify/E1_latent_diagnosis/`
 - `latent_stats.json`: MSE/cosine统计
-- `latent_tsne.png`: 可视化
+- `latent_pca.png`: 可视化（PCA，避免额外依赖）
 
 **预期**：
 - 如果z_flow和z_gt分布差异大 → 需要改进Flow
@@ -129,6 +129,17 @@ def sample_cfg(self, route_cond, cfg_scale=2.0):
 
 **结论**：Columbus路线显著更短，解释了per-city性能差异
 
+### D4: [40,60) hit_wall 深挖（空间模式）⬜ 待执行
+**目标**：回答 hit_wall 是否集中在特定空间区域/高出度交叉口（outdegree proxy）
+
+**方法**：
+1) 先用 `way_casd_binned_eval.py` 生成 `per_route.json`（务必 `--dump_way_seqs`）
+2) 再运行空间审计脚本 `tools/waycasd_analyze_hit_wall_spatial.py`
+
+**输出**：`_sync/wsa/pi_verify/D4_hit_wall_spatial/`
+- `hit_wall_spatial_audit.json`
+- `hit_wall_spatial.png`
+
 ---
 
 ## 放弃的实验方向
@@ -162,33 +173,91 @@ P2 (可选):
 
 ### E1 执行步骤
 ```bash
-# 1. 创建诊断脚本
-python src/evaluation/latent_diagnosis.py \
-  --ae_ckpt W9 \
-  --flow_ckpt W11 \
-  --n_routes 400 \
-  --output_dir _sync/wsa/pi_verify/E1_latent_diagnosis/
+# 0) 约定：提前 export 这些变量（示例）
+# RAW_ROOT=...; WAY_ROUTES_NPZ=...; WAY_GRAPH_NPZ=...; WAY_FEATS_NPZ=...
+# AE_CKPT=...; FLOW_CKPT=...; WAY_REGIONS_NPZ=...
 
-# 2. 输出文件
-# - latent_stats.json: 统计指标
-# - latent_tsne.png: 可视化
+# 1) E1: latent mismatch 诊断（Flow 若 use_region_seq，则必须传 --way_regions_npz）
+PYTHONUNBUFFERED=1 python -u -m src.evaluation.latent_diagnosis \
+  --way_routes_npz "$WAY_ROUTES_NPZ" \
+  --way_graph_npz "$WAY_GRAPH_NPZ" \
+  --way_features_npz "$WAY_FEATS_NPZ" \
+  --ae_ckpt "$AE_CKPT" \
+  --flow_ckpt "$FLOW_CKPT" \
+  --way_regions_npz "$WAY_REGIONS_NPZ" \
+  --out_dir "_sync/wsa/pi_verify/E1_latent_diagnosis_s0" \
+  --n_routes 200 --min_hops 5 --max_way_len 160 \
+  --batch_size 64 \
+  --device cuda --seed 0 \
+  |& tee "_sync/wsa/pi_verify/E1_latent_diagnosis_s0/run.log"
+
+# 2) 输出文件
+# - latent_stats.json / latent_pairs.npz / latent_pca.png
 ```
 
 ### E2 执行步骤
 ```bash
-# 1. Joint fine-tune
-python src/training/train_way_casd_decoder_joint.py \
-  --ae_ckpt W9 \
-  --flow_ckpt W11 \
-  --mode teacher_forcing \
-  --lr 1e-5 \
-  --n_epochs 20 \
-  --output_dir _sync/wsa/pi_verify/E2_joint_finetune/
+# 1) Joint fine-tune（只训 decoder.*，用 z_flow 做 latent tokens，teacher forcing CE）
+PYTHONUNBUFFERED=1 python -u -m src.training.train_way_casd_decoder_joint \
+  --way_routes_npz "$WAY_ROUTES_NPZ" \
+  --way_graph_npz "$WAY_GRAPH_NPZ" \
+  --way_features_npz "$WAY_FEATS_NPZ" \
+  --ae_ckpt "$AE_CKPT" \
+  --flow_ckpt "$FLOW_CKPT" \
+  --way_regions_npz "$WAY_REGIONS_NPZ" \
+  --out_dir "_sync/wsa/pi_verify/E2_joint_finetune_s0" \
+  --min_hops 5 --max_way_len 160 \
+  --batch_size 64 --num_workers 16 \
+  --n_epochs 20 --lr 1e-5 --weight_decay 0.0 --val_ratio 0.1 \
+  --device cuda --seed 0 \
+  |& tee "_sync/wsa/pi_verify/E2_joint_finetune_s0/run_train.log"
 
-# 2. 评估
-python src/evaluation/way_casd_binned_eval.py \
-  --ae_ckpt E2_joint_finetune/ckpt_best.pt \
-  --flow_ckpt W11 \
-  --region_constraint ar \
-  ...
+# 2) 评估：用 binned eval 复现论文口径（Flow end-to-end）
+PYTHONUNBUFFERED=1 python -u -m src.evaluation.way_casd_binned_eval \
+  --way_routes_npz "$WAY_ROUTES_NPZ" \
+  --way_graph_npz "$WAY_GRAPH_NPZ" \
+  --way_features_npz "$WAY_FEATS_NPZ" \
+  --ae_ckpt "_sync/wsa/pi_verify/E2_joint_finetune_s0/ckpt_best.pt" \
+  --latent_source flow --flow_ckpt "$FLOW_CKPT" \
+  --way_regions_npz "$WAY_REGIONS_NPZ" \
+  --region_constraint ar --region_ar_ckpt "$REGION_AR_CKPT" \
+  --region_constraint_mode relaxed --region_constraint_fallback dest_region \
+  --n_routes 200 --min_hops 5 --max_way_len 160 --max_decode_len 160 \
+  --decode_candidate_policy first --decode_max_candidates 0 \
+  --beam_size 10 \
+  --anti_loop_penalty 2.0 --anti_loop_penalty_k 4 \
+  --out_json "_sync/wsa/pi_verify/E2_joint_finetune_s0/binned_eval_flow_n200pc.json" \
+  |& tee "_sync/wsa/pi_verify/E2_joint_finetune_s0/run_eval.log"
+```
+
+### D4 执行步骤（[40,60) hit_wall 空间审计）
+```bash
+# 1) 生成 per-route dump（建议用当前 best Flow 配置；要空间审计必须 --dump_way_seqs）
+PYTHONUNBUFFERED=1 python -u -m src.evaluation.way_casd_binned_eval \
+  --way_routes_npz "$WAY_ROUTES_NPZ" \
+  --way_graph_npz "$WAY_GRAPH_NPZ" \
+  --way_features_npz "$WAY_FEATS_NPZ" \
+  --ae_ckpt "$AE_CKPT" \
+  --latent_source flow --flow_ckpt "$FLOW_CKPT" \
+  --way_regions_npz "$WAY_REGIONS_NPZ" \
+  --region_constraint ar --region_ar_ckpt "$REGION_AR_CKPT" \
+  --region_constraint_mode relaxed --region_constraint_fallback dest_region \
+  --n_routes 200 --min_hops 5 --max_way_len 160 --max_decode_len 160 \
+  --decode_candidate_policy first --decode_max_candidates 0 \
+  --beam_size 10 \
+  --anti_loop_penalty 2.0 --anti_loop_penalty_k 4 \
+  --out_json "_sync/wsa/pi_verify/D4_hit_wall_spatial_s0/binned_eval_flow_n200pc.json" \
+  --out_per_route_json "_sync/wsa/pi_verify/D4_hit_wall_spatial_s0/per_route_flow_n200pc.json" \
+  --dump_way_seqs \
+  |& tee "_sync/wsa/pi_verify/D4_hit_wall_spatial_s0/run_eval.log"
+
+# 2) 做空间审计（默认分析 [40,60) 桶）
+PYTHONUNBUFFERED=1 python -u tools/waycasd_analyze_hit_wall_spatial.py \
+  --per_route_json "_sync/wsa/pi_verify/D4_hit_wall_spatial_s0/per_route_flow_n200pc.json" \
+  --way_routes_npz "$WAY_ROUTES_NPZ" \
+  --way_graph_npz "$WAY_GRAPH_NPZ" \
+  --way_features_npz "$WAY_FEATS_NPZ" \
+  --out_dir "_sync/wsa/pi_verify/D4_hit_wall_spatial_s0/audit" \
+  --key beam --hops_bin "[40,60)" \
+  |& tee "_sync/wsa/pi_verify/D4_hit_wall_spatial_s0/audit/run_audit.log"
 ```

@@ -20,6 +20,14 @@ from src.models.way_casd.region_ar import RegionARCfg, RegionARModel
 
 TZ_SHANGHAI = timezone(timedelta(hours=8))
 
+def _set_seed(seed: int) -> None:
+    # Route sampling already uses a fixed-seed numpy Generator. This seed mainly stabilizes
+    # Torch RNG for Flow sampling, so repeated runs (same cfg.seed) are comparable.
+    np.random.seed(int(seed))
+    torch.manual_seed(int(seed))
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(int(seed))
+
 
 def _read_json(path: Path) -> dict:
     return json.loads(path.read_text(encoding="utf-8"))
@@ -561,6 +569,7 @@ def main() -> None:
     )
 
     device = torch.device(cfg.device if (cfg.device != "cuda" or torch.cuda.is_available()) else "cpu")
+    _set_seed(int(cfg.seed))
 
     routes = load_way_routes_npz(Path(args.way_routes_npz))
     wg = np.load(str(args.way_graph_npz), allow_pickle=True)

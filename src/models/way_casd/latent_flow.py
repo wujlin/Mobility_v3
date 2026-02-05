@@ -18,6 +18,10 @@ class LatentFlowCfg:
     dropout: float = 0.1
     noise_sigma: float = 1.0
     solver_steps: int = 20
+    # Classifier-free guidance (CFG): train with random condition dropout.
+    # In training mode, with probability cond_dropout_p we replace conditions with "unconditional" zeros.
+    # At sampling time, use cfg_scale>1.0 to amplify conditioning: v = v_u + s*(v_c - v_u).
+    cond_dropout_p: float = 0.0
     # Condition injection into latent tokens.
     # - "add": broadcast-add a single condition vector to all latent tokens (baseline behavior).
     # - "xattn": cross-attend latent tokens to condition tokens (stronger conditioning).
@@ -115,6 +119,7 @@ class LatentFlowMatching(nn.Module):
         zt: torch.Tensor,  # (B,L,D)
         t: torch.Tensor,  # (B,)
         route_cond: Dict[str, torch.Tensor],
+        force_uncond: bool = False,
     ) -> torch.Tensor:
         device = zt.device
         B = int(zt.shape[0])
@@ -134,6 +139,24 @@ class LatentFlowMatching(nn.Module):
             if "region_seq_pad" not in route_cond:
                 raise KeyError("Flow requires route_cond['region_seq_pad'] when cfg.use_region_seq=True.")
             region_tok, region_pad = self._encode_region_tokens(region_seq_pad=route_cond["region_seq_pad"].to(device=device))
+
+        # CFG: random condition dropout during training, or force unconditional branch at sampling.
+        drop_mask = torch.zeros((B,), device=device, dtype=torch.bool)
+        if bool(force_uncond):
+            drop_mask = torch.ones((B,), device=device, dtype=torch.bool)
+        elif self.training and float(getattr(self.cfg, "cond_dropout_p", 0.0)) > 0.0:
+            p = float(getattr(self.cfg, "cond_dropout_p", 0.0))
+            if p > 0.0:
+                drop_mask = torch.rand((B,), device=device) < float(p)
+
+        if bool(drop_mask.any()):
+            cond0 = cond0.clone()
+            cond0[drop_mask] = 0.0
+            if region_tok is not None and region_pad is not None:
+                region_tok = region_tok.clone()
+                region_tok[drop_mask] = 0.0
+                region_pad = region_pad.clone()
+                region_pad[drop_mask] = True
 
         if str(self.cond_inject) == "add":
             cond_vec = cond0
@@ -193,6 +216,7 @@ class LatentFlowMatching(nn.Module):
         *,
         route_cond: Dict[str, torch.Tensor],
         solver_steps: Optional[int] = None,
+        cfg_scale: float = 1.0,
     ) -> torch.Tensor:
         device = next(self.parameters()).device
         B = int(route_cond["start_pos"].shape[0])
@@ -207,7 +231,13 @@ class LatentFlowMatching(nn.Module):
 
         for i in range(steps):
             t = torch.full((B,), (float(i) + 0.5) * dt, device=device, dtype=torch.float32)
-            v = self._v(z, t, route_cond)
+            s = float(cfg_scale)
+            if s == 1.0:
+                v = self._v(z, t, route_cond, force_uncond=False)
+            else:
+                v_u = self._v(z, t, route_cond, force_uncond=True)
+                v_c = self._v(z, t, route_cond, force_uncond=False)
+                v = v_u + s * (v_c - v_u)
             z = z + dt * v
 
         return z
@@ -217,6 +247,8 @@ class LatentFlowMatching(nn.Module):
         zt: torch.Tensor,
         t: torch.Tensor,
         route_cond: Dict[str, torch.Tensor],
+        *,
+        force_uncond: bool = False,
     ) -> torch.Tensor:
-        x = self._apply_condition(zt=zt, t=t, route_cond=route_cond)
+        x = self._apply_condition(zt=zt, t=t, route_cond=route_cond, force_uncond=bool(force_uncond))
         return self.out_ln(self.net(x))

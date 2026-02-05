@@ -243,8 +243,9 @@ class Cfg:
 
     latent_source: str  # "gt" | "flow"
     n_samples_per_route: int  # only used when latent_source=flow
-    sample_select: str  # "first" | "best"
+    sample_select: str  # "first" | "best" | "dest"
     flow_solver_steps: Optional[int]  # None=use ckpt/default
+    flow_cfg_scale: float  # only used when latent_source=flow (1.0=disable)
 
     n_routes: int  # per city
     min_hops: int
@@ -451,11 +452,23 @@ def _nanmean(x: Sequence[float]) -> float:
     return float(np.mean(a)) if a.size else float("nan")
 
 
-def _best_sample_index(samples: List[Dict[str, object]]) -> int:
+def _select_sample_index(samples: List[Dict[str, object]], *, policy: str) -> int:
+    """
+    Select one sample index from K decoded candidates.
+
+    Policies:
+      - "best": prefer success, then minimize (DTW, Fréchet). NOTE: uses GT shape metrics (oracle).
+      - "dest": prefer success, then minimize final_error_m (deployable; GT-free).
+    """
+
     if not samples:
         return 0
 
-    def _key(m: Dict[str, object]) -> Tuple[int, float, float]:
+    pol = str(policy or "first").strip().lower()
+    if pol not in {"best", "dest"}:
+        return 0
+
+    def _key_best(m: Dict[str, object]) -> Tuple[int, float, float]:
         succ = 0 if bool(m.get("success", False)) else 1
         dtw = float(m.get("dtw_m", float("nan")))
         fre = float(m.get("frechet_m", float("nan")))
@@ -463,10 +476,17 @@ def _best_sample_index(samples: List[Dict[str, object]]) -> int:
         fre = fre if math.isfinite(fre) else float("inf")
         return (succ, dtw, fre)
 
+    def _key_dest(m: Dict[str, object]) -> Tuple[int, float]:
+        succ = 0 if bool(m.get("success", False)) else 1
+        err = float(m.get("final_error_m", float("nan")))
+        err = err if math.isfinite(err) else float("inf")
+        return (succ, err)
+
+    key_fn = _key_best if pol == "best" else _key_dest
     best_i = 0
-    best_k = _key(samples[0])
+    best_k = key_fn(samples[0])
     for i in range(1, len(samples)):
-        k = _key(samples[i])
+        k = key_fn(samples[i])
         if k < best_k:
             best_k = k
             best_i = int(i)
@@ -489,8 +509,21 @@ def main() -> None:
     p.add_argument("--latent_source", choices=["gt", "flow"], default="gt", help="gt=oracle (GT->AE.encode); flow=generation (Flow.sample).")
     p.add_argument("--flow_ckpt", type=Path, default=None, help="Required when --latent_source=flow.")
     p.add_argument("--n_samples_per_route", type=int, default=1, help="Only used when --latent_source=flow.")
-    p.add_argument("--sample_select", choices=["first", "best"], default="first", help="When n_samples_per_route>1, which sample to report as route-level metrics.")
+    p.add_argument(
+        "--sample_select",
+        choices=["first", "best", "dest"],
+        default="first",
+        help="When n_samples_per_route>1, which sample to report as route-level metrics: "
+        "first=use sample0; best=prefer success then min(DTW, Fréchet) [oracle, uses GT]; "
+        "dest=prefer success then min(final_error_m) [deployable, GT-free].",
+    )
     p.add_argument("--flow_solver_steps", type=int, default=0, help="Override flow solver steps (0=use ckpt/default).")
+    p.add_argument(
+        "--flow_cfg_scale",
+        type=float,
+        default=1.0,
+        help="Flow sampling CFG scale (1.0=disable). NOTE: requires Flow trained with cond_dropout_p>0.",
+    )
 
     p.add_argument("--n_routes", type=int, default=200, help="Per city (0 and 1).")
     p.add_argument("--min_hops", type=int, default=5)
@@ -549,6 +582,7 @@ def main() -> None:
         n_samples_per_route=max(1, int(args.n_samples_per_route)),
         sample_select=str(args.sample_select),
         flow_solver_steps=(int(args.flow_solver_steps) if int(args.flow_solver_steps) > 0 else None),
+        flow_cfg_scale=float(args.flow_cfg_scale),
         n_routes=int(args.n_routes),
         min_hops=int(args.min_hops),
         max_way_len=int(args.max_way_len),
@@ -913,7 +947,7 @@ def main() -> None:
             else:
                 if flow is None:
                     raise SystemExit("[FATAL] latent_source=flow but Flow is not loaded (missing --flow_ckpt?)")
-                z_use = flow.sample(route_cond=route_cond_use, solver_steps=cfg.flow_solver_steps)
+                z_use = flow.sample(route_cond=route_cond_use, solver_steps=cfg.flow_solver_steps, cfg_scale=float(cfg.flow_cfg_scale))
 
             greedy = ae.decoder.greedy_decode_batched(
                 way_embedder=ae.way_enc,
@@ -1020,7 +1054,7 @@ def main() -> None:
 
                 mg_list = [_eval_pred(p) for p in g_samples]
                 if int(K) > 1:
-                    k_sel = 0 if str(cfg.sample_select) == "first" else _best_sample_index(mg_list)
+                    k_sel = 0 if str(cfg.sample_select) == "first" else _select_sample_index(mg_list, policy=str(cfg.sample_select))
                     mg = dict(mg_list[int(k_sel)])
                     mg.update(
                         {
@@ -1048,7 +1082,7 @@ def main() -> None:
                 if b_samples is not None:
                     mb_list = [_eval_pred(p) for p in b_samples]
                     if int(K) > 1:
-                        k_sel = 0 if str(cfg.sample_select) == "first" else _best_sample_index(mb_list)
+                        k_sel = 0 if str(cfg.sample_select) == "first" else _select_sample_index(mb_list, policy=str(cfg.sample_select))
                         mb = dict(mb_list[int(k_sel)])
                         mb.update(
                             {
@@ -1205,7 +1239,7 @@ def main() -> None:
             "shape_metric": "DTW/Fréchet on way-center sequences (meters, equirectangular projection from osm_road_prob_meta.json bbox).",
             "bins": [b[2] for b in _hops_bins()],
             "latent_source": "gt=oracle (GT->AE.encode->Decoder); flow=Flow.sample->Decoder (generation).",
-            "sample_select": "When n_samples_per_route>1: first=use sample0; best=prefer success then min(DTW, Fréchet).",
+            "sample_select": "When n_samples_per_route>1: first=use sample0; best=prefer success then min(DTW, Fréchet) [oracle, uses GT]; dest=prefer success then min(final_error_m) [deployable, GT-free].",
             "region_constraint": "If enabled: use Region seq to filter way candidates by target region (modes: strict/relaxed; fallback: unconstrained/dest_region/stop).",
         },
     }

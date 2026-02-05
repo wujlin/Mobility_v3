@@ -1,6 +1,6 @@
 # Way-CASD 实验 Checklist
 
-> 目标：缩小 Oracle (85.3%) → Flow (50%) 的 35pp gap
+> 目标：缩小 Oracle（AE oracle，上界）→ Flow（端到端生成） 的性能差距
 > 更新日期：2026-02-05
 
 ---
@@ -8,237 +8,230 @@
 ## 当前最佳配置
 
 ```yaml
-AE: W9 (past_k=16, cand_query=True)
-Flow: W11 (RegionSeq xattn, n_layers=6)
-Decode: beam=10, soft P=2.0 K=4, maxcand=0
+AE/Decoder: E2 joint fine-tune (cont e60), ckpt_best.pt
+Flow: W11 RegionSeq xattn (n_layers=6)
+Decode: beam=10, softP=2.0 K=4, maxcand=0
 Region: AR constraint, relaxed, dest_region fallback
 ```
 
-**当前性能**：
-| Metric | [60,+) Beam | Overall |
-|--------|------------|---------|
-| E1 Flow v3 | 50.0% | ~52% |
-| Oracle | 85.3% | ~92% |
-| **Gap** | **35.3pp** | **~40pp** |
+### 当前性能（E2 cont e60）
+
+| Bin | Baseline | E2续训 | Oracle | 剩余Gap |
+|-----|----------|--------|--------|---------|
+| [5,10) | 62.5% | 91.7% | 100% | 8.3pp |
+| [10,20) | 67.0% | 86.6% | 96.9% | 10.3pp |
+| [20,30) | 56.3% | 69.0% | 91.5% | **22.5pp** |
+| [30,40) | 57.5% | 80.8% | 91.8% | 11.0pp |
+| [40,60) | 32.5% | 51.9% | 85.7% | **33.8pp** ← 最大瓶颈 |
+| [60,+) | 44.1% | 64.7% | 85.3% | 20.6pp |
+| **Overall** | 54.25% | **74.5%** | ~92% | ~17pp |
+
+### 关键诊断数据
+- E1 latent diagnosis: `cos(z_flow, z_gt) ≈ 0.31`（严重misalign）
+- D4 空间审计: hit_wall终点 outdeg p50=2（选错corridor，非局部confusion）
+- [40,60) 失败模式: hit_wall=46.8%, loop=37.7%（几乎全是hit_wall）
 
 ---
 
-## 核心问题诊断
+## 待执行实验（按优先级排序）
 
-**关键发现**：短路线gap反而更大
-- [5,10): Oracle=100%, Flow=47.9%, Gap=52.1pp
-- [60,+): Oracle=85.3%, Flow=50.0%, Gap=35.3pp
+### P0：B3 多样本+选择（立即执行，无需重训练）
 
-**结论**：问题不是"长路线更难"，而是 **Flow latent与GT latent存在系统性分布偏移**，Decoder对这种偏移不鲁棒。
-
----
-
-## Phase E: Flow-Decoder Gap 攻坚
-
-### E1: Latent分布诊断 ⬜ 待执行
-**目标**：量化z_flow与z_gt的分布差异，验证假设
+**目标**：测试"如果从K个z_flow中能选对，能提升多少"——这是改进Flow的upper bound proxy
 
 **方法**：
-1. 对验证集的所有routes，分别获取：
-   - z_gt = AE.encode(route)
-   - z_flow = Flow.sample(condition)
-2. 计算统计指标：
-   - Per-sample MSE: ||z_flow - z_gt||²
-   - Per-token cosine similarity
-   - 按route_len分bin统计
-3. 可视化：t-SNE/PCA对比z_gt和z_flow分布
-
-**输出**：`_sync/wsa/pi_verify/E1_latent_diagnosis/`
-- `latent_stats.json`: MSE/cosine统计
-- `latent_pca.png`: 可视化（PCA，避免额外依赖）
+- `--n_samples_per_route 8`
+- `--sample_select dest`：可部署版（success优先 → final_error_m最小）
+- `--sample_select best`：oracle上界（用GT的DTW/Fréchet选最优）
 
 **预期**：
-- 如果z_flow和z_gt分布差异大 → 需要改进Flow
-- 如果z_flow和z_gt分布相近但decoder仍失败 → 需要Joint FT
+- 如果 best-of-8 oracle 显著提升 → z_flow diversity足够，问题在于"选不对"
+- 如果 best-of-8 oracle 提升有限 → z_flow diversity不够，需要改进Flow本身
+
+**输出**：`_sync/wsa/pi_verify/B3_bestofK_s0/`
 
 ---
 
-### E2: Flow-Decoder Joint Fine-tuning ⬜ 待执行
-**目标**：让Decoder适应Flow生成的latent分布
+### P1：A2 Flow CFG（需重训Flow）
+
+**目标**：增强Flow对condition的利用
 
 **方法**：
-```python
-# 核心思路：用Flow latent fine-tune decoder
-for batch in dataloader:
-    z_flow = flow.sample(route_cond)  # 生成latent
-    # Option A: Teacher forcing (GT next-token, 但用z_flow)
-    loss = decoder.compute_loss(z_enc=z_flow, way_seq=gt_seq)
-    # Option B: RL (让decoder在z_flow下学习到达dest)
-    loss = decoder_rl_loss(z_flow, batch)
-```
-
-**实验配置**：
-- 基于W9 AE + W11 Flow
-- Fine-tune decoder 10-20 epochs
-- 使用较小lr (1e-5) 防止灾难性遗忘
-
-**输出**：`_sync/wsa/pi_verify/E2_joint_finetune/`
-- `ckpt_joint.pt`: fine-tuned decoder
-- `binned_joint.json`: 评估结果
-
-**预期收益**：+10-15pp on [60,+)
-
----
-
-### E3: CFG推理验证 ⬜ 可选
-**目标**：快速验证condition利用是否充分（成本低）
-
-**方法**：
-```python
-# 修改 LatentFlowMatching.sample()
-def sample_cfg(self, route_cond, cfg_scale=2.0):
-    # 训练时需要10%概率drop condition
-    v_uncond = self._v(z, t, empty_cond)
-    v_cond = self._v(z, t, route_cond)
-    v = v_uncond + cfg_scale * (v_cond - v_uncond)
-```
-
-**注意**：需要先重训Flow with condition dropout
+1. 重训Flow with `--cond_dropout_p 0.1`
+2. 推理时用 `--flow_cfg_scale {1.5, 2.0, 3.0}` sweep
 
 **预期收益**：+3-5pp（如果condition利用不充分）
 
----
-
-## Phase D: 已完成实验总结
-
-### D1: Hit-Wall Sweep ✅
-| Config | [60,+) Beam | 结论 |
-|--------|------------|------|
-| alpha=0.0 (baseline) | 44.1% | baseline |
-| maxcand=0 | **47.1%** | **+3pp, 推荐长程** |
-| maxcand=5 | 41.2% | -2.9pp |
-| alpha=0.1/0.2/0.3 | 35.3% | 显著下降，不推荐 |
-
-**结论**：`decode_max_candidates=0` 对长程路线有正向作用
-
-### D2: RL Reward Redesign ✅
-- 新增penalties: turn=0.05, hit_wall=1.0, wall_prox=0.2, margin=20
-- [60,+) beam = 44.1% (与baseline持平)
-- **结论**：简单reward penalty无效，问题在latent质量
-
-### D3: City Audit ✅
-| City | n_routes | route_len p50 | route_len p90 |
-|------|----------|---------------|---------------|
-| Detroit | 1,394 | 35 | 60 |
-| Columbus | 3,628 | 22 | 50 |
-
-**结论**：Columbus路线显著更短，解释了per-city性能差异
-
-### D4: [40,60) hit_wall 深挖（空间模式）⬜ 待执行
-**目标**：回答 hit_wall 是否集中在特定空间区域/高出度交叉口（outdegree proxy）
-
-**方法**：
-1) 先用 `way_casd_binned_eval.py` 生成 `per_route.json`（务必 `--dump_way_seqs`）
-2) 再运行空间审计脚本 `tools/waycasd_analyze_hit_wall_spatial.py`
-
-**输出**：`_sync/wsa/pi_verify/D4_hit_wall_spatial/`
-- `hit_wall_spatial_audit.json`
-- `hit_wall_spatial.png`
+**输出**：`_sync/wsa/pi_verify/A2_flow_cfg_s0/`
 
 ---
 
-## 放弃的实验方向
+### P2：A1 Flow更深（可选，依赖P0/P1结果）
 
-| 实验 | 原因 |
-|------|------|
-| Latent Regularization | 治标。AE本身没问题（Oracle 85%），问题在Flow |
-| route_len_bin condition | 信息泄露。真实场景不知道目标长度 |
-| Curriculum Learning (短→长) | 方向错误。短路线gap反而更大，非复杂度问题 |
-| Multi-Scale Flow | 成本高。region_seq xattn已提供coarse信息 |
+**条件**：仅当B3显示"diversity不够"时才执行
 
----
+**方法**：`n_layers 6→8`（保持d_model=256）
 
-## 执行优先级
-
-```
-P0 (立即执行):
-  E1: Latent分布诊断 → 验证假设，指导后续方向
-  E2: Flow-Decoder Joint FT → 核心治本实验
-
-P1 (E2完成后):
-  根据E1/E2结果决定是否需要改进Flow本身
-
-P2 (可选):
-  E3: CFG推理 → 如果condition利用不充分
-```
+**注意**：不改d_model，因为需要AE/latent同步升级
 
 ---
 
-## Partner执行指南
+## 已放弃的实验方向
 
-### E1 执行步骤
+| 实验 | 放弃原因 |
+|------|----------|
+| A3: 多步refinement | 架构复杂度太高，收益不确定 |
+| B1: Region AR更强 | D4审计显示hit_wall发生在低度节点，Region AR不是瓶颈 |
+| B2: Corridor-level loss | 需要设计新loss，"corridor alignment"定义本身是难题 |
+| C1: E2继续训练 | **已完成**。best_epoch=38/40，val_loss已收敛(0.1913) |
+| C2: RL fine-tune | D2实验已证明简单reward无效，RL训练不稳定 |
+| C3: Decoder ensemble | 推理成本K倍，B3已cover多样本思路 |
+
+---
+
+## Partner 执行指南
+
+### P0: B3 Best-of-K 评测
+
 ```bash
-# 0) 约定：提前 export 这些变量（示例）
-# RAW_ROOT=...; WAY_ROUTES_NPZ=...; WAY_GRAPH_NPZ=...; WAY_FEATS_NPZ=...
-# AE_CKPT=...; FLOW_CKPT=...; WAY_REGIONS_NPZ=...
+# 环境变量（请根据实际路径设置）
+export WAY_ROUTES_NPZ="..."
+export WAY_GRAPH_NPZ="..."
+export WAY_FEATS_NPZ="..."
+export DET_META="/home/jinlin/data/geoexplicit_data/worldtrace/detroit_core_v1/osm_road_prob_meta.json"
+export COL_META="/home/jinlin/data/geoexplicit_data/worldtrace/columbus_core_v1/osm_road_prob_meta.json"
+export AE_CKPT="_sync/wsa/pi_verify/E2_joint_finetune_s0_cont_e60/ckpt_best.pt"
+export FLOW_CKPT="..."  # W11 Flow checkpoint
+export WAY_REGIONS_NPZ="..."
+export REGION_AR_CKPT="..."
+export OUT_DIR="_sync/wsa/pi_verify/B3_bestofK_s0"
 
-# 1) E1: latent mismatch 诊断（Flow 若 use_region_seq，则必须传 --way_regions_npz）
-PYTHONUNBUFFERED=1 python -u -m src.evaluation.latent_diagnosis \
+mkdir -p "$OUT_DIR"
+
+# 1) Deployable best-of-8（不看GT，可部署）
+PYTHONUNBUFFERED=1 python -u -m src.evaluation.way_casd_binned_eval \
+  --way_routes_npz "$WAY_ROUTES_NPZ" \
+  --way_graph_npz "$WAY_GRAPH_NPZ" \
+  --way_features_npz "$WAY_FEATS_NPZ" \
+  --city_grid_meta "0=$DET_META" \
+  --city_grid_meta "1=$COL_META" \
+  --ae_ckpt "$AE_CKPT" \
+  --latent_source flow --flow_ckpt "$FLOW_CKPT" \
+  --way_regions_npz "$WAY_REGIONS_NPZ" \
+  --region_constraint ar --region_ar_ckpt "$REGION_AR_CKPT" \
+  --region_constraint_mode relaxed --region_constraint_fallback dest_region \
+  --n_routes 200 --min_hops 5 --max_way_len 160 --max_decode_len 160 \
+  --decode_candidate_policy first --decode_max_candidates 0 \
+  --beam_size 10 \
+  --anti_loop_penalty 2.0 --anti_loop_penalty_k 4 \
+  --n_samples_per_route 8 --sample_select dest \
+  --out_json "$OUT_DIR/binned_flow_bestof8_dest.json" \
+  |& tee "$OUT_DIR/run_bestof8_dest.log"
+
+# 2) Oracle best-of-8（上界，用GT选最优）
+PYTHONUNBUFFERED=1 python -u -m src.evaluation.way_casd_binned_eval \
+  --way_routes_npz "$WAY_ROUTES_NPZ" \
+  --way_graph_npz "$WAY_GRAPH_NPZ" \
+  --way_features_npz "$WAY_FEATS_NPZ" \
+  --city_grid_meta "0=$DET_META" \
+  --city_grid_meta "1=$COL_META" \
+  --ae_ckpt "$AE_CKPT" \
+  --latent_source flow --flow_ckpt "$FLOW_CKPT" \
+  --way_regions_npz "$WAY_REGIONS_NPZ" \
+  --region_constraint ar --region_ar_ckpt "$REGION_AR_CKPT" \
+  --region_constraint_mode relaxed --region_constraint_fallback dest_region \
+  --n_routes 200 --min_hops 5 --max_way_len 160 --max_decode_len 160 \
+  --decode_candidate_policy first --decode_max_candidates 0 \
+  --beam_size 10 \
+  --anti_loop_penalty 2.0 --anti_loop_penalty_k 4 \
+  --n_samples_per_route 8 --sample_select best \
+  --out_json "$OUT_DIR/binned_flow_bestof8_oraclebest.json" \
+  |& tee "$OUT_DIR/run_bestof8_oraclebest.log"
+```
+
+### P1: A2 Flow CFG 重训
+
+```bash
+export REGION_SEQ_NPZ="_sync/wsa/pi_verify/20260201_min5_candq1_past8_len160_s0/regions_louvain_res1p0_v1/region_seq_min5_max160.npz"
+
+# 建议：Flow ckpt 放数据盘（大文件），评测/日志放 _sync（便于 git review）
+export OUT_A2_FLOW="/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD1_waydata_rustbelt_seed0_strict_v1/W12_train_flow_cfgdrop0p1_s0"
+export OUT_A2_SYNC="_sync/wsa/pi_verify/A2_flow_cfg_s0"
+mkdir -p "$OUT_A2_FLOW" "$OUT_A2_SYNC"
+
+# 1) 重训Flow with condition dropout
+PYTHONUNBUFFERED=1 python -u -m src.training.train_way_casd_flow \
   --way_routes_npz "$WAY_ROUTES_NPZ" \
   --way_graph_npz "$WAY_GRAPH_NPZ" \
   --way_features_npz "$WAY_FEATS_NPZ" \
   --ae_ckpt "$AE_CKPT" \
-  --flow_ckpt "$FLOW_CKPT" \
-  --way_regions_npz "$WAY_REGIONS_NPZ" \
-  --out_dir "_sync/wsa/pi_verify/E1_latent_diagnosis_s0" \
-  --n_routes 200 --min_hops 5 --max_way_len 160 \
-  --batch_size 64 \
-  --device cuda --seed 0 \
-  |& tee "_sync/wsa/pi_verify/E1_latent_diagnosis_s0/run.log"
-
-# 2) 输出文件
-# - latent_stats.json / latent_pairs.npz / latent_pca.png
-```
-
-### E2 执行步骤
-```bash
-# 1) Joint fine-tune（只训 decoder.*，用 z_flow 做 latent tokens，teacher forcing CE）
-PYTHONUNBUFFERED=1 python -u -m src.training.train_way_casd_decoder_joint \
-  --way_routes_npz "$WAY_ROUTES_NPZ" \
-  --way_graph_npz "$WAY_GRAPH_NPZ" \
-  --way_features_npz "$WAY_FEATS_NPZ" \
-  --ae_ckpt "$AE_CKPT" \
-  --flow_ckpt "$FLOW_CKPT" \
-  --way_regions_npz "$WAY_REGIONS_NPZ" \
-  --out_dir "_sync/wsa/pi_verify/E2_joint_finetune_s0" \
+  --out_dir "$OUT_A2_FLOW" \
   --min_hops 5 --max_way_len 160 \
-  --batch_size 64 --num_workers 16 \
-  --n_epochs 20 --lr 1e-5 --weight_decay 0.0 --val_ratio 0.1 \
-  --device cuda --seed 0 \
-  |& tee "_sync/wsa/pi_verify/E2_joint_finetune_s0/run_train.log"
-
-# 2) 评估：用 binned eval 复现论文口径（Flow end-to-end）
-PYTHONUNBUFFERED=1 python -u -m src.evaluation.way_casd_binned_eval \
-  --way_routes_npz "$WAY_ROUTES_NPZ" \
-  --way_graph_npz "$WAY_GRAPH_NPZ" \
-  --way_features_npz "$WAY_FEATS_NPZ" \
-  --ae_ckpt "_sync/wsa/pi_verify/E2_joint_finetune_s0/ckpt_best.pt" \
-  --latent_source flow --flow_ckpt "$FLOW_CKPT" \
+  --cond_inject xattn --use_region_seq \
+  --region_seq_npz "$REGION_SEQ_NPZ" \
   --way_regions_npz "$WAY_REGIONS_NPZ" \
-  --region_constraint ar --region_ar_ckpt "$REGION_AR_CKPT" \
-  --region_constraint_mode relaxed --region_constraint_fallback dest_region \
-  --n_routes 200 --min_hops 5 --max_way_len 160 --max_decode_len 160 \
-  --decode_candidate_policy first --decode_max_candidates 0 \
-  --beam_size 10 \
-  --anti_loop_penalty 2.0 --anti_loop_penalty_k 4 \
-  --out_json "_sync/wsa/pi_verify/E2_joint_finetune_s0/binned_eval_flow_n200pc.json" \
-  |& tee "_sync/wsa/pi_verify/E2_joint_finetune_s0/run_eval.log"
+  --cond_dropout_p 0.1 \
+  --batch_size 256 --num_workers 16 --n_epochs 60 \
+  --device cuda --seed 0 \
+  |& tee "$OUT_A2_SYNC/run_train.log"
+
+# 2) CFG scale sweep（训练完成后）
+for CFG in 1.5 2.0 3.0; do
+  PYTHONUNBUFFERED=1 python -u -m src.evaluation.way_casd_binned_eval \
+    --way_routes_npz "$WAY_ROUTES_NPZ" \
+    --way_graph_npz "$WAY_GRAPH_NPZ" \
+    --way_features_npz "$WAY_FEATS_NPZ" \
+    --city_grid_meta "0=$DET_META" \
+    --city_grid_meta "1=$COL_META" \
+    --ae_ckpt "$AE_CKPT" \
+    --latent_source flow --flow_ckpt "$OUT_A2_FLOW/ckpt_best.pt" \
+    --flow_cfg_scale $CFG \
+    --way_regions_npz "$WAY_REGIONS_NPZ" \
+    --region_constraint ar --region_ar_ckpt "$REGION_AR_CKPT" \
+    --region_constraint_mode relaxed --region_constraint_fallback dest_region \
+    --n_routes 200 --min_hops 5 --max_way_len 160 --max_decode_len 160 \
+    --decode_candidate_policy first --decode_max_candidates 0 \
+    --beam_size 10 \
+    --anti_loop_penalty 2.0 --anti_loop_penalty_k 4 \
+    --out_json "$OUT_A2_SYNC/binned_flow_cfg${CFG}.json" \
+    |& tee "$OUT_A2_SYNC/run_cfg${CFG}.log"
+done
 ```
 
-### D4 执行步骤（[40,60) hit_wall 空间审计）
+### P2: A1 Flow 更深（n_layers 6→8，保持 d_model=256）
+
 ```bash
-# 1) 生成 per-route dump（建议用当前 best Flow 配置；要空间审计必须 --dump_way_seqs）
-PYTHONUNBUFFERED=1 python -u -m src.evaluation.way_casd_binned_eval \
+# 仅当 B3 显示 z_flow diversity 不够时再跑（否则优先 A2）
+export OUT_A1_FLOW="/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD1_waydata_rustbelt_seed0_strict_v1/W12_train_flow_deeperL8_s0"
+export OUT_A1_SYNC="_sync/wsa/pi_verify/A1_flow_deeperL8_s0"
+mkdir -p "$OUT_A1_FLOW" "$OUT_A1_SYNC"
+
+# 1) 训练更深的 Flow（不启用 CFG）
+PYTHONUNBUFFERED=1 python -u -m src.training.train_way_casd_flow \
   --way_routes_npz "$WAY_ROUTES_NPZ" \
   --way_graph_npz "$WAY_GRAPH_NPZ" \
   --way_features_npz "$WAY_FEATS_NPZ" \
   --ae_ckpt "$AE_CKPT" \
-  --latent_source flow --flow_ckpt "$FLOW_CKPT" \
+  --out_dir "$OUT_A1_FLOW" \
+  --min_hops 5 --max_way_len 160 \
+  --d_model 256 --n_layers 8 --n_heads 8 \
+  --cond_inject xattn --use_region_seq \
+  --region_seq_npz "$REGION_SEQ_NPZ" \
+  --way_regions_npz "$WAY_REGIONS_NPZ" \
+  --cond_dropout_p 0.0 \
+  --batch_size 256 --num_workers 16 --n_epochs 60 \
+  --device cuda --seed 0 \
+  |& tee "$OUT_A1_SYNC/run_train.log"
+
+# 2) 评测
+PYTHONUNBUFFERED=1 python -u -m src.evaluation.way_casd_binned_eval \
+  --way_routes_npz "$WAY_ROUTES_NPZ" \
+  --way_graph_npz "$WAY_GRAPH_NPZ" \
+  --way_features_npz "$WAY_FEATS_NPZ" \
+  --city_grid_meta "0=$DET_META" \
+  --city_grid_meta "1=$COL_META" \
+  --ae_ckpt "$AE_CKPT" \
+  --latent_source flow --flow_ckpt "$OUT_A1_FLOW/ckpt_best.pt" \
   --way_regions_npz "$WAY_REGIONS_NPZ" \
   --region_constraint ar --region_ar_ckpt "$REGION_AR_CKPT" \
   --region_constraint_mode relaxed --region_constraint_fallback dest_region \
@@ -246,18 +239,21 @@ PYTHONUNBUFFERED=1 python -u -m src.evaluation.way_casd_binned_eval \
   --decode_candidate_policy first --decode_max_candidates 0 \
   --beam_size 10 \
   --anti_loop_penalty 2.0 --anti_loop_penalty_k 4 \
-  --out_json "_sync/wsa/pi_verify/D4_hit_wall_spatial_s0/binned_eval_flow_n200pc.json" \
-  --out_per_route_json "_sync/wsa/pi_verify/D4_hit_wall_spatial_s0/per_route_flow_n200pc.json" \
-  --dump_way_seqs \
-  |& tee "_sync/wsa/pi_verify/D4_hit_wall_spatial_s0/run_eval.log"
-
-# 2) 做空间审计（默认分析 [40,60) 桶）
-PYTHONUNBUFFERED=1 python -u tools/waycasd_analyze_hit_wall_spatial.py \
-  --per_route_json "_sync/wsa/pi_verify/D4_hit_wall_spatial_s0/per_route_flow_n200pc.json" \
-  --way_routes_npz "$WAY_ROUTES_NPZ" \
-  --way_graph_npz "$WAY_GRAPH_NPZ" \
-  --way_features_npz "$WAY_FEATS_NPZ" \
-  --out_dir "_sync/wsa/pi_verify/D4_hit_wall_spatial_s0/audit" \
-  --key beam --hops_bin "[40,60)" \
-  |& tee "_sync/wsa/pi_verify/D4_hit_wall_spatial_s0/audit/run_audit.log"
+  --out_json "$OUT_A1_SYNC/binned_eval_flow_n200pc.json" \
+  |& tee "$OUT_A1_SYNC/run_eval.log"
 ```
+
+---
+
+## 结果解读指南
+
+### B3 结果解读
+1. 对比 `binned_flow_bestof8_oraclebest.json` vs 当前E2 (74.5%)
+   - 如果 oracle-best-of-8 > 85% → **z_flow diversity足够**，问题是"选不对"，后续考虑训练一个selector
+   - 如果 oracle-best-of-8 ≈ 75-80% → **z_flow diversity不够**，需要改进Flow本身（做A2）
+2. 对比 `dest` vs `best` 选择策略的差距
+   - 差距大 → 可部署的selector有改进空间
+
+### A2 结果解读
+1. 对比不同CFG scale的success rate
+2. 最优CFG scale应该在1.5-2.0之间（太大会过拟合condition）

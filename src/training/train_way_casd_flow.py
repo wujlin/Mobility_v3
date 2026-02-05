@@ -52,6 +52,7 @@ class TrainCfg:
     dropout: float
     noise_sigma: float
     solver_steps: int
+    cond_dropout_p: float
     cond_inject: str
     use_region_seq: bool
     n_regions: int
@@ -308,6 +309,7 @@ def build_argparser() -> argparse.ArgumentParser:
     p.add_argument("--dropout", type=float, default=0.1)
     p.add_argument("--noise_sigma", type=float, default=1.0)
     p.add_argument("--solver_steps", type=int, default=20)
+    p.add_argument("--cond_dropout_p", type=float, default=0.0, help="CFG training: probability to drop conditions (0=disable).")
     p.add_argument("--cond_inject", type=str, default="add", choices=["add", "xattn"], help="How to inject conditions into latent tokens.")
     p.add_argument("--use_region_seq", action="store_true", help="If set, condition Flow on coarse region_seq (from --region_seq_npz).")
     p.add_argument("--region_seq_npz", type=Path, default=None, help="region_seq_min*.npz from extract_region_seq_stats.py (required when --use_region_seq).")
@@ -397,6 +399,7 @@ def main() -> None:
         dropout=float(args.dropout),
         noise_sigma=float(args.noise_sigma),
         solver_steps=int(args.solver_steps),
+        cond_dropout_p=float(args.cond_dropout_p),
         cond_inject=str(cond_inject),
         use_region_seq=bool(use_region_seq),
         n_regions=int(n_regions),
@@ -555,6 +558,7 @@ def main() -> None:
             dropout=float(cfg.dropout),
             noise_sigma=float(cfg.noise_sigma),
             solver_steps=int(cfg.solver_steps),
+            cond_dropout_p=float(cfg.cond_dropout_p),
             cond_inject=str(cfg.cond_inject),
             use_region_seq=bool(cfg.use_region_seq),
             n_regions=int(cfg.n_regions),

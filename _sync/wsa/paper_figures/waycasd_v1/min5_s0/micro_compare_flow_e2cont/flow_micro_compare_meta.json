@@ -1,0 +1,40 @@
+{
+  "ok": true,
+  "task": "waycasd_plot_flow_micro_compare",
+  "created_at": "2026-02-05T13:33:14.059549+08:00",
+  "decode": "beam",
+  "baseline": "Flow(baseline)",
+  "methods": [
+    {
+      "name": "Flow(baseline)",
+      "path": "_sync/wsa/pi_verify/D4_hit_wall_spatial_s0/per_route_flow_n200pc.json"
+    },
+    {
+      "name": "Flow+E2cont",
+      "path": "_sync/wsa/pi_verify/D4_hit_wall_spatial_e2cont_s0/eval/per_route_flow_n200pc.json"
+    }
+  ],
+  "picked": {
+    "0:easy": [
+      1166
+    ],
+    "0:improved": [
+      1053
+    ],
+    "0:hard": [
+      1524
+    ],
+    "1:easy": [
+      3954
+    ],
+    "1:improved": [
+      3237
+    ],
+    "1:hard": [
+      6641
+    ]
+  },
+  "way_features_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD1_waydata_rustbelt_seed0_strict_v1/W4_way_features_sem/way_features.npz",
+  "way_regions_npz": "_sync/wsa/pi_verify/20260201_min5_candq1_past8_len160_s0/regions_louvain_res1p0_v1/way_regions_louvain_per_city_res1p0_seed0.npz",
+  "corridor_draw": true
+}

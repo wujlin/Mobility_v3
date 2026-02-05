@@ -1,0 +1,276 @@
+{
+  "ok": true,
+  "task": "waycasd_hit_wall_spatial_audit",
+  "created_at": "2026-02-05T11:47:11.675842+08:00",
+  "cfg": {
+    "key": "beam",
+    "hops_bin": "[40,60)",
+    "topk_ways": 20,
+    "bins": 60,
+    "bg_alpha": 0.25,
+    "bg_s": 0.6
+  },
+  "inputs": {
+    "per_route_json": "_sync/wsa/pi_verify/D4_hit_wall_spatial_e2cont_s0/eval/per_route_flow_n200pc.json",
+    "way_routes_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD1_waydata_rustbelt_seed0_strict_v1/W5_way_routes_strict/way_routes_strict_masklen0.npz",
+    "way_graph_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD1_waydata_rustbelt_seed0_strict_v1/W3_way_graph_strict/way_graph.npz",
+    "way_features_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD1_waydata_rustbelt_seed0_strict_v1/W4_way_features_sem/way_features.npz"
+  },
+  "per_city": [
+    {
+      "city": 0,
+      "n_total_in_bin": 59,
+      "n_hit_wall": 30,
+      "hit_wall_rate": 0.5084745762711864,
+      "n_with_pred_way_ids": 30,
+      "last_outdeg": {
+        "n": 30,
+        "quantiles": {
+          "p00": 1,
+          "p50": 1,
+          "p90": 2,
+          "p95": 2,
+          "p99": 2,
+          "p100": 3
+        },
+        "frac_gt2": 0.03333333333333333,
+        "frac_gt4": 0.0
+      },
+      "div_outdeg": {
+        "n": 30,
+        "quantiles": {
+          "p00": 1,
+          "p50": 1,
+          "p90": 3,
+          "p95": 3,
+          "p99": 3,
+          "p100": 3
+        }
+      },
+      "top_last_ways": [
+        {
+          "way": 640,
+          "count": 2,
+          "outdeg": 2,
+          "center_x": 441.8477783203125,
+          "center_y": 447.07330322265625
+        },
+        {
+          "way": 18249,
+          "count": 1,
+          "outdeg": 1,
+          "center_x": 156.3964385986328,
+          "center_y": 697.9375
+        },
+        {
+          "way": 17905,
+          "count": 1,
+          "outdeg": 2,
+          "center_x": 647.4855346679688,
+          "center_y": 512.3157958984375
+        },
+        {
+          "way": 13100,
+          "count": 1,
+          "outdeg": 1,
+          "center_x": 233.80230712890625,
+          "center_y": 301.6250915527344
+        },
+        {
+          "way": 19205,
+          "count": 1,
+          "outdeg": 1,
+          "center_x": 530.152587890625,
+          "center_y": 218.98326110839844
+        },
+        {
+          "way": 12045,
+          "count": 1,
+          "outdeg": 1,
+          "center_x": 113.13802337646484,
+          "center_y": 974.3984375
+        },
+        {
+          "way": 11652,
+          "count": 1,
+          "outdeg": 1,
+          "center_x": 128.33323669433594,
+          "center_y": 749.8982543945312
+        },
+        {
+          "way": 11606,
+          "count": 1,
+          "outdeg": 2,
+          "center_x": 678.755615234375,
+          "center_y": 666.4108276367188
+        },
+        {
+          "way": 11065,
+          "count": 1,
+          "outdeg": 2,
+          "center_x": 676.796875,
+          "center_y": 587.3515625
+        },
+        {
+          "way": 11021,
+          "count": 1,
+          "outdeg": 1,
+          "center_x": 105.01302337646484,
+          "center_y": 285.9609375
+        },
+        {
+          "way": 10933,
+          "count": 1,
+          "outdeg": 1,
+          "center_x": 641.875,
+          "center_y": 504.1640625
+        },
+        {
+          "way": 10918,
+          "count": 1,
+          "outdeg": 1,
+          "center_x": 104.34896087646484,
+          "center_y": 266.34375
+        },
+        {
+          "way": 12395,
+          "count": 1,
+          "outdeg": 1,
+          "center_x": 677.1808471679688,
+          "center_y": 663.6904907226562
+        },
+        {
+          "way": 10887,
+          "count": 1,
+          "outdeg": 1,
+          "center_x": 117.68228912353516,
+          "center_y": 495.3359375
+        },
+        {
+          "way": 10457,
+          "count": 1,
+          "outdeg": 1,
+          "center_x": 272.42041015625,
+          "center_y": 472.1967468261719
+        },
+        {
+          "way": 9292,
+          "count": 1,
+          "outdeg": 2,
+          "center_x": 443.0729064941406,
+          "center_y": 691.765625
+        },
+        {
+          "way": 9860,
+          "count": 1,
+          "outdeg": 1,
+          "center_x": 45.814422607421875,
+          "center_y": 786.7274169921875
+        },
+        {
+          "way": 9135,
+          "count": 1,
+          "outdeg": 2,
+          "center_x": 278.787109375,
+          "center_y": 719.31591796875
+        },
+        {
+          "way": 8948,
+          "count": 1,
+          "outdeg": 3,
+          "center_x": 369.8778991699219,
+          "center_y": 263.7655029296875
+        },
+        {
+          "way": 8090,
+          "count": 1,
+          "outdeg": 1,
+          "center_x": 199.921875,
+          "center_y": 698.4609375
+        }
+      ]
+    },
+    {
+      "city": 1,
+      "n_total_in_bin": 18,
+      "n_hit_wall": 6,
+      "hit_wall_rate": 0.3333333333333333,
+      "n_with_pred_way_ids": 6,
+      "last_outdeg": {
+        "n": 6,
+        "quantiles": {
+          "p00": 1,
+          "p50": 1,
+          "p90": 2,
+          "p95": 2,
+          "p99": 2,
+          "p100": 3
+        },
+        "frac_gt2": 0.16666666666666666,
+        "frac_gt4": 0.0
+      },
+      "div_outdeg": {
+        "n": 6,
+        "quantiles": {
+          "p00": 1,
+          "p50": 1,
+          "p90": 2,
+          "p95": 2,
+          "p99": 2,
+          "p100": 3
+        }
+      },
+      "top_last_ways": [
+        {
+          "way": 14611,
+          "count": 1,
+          "outdeg": 2,
+          "center_x": 794.8080444335938,
+          "center_y": 104.81717681884766
+        },
+        {
+          "way": 4326,
+          "count": 1,
+          "outdeg": 1,
+          "center_x": 679.3458862304688,
+          "center_y": 918.7163696289062
+        },
+        {
+          "way": 3670,
+          "count": 1,
+          "outdeg": 1,
+          "center_x": 246.91119384765625,
+          "center_y": 465.19744873046875
+        },
+        {
+          "way": 3451,
+          "count": 1,
+          "outdeg": 1,
+          "center_x": 550.8433227539062,
+          "center_y": 429.5347595214844
+        },
+        {
+          "way": 3111,
+          "count": 1,
+          "outdeg": 1,
+          "center_x": 436.13397216796875,
+          "center_y": 495.1838073730469
+        },
+        {
+          "way": 2549,
+          "count": 1,
+          "outdeg": 3,
+          "center_x": 123.87594604492188,
+          "center_y": 175.93246459960938
+        }
+      ]
+    }
+  ],
+  "figures": [
+    "_sync/wsa/pi_verify/D4_hit_wall_spatial_e2cont_s0/audit/hit_wall_spatial.png"
+  ],
+  "notes": [
+    "This audit expects per_route_json generated with --dump_way_seqs so that pred_way_ids and gt_way_ids are available.",
+    "Intersection-type proxy uses out-degree of way graph at last/diverge way."
+  ]
+}

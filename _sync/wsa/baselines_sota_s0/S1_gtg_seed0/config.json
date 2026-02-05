@@ -1,0 +1,11 @@
+{
+  "n_ways": 19551,
+  "d_model": 256,
+  "hidden_dim": 256,
+  "n_layers": 2,
+  "dropout": 0.1,
+  "max_candidates": 32,
+  "n_route_cities": 4,
+  "coord_scale": 1024.0,
+  "cost_eps": 0.001
+}

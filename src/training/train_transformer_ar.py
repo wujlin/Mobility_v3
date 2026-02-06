@@ -41,6 +41,18 @@ def _split_dataset(n: int, val_ratio: float, seed: int) -> Tuple[np.ndarray, np.
     return tr, val
 
 
+def _read_json(path: Path) -> dict:
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _subset_indices_from_route_ids(dataset: WayRouteDataset, route_ids: np.ndarray) -> np.ndarray:
+    route_ids = np.asarray(route_ids, dtype=np.int64).reshape(-1)
+    if route_ids.size == 0:
+        return np.zeros((0,), dtype=np.int64)
+    mask = np.isin(dataset.route_ids.astype(np.int64, copy=False), route_ids, assume_unique=False)
+    return np.nonzero(mask)[0].astype(np.int64, copy=False)
+
+
 def _collate_way_routes(batch: List[Dict[str, np.ndarray]], *, tz_offset_hours: float) -> Dict[str, torch.Tensor]:
     B = int(len(batch))
     way_lens = np.asarray([int(b["way_len"]) for b in batch], dtype=np.int64)
@@ -219,6 +231,12 @@ def main() -> None:
     p.add_argument("--way_routes_npz", type=Path, required=True)
     p.add_argument("--way_graph_npz", type=Path, required=True)
     p.add_argument("--out_dir", type=Path, required=True)
+    p.add_argument(
+        "--split_json",
+        type=Path,
+        default=None,
+        help="Optional OD-disjoint split json (expects splits.train/val/test route_ids). Overrides val_ratio.",
+    )
 
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--device", type=str, default="cuda")
@@ -251,16 +269,36 @@ def main() -> None:
     print(f"[device] {device}")
 
     routes = load_way_routes_npz(Path(args.way_routes_npz))
+    if args.split_json is not None and args.max_routes is not None:
+        print("[WARN] --split_json is set, ignoring --max_routes to avoid inconsistent splits.", flush=True)
     dataset = WayRouteDataset(
         routes,
-        max_routes=(int(args.max_routes) if args.max_routes is not None else None),
+        max_routes=(None if args.split_json is not None else (int(args.max_routes) if args.max_routes is not None else None)),
         max_way_len=int(args.max_way_len),
         min_hops=int(args.min_hops),
     )
-    tr_idx, va_idx = _split_dataset(len(dataset), float(args.val_ratio), int(args.seed))
+    if args.split_json is None:
+        tr_idx, va_idx = _split_dataset(len(dataset), float(args.val_ratio), int(args.seed))
+    else:
+        split = _read_json(Path(args.split_json))
+        splits = split.get("splits", split)
+        tr_rids = np.asarray(splits.get("train", []), dtype=np.int64).reshape(-1)
+        va_rids = np.asarray(splits.get("val", []), dtype=np.int64).reshape(-1)
+        tr_idx = _subset_indices_from_route_ids(dataset, tr_rids)
+        va_idx = _subset_indices_from_route_ids(dataset, va_rids)
+        if int(tr_idx.size) == 0 or int(va_idx.size) == 0:
+            raise SystemExit(
+                f"[FATAL] split_json produced empty subsets: train_idx={int(tr_idx.size)} val_idx={int(va_idx.size)}. "
+                "Check min_hops/max_way_len match split generation."
+            )
+        print(
+            f"[split] {args.split_json} train_routes={int(tr_rids.size)} val_routes={int(va_rids.size)} "
+            f"=> train_idx={int(tr_idx.size)} val_idx={int(va_idx.size)}",
+            flush=True,
+        )
     train_set = Subset(dataset, tr_idx.tolist())
     val_set = Subset(dataset, va_idx.tolist())
-    print(f"[data] total={len(dataset)} train={len(train_set)} val={len(val_set)}")
+    print(f"[data] total={len(dataset)} train={len(train_set)} val={len(val_set)}", flush=True)
 
     wg = np.load(str(Path(args.way_graph_npz)), allow_pickle=True)
     ptr = np.asarray(wg["way_adj_ptr"], dtype=np.int64)
@@ -361,4 +399,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

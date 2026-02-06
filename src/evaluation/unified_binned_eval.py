@@ -374,6 +374,9 @@ class Cfg:
     snap_cell_size: int
     snap_max_radius: int
 
+    split_json: Optional[str] = None
+    split_part: Optional[str] = None
+
 
 def _load_state_dict(ckpt_obj: object) -> Tuple[Dict[str, torch.Tensor], Dict[str, object]]:
     if isinstance(ckpt_obj, dict) and "model_state_dict" in ckpt_obj:
@@ -529,6 +532,18 @@ def main() -> None:
 
     p.add_argument("--dump_way_seqs", action="store_true")
     p.add_argument(
+        "--split_json",
+        type=Path,
+        default=None,
+        help="Optional: restrict evaluated routes to a split json (expects splits.train/val/test route_ids).",
+    )
+    p.add_argument(
+        "--split_part",
+        choices=["train", "val", "test"],
+        default=None,
+        help="Which split to evaluate (default: test when --split_json is set).",
+    )
+    p.add_argument(
         "--city_grid_meta",
         type=str,
         action="append",
@@ -556,6 +571,8 @@ def main() -> None:
         difftraj_disconnected_fail=float(args.difftraj_disconnected_fail),
         snap_cell_size=int(args.snap_cell_size),
         snap_max_radius=int(args.snap_max_radius),
+        split_json=(str(args.split_json) if args.split_json is not None else None),
+        split_part=(str(args.split_part) if args.split_part is not None else (("test" if args.split_json is not None else None))),
     )
 
     device = torch.device(cfg.device if (cfg.device != "cuda" or torch.cuda.is_available()) else "cpu")
@@ -588,6 +605,23 @@ def main() -> None:
     for c in cities_obs:
         way_xy_m[int(c)] = _grid_yx_to_xy_m(way_center_y, way_center_x, meta=city_meta[int(c)])
 
+    # Optional: restrict evaluated routes to a predefined split (route_id list).
+    split_ids: Optional[np.ndarray] = None
+    if cfg.split_json is not None:
+        if cfg.split_part is None:
+            raise SystemExit("[FATAL] --split_part is required when --split_json is set.")
+        split_path = Path(str(cfg.split_json))
+        if not split_path.exists():
+            raise SystemExit(f"[FATAL] file not found: {split_path}")
+        split_obj = _read_json(split_path)
+        splits = split_obj.get("splits", split_obj)
+        ids_raw = splits.get(str(cfg.split_part), None) if isinstance(splits, dict) else None
+        if ids_raw is None:
+            raise SystemExit(f"[FATAL] split_json missing part={cfg.split_part!r} (expects splits.train/val/test).")
+        split_ids = np.asarray([int(x) for x in list(ids_raw)], dtype=np.int64).reshape(-1)
+        if int(split_ids.size) == 0:
+            raise SystemExit(f"[FATAL] split {cfg.split_part!r} is empty in {split_path}")
+
     # Sample routes per city.
     picks: Dict[int, np.ndarray] = {}
     for city in cities_obs:
@@ -597,6 +631,8 @@ def main() -> None:
             & (routes.way_seq_len <= int(cfg.max_way_len))
         )
         ids = np.nonzero(keep)[0].astype(np.int64, copy=False)
+        if split_ids is not None:
+            ids = ids[np.isin(ids, split_ids, assume_unique=False)]
         rng = np.random.default_rng(int(cfg.seed) + 101 * int(city))
         rng.shuffle(ids)
         picks[int(city)] = ids[: min(int(cfg.n_routes), int(ids.size))]
@@ -993,6 +1029,8 @@ def main() -> None:
             "way_features_npz": str(args.way_features_npz),
             "ckpt": (str(args.ckpt) if args.ckpt is not None else None),
             "city_grid_meta": {str(int(k)): str(v) for k, v in sorted(city_meta_src.items(), key=lambda kv: int(kv[0]))},
+            "split_json": (str(args.split_json) if args.split_json is not None else None),
+            "split_part": (str(cfg.split_part) if cfg.split_part is not None else None),
         },
         "ckpt_strict_load_ok": bool(ckpt_load_ok),
         "per_city": per_city,

@@ -270,6 +270,9 @@ class Cfg:
     anti_loop_penalty: float  # 0=disable soft penalty; >0=penalty for recently visited ways
     anti_loop_penalty_k: int  # window size K for soft penalty
 
+    split_json: Optional[str] = None
+    split_part: Optional[str] = None
+
 
 def _compress_consecutive_int(seq: List[int]) -> List[int]:
     out: List[int] = []
@@ -566,6 +569,18 @@ def main() -> None:
     p.add_argument("--anti_loop_penalty_k", type=int, default=4, help="Soft anti-loop window size K (only used when anti_loop_penalty>0).")
 
     p.add_argument(
+        "--split_json",
+        type=Path,
+        default=None,
+        help="Optional: restrict evaluated routes to a split json (expects splits.train/val/test route_ids).",
+    )
+    p.add_argument(
+        "--split_part",
+        choices=["train", "val", "test"],
+        default=None,
+        help="Which split to evaluate (default: test when --split_json is set).",
+    )
+    p.add_argument(
         "--city_grid_meta",
         type=str,
         action="append",
@@ -600,6 +615,8 @@ def main() -> None:
         anti_loop_k=max(0, int(args.anti_loop_k)),
         anti_loop_penalty=max(0.0, float(args.anti_loop_penalty)),
         anti_loop_penalty_k=max(0, int(args.anti_loop_penalty_k)),
+        split_json=(str(args.split_json) if args.split_json is not None else None),
+        split_part=(str(args.split_part) if args.split_part is not None else (("test" if args.split_json is not None else None))),
     )
 
     device = torch.device(cfg.device if (cfg.device != "cuda" or torch.cuda.is_available()) else "cpu")
@@ -809,6 +826,23 @@ def main() -> None:
     if max_candidates < 0:
         max_candidates = int(ae.cfg.max_candidates)
 
+    # Optional: restrict evaluated routes to a predefined split (route_id list).
+    split_ids: Optional[np.ndarray] = None
+    if cfg.split_json is not None:
+        if cfg.split_part is None:
+            raise SystemExit("[FATAL] --split_part is required when --split_json is set.")
+        split_path = Path(str(cfg.split_json))
+        if not split_path.exists():
+            raise SystemExit(f"[FATAL] file not found: {split_path}")
+        split_obj = _read_json(split_path)
+        splits = split_obj.get("splits", split_obj)
+        ids_raw = splits.get(str(cfg.split_part), None) if isinstance(splits, dict) else None
+        if ids_raw is None:
+            raise SystemExit(f"[FATAL] split_json missing part={cfg.split_part!r} (expects splits.train/val/test).")
+        split_ids = np.asarray([int(x) for x in list(ids_raw)], dtype=np.int64).reshape(-1)
+        if int(split_ids.size) == 0:
+            raise SystemExit(f"[FATAL] split {cfg.split_part!r} is empty in {split_path}")
+
     # Route sampling per city (fixed seed).
     picks: Dict[int, np.ndarray] = {}
     for city in cities_obs:
@@ -818,6 +852,8 @@ def main() -> None:
             & (routes.way_seq_len <= int(cfg.max_way_len))
         )
         ids = np.nonzero(keep)[0].astype(np.int64, copy=False)
+        if split_ids is not None:
+            ids = ids[np.isin(ids, split_ids, assume_unique=False)]
         rng = np.random.default_rng(int(cfg.seed) + 101 * int(city))
         rng.shuffle(ids)
         picks[int(city)] = ids[: min(int(cfg.n_routes), int(ids.size))]
@@ -1204,6 +1240,8 @@ def main() -> None:
             "way_regions_npz": (str(args.way_regions_npz) if args.way_regions_npz is not None else None),
             "region_ar_ckpt": (str(args.region_ar_ckpt) if args.region_ar_ckpt is not None else None),
             "city_grid_meta": {str(int(k)): str(v) for k, v in sorted(city_meta_src.items(), key=lambda kv: int(kv[0]))},
+            "split_json": (str(args.split_json) if args.split_json is not None else None),
+            "split_part": (str(cfg.split_part) if cfg.split_part is not None else None),
         },
         "ckpt_strict_load_ok": bool(strict_ok),
         "ae_cfg_inferred": {

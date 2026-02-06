@@ -1,7 +1,7 @@
 {
   "ok": true,
   "task": "unified_binned_eval",
-  "created_at": "2026-02-05T22:21:33.486418+08:00",
+  "created_at": "2026-02-06T11:01:45.095449+08:00",
   "cfg": {
     "seed": 0,
     "device": "cuda",
@@ -20,7 +20,9 @@
     "difftraj_sample_steps": null,
     "difftraj_disconnected_fail": 0.5,
     "snap_cell_size": 16,
-    "snap_max_radius": 8
+    "snap_max_radius": 8,
+    "split_json": null,
+    "split_part": null
   },
   "inputs": {
     "way_routes_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD1_waydata_rustbelt_seed0_strict_v1/W5_way_routes_strict/way_routes_strict_masklen0.npz",
@@ -30,7 +32,9 @@
     "city_grid_meta": {
       "0": "/home/jinlin/data/geoexplicit_data/worldtrace/detroit_core_v1/osm_road_prob_meta.json",
       "1": "/home/jinlin/data/geoexplicit_data/worldtrace/columbus_core_v1/osm_road_prob_meta.json"
-    }
+    },
+    "split_json": null,
+    "split_part": null
   },
   "ckpt_strict_load_ok": true,
   "per_city": [

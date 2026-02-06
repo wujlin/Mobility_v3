@@ -1,0 +1,68 @@
+2026-02-06 14:59:48,063 - INFO - device=cuda
+2026-02-06 14:59:48,068 - INFO - loaded way_semantic: n_channels=5
+2026-02-06 14:59:48,074 - INFO - split_json=_sync/wsa/pi_verify/20260206_od_disjoint_s0/od_split_min5_max160_seed0.json train_routes=4316 val_routes=233 => train_idx=4316 val_idx=233
+2026-02-06 14:59:48,074 - INFO - routes: total=5022 train=4316 val=233 min_hops=5 max_way_len=160
+/home/jinlin/miniconda3/envs/dpl/lib/python3.11/site-packages/torch/nn/modules/transformer.py:392: UserWarning: enable_nested_tensor is True, but self.use_nested_tensor is False because encoder_layer.norm_first was True
+  warnings.warn(
+2026-02-06 14:59:49,101 - INFO - init best_val_loss=3.664920 from current weights (epoch=0)
+2026-02-06 14:59:50,341 - INFO - epoch=1 train_loss=2.6180 val_loss=2.0801
+2026-02-06 14:59:51,360 - INFO - epoch=2 train_loss=1.8787 val_loss=1.7368
+2026-02-06 14:59:52,364 - INFO - epoch=3 train_loss=1.6673 val_loss=1.6595
+2026-02-06 14:59:53,389 - INFO - epoch=4 train_loss=1.5973 val_loss=1.5810
+2026-02-06 14:59:54,419 - INFO - epoch=5 train_loss=1.5482 val_loss=1.5366
+2026-02-06 14:59:55,449 - INFO - epoch=6 train_loss=1.5155 val_loss=1.5543
+2026-02-06 14:59:56,453 - INFO - epoch=7 train_loss=1.4957 val_loss=1.4898
+2026-02-06 14:59:57,488 - INFO - epoch=8 train_loss=1.4753 val_loss=1.4555
+2026-02-06 14:59:58,507 - INFO - epoch=9 train_loss=1.4694 val_loss=1.4605
+2026-02-06 14:59:59,510 - INFO - epoch=10 train_loss=1.4481 val_loss=1.4442
+2026-02-06 15:00:00,530 - INFO - epoch=11 train_loss=1.4413 val_loss=1.4280
+2026-02-06 15:00:01,563 - INFO - epoch=12 train_loss=1.4331 val_loss=1.4363
+2026-02-06 15:00:02,565 - INFO - epoch=13 train_loss=1.4112 val_loss=1.4071
+2026-02-06 15:00:03,596 - INFO - epoch=14 train_loss=1.4159 val_loss=1.3988
+2026-02-06 15:00:04,629 - INFO - epoch=15 train_loss=1.4131 val_loss=1.4373
+2026-02-06 15:00:05,637 - INFO - epoch=16 train_loss=1.4040 val_loss=1.3942
+2026-02-06 15:00:06,678 - INFO - epoch=17 train_loss=1.4026 val_loss=1.4152
+2026-02-06 15:00:07,673 - INFO - epoch=18 train_loss=1.4017 val_loss=1.4165
+2026-02-06 15:00:08,676 - INFO - epoch=19 train_loss=1.3918 val_loss=1.3740
+2026-02-06 15:00:09,706 - INFO - epoch=20 train_loss=1.3857 val_loss=1.3710
+2026-02-06 15:00:10,797 - INFO - epoch=21 train_loss=1.3865 val_loss=1.3891
+2026-02-06 15:00:11,803 - INFO - epoch=22 train_loss=1.3872 val_loss=1.3694
+2026-02-06 15:00:12,823 - INFO - epoch=23 train_loss=1.3703 val_loss=1.4085
+2026-02-06 15:00:13,840 - INFO - epoch=24 train_loss=1.3671 val_loss=1.3508
+2026-02-06 15:00:14,866 - INFO - epoch=25 train_loss=1.3598 val_loss=1.3498
+2026-02-06 15:00:15,894 - INFO - epoch=26 train_loss=1.3614 val_loss=1.3486
+2026-02-06 15:00:16,924 - INFO - epoch=27 train_loss=1.3551 val_loss=1.3235
+2026-02-06 15:00:17,958 - INFO - epoch=28 train_loss=1.3574 val_loss=1.3119
+2026-02-06 15:00:18,986 - INFO - epoch=29 train_loss=1.3519 val_loss=1.3588
+2026-02-06 15:00:19,993 - INFO - epoch=30 train_loss=1.3446 val_loss=1.3564
+2026-02-06 15:00:21,027 - INFO - epoch=31 train_loss=1.3451 val_loss=1.3306
+2026-02-06 15:00:22,034 - INFO - epoch=32 train_loss=1.3417 val_loss=1.3785
+2026-02-06 15:00:23,072 - INFO - epoch=33 train_loss=1.3462 val_loss=1.3374
+2026-02-06 15:00:24,092 - INFO - epoch=34 train_loss=1.3391 val_loss=1.3192
+2026-02-06 15:00:25,116 - INFO - epoch=35 train_loss=1.3233 val_loss=1.2980
+2026-02-06 15:00:26,164 - INFO - epoch=36 train_loss=1.3379 val_loss=1.2903
+2026-02-06 15:00:27,198 - INFO - epoch=37 train_loss=1.3327 val_loss=1.3074
+2026-02-06 15:00:28,214 - INFO - epoch=38 train_loss=1.3240 val_loss=1.3165
+2026-02-06 15:00:29,232 - INFO - epoch=39 train_loss=1.3314 val_loss=1.3349
+2026-02-06 15:00:30,258 - INFO - epoch=40 train_loss=1.3222 val_loss=1.2627
+2026-02-06 15:00:31,386 - INFO - epoch=41 train_loss=1.3167 val_loss=1.2816
+2026-02-06 15:00:32,410 - INFO - epoch=42 train_loss=1.3194 val_loss=1.2992
+2026-02-06 15:00:33,439 - INFO - epoch=43 train_loss=1.3141 val_loss=1.3050
+2026-02-06 15:00:34,464 - INFO - epoch=44 train_loss=1.3152 val_loss=1.3426
+2026-02-06 15:00:35,480 - INFO - epoch=45 train_loss=1.3125 val_loss=1.3063
+2026-02-06 15:00:36,504 - INFO - epoch=46 train_loss=1.3031 val_loss=1.2909
+2026-02-06 15:00:37,525 - INFO - epoch=47 train_loss=1.3068 val_loss=1.3125
+2026-02-06 15:00:38,548 - INFO - epoch=48 train_loss=1.3050 val_loss=1.2876
+2026-02-06 15:00:39,568 - INFO - epoch=49 train_loss=1.2984 val_loss=1.3018
+2026-02-06 15:00:40,582 - INFO - epoch=50 train_loss=1.2976 val_loss=1.2861
+2026-02-06 15:00:41,597 - INFO - epoch=51 train_loss=1.2987 val_loss=1.2965
+2026-02-06 15:00:42,623 - INFO - epoch=52 train_loss=1.3029 val_loss=1.3048
+2026-02-06 15:00:43,639 - INFO - epoch=53 train_loss=1.3072 val_loss=1.3110
+2026-02-06 15:00:44,649 - INFO - epoch=54 train_loss=1.2933 val_loss=1.2934
+2026-02-06 15:00:45,668 - INFO - epoch=55 train_loss=1.2964 val_loss=1.2903
+2026-02-06 15:00:46,673 - INFO - epoch=56 train_loss=1.2918 val_loss=1.2972
+2026-02-06 15:00:47,715 - INFO - epoch=57 train_loss=1.2902 val_loss=1.3316
+2026-02-06 15:00:48,741 - INFO - epoch=58 train_loss=1.3026 val_loss=1.2977
+2026-02-06 15:00:49,757 - INFO - epoch=59 train_loss=1.2789 val_loss=1.2602
+2026-02-06 15:00:50,796 - INFO - epoch=60 train_loss=1.2843 val_loss=1.2369
+2026-02-06 15:00:50,951 - INFO - saved: /home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/20260206_od_disjoint_s0/waycasd_flow_regionseq_xattn_seed0/report.json

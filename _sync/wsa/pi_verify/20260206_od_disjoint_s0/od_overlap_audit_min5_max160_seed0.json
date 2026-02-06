@@ -1,0 +1,63 @@
+{
+  "ok": true,
+  "task": "od_overlap_audit",
+  "created_at": "2026-02-06T14:43:57.853724+08:00",
+  "cfg": {
+    "seed": 0,
+    "val_ratio": 0.05,
+    "min_hops": 5,
+    "max_way_len": 160,
+    "test_n_routes": 200,
+    "use_split_json": true,
+    "split_part_train": "train",
+    "split_part_test": "test",
+    "split_part_val": "val"
+  },
+  "inputs": {
+    "way_routes_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD1_waydata_rustbelt_seed0_strict_v1/W5_way_routes_strict/way_routes_strict_masklen0.npz",
+    "split_json": "_sync/wsa/pi_verify/20260206_od_disjoint_s0/od_split_min5_max160_seed0.json"
+  },
+  "report": {
+    "n_kept": 5022,
+    "train": {
+      "n_routes": 4316,
+      "n_od": 3353,
+      "n_trans": 18943
+    },
+    "val": {
+      "n_routes": 233
+    },
+    "test": {
+      "n_routes": 473,
+      "n_od": 394,
+      "n_trans": 5908
+    },
+    "overlap": {
+      "route_overlap_test_in_train": 0,
+      "route_overlap_test_in_val": 0,
+      "route_overlap_rate_test_in_train": 0.0,
+      "od_overlap_test_in_train": 0,
+      "od_overlap_rate_test_in_train": 0.0,
+      "transition_coverage_test_in_train": 0.8392010832769127
+    },
+    "per_test_route_transition_coverage": {
+      "n_routes": 473,
+      "mean": 0.8903223154723441,
+      "quantiles": {
+        "p0": 0.0,
+        "p50": 1.0,
+        "p90": 1.0,
+        "p95": 1.0,
+        "p100": 1.0
+      },
+      "frac_full_coverage": 0.6194503171247357,
+      "route_len_quantiles": {
+        "p0": 5.0,
+        "p50": 26.0,
+        "p90": 53.0,
+        "p95": 60.0,
+        "p100": 78.0
+      }
+    }
+  }
+}

@@ -1,0 +1,15 @@
+/home/jinlin/miniconda3/envs/dpl/lib/python3.11/site-packages/torch/nn/modules/transformer.py:392: UserWarning: enable_nested_tensor is True, but self.use_nested_tensor is False because encoder_layer.norm_first was True
+  warnings.warn(
+[city0] start n_routes=132 latent_source=flow region_constraint=ar compare_beam=True
+[city0] batch 0:64/132
+[city0] batch 64:128/132
+[city0] batch 128:132/132
+[city0] done=132 routes
+[city1] start n_routes=200 latent_source=flow region_constraint=ar compare_beam=True
+[city1] batch 0:64/200
+[city1] batch 64:128/200
+[city1] batch 128:192/200
+[city1] batch 192:200/200
+[city1] done=200 routes
+[OK] saved: _sync/wsa/pi_verify/20260206_od_disjoint_s0/eval/binned_waycasd_flow_test_n200pc.json
+[OK] saved: _sync/wsa/pi_verify/20260206_od_disjoint_s0/eval/per_route_waycasd_flow_test_n200pc.json

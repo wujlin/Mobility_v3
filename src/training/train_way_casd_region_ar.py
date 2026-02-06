@@ -41,6 +41,7 @@ class TrainCfg:
     n_route_cities: int
     max_routes: Optional[int]
     use_candidate_mask: bool
+    split_json: Optional[str] = None
 
 
 def _set_seed(seed: int) -> None:
@@ -58,6 +59,24 @@ def _split_dataset(n: int, val_ratio: float, seed: int) -> Tuple[np.ndarray, np.
     val_idx = perm[:n_val]
     train_idx = perm[n_val:]
     return train_idx.astype(np.int64, copy=False), val_idx.astype(np.int64, copy=False)
+
+
+def _read_json(path: Path) -> dict:
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _subset_indices_from_route_ids(ds: object, route_ids: np.ndarray) -> np.ndarray:
+    """
+    RegionRouteDataset is indexed by row (region_seq CSR row), not by route_id.
+    This helper maps a list of route_ids -> dataset indices.
+    """
+    route_ids = np.asarray(route_ids, dtype=np.int64).reshape(-1)
+    if route_ids.size == 0:
+        return np.zeros((0,), dtype=np.int64)
+    # ds.row_ids are CSR rows; region_seq.route_id[row] is the corresponding route_id.
+    rid_per_idx = np.asarray(ds.region_seq.route_id[ds.row_ids], dtype=np.int64).reshape(-1)
+    mask = np.isin(rid_per_idx, route_ids, assume_unique=False)
+    return np.nonzero(mask)[0].astype(np.int64, copy=False)
 
 
 def _load_region_meta(*, way_regions_npz: Path, way_features_npz: Path, coord_scale: float) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, Dict[str, object]]:
@@ -264,6 +283,12 @@ def build_argparser() -> argparse.ArgumentParser:
     p.add_argument("--device", type=str, default="cuda")
     p.add_argument("--tz_offset_hours", type=float, default=-5.0)
     p.add_argument("--max_routes", type=int, default=None, help="Debug: cap number of routes (after filtering).")
+    p.add_argument(
+        "--split_json",
+        type=Path,
+        default=None,
+        help="Optional OD-disjoint split json (expects splits.train/val/test route_ids). Overrides val_ratio.",
+    )
 
     p.add_argument("--d_model", type=int, default=256)
     p.add_argument("--n_heads", type=int, default=8)
@@ -300,6 +325,7 @@ def main() -> None:
         n_route_cities=int(args.n_route_cities),
         max_routes=(int(args.max_routes) if args.max_routes is not None else None),
         use_candidate_mask=bool(args.use_candidate_mask),
+        split_json=(str(args.split_json) if args.split_json is not None else None),
     )
 
     _set_seed(cfg.seed)
@@ -313,14 +339,33 @@ def main() -> None:
     )
     log.info(f"region_meta: {region_meta_report}")
 
+    if args.split_json is not None and args.max_routes is not None:
+        log.warning("--split_json is set, ignoring --max_routes to avoid inconsistent splits.")
     ds = load_region_ar_dataset(
         way_routes_npz=Path(args.way_routes_npz),
         region_seq_npz=Path(args.region_seq_npz),
         way_regions_npz=Path(args.way_regions_npz),
         tz_offset_hours=float(cfg.tz_offset_hours),
-        max_routes=cfg.max_routes,
+        max_routes=(None if args.split_json is not None else cfg.max_routes),
     )
-    train_idx, val_idx = _split_dataset(len(ds), val_ratio=float(cfg.val_ratio), seed=int(cfg.seed))
+    if args.split_json is None:
+        train_idx, val_idx = _split_dataset(len(ds), val_ratio=float(cfg.val_ratio), seed=int(cfg.seed))
+    else:
+        split = _read_json(Path(args.split_json))
+        splits = split.get("splits", split)
+        tr_rids = np.asarray(splits.get("train", []), dtype=np.int64).reshape(-1)
+        va_rids = np.asarray(splits.get("val", []), dtype=np.int64).reshape(-1)
+        train_idx = _subset_indices_from_route_ids(ds, tr_rids)
+        val_idx = _subset_indices_from_route_ids(ds, va_rids)
+        if int(train_idx.size) == 0 or int(val_idx.size) == 0:
+            raise SystemExit(
+                f"[FATAL] split_json produced empty subsets: train_idx={int(train_idx.size)} val_idx={int(val_idx.size)}. "
+                "Check min_hops/max_way_len match split generation and region_seq_npz."
+            )
+        log.info(
+            f"split_json={args.split_json} train_routes={int(tr_rids.size)} val_routes={int(va_rids.size)} "
+            f"=> train_idx={int(train_idx.size)} val_idx={int(val_idx.size)}"
+        )
     train_ds = Subset(ds, train_idx.tolist())
     val_ds = Subset(ds, val_idx.tolist())
 
@@ -415,6 +460,7 @@ def main() -> None:
             "way_regions_npz": str(args.way_regions_npz),
             "region_seq_npz": str(args.region_seq_npz),
             "way_features_npz": str(args.way_features_npz),
+            "split_json": (str(args.split_json) if args.split_json is not None else None),
         },
         "region_meta": region_meta_report,
         "best_by_loss": best_by_loss,

@@ -56,6 +56,7 @@ class TrainCfg:
     save_every: int
     early_stop_patience: int
     max_grad_norm: float
+    split_json: Optional[str] = None
 
 
 def _set_seed(seed: int) -> None:
@@ -73,6 +74,18 @@ def _split_dataset(n: int, val_ratio: float, seed: int) -> Tuple[np.ndarray, np.
     val_idx = perm[:n_val]
     train_idx = perm[n_val:]
     return train_idx.astype(np.int64, copy=False), val_idx.astype(np.int64, copy=False)
+
+
+def _read_json(path: Path) -> dict:
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _subset_indices_from_route_ids(dataset: WayRouteDataset, route_ids: np.ndarray) -> np.ndarray:
+    route_ids = np.asarray(route_ids, dtype=np.int64).reshape(-1)
+    if route_ids.size == 0:
+        return np.zeros((0,), dtype=np.int64)
+    mask = np.isin(dataset.route_ids.astype(np.int64, copy=False), route_ids, assume_unique=False)
+    return np.nonzero(mask)[0].astype(np.int64, copy=False)
 
 
 def _to_device(batch: Dict[str, object], device: torch.device) -> Dict[str, object]:
@@ -333,6 +346,12 @@ def main() -> None:
     p.add_argument("--min_hops", type=int, default=5)
     p.add_argument("--max_way_len", type=int, default=160)
     p.add_argument("--max_routes", type=int, default=None)
+    p.add_argument(
+        "--split_json",
+        type=Path,
+        default=None,
+        help="Optional OD-disjoint split json (expects splits.train/val/test route_ids). Overrides val_ratio.",
+    )
     p.add_argument("--flow_solver_steps", type=int, default=0, help="Override flow solver steps (0=use ckpt).")
     p.add_argument("--save_every", type=int, default=1)
     p.add_argument("--early_stop_patience", type=int, default=0)
@@ -359,6 +378,7 @@ def main() -> None:
         save_every=int(args.save_every),
         early_stop_patience=int(args.early_stop_patience),
         max_grad_norm=float(args.max_grad_norm),
+        split_json=(str(args.split_json) if args.split_json is not None else None),
     )
 
     _set_seed(cfg.seed)
@@ -366,8 +386,32 @@ def main() -> None:
     log.info(f"device={device}")
 
     routes = load_way_routes_npz(Path(args.way_routes_npz))
-    dataset = WayRouteDataset(routes, max_routes=cfg.max_routes, max_way_len=int(cfg.max_way_len), min_hops=int(cfg.min_hops))
-    tr_idx, va_idx = _split_dataset(len(dataset), cfg.val_ratio, cfg.seed)
+    if args.split_json is not None and args.max_routes is not None:
+        log.warning("--split_json is set, ignoring --max_routes to avoid inconsistent splits.")
+    dataset = WayRouteDataset(
+        routes,
+        max_routes=(None if args.split_json is not None else cfg.max_routes),
+        max_way_len=int(cfg.max_way_len),
+        min_hops=int(cfg.min_hops),
+    )
+    if args.split_json is None:
+        tr_idx, va_idx = _split_dataset(len(dataset), cfg.val_ratio, cfg.seed)
+    else:
+        split = _read_json(Path(args.split_json))
+        splits = split.get("splits", split)
+        tr_rids = np.asarray(splits.get("train", []), dtype=np.int64).reshape(-1)
+        va_rids = np.asarray(splits.get("val", []), dtype=np.int64).reshape(-1)
+        tr_idx = _subset_indices_from_route_ids(dataset, tr_rids)
+        va_idx = _subset_indices_from_route_ids(dataset, va_rids)
+        if int(tr_idx.size) == 0 or int(va_idx.size) == 0:
+            raise SystemExit(
+                f"[FATAL] split_json produced empty subsets: train_idx={int(tr_idx.size)} val_idx={int(va_idx.size)}. "
+                "Check min_hops/max_way_len match split generation."
+            )
+        log.info(
+            f"split_json={args.split_json} train_routes={int(tr_rids.size)} val_routes={int(va_rids.size)} "
+            f"=> train_idx={int(tr_idx.size)} val_idx={int(va_idx.size)}"
+        )
     train_set = Subset(dataset, tr_idx.tolist())
     val_set = Subset(dataset, va_idx.tolist())
     log.info(f"routes: total={len(dataset)} train={len(train_set)} val={len(val_set)} min_hops={cfg.min_hops} max_way_len={cfg.max_way_len}")
@@ -526,6 +570,7 @@ def main() -> None:
             "ae_ckpt": str(args.ae_ckpt),
             "flow_ckpt": str(args.flow_ckpt),
             "way_regions_npz": (str(args.way_regions_npz) if args.way_regions_npz is not None else None),
+            "split_json": (str(args.split_json) if args.split_json is not None else None),
         },
         "out_dir": str(out_dir),
         "best_val_loss": float(best_val),
@@ -542,4 +587,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

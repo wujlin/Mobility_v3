@@ -62,6 +62,7 @@ class TrainCfg:
     # E8 (optional): multi-scale latent (segment tokens)
     segment_size: int
     segment_n_latent: int
+    split_json: Optional[str] = None
 
 
 def _set_seed(seed: int) -> None:
@@ -86,6 +87,18 @@ def _split_dataset(n: int, val_ratio: float, seed: int) -> Tuple[np.ndarray, np.
     val_idx = perm[:n_val]
     train_idx = perm[n_val:]
     return train_idx.astype(np.int64, copy=False), val_idx.astype(np.int64, copy=False)
+
+
+def _read_json(path: Path) -> dict:
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _subset_indices_from_route_ids(dataset: WayRouteDataset, route_ids: np.ndarray) -> np.ndarray:
+    route_ids = np.asarray(route_ids, dtype=np.int64).reshape(-1)
+    if route_ids.size == 0:
+        return np.zeros((0,), dtype=np.int64)
+    mask = np.isin(dataset.route_ids.astype(np.int64, copy=False), route_ids, assume_unique=False)
+    return np.nonzero(mask)[0].astype(np.int64, copy=False)
 
 
 def train_epoch(model: WayCASDAutoEncoder, loader: DataLoader, opt: torch.optim.Optimizer, device: torch.device) -> Dict[str, float]:
@@ -147,6 +160,12 @@ def build_argparser() -> argparse.ArgumentParser:
     p.add_argument("--max_way_len", type=int, default=128)
     p.add_argument("--max_candidates", type=int, default=32)
     p.add_argument("--max_routes", type=int, default=None, help="Debug: cap number of routes (after filtering).")
+    p.add_argument(
+        "--split_json",
+        type=Path,
+        default=None,
+        help="Optional OD-disjoint split json (expects splits.train/val/test route_ids). Overrides val_ratio.",
+    )
 
     p.add_argument("--d_model", type=int, default=256)
     p.add_argument("--n_latent", type=int, default=64)
@@ -245,6 +264,7 @@ def main() -> None:
         decoder_past_n_heads=int(args.decoder_past_n_heads),
         segment_size=int(args.segment_size),
         segment_n_latent=int(args.segment_n_latent),
+        split_json=(str(args.split_json) if args.split_json is not None else None),
     )
 
     _set_seed(cfg.seed)
@@ -260,8 +280,32 @@ def main() -> None:
         log.info(f"loaded way_semantic: n_channels={n_semantic}")
 
     routes = load_way_routes_npz(Path(args.way_routes_npz))
-    dataset = WayRouteDataset(routes, max_routes=cfg.max_routes, max_way_len=int(cfg.max_way_len), min_hops=int(cfg.min_hops))
-    train_ids, val_ids = _split_dataset(len(dataset), cfg.val_ratio, cfg.seed)
+    if args.split_json is not None and args.max_routes is not None:
+        log.warning("--split_json is set, ignoring --max_routes to avoid inconsistent splits.")
+    dataset = WayRouteDataset(
+        routes,
+        max_routes=(None if args.split_json is not None else cfg.max_routes),
+        max_way_len=int(cfg.max_way_len),
+        min_hops=int(cfg.min_hops),
+    )
+    if args.split_json is None:
+        train_ids, val_ids = _split_dataset(len(dataset), cfg.val_ratio, cfg.seed)
+    else:
+        split = _read_json(Path(args.split_json))
+        splits = split.get("splits", split)
+        tr_rids = np.asarray(splits.get("train", []), dtype=np.int64).reshape(-1)
+        va_rids = np.asarray(splits.get("val", []), dtype=np.int64).reshape(-1)
+        train_ids = _subset_indices_from_route_ids(dataset, tr_rids)
+        val_ids = _subset_indices_from_route_ids(dataset, va_rids)
+        if int(train_ids.size) == 0 or int(val_ids.size) == 0:
+            raise SystemExit(
+                f"[FATAL] split_json produced empty subsets: train_idx={int(train_ids.size)} val_idx={int(val_ids.size)}. "
+                "Check min_hops/max_way_len match split generation."
+            )
+        log.info(
+            f"split_json={args.split_json} train_routes={int(tr_rids.size)} val_routes={int(va_rids.size)} "
+            f"=> train_idx={int(train_ids.size)} val_idx={int(val_ids.size)}"
+        )
     train_set = Subset(dataset, train_ids.tolist())
     val_set = Subset(dataset, val_ids.tolist())
     log.info(
@@ -469,7 +513,12 @@ def main() -> None:
         "ok": True,
         "task": "train_way_casd_autoencoder",
         "created_at": datetime.now(tz=TZ_SHANGHAI).isoformat(),
-        "inputs": {"way_routes_npz": str(args.way_routes_npz), "way_graph_npz": str(args.way_graph_npz), "way_features_npz": str(args.way_features_npz)},
+        "inputs": {
+            "way_routes_npz": str(args.way_routes_npz),
+            "way_graph_npz": str(args.way_graph_npz),
+            "way_features_npz": str(args.way_features_npz),
+            "split_json": (str(args.split_json) if args.split_json is not None else None),
+        },
         "out_dir": str(out_dir),
         "best_val_loss": float(best),
         "best_ckpt": str(best_path),

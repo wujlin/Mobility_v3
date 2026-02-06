@@ -1,17 +1,21 @@
 # ICML 2026 RouteGen：Way-CASD 主线实验记录（给新 PI 的快速背景）
 
-> 口径声明：本文只记录**已跑过且在本地 `_sync/wsa/icml2026_routegen/` 可查到的结果**，并把关键实验的**设置/结果/结论**压缩成可审阅版本。  
+> 口径声明：本文只记录**已跑过且在本地 `_sync/wsa/` 下可查到的结果**（主要在 `_sync/wsa/icml2026_routegen/`、`_sync/wsa/pi_verify/`、`_sync/wsa/baselines_sota_s0/`），并把关键实验的**设置/结果/结论**压缩成可审阅版本。  
 > 工作站真实落盘与环境约定见：`docs/WORKSTATION_GUIDE.md`。  
 > legacy（Map-free / raster / segment）E 系列实验索引见：`docs/ICML_2026_ROUTEGEN_SYNC_MANIFEST.md`。
 
 > ⚠️ 2026-02-01 更新（min_hops=5 的“论文口径”）：我们新增了一条“过滤短路线(min_hops=5)→重训AE→Oracle Decode(beam)→granularity(米)”的结果链路，产物在 `_sync/wsa/pi_verify/20260201_min5_candq1_past8_len160_s0/`（以及对应可视化 `_sync/wsa/paper_figures/waycasd_v1/min5_s0/`）。  
 > 这条链路 **不在** `_sync/wsa/icml2026_routegen/` 下，因此单独在第 0 节补充，避免 PI 误把旧口径（未过滤短路线 / 不同 ckpt）当作当前主结果。
+>
+> ⚠️ 2026-02-05 补充（min_hops=5 的 end-to-end generation）：已完成 Flow→z_flow→Decoder 的端到端评测（含 per-route + 形状指标），并形成 D4 空间审计（hit_wall 热点）。产物主要在 `_sync/wsa/pi_verify/E2_joint_finetune_s0_cont_e60/` 与 `_sync/wsa/pi_verify/D4_hit_wall_spatial_e2cont_s0/`。
+>
+> ⚠️ 2026-02-06 补充（评测公平性）：已完成 OD-disjoint split（精确 OD：city,start_way,dest_way 不重叠）并重训 RNN-AR / Tr-AR / Way-CASD，输出 paired McNemar 与失败模式对比。产物在 `_sync/wsa/pi_verify/20260206_od_disjoint_s0/`。
 
 ---
 
 ## 0. 一句话结论（当前状态）
 
-### 0.0 论文口径（min_hops=5，2026-02-01）
+### 0.0 论文口径（min_hops=5；oracle 上界 + generation 现状）
 
 **核心结论**：过滤短路线后，任务更“planning-like”，但 greedy 显著变难；beam=10 仍能带来稳定提升；并且我们已把“way-level success 的地理精度”用 meters 量化清楚（成功中位误差≈65m）。
 
@@ -32,7 +36,44 @@
   - Micro（每城 easy/recovered/hard，带 Err@dest 角标）：`_sync/wsa/paper_figures/waycasd_v1/min5_s0/micro/waycasd_city_micro_case_study.png`  
   - Macro（三列：beam10 failure density / greedy success rate / beam gain）：`_sync/wsa/paper_figures/waycasd_v1/min5_s0/macro/waycasd_city_macro_overview.png`
 
-> 重要声明：以上为 **reconstruction/oracle 上界**（latent_source=gt），不是 end-to-end generation。要主张“generation”，必须补齐 Flow→sample latent→decode 的定量评测（见第 3.5 与后续 TODO）。
+#### 0.0.1 end-to-end generation（Flow→z_flow→Decoder；min5 口径，n=200/城）
+
+当前“可复现最佳链路”（对齐 `checklist_exp.md`）：
+- Flow：`W11_train_flow_past16_regionseq_xattn_s0/ckpt_best.pt`
+- Decoder：E2 joint fine-tune 续训 e60：`_sync/wsa/pi_verify/E2_joint_finetune_s0_cont_e60/ckpt_best.pt`
+- Decode：beam=10，`decode_max_candidates=0`（全后继），soft anti-loop `P=2.0,K=4`，Region constraint=AR relaxed + dest_region fallback
+
+结果（Overall success_rate，beam）：
+- **E2（未续训）**：69.0%（`_sync/wsa/pi_verify/E2_joint_finetune_s0/binned_eval_flow_n200pc.json`）
+- **E2 续训 e60（当前主结果）**：**74.5%**（`_sync/wsa/pi_verify/E2_joint_finetune_s0_cont_e60/binned_eval_flow_n200pc.json`）
+  - 分桶 success_rate（[5,10)→[60,+)）：`91.7 / 86.6 / 69.0 / 80.8 / 51.9 / 64.7`
+
+失败模式（E2 续训 e60，per-route；n=400）：
+- hit_wall=24.5%，loop=21.0%，dead_end=1.0%  
+  产物：`_sync/wsa/pi_verify/D4_hit_wall_spatial_e2cont_s0/eval/per_route_flow_n200pc.json`
+
+#### 0.0.2 D4：hit_wall 空间审计（[40,60) bin）
+
+目的：定位最严重 bin（[40,60)）的 hit_wall 是否呈现空间聚集，并量化“卡住点”的局部拓扑难度。
+- 输出：`_sync/wsa/pi_verify/D4_hit_wall_spatial_e2cont_s0/audit/hit_wall_spatial.png`
+- 审计 JSON：`_sync/wsa/pi_verify/D4_hit_wall_spatial_e2cont_s0/audit/hit_wall_spatial_audit.json`
+- 关键事实（hit_wall 子集，last_outdeg）：两城均 `p50=1, p90=2`（并非高分叉路口），更像“早期选错 corridor 后一路走到底”。
+
+#### 0.0.3 Flow 改进实验索引（min5 口径，n=200/城）
+
+> 目的：避免对“+2/+4 条路径”的噪声做过度解读；尽量用可复现的对照 +（可用时）paired 统计来支持结论。
+
+- **B3：Best-of-K（K=8）= 多样本 + 选择**  
+  产物：`_sync/wsa/pi_verify/B3_bestofK_s0/`  
+  - success_rate（beam）：dest 选择与 oraclebest 选择 **相同**：Overall 82.25%（因为两者都“success-first”）；但在 **成功样本内**，oraclebest 可显著改善 shape（例如 [40,60) DTW p50：21.7km→0.73km，Fréchet p50：1.02km→0.265km，len_ratio p50：1.27→1.006）。  
+  - 含义：z_flow 的“可达性/多样性”并不差，瓶颈更可能在 **如何选到好样本**（final_error 对成功样本几乎无区分度）。
+- **A2：Flow CFG（cond dropout=0.1 + CFG 推理）**  
+  产物：`_sync/wsa/pi_verify/A2_flow_cfg_s0/`  
+  - sweep（cfg_scale）：1.0/1.5/2.0/3.0，其中 cfg=2.0 的 overall success≈73.25%（本轮未超过主结果 74.5%）。  
+  - 备注：当前只保存 binned JSON，未 dump per-route，因此不做显著性结论；若要对“是否有改进”下判断，建议补跑 paired（输出 per_route）。
+- **A1：Flow 更深（n_layers=8）**  
+  产物：`_sync/wsa/pi_verify/A1_flow_deeperL8_s0/`  
+  - overall success≈73.75%（本轮未超过主结果 74.5%）；同样建议补 per-route 才能做 paired 结论。
 
 ### 0.1 历史口径（未过滤短路线 / strict_sem5 旧主线，2026-01）
 
@@ -243,11 +284,17 @@ On-road prior 的“数据侧核验”（用于解释跨城差异）：
 
 - 工作站跑法与目录口径：`docs/WORKSTATION_GUIDE.md`
 - legacy E 系列同步索引：`docs/ICML_2026_ROUTEGEN_SYNC_MANIFEST.md`
-- 本地结果索引：`_sync/wsa/icml2026_routegen/`
+- 本地结果索引：
+  - 旧主线（strict_sem5）：`_sync/wsa/icml2026_routegen/`
+  - PI/Partner 验证与论文口径（min5 / flow / region / fairness）：`_sync/wsa/pi_verify/`
+  - baseline & sota（unified eval）：`_sync/wsa/baselines_sota_s0/`
 - Way-CASD 关键目录（本地同步）：
   - AE+诊断：`_sync/wsa/icml2026_routegen/WAYCASD_PASTCTX_strict_sem5_rustbelt_seed0/`
   - Beam 大样本：`_sync/wsa/icml2026_routegen/WAYCASD_DIAG_beam_gt_pastctxfix_seed0_n200pc/`
   - Flow any-success：`_sync/wsa/icml2026_routegen/WAYCASD_DIAG_flow_anysucc_pastctxfix_seed0_N*_n200/`
+  - min5 generation 主结果（E2续训）：`_sync/wsa/pi_verify/E2_joint_finetune_s0_cont_e60/`
+  - D4 空间审计（hit_wall）：`_sync/wsa/pi_verify/D4_hit_wall_spatial_e2cont_s0/`
+  - OD-disjoint split（重训 + paired）：`_sync/wsa/pi_verify/20260206_od_disjoint_s0/`
 
 ---
 
@@ -261,20 +308,21 @@ On-road prior 的“数据侧核验”（用于解释跨城差异）：
 - **beam 的价值**：在 min_hops=5 的 oracle 口径下，beam=10 相对 greedy Overall +31.5pp（第 0.0 节）。
 - **granularity 诚实披露**：已经给出 way_len 分布与终点误差（meters）（第 0.0 节），并在可视化里展示 recovered/hard case。
 
-### 6.2 目前 **还缺** 的（PI review 提到但尚未完成）
+### 6.2 PI review 关注项：当前完成情况
 
-1) **Flow end-to-end generation（min_hops=5 口径）**  
-   - 现状：min_hops=5 只有 AE oracle（`oracle_decode_*`），不等价 generation。  
-   - 现有工具：
-     - `src/evaluation/way_casd_decision_eval.py`：decision 侧（success/jaccard/len_ratio，支持多采样 any-success / sample-success）。
-     - `src/evaluation/way_casd_binned_eval.py`：shape 侧（DTW/Fréchet/len_ratio/final_error，支持 `--latent_source flow --flow_ckpt ...`）。
+1) **Flow end-to-end generation（min_hops=5 口径）** ✅ 已补齐  
+   - 主结果（E2续训 e60）：`_sync/wsa/pi_verify/E2_joint_finetune_s0_cont_e60/binned_eval_flow_n200pc.json`  
+   - per-route（paired/显著性基础设施）：`_sync/wsa/pi_verify/D4_hit_wall_spatial_e2cont_s0/eval/per_route_flow_n200pc.json`  
+   - hit_wall 空间审计：`_sync/wsa/pi_verify/D4_hit_wall_spatial_e2cont_s0/audit/hit_wall_spatial.png`
 
-2) **Baseline（Shortest Path / Random Walk）**  
+2) **Baseline（Shortest Path / RNN-AR / Tr-AR / GTG / DiffTraj）** ✅ 已跑（但需强调公平性）  
    - 注意：在 “success=到达 dest way” 的定义下，Shortest Path 很可能在过滤后的集合上接近 100% success（因为 GT 已证明可达且长度≤160）。  
    - 因此 baseline 更应与 **路径质量指标** 绑定汇报（例如 Jaccard / DTW / length ratio / final error），否则会造成“成功率被 trivial baseline 统治”的误解。
    - 现有工具：
      - `src/evaluation/shortest_path_baseline.py`：length-weighted Dijkstra（meters），输出 `detour_gt_over_sp` + DTW/Fréchet（按 gt_hops 分桶）。
      - `src/evaluation/way_casd_vs_sp_shape_compare.py`：Way-CASD vs SP 的分桶 shape 对比汇总（输出 json/markdown 表）。
+   - 产物（随机 split 的统一评测结果，供参考）：`_sync/wsa/baselines_sota_s0/`  
+   - ⚠️ 公平性修复（OD-disjoint 重训 + paired McNemar）：`_sync/wsa/pi_verify/20260206_od_disjoint_s0/`
 
 3) **路径质量指标补全（除 success/final error 外）**  
    - 已有：Jaccard（oracle failures & zenc_info），len_ratio（decision_eval 里已有 best/mean 统计）。  
@@ -284,3 +332,18 @@ On-road prior 的“数据侧核验”（用于解释跨城差异）：
 4) **min_hops=5 口径下的 cand_query ablation 是否仍成立**  
    - 现状：已有的 +24pp ablation 是旧口径（未 min5 过滤）。  
    - TODO：若论文主表采用 min_hops=5，应训练一版 candq=0(min5) 并复现对比（否则只能把旧 ablation 放在 appendix/讨论里并标注口径差异）。
+
+### 6.3 评测公平性（OD-disjoint；2026-02-06，seed0）
+
+目的：验证“RNN/Tr 的高成功率是否来自 random split + way_id embedding 的背诵”，并给出 paired 显著性结论。
+
+- split + 审计：`_sync/wsa/pi_verify/20260206_od_disjoint_s0/od_split_min5_max160_seed0.json`、`_sync/wsa/pi_verify/20260206_od_disjoint_s0/od_overlap_audit_min5_max160_seed0.json`
+  - train/test **OD overlap=0**（严格 disjoint），route overlap=0  
+  - 但 transition coverage 仍高：test transitions in train ≈0.839（提示“背诵风险”会弱化但不会归零）
+- 评测样本：test 可用 routes 为 Detroit 132 + Columbus 200 = 332（`n_routes=200/城` 时 Detroit 不足）
+- paired 结论（beam）：
+  - Way-CASD vs Tr-AR：+11.4pp，p=0.0001（显著）  
+    产物：`_sync/wsa/pi_verify/20260206_od_disjoint_s0/eval/paired_tr_vs_waycasd_beam.md`
+  - Way-CASD vs RNN-AR：-3.0pp，p=0.2888（不显著，统计上打平）  
+    产物：`_sync/wsa/pi_verify/20260206_od_disjoint_s0/eval/paired_rnn_vs_waycasd_beam.md`
+- 失败模式强对比：RNN 主要 dead_end（≈34%），Way-CASD 主要 hit_wall/loop（hit_wall≈36%）——两者瓶颈不同，后续优化应对准 Way-CASD 的 hit_wall（而不是 dead_end）。

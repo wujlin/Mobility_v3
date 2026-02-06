@@ -1,7 +1,7 @@
 # Way-CASD 实验 Checklist
 
 > 目标：缩小 Oracle（AE oracle，上界）→ Flow（端到端生成） 的性能差距
-> 更新日期：2026-02-05
+> 更新日期：2026-02-06
 
 ---
 
@@ -35,24 +35,192 @@ Region: AR constraint, relaxed, dest_region fallback
 
 ## 待执行实验（按优先级排序）
 
-### P0：B3 多样本+选择（立即执行，无需重训练）
+### P0：OD-Disjoint Best-of-K（论文主表关键；零训练成本）
 
-**目标**：测试"如果从K个z_flow中能选对，能提升多少"——这是改进Flow的upper bound proxy
+> 说明：PI 要求的 EXP-1~EXP-4 本质上是同一组 eval，只是改 `n_samples_per_route` / `sample_select` 并强制输出 per_route。
+> 我们把它整理成 3 个可直接跑的实验（best-of-8、K-sweep、oracle 上界），并把 per_route dump 作为默认输出。
 
-**方法**：
-- `--n_samples_per_route 8`
-- `--sample_select dest`：可部署版（success优先 → final_error_m最小）
-- `--sample_select best`：oracle上界（用GT的DTW/Fréchet选最优）
+#### EXP-1：OD-Disjoint best-of-8（deployable）
+- 只改两项：`--n_samples_per_route 8 --sample_select dest`
+- 输出：`_sync/wsa/pi_verify/20260206_od_disjoint_s0/p0_bestofk/`
 
-**预期**：
-- 如果 best-of-8 oracle 显著提升 → z_flow diversity足够，问题在于"选不对"
-- 如果 best-of-8 oracle 提升有限 → z_flow diversity不够，需要改进Flow本身
+#### EXP-2：K sweep（K=1/2/4/8/16）
+- 目的：画 diversity 曲线（success vs K），并报告 any-success/mean-sample-success（来自 per_route）
+- 输出同上（每个 K 一份 binned +（可选）per_route）
 
-**输出**：`_sync/wsa/pi_verify/B3_bestofK_s0/`
+#### EXP-3：Oracle decode 上界（标定 flow 损失）
+- `--latent_source gt`（GT→AE.encode→Decoder）
+- 输出同上（binned + per_route）
+
+#### EXP-4：paired 分析（McNemar + shape paired diff）
+- 依赖 EXP-1/3 的 `per_route_*.json`
+- 输出：`paired_*.md`（直接放到同一目录，便于 git review）
+
+---
+
+### P0：执行命令（推荐直接复制粘贴；无 exit）
+
+> 建议：先从 **已有 OD-disjoint K=1 评测** 自动抽取输入路径，避免手填出错。
+
+```bash
+cd ~/projects/Mobility_v3
+
+export OD_ROOT="_sync/wsa/pi_verify/20260206_od_disjoint_s0"
+export BASE_JSON="$OD_ROOT/eval/binned_waycasd_flow_test_n200pc.json"
+export OUT_DIR="$OD_ROOT/p0_bestofk"
+mkdir -p "$OUT_DIR"
+
+# 0) 生成一份可 source 的环境变量脚本（从 BASE_JSON 自动读 inputs）
+python - <<'PY'
+import json, os, shlex
+from pathlib import Path
+
+base = Path(os.environ.get("BASE_JSON", "_sync/wsa/pi_verify/20260206_od_disjoint_s0/eval/binned_waycasd_flow_test_n200pc.json"))
+obj = json.loads(base.read_text(encoding="utf-8"))
+inp = obj["inputs"]
+
+items = {
+  "WAY_ROUTES_NPZ": inp["way_routes_npz"],
+  "WAY_GRAPH_NPZ": inp["way_graph_npz"],
+  "WAY_FEATS_NPZ": inp["way_features_npz"],
+  "AE_CKPT": inp["ae_ckpt"],
+  "FLOW_CKPT": inp["flow_ckpt"],
+  "WAY_REGIONS_NPZ": inp["way_regions_npz"],
+  "REGION_AR_CKPT": inp["region_ar_ckpt"],
+  "SPLIT_JSON": inp["split_json"],
+  "SPLIT_PART": inp["split_part"],
+  "DET_META": inp["city_grid_meta"]["0"],
+  "COL_META": inp["city_grid_meta"]["1"],
+}
+out = Path(os.environ.get("OUT_DIR", "_sync/wsa/pi_verify/20260206_od_disjoint_s0/p0_bestofk")) / "vars.sh"
+lines = ["#!/usr/bin/env bash"]
+for k, v in items.items():
+  lines.append(f"export {k}={shlex.quote(str(v))}")
+out.write_text("\\n".join(lines) + "\\n", encoding="utf-8")
+print(f"[OK] wrote: {out}")
+PY
+
+source "$OUT_DIR/vars.sh"
+
+echo ">>> Preflight..."
+ls -lh "$WAY_ROUTES_NPZ" "$WAY_GRAPH_NPZ" "$WAY_FEATS_NPZ" "$AE_CKPT" "$FLOW_CKPT" "$WAY_REGIONS_NPZ" "$REGION_AR_CKPT" "$DET_META" "$COL_META" "$SPLIT_JSON"
+```
+
+**EXP-1：best-of-8（deployable dest selection）**
+```bash
+PYTHONUNBUFFERED=1 python -u -m src.evaluation.way_casd_binned_eval \
+  --way_routes_npz "$WAY_ROUTES_NPZ" \
+  --way_graph_npz "$WAY_GRAPH_NPZ" \
+  --way_features_npz "$WAY_FEATS_NPZ" \
+  --city_grid_meta "0=$DET_META" \
+  --city_grid_meta "1=$COL_META" \
+  --split_json "$SPLIT_JSON" --split_part "$SPLIT_PART" \
+  --ae_ckpt "$AE_CKPT" \
+  --latent_source flow --flow_ckpt "$FLOW_CKPT" \
+  --way_regions_npz "$WAY_REGIONS_NPZ" \
+  --region_constraint ar --region_ar_ckpt "$REGION_AR_CKPT" \
+  --region_constraint_mode relaxed --region_constraint_fallback dest_region \
+  --n_routes 200 --min_hops 5 --max_way_len 160 --max_decode_len 160 \
+  --decode_candidate_policy first --decode_max_candidates 0 \
+  --beam_size 10 \
+  --anti_loop_penalty 2.0 --anti_loop_penalty_k 4 \
+  --n_samples_per_route 8 --sample_select dest \
+  --out_json "$OUT_DIR/binned_flow_bestof8_dest.json" \
+  --out_per_route_json "$OUT_DIR/per_route_flow_bestof8_dest.json" \
+  |& tee "$OUT_DIR/run_bestof8_dest.log"
+```
+
+**EXP-2：K sweep（dest selection）**
+```bash
+for K in 1 2 4 8 16; do
+  OUT_JSON="$OUT_DIR/binned_flow_bestof${K}_dest.json"
+  OUT_PR="$OUT_DIR/per_route_flow_bestof${K}_dest.json"
+  EXTRA_PR=""
+  # 只对 K>=8 dump per_route（K=1/2/4 只保留 binned，避免仓库膨胀）
+  if [[ "$K" -ge 8 ]]; then EXTRA_PR="--out_per_route_json $OUT_PR"; fi
+
+  PYTHONUNBUFFERED=1 python -u -m src.evaluation.way_casd_binned_eval \
+    --way_routes_npz "$WAY_ROUTES_NPZ" \
+    --way_graph_npz "$WAY_GRAPH_NPZ" \
+    --way_features_npz "$WAY_FEATS_NPZ" \
+    --city_grid_meta "0=$DET_META" \
+    --city_grid_meta "1=$COL_META" \
+    --split_json "$SPLIT_JSON" --split_part "$SPLIT_PART" \
+    --ae_ckpt "$AE_CKPT" \
+    --latent_source flow --flow_ckpt "$FLOW_CKPT" \
+    --way_regions_npz "$WAY_REGIONS_NPZ" \
+    --region_constraint ar --region_ar_ckpt "$REGION_AR_CKPT" \
+    --region_constraint_mode relaxed --region_constraint_fallback dest_region \
+    --n_routes 200 --min_hops 5 --max_way_len 160 --max_decode_len 160 \
+    --decode_candidate_policy first --decode_max_candidates 0 \
+    --beam_size 10 \
+    --anti_loop_penalty 2.0 --anti_loop_penalty_k 4 \
+    --n_samples_per_route "$K" --sample_select dest \
+    --out_json "$OUT_JSON" \
+    $EXTRA_PR \
+    |& tee "$OUT_DIR/run_bestof${K}_dest.log"
+done
+```
+
+**（可选）画曲线：success vs K（需要本仓库的 `tools/waycasd_plot_bestofk_curve.py`）**
+```bash
+PYTHONUNBUFFERED=1 python -u tools/waycasd_plot_bestofk_curve.py \
+  --out_dir "$OUT_DIR/fig" \
+  --title "OD-disjoint best-of-K (dest selection)" \
+  --json "$OUT_DIR/binned_flow_bestof1_dest.json" \
+  --json "$OUT_DIR/binned_flow_bestof2_dest.json" \
+  --json "$OUT_DIR/binned_flow_bestof4_dest.json" \
+  --json "$OUT_DIR/binned_flow_bestof8_dest.json" \
+  --json "$OUT_DIR/binned_flow_bestof16_dest.json"
+```
+
+**EXP-3：Oracle decode 上界（GT latent，上界）**
+```bash
+PYTHONUNBUFFERED=1 python -u -m src.evaluation.way_casd_binned_eval \
+  --way_routes_npz "$WAY_ROUTES_NPZ" \
+  --way_graph_npz "$WAY_GRAPH_NPZ" \
+  --way_features_npz "$WAY_FEATS_NPZ" \
+  --city_grid_meta "0=$DET_META" \
+  --city_grid_meta "1=$COL_META" \
+  --split_json "$SPLIT_JSON" --split_part "$SPLIT_PART" \
+  --ae_ckpt "$AE_CKPT" \
+  --latent_source gt \
+  --way_regions_npz "$WAY_REGIONS_NPZ" \
+  --region_constraint ar --region_ar_ckpt "$REGION_AR_CKPT" \
+  --region_constraint_mode relaxed --region_constraint_fallback dest_region \
+  --n_routes 200 --min_hops 5 --max_way_len 160 --max_decode_len 160 \
+  --decode_candidate_policy first --decode_max_candidates 0 \
+  --beam_size 10 \
+  --anti_loop_penalty 2.0 --anti_loop_penalty_k 4 \
+  --out_json "$OUT_DIR/binned_oracle_gtlatent.json" \
+  --out_per_route_json "$OUT_DIR/per_route_oracle_gtlatent.json" \
+  |& tee "$OUT_DIR/run_oracle_gtlatent.log"
+```
+
+**EXP-4：paired（McNemar + shape）**
+```bash
+# K=1 vs best-of-8（deployable）
+PYTHONUNBUFFERED=1 python -u tools/waycasd_paired_compare.py \
+  --a_json "$OD_ROOT/eval/per_route_waycasd_flow_test_n200pc.json" \
+  --b_json "$OUT_DIR/per_route_flow_bestof8_dest.json" \
+  --a_name "Flow(K=1)" --b_name "Flow(best-of-8,dest)" \
+  --key beam \
+  --out_md "$OUT_DIR/paired_k1_vs_bestof8_dest.md"
+
+# Flow(best-of-8,dest) vs Oracle(gt latent)
+PYTHONUNBUFFERED=1 python -u tools/waycasd_paired_compare.py \
+  --a_json "$OUT_DIR/per_route_flow_bestof8_dest.json" \
+  --b_json "$OUT_DIR/per_route_oracle_gtlatent.json" \
+  --a_name "Flow(best-of-8,dest)" --b_name "Oracle(gt latent)" \
+  --key beam \
+  --out_md "$OUT_DIR/paired_bestof8_dest_vs_oracle.md"
+```
 
 ---
 
 ### P1：A2 Flow CFG（需重训Flow）
+
+> 本轮已被 PI 暂时降级：建议先把 OD-disjoint P0（EXP-1~4）跑完整，再决定是否重训。
 
 **目标**：增强Flow对condition的利用
 

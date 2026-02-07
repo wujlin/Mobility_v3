@@ -239,6 +239,7 @@ $RAW_ROOT/experiments/icml2026_routegen/WAYCASD1_waydata_rustbelt_seed0/
 - `corridor_type: (N,)`：由 `label_corridor_type_from_way_features.py` 写入（dominant tier > 50% → {major/minor/service} else mixed）
 
 `way_graph.npz` 典型字段：
+- `way_osm_id`：way id 词表（OSM 全局 way id；用于与 routes/features 对齐与审计）
 - `way_adj_ptr/way_adj_idx`：way-level adjacency（CSR；默认由 GT transition 构建，KISS）
 
 `way_features.npz` 典型字段：

@@ -51,14 +51,14 @@ _download_url() {
     return 0
   fi
 
-  _warn "Missing downloader: install `wget` or `curl`."
+  _warn "Missing downloader: install wget or curl."
   return 1
 }
 
 _unzip_all_in_dir() {
   local dir="$1"
   if ! _have unzip; then
-    _warn "Missing `unzip`. Install it first."
+    _warn "Missing unzip. Install it first."
     return 1
   fi
 
@@ -103,7 +103,7 @@ _train_csv_sanity_ok() {
 _try_kaggle_competition() {
   local dir="$1"
   if ! _have kaggle; then
-    _warn "Missing `kaggle` CLI. Install via: pip install kaggle"
+    _warn "Missing kaggle CLI. Install via: pip install kaggle"
     _warn "Then configure: ~/.kaggle/kaggle.json (chmod 600)."
     return 1
   fi
@@ -168,7 +168,7 @@ main() {
   _info ">>> [2/3] Downloading Portugal OSM PBF (Geofabrik)..."
   _download_url "$GEF_PBF_URL" "$PORTUGAL_PBF" || _warn "OSM download failed. Check network."
 
-  _info ">>> [2.1] Optional: Extract Porto bbox via `osmium` (seconds, if installed)..."
+  _info ">>> [2.1] Optional: Extract Porto bbox via osmium (seconds, if installed)..."
   if _have osmium && [[ -f "$PORTUGAL_PBF" ]]; then
     if [[ -f "$PORTO_EXTRACT_PBF" ]]; then
       _info "Exists: $PORTO_EXTRACT_PBF"
@@ -179,7 +179,7 @@ main() {
         || _warn "osmium extract failed; you can retry after installing osmium-tool."
     fi
   else
-    _info "Skip porto extract: `osmium` not found (optional)."
+    _info "Skip porto extract: osmium not found (optional)."
   fi
 
   _info ">>> [3/3] Done. Artifacts:"
@@ -193,4 +193,3 @@ main() {
 }
 
 main "$@"
-

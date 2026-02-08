@@ -1,0 +1,33 @@
+{
+  "ok": true,
+  "task": "train_way_casd_value_fn",
+  "created_at": "2026-02-08T17:25:51.360856+08:00",
+  "inputs": {
+    "per_route_json": "_sync/wsa/pi_verify/EXPBIAS_baseline_flow_s0/per_route_flow_n200pc.json",
+    "pred_key": "beam",
+    "way_routes_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD1_waydata_rustbelt_seed0_strict_v1/W5_way_routes_strict/way_routes_strict_masklen0.npz",
+    "way_graph_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD1_waydata_rustbelt_seed0_strict_v1/W3_way_graph_strict/way_graph.npz",
+    "way_features_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD1_waydata_rustbelt_seed0_strict_v1/W4_way_features_sem/way_features.npz",
+    "ae_ckpt": "/home/jinlin/projects/Mobility_v3/_sync/wsa/pi_verify/E2_joint_finetune_s0_cont_e60/ckpt_best.pt",
+    "flow_ckpt": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD1_waydata_rustbelt_seed0_strict_v1/W11_train_flow_past16_regionseq_xattn_s0/ckpt_best.pt",
+    "way_regions_npz": "/home/jinlin/projects/Mobility_v3/_sync/wsa/pi_verify/20260201_min5_candq1_past8_len160_s0/regions_louvain_res1p0_v1/way_regions_louvain_per_city_res1p0_seed0.npz"
+  },
+  "out_dir": "_sync/wsa/pi_verify/VF_from_flow_beam_s0",
+  "best_val_loss": 0.5248559564352036,
+  "best_epoch": 1,
+  "cfg": {
+    "batch_size": 1024,
+    "num_workers": 8,
+    "n_epochs": 20,
+    "lr": 0.001,
+    "weight_decay": 0.0001,
+    "val_ratio": 0.1,
+    "seed": 0,
+    "device": "cuda",
+    "tz_offset_hours": -5.0,
+    "latent_source": "flow",
+    "flow_solver_steps": null,
+    "max_states_per_route": 64,
+    "save_every": 1
+  }
+}

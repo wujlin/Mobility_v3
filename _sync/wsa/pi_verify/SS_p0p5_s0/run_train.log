@@ -1,0 +1,25 @@
+2026-02-08 16:42:55,796 - INFO - device=cuda
+2026-02-08 16:42:55,803 - INFO - routes: total=5022 train=4520 val=502 min_hops=5 max_way_len=160
+/home/jinlin/miniconda3/envs/dpl/lib/python3.11/site-packages/torch/nn/modules/transformer.py:392: UserWarning: enable_nested_tensor is True, but self.use_nested_tensor is False because encoder_layer.norm_first was True
+  warnings.warn(
+2026-02-08 16:43:52,698 - INFO - epoch=1 train_loss=nan val_loss=0.189762 best=inf@0 ss(p=0.050, acc=0.917, use_pred=0.050, off_gt=0.051, skip=0.000, steps=1748)
+2026-02-08 16:44:48,603 - INFO - epoch=2 train_loss=nan val_loss=0.191726 best=0.189762@1 ss(p=0.100, acc=0.913, use_pred=0.101, off_gt=0.107, skip=0.000, steps=1747)
+2026-02-08 16:45:43,753 - INFO - epoch=3 train_loss=nan val_loss=0.191758 best=0.189762@1 ss(p=0.150, acc=0.907, use_pred=0.151, off_gt=0.154, skip=0.000, steps=1747)
+2026-02-08 16:46:40,594 - INFO - epoch=4 train_loss=nan val_loss=0.192763 best=0.189762@1 ss(p=0.200, acc=0.905, use_pred=0.201, off_gt=0.195, skip=0.000, steps=1745)
+2026-02-08 16:47:37,850 - INFO - epoch=5 train_loss=nan val_loss=0.194082 best=0.189762@1 ss(p=0.250, acc=0.901, use_pred=0.250, off_gt=0.236, skip=0.000, steps=1745)
+2026-02-08 16:48:35,273 - INFO - epoch=6 train_loss=nan val_loss=0.198645 best=0.189762@1 ss(p=0.300, acc=0.894, use_pred=0.300, off_gt=0.272, skip=0.000, steps=1745)
+2026-02-08 16:49:33,591 - INFO - epoch=7 train_loss=nan val_loss=0.198129 best=0.189762@1 ss(p=0.350, acc=0.896, use_pred=0.349, off_gt=0.299, skip=0.000, steps=1744)
+2026-02-08 16:50:32,034 - INFO - epoch=8 train_loss=nan val_loss=0.202851 best=0.189762@1 ss(p=0.400, acc=0.890, use_pred=0.399, off_gt=0.335, skip=0.000, steps=1744)
+2026-02-08 16:51:28,680 - INFO - epoch=9 train_loss=nan val_loss=0.206862 best=0.189762@1 ss(p=0.450, acc=0.885, use_pred=0.452, off_gt=0.372, skip=0.000, steps=1743)
+2026-02-08 16:52:23,211 - INFO - epoch=10 train_loss=nan val_loss=0.205427 best=0.189762@1 ss(p=0.500, acc=0.882, use_pred=0.502, off_gt=0.405, skip=0.000, steps=1745)
+2026-02-08 16:53:18,385 - INFO - epoch=11 train_loss=nan val_loss=0.207509 best=0.189762@1 ss(p=0.500, acc=0.881, use_pred=0.499, off_gt=0.400, skip=0.000, steps=1744)
+2026-02-08 16:54:11,835 - INFO - epoch=12 train_loss=nan val_loss=0.208503 best=0.189762@1 ss(p=0.500, acc=0.883, use_pred=0.500, off_gt=0.393, skip=0.000, steps=1744)
+2026-02-08 16:55:07,024 - INFO - epoch=13 train_loss=nan val_loss=0.207220 best=0.189762@1 ss(p=0.500, acc=0.882, use_pred=0.502, off_gt=0.404, skip=0.000, steps=1744)
+2026-02-08 16:56:04,134 - INFO - epoch=14 train_loss=nan val_loss=0.207489 best=0.189762@1 ss(p=0.500, acc=0.882, use_pred=0.498, off_gt=0.392, skip=0.000, steps=1744)
+2026-02-08 16:57:01,559 - INFO - epoch=15 train_loss=nan val_loss=0.208205 best=0.189762@1 ss(p=0.500, acc=0.882, use_pred=0.501, off_gt=0.405, skip=0.000, steps=1743)
+2026-02-08 16:57:58,364 - INFO - epoch=16 train_loss=nan val_loss=0.208989 best=0.189762@1 ss(p=0.500, acc=0.884, use_pred=0.499, off_gt=0.393, skip=0.000, steps=1745)
+2026-02-08 16:58:56,138 - INFO - epoch=17 train_loss=nan val_loss=0.206657 best=0.189762@1 ss(p=0.500, acc=0.884, use_pred=0.500, off_gt=0.395, skip=0.000, steps=1744)
+2026-02-08 16:59:50,384 - INFO - epoch=18 train_loss=nan val_loss=0.206512 best=0.189762@1 ss(p=0.500, acc=0.886, use_pred=0.497, off_gt=0.389, skip=0.000, steps=1744)
+2026-02-08 17:00:47,335 - INFO - epoch=19 train_loss=nan val_loss=0.207900 best=0.189762@1 ss(p=0.500, acc=0.884, use_pred=0.501, off_gt=0.400, skip=0.000, steps=1744)
+2026-02-08 17:01:43,041 - INFO - epoch=20 train_loss=nan val_loss=0.206515 best=0.189762@1 ss(p=0.500, acc=0.884, use_pred=0.498, off_gt=0.395, skip=0.000, steps=1744)
+2026-02-08 17:01:43,058 - INFO - saved: _sync/wsa/pi_verify/SS_p0p5_s0/report.json

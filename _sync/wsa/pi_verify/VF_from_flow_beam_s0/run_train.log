@@ -1,0 +1,27 @@
+2026-02-08 17:25:48,820 - INFO - device=cuda
+2026-02-08 17:25:48,829 - INFO - routes_in_json=400 pred_key=beam
+/home/jinlin/miniconda3/envs/dpl/lib/python3.11/site-packages/torch/nn/modules/transformer.py:392: UserWarning: enable_nested_tensor is True, but self.use_nested_tensor is False because encoder_layer.norm_first was True
+  warnings.warn(
+2026-02-08 17:25:49,679 - INFO - states=15167 (max_states_per_route=64)
+2026-02-08 17:25:49,682 - INFO - train_states=13688 val_states=1479 val_routes=40/400
+2026-02-08 17:25:50,332 - INFO - epoch=1 train_loss=0.647655 val_loss=0.524856 best=inf@0
+2026-02-08 17:25:50,395 - INFO - epoch=2 train_loss=0.562207 val_loss=0.541606 best=0.524856@1
+2026-02-08 17:25:50,454 - INFO - epoch=3 train_loss=0.471932 val_loss=0.594081 best=0.524856@1
+2026-02-08 17:25:50,509 - INFO - epoch=4 train_loss=0.395431 val_loss=0.719970 best=0.524856@1
+2026-02-08 17:25:50,564 - INFO - epoch=5 train_loss=0.329719 val_loss=0.741630 best=0.524856@1
+2026-02-08 17:25:50,623 - INFO - epoch=6 train_loss=0.260679 val_loss=0.777251 best=0.524856@1
+2026-02-08 17:25:50,677 - INFO - epoch=7 train_loss=0.203387 val_loss=0.908182 best=0.524856@1
+2026-02-08 17:25:50,730 - INFO - epoch=8 train_loss=0.156895 val_loss=1.016211 best=0.524856@1
+2026-02-08 17:25:50,786 - INFO - epoch=9 train_loss=0.113858 val_loss=1.107472 best=0.524856@1
+2026-02-08 17:25:50,840 - INFO - epoch=10 train_loss=0.091125 val_loss=1.234402 best=0.524856@1
+2026-02-08 17:25:50,894 - INFO - epoch=11 train_loss=0.064778 val_loss=1.341761 best=0.524856@1
+2026-02-08 17:25:50,946 - INFO - epoch=12 train_loss=0.051250 val_loss=1.368707 best=0.524856@1
+2026-02-08 17:25:50,996 - INFO - epoch=13 train_loss=0.039200 val_loss=1.472910 best=0.524856@1
+2026-02-08 17:25:51,047 - INFO - epoch=14 train_loss=0.034062 val_loss=1.588369 best=0.524856@1
+2026-02-08 17:25:51,098 - INFO - epoch=15 train_loss=0.028436 val_loss=1.734038 best=0.524856@1
+2026-02-08 17:25:51,152 - INFO - epoch=16 train_loss=0.021385 val_loss=1.847445 best=0.524856@1
+2026-02-08 17:25:51,206 - INFO - epoch=17 train_loss=0.016641 val_loss=1.801948 best=0.524856@1
+2026-02-08 17:25:51,255 - INFO - epoch=18 train_loss=0.015788 val_loss=1.945701 best=0.524856@1
+2026-02-08 17:25:51,306 - INFO - epoch=19 train_loss=0.011158 val_loss=1.915810 best=0.524856@1
+2026-02-08 17:25:51,358 - INFO - epoch=20 train_loss=0.009898 val_loss=1.996604 best=0.524856@1
+2026-02-08 17:25:51,361 - INFO - saved: _sync/wsa/pi_verify/VF_from_flow_beam_s0/report.json

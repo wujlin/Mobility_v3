@@ -427,39 +427,38 @@ class WayDecoder(nn.Module):
                 if T2 != T:
                     raise ValueError(f"cand_way T mismatch: T={T} vs cand_way.shape[0]={T2}")
 
+                # Compute candidate-aware cross-attn without exploding memory.
+                #
+                # NOTE: Avoid flattening valid (t,c) pairs and repeating keys/values per candidate.
+                # That pattern scales as O((T*C)*L*d) and can easily OOM on long routes / large batches.
+                # Here we treat each transition t as a "batch element" and candidates as the query sequence.
                 cand_q = query_vec[:, None, :] + self.cand_query_proj(cand_emb)  # (T,C,d_model)
                 valid = cand_mask.to(dtype=torch.bool)
-                idx = valid.nonzero(as_tuple=False)  # (N,2)
-                if int(idx.numel()) == 0:
+                if not bool(valid.any().item()):
                     ctx0 = torch.zeros((T, C, int(self.cfg.hidden_dim)), dtype=query_vec.dtype, device=device)
                     if bool(return_attn_weights):
                         attn0 = torch.zeros((T, C, int(lat_gathered.shape[1])), dtype=torch.float32, device=device)
                         return ctx0, attn0
                     return ctx0
-                t_idx = idx[:, 0]
-                c_idx = idx[:, 1]
 
-                qv = cand_q[t_idx, c_idx]  # (N,d_model)
-                kv = lat_gathered[t_idx]  # (N,L,d_model)
-                query = qv.unsqueeze(1)  # (N,1,d_model)
-                attn_out, attn_w = self.cross_attn(query, kv, kv, need_weights=bool(return_attn_weights))  # (N,1,d_model)
-                attn_vec = self.cross_ln(attn_out[:, 0, :] + qv)  # (N,d_model)
-                ctx_v = self.ctx_mlp(torch.cat([cond_t[t_idx], attn_vec], dim=-1))  # (N,hidden)
+                # Zero-out invalid candidates to keep outputs stable under padding.
+                cand_q = cand_q * valid[:, :, None].to(dtype=cand_q.dtype)
 
-                ctx = torch.zeros((T, C, ctx_v.shape[-1]), dtype=ctx_v.dtype, device=ctx_v.device)
-                ctx[t_idx, c_idx] = ctx_v
+                # Query: (T,C,d), Key/Val: (T,L,d) -> attn_out: (T,C,d)
+                attn_out, attn_w = self.cross_attn(
+                    cand_q, lat_gathered, lat_gathered, need_weights=bool(return_attn_weights)
+                )
+                attn_vec = self.cross_ln(attn_out + cand_q)  # (T,C,d), residual
+                ctx = self.ctx_mlp(torch.cat([cond_t[:, None, :].expand(T, C, -1), attn_vec], dim=-1))  # (T,C,hidden)
+                ctx = ctx * valid[:, :, None].to(dtype=ctx.dtype)
 
                 if bool(return_attn_weights) and isinstance(attn_w, torch.Tensor):
                     w = attn_w.to(dtype=torch.float32)
-                    # Default shape: (N,1,L) when average_attn_weights=True
-                    if w.ndim == 3:
-                        w = w[:, 0, :]  # (N,L)
-                    elif w.ndim != 2:
-                        w = w.reshape(w.shape[0], -1)
-                    L2 = int(w.shape[-1])
-                    attn = torch.zeros((T, C, L2), dtype=w.dtype, device=w.device)
-                    attn[t_idx, c_idx] = w
-                    attn_weights_out = attn
+                    # Default: (T,C,L) when average_attn_weights=True.
+                    # If (T,H,C,L), average over heads.
+                    if w.ndim == 4:
+                        w = w.mean(dim=1)
+                    attn_weights_out = w
             else:
                 # Candidate-independent context (original): (T,hidden)
                 query = query_vec.unsqueeze(1)  # (T,1,d_model)

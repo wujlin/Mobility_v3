@@ -95,10 +95,17 @@ def build_way_features(*, osm_pbf: Path, semantic_dir: Path, way_routes_npz: Pat
     except ModuleNotFoundError as e:  # pragma: no cover
         raise SystemExit("Missing dependency: pyrosm. Install via conda/pip (plus shapely/geopandas).") from e
 
+    import sys
+    def _log(msg: str) -> None:
+        elapsed = time.time() - t0
+        print(f"[way_features] [{elapsed:6.1f}s] {msg}", flush=True, file=sys.stderr)
+
     t0 = time.time()
+    _log("Loading grid from semantic_dir...")
     grid = _load_grid_from_semantic_dir(Path(semantic_dir))
     bbox = grid.bbox
 
+    _log("Loading way_routes_npz...")
     routes = np.load(str(way_routes_npz), allow_pickle=True)
     if "way_osm_id" not in routes.files:
         raise ValueError(f"way_routes_npz missing way_osm_id: {way_routes_npz}")
@@ -112,6 +119,8 @@ def build_way_features(*, osm_pbf: Path, semantic_dir: Path, way_routes_npz: Pat
     hw_to_code = {h: int(i) for i, h in enumerate(hw_vocab)}
 
     # Load OSM roads within bbox.
+    _log(f"Loading OSM PBF via pyrosm: {osm_pbf} ({osm_pbf.stat().st_size / 1e6:.1f} MB)")
+    _log(f"  bbox=[{bbox.min_lon:.4f}, {bbox.min_lat:.4f}, {bbox.max_lon:.4f}, {bbox.max_lat:.4f}]")
     osm = OSM(str(osm_pbf), bounding_box=[bbox.min_lon, bbox.min_lat, bbox.max_lon, bbox.max_lat])
     net = None
     try:
@@ -119,6 +128,7 @@ def build_way_features(*, osm_pbf: Path, semantic_dir: Path, way_routes_npz: Pat
     except TypeError:
         net = osm.get_network(network_type="driving")
     roads, _nodes = _split_pyrosm_network(net)
+    _log(f"pyrosm returned {len(roads)} road segments")
 
     # Robust way-id column.
     way_id_col = None
@@ -171,6 +181,8 @@ def build_way_features(*, osm_pbf: Path, semantic_dir: Path, way_routes_npz: Pat
 
     # Iterate (subset columns to avoid pandas itertuples name quirks).
     roads_sub = roads[[way_id_col, length_col, "_highway_norm", "geometry"]]
+    n_roads_sub = len(roads_sub)
+    _log(f"Iterating {n_roads_sub} filtered road segments (wanted {len(wanted)} ways)...")
     for wid, length_val, hw_norm, geom in roads_sub.itertuples(index=False, name=None):
         wi = way_to_idx.get(int(wid))
         if wi is None:
@@ -213,6 +225,7 @@ def build_way_features(*, osm_pbf: Path, semantic_dir: Path, way_routes_npz: Pat
         tier_sum[wi, _tier_id(hw)] += l
         hw_sum[wi, hw_to_code[hw]] += l
 
+    _log(f"Iteration done. Computing statistics...")
     missing = int(np.sum(way_len_m <= 0))
     valid = way_len_m > 0
     way_center_y[valid] /= way_len_m[valid]
@@ -321,6 +334,7 @@ def build_way_features(*, osm_pbf: Path, semantic_dir: Path, way_routes_npz: Pat
             },
         }
 
+    _log(f"Saving to {out_npz}...")
     out_npz.parent.mkdir(parents=True, exist_ok=True)
     out_kwargs = dict(
         way_osm_id=way_osm_id.astype(np.int64, copy=False),

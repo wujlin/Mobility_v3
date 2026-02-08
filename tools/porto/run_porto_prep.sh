@@ -34,7 +34,9 @@ PROJ_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 PORTO_CSV="${RAW_ROOT}/porto_taxi/raw/train.csv"
 PORTO_PARQUET="${RAW_ROOT}/porto_taxi/segments_with_wayid.parquet"
 PORTO_BBOX_META="${PROJ_ROOT}/tools/porto/porto_bbox_meta.json"
-OSM_PBF="${RAW_ROOT}/osm/portugal-latest.osm.pbf"
+# 用 osmium 裁剪后的 porto_extract (16MB) 而非全国 PBF (382MB)
+# pyrosm 需要完整解析 PBF，全国文件极慢
+OSM_PBF="${RAW_ROOT}/osm/porto_extract.osm.pbf"
 VALHALLA_URL="${VALHALLA_URL:-http://localhost:8002}"
 WORKERS="${WORKERS:-8}"
 

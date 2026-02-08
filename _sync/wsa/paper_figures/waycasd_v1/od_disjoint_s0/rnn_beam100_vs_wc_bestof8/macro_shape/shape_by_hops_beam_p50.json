@@ -1,7 +1,7 @@
 {
   "ok": true,
   "task": "waycasd_plot_shape_macro_summary",
-  "created_at": "2026-02-08T10:32:36.529408+08:00",
+  "created_at": "2026-02-08T11:18:42.165912+08:00",
   "cfg": {
     "decode": "beam",
     "stat": "p50",

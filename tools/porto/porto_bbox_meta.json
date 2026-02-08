@@ -1,0 +1,13 @@
+{
+    "grid": {
+        "H": 1024,
+        "W": 1024,
+        "bbox": {
+            "min_lon": -8.72,
+            "min_lat": 41.08,
+            "max_lon": -8.50,
+            "max_lat": 41.25
+        }
+    },
+    "_comment": "Porto 都会区 bbox + grid 定义，与 build_way_features_from_osm_pbf.py 所需的 osm_road_prob_meta.json 格式一致"
+}

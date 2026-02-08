@@ -1,8 +1,56 @@
 # 数据集迁移方案：从 WorldTrace/Detroit 到多模态出租车轨迹
 
-> 日期：2026-02-07
+> 日期：2026-02-07（更新 2026-02-08：优化执行流程，删除冗余步骤）
 > 目的：为 partner 提供可直接执行的数据下载、预处理、验证方案
 > 背景：当前 WorldTrace Detroit 数据集中 83.5% 的 GT 路线 ≈ 最短路径，route generation 退化为图搜索问题，WC 的 latent diversity 无法被验证
+
+## ⚡ 快速执行指南
+
+**核心思路：只新写一个 CSV→parquet 转换脚本，后续完全复用现有 `run_way_casd_prep.sh` pipeline。**
+
+### 前置条件
+1. `train.csv` 已存在于 `$RAW_ROOT/porto_taxi/raw/`（✅ 已完成）
+2. `portugal-latest.osm.pbf` 已存在于 `$RAW_ROOT/osm/`（✅ 已完成，382MB）
+3. Valhalla Docker 在 `localhost:8002` 运行（需部署，见下方）
+
+### 一键执行
+```bash
+export RAW_ROOT="$HOME/data/geoexplicit_data"
+
+# 部署 Valhalla (首次，约 20 分钟)
+# 详见下方 "Valhalla 部署" 一节
+
+# 调试跑 100 条，确认 Valhalla 通路正常
+bash tools/porto/run_porto_prep.sh --limit 100
+
+# 全量跑 (Phase 0: ~2-3h map matching; Phase 1: ~15min pipeline)
+bash tools/porto/run_porto_prep.sh
+```
+
+### 代码结构
+```
+tools/porto/
+  porto_bbox_meta.json              ← Porto bbox+grid 定义
+  porto_csv_to_segments_parquet.py  ← 唯一新代码: CSV→parquet (Valhalla)
+  run_porto_prep.sh                 ← 入口: Phase 0 + 复用 run_way_casd_prep.sh
+  porto_download_raw.sh             ← 数据下载 (已完成)
+```
+
+### 计算流程
+```
+Porto train.csv                     WorldTrace Trajectory.zip
+     │                                    │
+     ▼  porto_csv_to_segments_parquet.py  ▼  build_detroit_segments.py
+  segments_with_wayid.parquet  ←  同一格式  →  segments_with_wayid.parquet
+     │                                    │
+     └──────────── 完全相同的 pipeline ───────────┘
+                        │
+                        ▼  run_way_casd_prep.sh
+                   W1: way_routes.npz
+                   W2: way_graph.npz
+                   W3: way_features.npz
+                   W4: way_routes_labeled.npz
+```
 
 ---
 
@@ -120,44 +168,48 @@ rm -f "$RAW_ROOT/porto_taxi/raw/"*.zip
 | MISSING_DATA | bool | GPS 流是否完整 |
 | POLYLINE | string | GPS 坐标序列，JSON 格式 `[[lon,lat], ...]`，**每 15 秒一个点** |
 
-### 2.3 预处理 Pipeline（partner 执行）
+### 2.3 预处理 Pipeline
+
+**核心洞见：** 现有 `run_way_casd_prep.sh`（4 步）完全可复用。唯一新代码是 Phase 0：Porto CSV → `segments_with_wayid.parquet`。
+
+#### Phase 0: CSV → segments_with_wayid.parquet（唯一新代码）
+
+脚本：`tools/porto/porto_csv_to_segments_parquet.py`
 
 ```
-Step 1: 基础清洗
-├── 过滤 MISSING_DATA=True 的行程
-├── 解析 POLYLINE JSON → numpy array (N, 2) [lon, lat]
-├── 过滤点数 < 10 的行程（< 150 秒，太短）
-├── 过滤点数 > 300 的行程（> 75 分钟，异常）
-└── 输出：cleaned_trips.parquet（trip_id, taxi_id, timestamp, polyline, n_points）
+输入: train.csv (1.7M rows)
+  ├── 过滤 MISSING_DATA=True
+  ├── 解析 POLYLINE JSON → (N,2) [lon,lat]
+  ├── 过滤点数 ∉ [10, 300]
+  ├── Valhalla trace_attributes API → 每个 GPS 点的 osm_way_id
+  │     ├── edges[].way_id + matched_points[].edge_index
+  │     ├── gps_accuracy=30, search_radius=50（适应 15s 稀疏采样）
+  │     └── unmatched 点 → osm_way_id = 0
+  └── 输出: segments_with_wayid.parquet（同 WorldTrace 格式，12 列）
+```
 
-Step 2: OSM 路网准备
-├── 下载 Porto 区域的 OSM 数据（Portugal extract from Geofabrik）
-│   URL: https://download.geofabrik.de/europe/portugal-latest.osm.pbf
-│   保存到：$RAW_ROOT/osm/portugal-latest.osm.pbf
-├── （可选但推荐）用 osmium 裁剪 Porto bbox（秒级）
-│   bbox 约：-8.72,41.10,-8.52,41.22
-│   输出：$RAW_ROOT/osm/porto_extract.osm.pbf
-├── 用 osmnx 或自建脚本构建 Porto 的 way-level 有向图
-│   bbox: 大约 [-8.72, 41.10, -8.52, 41.22]（波尔图市区）
-├── 输出：road_graph.npz（与当前 Detroit 格式一致）
-│   包含：way_adj_ptr, way_adj_idx, way_center, way_len_m, way_tier, ...
-└── 记录：n_ways, avg_degree
+**Parquet Schema（与 WorldTrace 完全一致）：**
+```
+traj_csv: string, n_points: int32, unmatched_ratio: float32,
+way_id_missing_ratio: float32, t: list<int64>, lat: list<float32>,
+lon: list<float32>, y: list<int32>, x: list<int32>,
+is_matched: list<int8>, matched_distance: list<float32>,
+osm_way_id: list<int64>
+```
 
-Step 3: Map Matching
-├── 工具推荐：Valhalla（推荐）或 OSRM
-│   Valhalla: docker pull ghcr.io/valhalla/valhalla:latest
-│   优势：原生支持 15s 间隔的稀疏轨迹 matching
-├── 输入：每条轨迹的 GPS 点序列
-├── 输出：每条轨迹的 way_id 序列（ordered list of OSM way IDs）
-├── 质量闸门：matching confidence < 阈值 → 丢弃
-└── 输出：matched_routes.parquet（trip_id, way_sequence, match_confidence）
+#### Phase 1: 现有 pipeline（零代码改动）
 
-Step 4: 构建训练数据（与当前 pipeline 对齐）
-├── 将 way_sequence 映射到 road_graph.npz 的内部 way_id
-├── 过滤：way_sequence 长度 >= 5 hops（min_hops=5 与当前一致）
-├── 统计：每个 OD region-pair 的路线数量
-├── 构建 OD-disjoint split（与当前协议一致）
-└── 输出格式与当前 Detroit 的 graph_routes.npz 一致
+由 `run_way_casd_prep.sh` 执行，通过环境变量注入 Porto 路径：
+
+```
+W1: build_way_routes_from_segments_parquet.py → way_routes.npz
+    (读 osm_way_id → 去重连续重复 → 构建路线)
+W2: build_way_graph_from_way_routes_npz.py → way_graph.npz
+    (从路线构建 CSR 邻接图)
+W3: build_way_features_from_osm_pbf.py → way_features.npz
+    (pyrosm 从 PBF 提取 highway_type/geometry/length)
+W4: label_corridor_type_from_way_features.py → way_routes_labeled.npz
+    (基于 way_features 标注 corridor_type)
 ```
 
 ### 2.4 关键验证指标（预处理完成后立即检查）
@@ -186,17 +238,15 @@ Step 4: 构建训练数据（与当前 pipeline 对齐）
 - 评估框架（evaluation/way_casd_binned_eval.py）
 
 ### 3.2 需要改的（数据层）
-- `src/data/road_graph/` 下的图构建脚本 → 适配 Porto OSM
-- 图路径提取：`dump_graph_paths_from_routes_npz.py` → 适配新的 matched 轨迹格式
-- Region 划分：Louvain clustering → 在 Porto 图上重新跑
-- way_encoder 的几何特征（coord, direction, highway_type）→ 自动适配新图，无代码改动
+- 配置文件：bbox, n_ways, 各种路径常量 → 由 `run_porto_prep.sh` 通过环境变量注入
+- `porto_bbox_meta.json` → 复制为 `semantic/osm_road_prob_meta.json`（供 `build_way_features_from_osm_pbf.py` 读取 bbox）
 - **RNN 的 way embedding 维度**：`nn.Embedding(n_ways, d_model)` → n_ways 变化，需重新训练
-- 配置文件：bbox, n_ways, 各种路径常量
 
-### 3.3 新增的（map matching）
-- Map matching pipeline（Valhalla Docker）
-- 轨迹清洗脚本
-- 质量审计脚本
+### 3.3 新增的（已完成）
+- `tools/porto/porto_csv_to_segments_parquet.py` — CSV→parquet 转换（含 Valhalla map matching）
+- `tools/porto/porto_bbox_meta.json` — Porto bbox+grid 元数据
+- `tools/porto/run_porto_prep.sh` — 入口脚本（Phase 0 + Phase 1）
+- Valhalla Docker 部署（一次性，见 run_porto_prep.sh 注释）
 
 ---
 
@@ -204,15 +254,14 @@ Step 4: 构建训练数据（与当前 pipeline 对齐）
 
 | 步骤 | 耗时估计 | 阻塞项 |
 |---|---|---|
-| 下载 Porto CSV + OSM | 1 小时 | 网络带宽 |
-| 清洗 + 解析 | 2 小时 | 无 |
-| OSM 图构建 | 3 小时 | osmnx / 自建脚本 |
-| Valhalla 部署 + Map matching | **1-2 天** | Docker + 170 万条轨迹 matching |
-| 数据格式转换 + Split | 半天 | 无 |
-| Region clustering | 2 小时 | 无 |
+| 下载 Porto CSV + OSM | ✅ 已完成 | — |
+| Valhalla Docker 部署 | ~20 分钟 | osmium 裁剪 + tile 构建 |
+| Phase 0: CSV→parquet (map matching) | **2-3 小时** | 8 workers 并行 |
+| Phase 1: way_routes→graph→features | ~15 分钟 | 无 |
+| 验证检查点（detour + diversity） | 30 分钟 | 人工审核 |
 | 训练 WC + RNN（各 1 天） | 2 天 | GPU |
 | 评估 + 对比 | 半天 | 无 |
-| **总计** | **~5 天** | Map matching 是瓶颈 |
+| **总计** | **~3 天** | Phase 0 map matching 是瓶颈 |
 
 ---
 
@@ -220,28 +269,23 @@ Step 4: 构建训练数据（与当前 pipeline 对齐）
 
 | 风险 | 影响 | 缓解 |
 |---|---|---|
-| 15s 采样 → map matching 精度低 | way sequence 不准确 | 用 Valhalla 的 trace_route API，它专门处理稀疏轨迹 |
-| Porto 路网也以最短路径为主 | 同 Detroit 一样的问题 | Step 2.4 的验证指标会尽早暴露；如果真如此，转向 T-Drive (北京) |
+| 15s 采样 → map matching 精度低 | way sequence 不准确 | 用 Valhalla 的 `trace_attributes` API（`gps_accuracy=30, search_radius=50`），专门处理稀疏轨迹 |
+| Porto 路网也以最短路径为主 | 同 Detroit 一样的问题 | Phase 1 完成后立即检查 detour ratio；如果仍 ≈1.0，转向 T-Drive (北京) |
 | Valhalla 部署复杂 | 拖慢进度 | 备选方案：OSRM match API + Docker |
 | n_ways >> Detroit (19K) | 训练变慢 | WC 不用 way embedding (用几何特征)，不受影响；RNN 需要更大 embedding |
 
 ---
 
-## 6) Partner 执行清单
+## 6) 执行清单
 
 ```
-□ 1. 下载 Porto taxi CSV（Kaggle）
-□ 2. 下载 Portugal OSM（Geofabrik）
-□ 3. 部署 Valhalla Docker
-□ 4. 运行清洗脚本（过滤 + 解析 POLYLINE）
-□ 5. 构建 Porto way-level 有向图（road_graph.npz 格式）
-□ 6. 运行 map matching（Valhalla trace_route）
-□ 7. 统计 detour ratio + 同 OD 路线多样性 → 报告数字
-□ 8. 如果通过验证 → 构建 graph_routes.npz + OD-disjoint split
-□ 9. 运行 Louvain region clustering
-□ 10. 训练 WC AE + Region AR + Flow → 评估
-□ 11. 训练 RNN baseline → 评估
-□ 12. 对比结果
+✅ 1. 下载 Porto taxi CSV（Kaggle）  — 已完成，1,710,671 rows
+✅ 2. 下载 Portugal OSM（Geofabrik）  — 已完成，382MB
+□  3. 部署 Valhalla Docker（osmium extract → docker run）
+□  4. 调试跑: bash tools/porto/run_porto_prep.sh --limit 100
+□  5. 全量跑: bash tools/porto/run_porto_prep.sh
+□  6. 🔴 验证检查点：detour ratio + 同 OD 路线多样性 → 报告数字
+□  7. 如果通过验证 → 训练 WC + RNN → 评估 → 对比
 ```
 
-**关键检查点：Step 7 完成后暂停**，报告 detour ratio 和路线多样性数字。如果数据仍缺乏多模态性，在投入训练之前重新评估方向。
+**关键检查点：Step 6 完成后暂停**，报告 detour ratio 和路线多样性数字。如果数据仍缺乏多模态性，在投入训练之前重新评估方向。

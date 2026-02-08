@@ -31,6 +31,28 @@
   - 2：1,295
   - 3：36,462
 
+### ✅ 质量诊断结果（A_porto_diagnose）
+
+诊断输出目录：
+- `A_porto_diagnose=/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD0_waydata_porto_seed0/A_porto_diagnose`
+
+Way graph 审计（`W2_way_graph/way_graph.npz`）：
+- `ways=35,471`，`edges_directed=280,830`
+- `out_deg`：p50=4，p90=18，max=211
+- 连通性：`n_cc=1`，`largest_cc=100%`，`isolated=0%`
+
+Way routes 质量审计（`W4_way_routes_labeled/way_routes_labeled.npz`，仅统计 `len∈[3,160]`）：
+- `N=1,629,126`（routes）
+- `way_seq_len`：p50=24，p90=46，max=160
+- `loop_ratio`：p50=0.000，p90=0.026，p99=0.138
+- `missing_frac`：p50=0.000，p90=0.047，p99=0.200
+- `dead_end_frac`：p50=0.000，p90=0.000，max=0.000
+- `max_step_m`：p50=494m，p95=14,899m，p99=15,436m，max=25,149m（用于定位异常跳跃/超长 way；详见 `way_routes_bad.json`）
+
+Shortest path baseline（detour ratio）：
+- 已对 `n=500` routes 计算并保存：`A_porto_diagnose/shortest_path_baseline.json`
+- 下一步必须读取该文件确认 **GT 是否明显偏离最短路**（否则 Porto 也会退化成“图搜索/最短路”问题）
+
 ### 前置条件
 1. `train.csv` 已存在于 `$RAW_ROOT/porto_taxi/raw/`（✅ 已完成）
 2. `portugal-latest.osm.pbf` 已存在于 `$RAW_ROOT/osm/`（✅ 已完成，382MB）

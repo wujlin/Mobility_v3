@@ -429,14 +429,6 @@ def _train_batch_scheduled_sampling(
     with torch.no_grad():
         z = flow.sample(route_cond=route_cond_use, solver_steps=solver_steps)
 
-    cond_emb = ae.decoder.cond_enc(
-        start_pos=route_cond_use["start_pos"],
-        dest_pos=route_cond_use["dest_pos"],
-        hour=route_cond_use["hour"],
-        dow=route_cond_use["dow"],
-        route_city=route_cond_use["route_city"],
-    )  # (B,d)
-
     cur_way = way_seq_pad[:, 0].detach().clone().to(dtype=torch.long)  # (B,)
     dest_way = route_cond.get("dest_way", None)
     dest_way = (dest_way.to(device=device, dtype=torch.long) if isinstance(dest_way, torch.Tensor) else None)
@@ -537,6 +529,18 @@ def _train_batch_scheduled_sampling(
         if past_way_tensor is not None and past_mask_tensor is not None:
             trans["past_way"] = past_way_tensor
             trans["past_mask"] = past_mask_tensor
+
+        # IMPORTANT: do NOT reuse a single cond_emb tensor across multiple backward() calls.
+        # Scheduled sampling runs step-by-step and calls backward per step; caching cond_emb would
+        # cause "Trying to backward through the graph a second time" because cond_emb's graph
+        # would be shared across steps and freed after the first backward.
+        cond_emb = ae.decoder.cond_enc(
+            start_pos=route_cond_use["start_pos"],
+            dest_pos=route_cond_use["dest_pos"],
+            hour=route_cond_use["hour"],
+            dow=route_cond_use["dow"],
+            route_city=route_cond_use["route_city"],
+        )  # (B,d)
 
         logits = ae.decoder.score_candidates(
             way_embedder=ae.way_enc,

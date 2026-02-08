@@ -63,6 +63,24 @@ OD bin 路径多样性扫描（corridor diversity）：
 - 解释：Porto 在**粗粒度 OD 口径**下存在非常显著的 corridor 多样性（这正是 Way-CASD / Flow latent diversity 能发挥作用的前提）。
 - ⚠️ 注意：当前 `max_step_m` 尾部很重（p95≈14.9km），说明仍存在“way 间跳跃/teleport edge”风险；建议在用 detour/SP 或更严格指标前先做异常过滤或用 OSM topology 重建 graph。
 
+### ✅ 下一步（P0 / Blocking）：Strict gate + OD-disjoint split
+
+PI 建议的 strict gate 不是为了过滤 detour（那是多样性信号），而是过滤**数据质量问题**（teleport / missing / 异常循环）。本仓库已在 `A_porto_diagnose/way_routes_bad.json` 中生成默认阈值下的 bad route 列表（`n_bad=278,983`），对应保留：
+
+- keep `1,350,143 / 1,629,126 = 82.9%`（在 `len∈[3,160]` 子集内）
+
+建议直接用脚本一键生成 strict 数据集 + split（小文件可进 git，npz 不进）：
+
+```bash
+export RAW_ROOT="$HOME/data/geoexplicit_data"
+bash tools/porto/run_porto_strict_gate_and_split.sh
+```
+
+输出：
+- `W5_way_routes_strict_gate/way_routes_strict_gate.npz`（strict routes；包含 `orig_route_id` 映射）
+- `W5_way_routes_strict_gate/od_split_min3_max160_seed0.json`（OD-disjoint split，供训练/评测复用）
+- `W5_way_routes_strict_gate/report.json`（过滤统计）
+
 ### 前置条件
 1. `train.csv` 已存在于 `$RAW_ROOT/porto_taxi/raw/`（✅ 已完成）
 2. `portugal-latest.osm.pbf` 已存在于 `$RAW_ROOT/osm/`（✅ 已完成，382MB）
@@ -88,6 +106,9 @@ tools/porto/
   porto_bbox_meta.json              ← Porto bbox+grid 定义
   porto_csv_to_segments_parquet.py  ← 唯一新代码: CSV→parquet (Valhalla)
   run_porto_prep.sh                 ← 入口: Phase 0 + 复用 run_way_casd_prep.sh
+  run_porto_diagnose.sh             ← 诊断：图/质量/最短路 baseline
+  run_porto_strict_gate_and_split.sh← P0：strict gate + OD-disjoint split
+  porto_od_diversity_scan.py        ← OD bin corridor 多样性扫描
   porto_download_raw.sh             ← 数据下载 (已完成)
 ```
 

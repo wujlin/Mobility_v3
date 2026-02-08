@@ -118,6 +118,29 @@
 - `src/data/worldtrace/build_detroit_segments.py`（已支持写入 `osm_way_id`）
 - `src/data/way_graph/build_way_routes_from_segments_parquet.py`
 
+---
+
+## 8. 新数据集：Porto Taxi（WAYCASD0，2026-02-08）
+
+> 背景：Rustbelt（Detroit/Columbus）存在 “GT≈ShortestPath” 的退化风险，且样本量很小（5k）。Porto Taxi 提供更丰富拓扑与更强 OD 多模态，适合验证 latent diversity 与 best-of-K。
+
+**数据根目录（工作站落盘）**：
+- `OUT_BASE=/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD0_waydata_porto_seed0`
+
+**Way-CASD 标准产物（W1–W4）**：
+- `W2_way_graph/way_graph.npz`：`out_deg p50=4, p90=18`；连通性 `largest_cc=100%`
+- `W4_way_routes_labeled/way_routes_labeled.npz`：routes=1,630,527；`way_seq_len p50=24, p90=46`
+
+**诊断与关键结论**（产物同步到仓库，便于 review）：
+- 诊断目录：`_sync/wsa/pi_verify/20260208_porto_diagnose/`
+- OD corridor 多样性（coarse OD bin，>=5 routes）：抽样 5000 bins，multimodal=99.6%，mean LCS dist=0.742（支持“同一 OD 存在结构性不同走法”）。
+- 质量风险：`max_step_m` 重尾（p95≈14.9km），提示存在 teleport edge/异常段；在引用 SP/detour 等指标前，必须先做 strict gate。
+
+**P0 / Blocking（严格过滤 + split）**：
+- bad ids（默认阈值）：`_sync/wsa/pi_verify/20260208_porto_diagnose/way_routes_bad.json`
+- default gate 保留：`1,350,143 / 1,629,126 = 82.9%`（len∈[3,160]）
+- 脚本：`tools/porto/run_porto_strict_gate_and_split.sh`（生成 `W5_way_routes_strict_gate/*` 与 `od_split_min3_max160_seed0.json`）
+
 ### 2.2 Way routes 质量审计与 Strict gate（事实）
 
 来自：`_sync/wsa/icml2026_routegen/A_way_routes_quality_rustbelt_v1/report.json`

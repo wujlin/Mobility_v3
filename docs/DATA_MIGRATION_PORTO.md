@@ -8,6 +8,29 @@
 
 **核心思路：只新写一个 CSV→parquet 转换脚本，后续完全复用现有 `run_way_casd_prep.sh` pipeline。**
 
+### ✅ 当前进度（Porto 已跑通，产物已落盘）
+
+本次在工作站完成的 Porto 数据预处理输出根目录：
+
+- `OUT_BASE=/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD0_waydata_porto_seed0`
+
+关键产物（Way-CASD 标准接口，W1–W4）：
+
+- `W1_way_routes/way_routes.npz`
+- `W2_way_graph/way_graph.npz`
+- `W3_way_features/way_features.npz`
+- `W4_way_routes_labeled/way_routes_labeled.npz`（推荐后续训练/评测用这个）
+
+路由与标签统计（来自 `W4_way_routes_labeled/way_routes_labeled.npz`）：
+
+- `N=1,630,527`（routes），`vocab=35,471`（ways）
+- `way_seq_len`：p50=24，p90=46，mean=27.3，max=212
+- `corridor_type`：
+  - 0：1,378,968
+  - 1：213,802
+  - 2：1,295
+  - 3：36,462
+
 ### 前置条件
 1. `train.csv` 已存在于 `$RAW_ROOT/porto_taxi/raw/`（✅ 已完成）
 2. `portugal-latest.osm.pbf` 已存在于 `$RAW_ROOT/osm/`（✅ 已完成，382MB）
@@ -281,11 +304,9 @@ W4: label_corridor_type_from_way_features.py → way_routes_labeled.npz
 ```
 ✅ 1. 下载 Porto taxi CSV（Kaggle）  — 已完成，1,710,671 rows
 ✅ 2. 下载 Portugal OSM（Geofabrik）  — 已完成，382MB
-□  3. 部署 Valhalla Docker（osmium extract → docker run）
-□  4. 调试跑: bash tools/porto/run_porto_prep.sh --limit 100
-□  5. 全量跑: bash tools/porto/run_porto_prep.sh
-□  6. 🔴 验证检查点：detour ratio + 同 OD 路线多样性 → 报告数字
-□  7. 如果通过验证 → 训练 WC + RNN → 评估 → 对比
+✅ 3. Phase 0+1 全量跑通（Porto way 数据已产出 W1–W4）
+□  4. 🔴 验证检查点：detour ratio + 同 OD 路线多样性 → 报告数字
+□  5. 如果通过验证 → 训练 WC + RNN → 评估 → 对比
 ```
 
-**关键检查点：Step 6 完成后暂停**，报告 detour ratio 和路线多样性数字。如果数据仍缺乏多模态性，在投入训练之前重新评估方向。
+**关键检查点：Step 4 完成后暂停**，报告 detour ratio 和路线多样性数字。如果数据仍缺乏多模态性，在投入训练之前重新评估方向。

@@ -17,6 +17,7 @@ from src.models.way_casd.latent_flow import LatentFlowCfg, LatentFlowMatching
 from src.models.way_casd.way_casd import WayCASDAECfg, WayCASDAutoEncoder
 from src.models.way_casd.way_encoder import load_way_features_from_npz
 from src.models.way_casd.region_ar import RegionARCfg, RegionARModel
+from src.models.way_casd.value_fn import WayValueFn, WayValueFnCfg
 
 TZ_SHANGHAI = timezone(timedelta(hours=8))
 
@@ -269,6 +270,9 @@ class Cfg:
     anti_loop_k: int  # 0=disable hard mask; >0=exclude recently visited ways (last K)
     anti_loop_penalty: float  # 0=disable soft penalty; >0=penalty for recently visited ways
     anti_loop_penalty_k: int  # window size K for soft penalty
+
+    value_ckpt: Optional[str] = None
+    value_beta: float = 0.0
 
     split_json: Optional[str] = None
     split_part: Optional[str] = None
@@ -567,6 +571,8 @@ def main() -> None:
     p.add_argument("--anti_loop_k", type=int, default=0, help="Hard anti-loop: exclude candidates visited in last K steps (0=disable).")
     p.add_argument("--anti_loop_penalty", type=float, default=0.0, help="Soft anti-loop: subtract penalty from logits for recently visited ways (0=disable).")
     p.add_argument("--anti_loop_penalty_k", type=int, default=4, help="Soft anti-loop window size K (only used when anti_loop_penalty>0).")
+    p.add_argument("--value_ckpt", type=Path, default=None, help="Optional: value function ckpt for lookahead scoring.")
+    p.add_argument("--value_beta", type=float, default=0.0, help="Lookahead beta (0=disable).")
 
     p.add_argument(
         "--split_json",
@@ -615,6 +621,8 @@ def main() -> None:
         anti_loop_k=max(0, int(args.anti_loop_k)),
         anti_loop_penalty=max(0.0, float(args.anti_loop_penalty)),
         anti_loop_penalty_k=max(0, int(args.anti_loop_penalty_k)),
+        value_ckpt=(str(args.value_ckpt) if args.value_ckpt is not None else None),
+        value_beta=float(args.value_beta),
         split_json=(str(args.split_json) if args.split_json is not None else None),
         split_part=(str(args.split_part) if args.split_part is not None else (("test" if args.split_json is not None else None))),
     )
@@ -826,6 +834,30 @@ def main() -> None:
     if max_candidates < 0:
         max_candidates = int(ae.cfg.max_candidates)
 
+    value_fn: Optional[WayValueFn] = None
+    if cfg.value_ckpt is not None and abs(float(cfg.value_beta)) > 1e-12:
+        v_path = Path(str(cfg.value_ckpt))
+        if not v_path.exists():
+            raise SystemExit(f"[FATAL] file not found: {v_path}")
+        ckpt_v = torch.load(str(v_path), map_location=device)
+        v_state = ckpt_v.get("model_state_dict", ckpt_v) if isinstance(ckpt_v, dict) else ckpt_v
+        v_cfg_dict = ckpt_v.get("config", {}) if isinstance(ckpt_v, dict) else {}
+        if not isinstance(v_state, dict):
+            raise SystemExit("[FATAL] unexpected value ckpt format (state_dict missing).")
+        v_cfg = WayValueFnCfg(
+            d_model=int(v_cfg_dict.get("d_model", ae.cfg.d_model)),
+            hidden_dim=int(v_cfg_dict.get("hidden_dim", ae.cfg.d_model)),
+            dropout=float(v_cfg_dict.get("dropout", 0.1)),
+            use_z_mean=bool(v_cfg_dict.get("use_z_mean", True)),
+            use_cond_emb=bool(v_cfg_dict.get("use_cond_emb", True)),
+            use_dest_dist=bool(v_cfg_dict.get("use_dest_dist", True)),
+        )
+        if int(v_cfg.d_model) != int(ae.cfg.d_model):
+            raise SystemExit(f"[FATAL] value_fn d_model mismatch: value={int(v_cfg.d_model)} vs AE={int(ae.cfg.d_model)}")
+        value_fn = WayValueFn(cfg=v_cfg).to(device)
+        value_fn.load_state_dict(v_state, strict=False)
+        value_fn.eval()
+
     # Optional: restrict evaluated routes to a predefined split (route_id list).
     split_ids: Optional[np.ndarray] = None
     if cfg.split_json is not None:
@@ -1004,6 +1036,8 @@ def main() -> None:
                 anti_loop_k=int(cfg.anti_loop_k),
                 anti_loop_penalty=float(cfg.anti_loop_penalty),
                 anti_loop_penalty_k=int(cfg.anti_loop_penalty_k),
+                value_fn=value_fn,
+                value_beta=float(cfg.value_beta),
             )
 
             beam: Optional[List[List[int]]] = None
@@ -1028,6 +1062,8 @@ def main() -> None:
                     anti_loop_k=int(cfg.anti_loop_k),
                     anti_loop_penalty=float(cfg.anti_loop_penalty),
                     anti_loop_penalty_k=int(cfg.anti_loop_penalty_k),
+                    value_fn=value_fn,
+                    value_beta=float(cfg.value_beta),
                 )
 
             # Metrics per route.

@@ -1015,6 +1015,8 @@ class WayDecoder(nn.Module):
         anti_loop_k: int = 0,
         anti_loop_penalty: float = 0.0,
         anti_loop_penalty_k: int = 4,
+        value_fn: Optional[nn.Module] = None,
+        value_beta: float = 0.0,
     ) -> List[List[int]]:
         """
         Batched greedy decoding for speed.
@@ -1276,6 +1278,28 @@ class WayDecoder(nn.Module):
                 hit = (cand_way.unsqueeze(-1) == recent[:, None, :])  # (B2,C,K)
                 bad = (hit.any(dim=-1)) & cand_mask  # (B2,C)
                 logits = logits - bad.to(dtype=logits.dtype) * pen
+
+            beta = float(value_beta)
+            if (value_fn is not None) and (abs(beta) > 1e-12):
+                try:
+                    # Lookahead value: V(next_way, z, dest)
+                    cand_emb, _ = way_embedder(cand_way)  # (B2,C,d_model)
+                    z_mean = latent_tokens[keep].mean(dim=1)  # (B2,d_model)
+                    z_rep = z_mean[:, None, :].expand_as(cand_emb)
+                    cond_rep = cond_emb[keep][:, None, :].expand_as(cand_emb)
+
+                    coord_scale = float(getattr(way_embedder, "coord_scale", self.coord_scale))
+                    dest = route_cond["dest_pos"][keep].to(dtype=torch.float32)
+                    if coord_scale > 0:
+                        dest = dest / coord_scale
+                    cand_geom, _tier, _hw = way_embedder._lookup(cand_way)
+                    cand_center = cand_geom[..., :2].to(dtype=torch.float32)
+                    dist = torch.norm(dest[:, None, :] - cand_center, dim=-1)  # (B2,C)
+
+                    v = value_fn(cur_emb=cand_emb, z_mean=z_rep, cond_emb=cond_rep, dest_dist=dist)  # (B2,C)
+                    logits = logits + beta * v.to(dtype=logits.dtype)
+                except Exception:
+                    pass
 
             j = torch.argmax(logits, dim=-1)  # (B2,)
             nxt = cand_way[torch.arange(B2, device=device), j].to(dtype=torch.long)
@@ -1633,6 +1657,8 @@ class WayDecoder(nn.Module):
         anti_loop_k: int = 0,
         anti_loop_penalty: float = 0.0,
         anti_loop_penalty_k: int = 4,
+        value_fn: Optional[nn.Module] = None,
+        value_beta: float = 0.0,
     ) -> List[List[int]]:
         """
         Batched beam search:
@@ -1689,6 +1715,10 @@ class WayDecoder(nn.Module):
             dow=route_cond["dow"],
             route_city=route_cond["route_city"],
         )
+        z_mean: Optional[torch.Tensor] = None
+        beta = float(value_beta)
+        if (value_fn is not None) and (abs(beta) > 1e-12):
+            z_mean = latent_tokens.mean(dim=1)  # (B,d_model)
 
         # per-route region paths
         region_paths: Optional[List[List[int]]] = None
@@ -1900,6 +1930,28 @@ class WayDecoder(nn.Module):
                 hit = (cand_way.unsqueeze(-1) == recent[:, None, :])  # (T,C,K)
                 bad = (hit.any(dim=-1)) & cand_mask  # (T,C)
                 logits = logits - bad.to(dtype=logits.dtype) * pen
+
+            if (value_fn is not None) and (abs(beta) > 1e-12) and (z_mean is not None):
+                try:
+                    cand_emb, _ = way_embedder(cand_way)  # (T,C,d_model)
+                    ridx = trans["route_idx"].to(dtype=torch.long)  # (T,)
+                    z_t = z_mean[ridx]  # (T,d)
+                    cond_t = cond_emb[ridx]  # (T,d)
+                    z_rep = z_t[:, None, :].expand_as(cand_emb)
+                    cond_rep = cond_t[:, None, :].expand_as(cand_emb)
+
+                    coord_scale = float(getattr(way_embedder, "coord_scale", self.coord_scale))
+                    dest = route_cond["dest_pos"][ridx].to(dtype=torch.float32)
+                    if coord_scale > 0:
+                        dest = dest / coord_scale
+                    cand_geom, _tier, _hw = way_embedder._lookup(cand_way)
+                    cand_center = cand_geom[..., :2].to(dtype=torch.float32)
+                    dist = torch.norm(dest[:, None, :] - cand_center, dim=-1)  # (T,C)
+
+                    v = value_fn(cur_emb=cand_emb, z_mean=z_rep, cond_emb=cond_rep, dest_dist=dist)  # (T,C)
+                    logits = logits + beta * v.to(dtype=logits.dtype)
+                except Exception:
+                    pass
 
             logp = F.log_softmax(logits, dim=-1)
             topk = min(int(beam_size), int(logp.shape[1]))

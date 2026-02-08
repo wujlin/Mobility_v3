@@ -21,7 +21,7 @@ import logging
 from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Dict, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 import torch
@@ -56,6 +56,10 @@ class TrainCfg:
     save_every: int
     early_stop_patience: int
     max_grad_norm: float
+    scheduled_sampling_max_p: float
+    scheduled_sampling_warmup_epochs: int
+    scheduled_sampling_expert: str
+    focus_train_route_ids_json: Optional[str] = None
     split_json: Optional[str] = None
 
 
@@ -130,6 +134,46 @@ def _pad_region_seqs(seqs: list[list[int]], device: torch.device) -> torch.Tenso
             continue
         pad[i, : len(s)] = torch.as_tensor(s, dtype=torch.long, device=device)
     return pad
+
+
+def _read_json_ids(path: Path) -> np.ndarray:
+    """
+    Read a json file containing route_ids.
+
+    Supported formats:
+      - [1,2,3]
+      - {"route_ids":[...]}
+      - {"routes":[...]}
+      - {"ids":[...]}
+    """
+    obj = json.loads(path.read_text(encoding="utf-8"))
+    if isinstance(obj, list):
+        ids = obj
+    elif isinstance(obj, dict):
+        ids = None
+        for k in ("route_ids", "routes", "ids"):
+            if k in obj and isinstance(obj[k], list):
+                ids = obj[k]
+                break
+        if ids is None:
+            raise ValueError(f"Unsupported id json format: keys={sorted(list(obj.keys()))}")
+    else:
+        raise ValueError(f"Unsupported id json format: type={type(obj)}")
+    return np.asarray([int(x) for x in ids], dtype=np.int64).reshape(-1)
+
+
+def _ss_p(epoch: int, *, max_p: float, warmup_epochs: int) -> float:
+    """
+    Linear scheduled-sampling probability warmup: 0 -> max_p over warmup_epochs.
+    """
+    mp = float(max_p)
+    if not (mp > 0.0):
+        return 0.0
+    w = int(warmup_epochs)
+    if w <= 1:
+        return float(mp)
+    t = float(max(0, min(int(epoch), int(w)))) / float(w)
+    return float(mp) * t
 
 
 def _infer_decoder_use_dest_dist_from_state(state: Dict[str, torch.Tensor]) -> bool:
@@ -280,6 +324,278 @@ def _load_flow(*, flow_ckpt: Path, ae: WayCASDAutoEncoder, device: torch.device)
     return flow
 
 
+def _succ_slice(ptr: np.ndarray, idx: np.ndarray, way: int) -> np.ndarray:
+    s = int(ptr[int(way)])
+    e = int(ptr[int(way) + 1])
+    if e <= s:
+        return np.zeros((0,), dtype=np.int64)
+    return np.asarray(idx[s:e], dtype=np.int64)
+
+
+def _build_candidates_ss(
+    *,
+    ptr: np.ndarray,
+    idx: np.ndarray,
+    cur_way: int,
+    gt_next_way: int,
+    max_candidates: int,
+) -> Tuple[np.ndarray, np.ndarray, int]:
+    """
+    Build a candidate row from successors of cur_way (truncate to max_candidates).
+
+    Returns:
+      cand_row: (Cmax,) int64, padded with -1
+      cand_mask: (Cmax,) bool
+      gt_pos: int (>=0 iff gt_next_way is in full successors; injected if truncated, but NOT injected if off-graph)
+    """
+    succ = _succ_slice(ptr, idx, int(cur_way))
+    gt = int(gt_next_way)
+    succ_set = set(int(x) for x in succ.tolist())
+    gt_is_succ = bool(gt in succ_set)
+
+    c = succ[: int(max_candidates)].astype(np.int64, copy=True)
+    gt_pos = -1
+    if gt_is_succ:
+        if c.size == 0:
+            c = np.asarray([gt], dtype=np.int64)
+        elif int(gt) not in set(int(x) for x in c.tolist()):
+            if int(c.size) < int(max_candidates):
+                c = np.concatenate([c, np.asarray([gt], dtype=np.int64)], axis=0)
+            else:
+                c[-1] = int(gt)
+        where = np.nonzero(c == int(gt))[0]
+        gt_pos = int(where[0]) if int(where.size) > 0 else -1
+
+    C = min(int(c.size), int(max_candidates))
+    row = np.full((int(max_candidates),), -1, dtype=np.int64)
+    mask = np.zeros((int(max_candidates),), dtype=bool)
+    if C > 0:
+        row[:C] = c[:C]
+        mask[:C] = True
+    return row, mask, int(gt_pos)
+
+
+def _train_batch_scheduled_sampling(
+    *,
+    ae: WayCASDAutoEncoder,
+    flow: LatentFlowMatching,
+    batch: Dict[str, object],
+    ptr: np.ndarray,
+    idx: np.ndarray,
+    way_region: Optional[np.ndarray],
+    solver_steps: Optional[int],
+    p_ss: float,
+    expert_policy: str,
+    opt: torch.optim.Optimizer,
+    params: List[torch.nn.Parameter],
+    max_grad_norm: float,
+    device: torch.device,
+) -> Dict[str, float]:
+    """
+    Scheduled sampling / self-play for decoder fine-tuning on Flow latents.
+
+    We roll out step-by-step and, with prob p_ss, feed the model's argmax back as next input.
+    When the GT next way is NOT a successor under the self-play state, we use a simple
+    expert fallback to keep training on valid graph transitions:
+      - expert_policy="destdist": choose successor with min dest distance.
+      - expert_policy="skip": skip this step (no gradient).
+    """
+    way_seq_pad = batch["way_seq_pad"]  # (B,K) long
+    way_seq_len = batch["way_seq_len"]  # (B,) long
+    route_cond = batch["route_cond"]
+
+    B = int(way_seq_pad.shape[0])
+    coord_scale = float(getattr(ae.way_enc, "coord_scale", ae.cfg.coord_scale))
+
+    route_cond_use = {
+        "start_pos": route_cond["start_pos"],
+        "dest_pos": route_cond["dest_pos"],
+        "hour": route_cond["hour"],
+        "dow": route_cond["dow"],
+        "route_city": route_cond["route_city"],
+    }
+    if bool(flow.cfg.use_region_seq):
+        if way_region is None:
+            raise RuntimeError("Flow requires region_seq conditioning, but way_region is missing.")
+        pad = way_seq_pad.detach().cpu().numpy()
+        lens = way_seq_len.detach().cpu().numpy()
+        seqs: list[list[int]] = []
+        for i in range(int(pad.shape[0])):
+            L = int(lens[i])
+            seq = pad[i, :L].astype(np.int64, copy=False)
+            seqs.append(_region_seq_from_way_seq(seq, way_region))
+        route_cond_use["region_seq_pad"] = _pad_region_seqs(seqs, device=device)
+
+    with torch.no_grad():
+        z = flow.sample(route_cond=route_cond_use, solver_steps=solver_steps)
+
+    cond_emb = ae.decoder.cond_enc(
+        start_pos=route_cond_use["start_pos"],
+        dest_pos=route_cond_use["dest_pos"],
+        hour=route_cond_use["hour"],
+        dow=route_cond_use["dow"],
+        route_city=route_cond_use["route_city"],
+    )  # (B,d)
+
+    cur_way = way_seq_pad[:, 0].detach().clone().to(dtype=torch.long)  # (B,)
+    dest_way = route_cond.get("dest_way", None)
+    dest_way = (dest_way.to(device=device, dtype=torch.long) if isinstance(dest_way, torch.Tensor) else None)
+    done = torch.zeros((B,), dtype=torch.bool, device=device)
+    if dest_way is not None:
+        done = done | (cur_way == dest_way)
+
+    paths: List[List[int]] = [[int(w)] for w in cur_way.detach().cpu().tolist()]
+
+    max_steps = int(way_seq_len.max().item()) - 1 if B > 0 else 0
+    max_steps = max(0, int(max_steps))
+
+    opt.zero_grad(set_to_none=True)
+    total_loss = 0.0
+    total_acc = 0.0
+    total_steps = 0
+    n_use_pred = 0
+    n_off_gt = 0
+    n_skipped = 0
+
+    Cmax = int(ae.cfg.max_candidates)
+    Kpast = int(ae.cfg.decoder_past_k)
+    use_past = bool(ae.decoder.use_past_context)
+
+    for step_idx in range(int(max_steps)):
+        has_next = (way_seq_len > int(step_idx) + 1)
+        active = (~done) & has_next
+        if not bool(active.any().item()):
+            break
+        route_idx = torch.nonzero(active, as_tuple=False).reshape(-1)
+        T = int(route_idx.numel())
+        if T <= 0:
+            break
+
+        cur_t = cur_way[route_idx].detach().cpu().numpy().astype(np.int64, copy=False)
+        gt_next_t = way_seq_pad[route_idx, int(step_idx) + 1].detach().cpu().numpy().astype(np.int64, copy=False)
+
+        cand_rows = np.full((T, Cmax), -1, dtype=np.int64)
+        cand_masks = np.zeros((T, Cmax), dtype=bool)
+        gt_pos = np.full((T,), -1, dtype=np.int64)
+        for i in range(T):
+            row, m, pos = _build_candidates_ss(
+                ptr=ptr,
+                idx=idx,
+                cur_way=int(cur_t[i]),
+                gt_next_way=int(gt_next_t[i]),
+                max_candidates=int(Cmax),
+            )
+            cand_rows[i] = row
+            cand_masks[i] = m
+            gt_pos[i] = int(pos)
+
+        cand_way = torch.as_tensor(cand_rows, dtype=torch.long, device=device)
+        cand_mask = torch.as_tensor(cand_masks, dtype=torch.bool, device=device)
+
+        expert_idx = torch.full((T,), -1, dtype=torch.long, device=device)
+        ok_gt = torch.as_tensor(gt_pos >= 0, dtype=torch.bool, device=device)
+        if bool(ok_gt.any().item()):
+            expert_idx[ok_gt] = torch.as_tensor(gt_pos[gt_pos >= 0], dtype=torch.long, device=device)
+
+        off = ~ok_gt
+        if bool(off.any().item()):
+            n_off_gt += int(off.long().sum().item())
+            if str(expert_policy) == "skip":
+                n_skipped += int(off.long().sum().item())
+            elif str(expert_policy) == "destdist":
+                dest = route_cond_use["dest_pos"][route_idx].to(dtype=torch.float32)
+                if coord_scale > 0:
+                    dest = dest / float(coord_scale)
+                cand_geom, _tier, _hw = ae.way_enc._lookup(cand_way)
+                cand_center = cand_geom[..., :2].to(dtype=torch.float32)
+                dist = torch.norm(dest[:, None, :] - cand_center, dim=-1)
+                dist = dist.masked_fill(~cand_mask, float("inf"))
+                best = torch.argmin(dist, dim=-1)
+                expert_idx[off] = best[off]
+            else:
+                raise ValueError(f"unsupported scheduled_sampling_expert: {expert_policy!r}")
+
+        past_way_tensor: Optional[torch.Tensor] = None
+        past_mask_tensor: Optional[torch.Tensor] = None
+        if use_past:
+            past_way_tensor = torch.full((T, Kpast), -1, dtype=torch.long, device=device)
+            for i, ri in enumerate(route_idx.detach().cpu().tolist()):
+                hist = paths[int(ri)]
+                past_list = hist[:-1][-Kpast:] if len(hist) > 1 else []
+                off0 = Kpast - len(past_list)
+                for j, w in enumerate(past_list):
+                    past_way_tensor[i, off0 + j] = int(w)
+            past_mask_tensor = (past_way_tensor >= 0)
+
+        trans = {
+            "route_idx": route_idx,
+            "cur_way": cur_way[route_idx],
+            "cand_way": cand_way,
+            "cand_mask": cand_mask,
+            "step": torch.full((T,), int(step_idx), dtype=torch.long, device=device),
+        }
+        if past_way_tensor is not None and past_mask_tensor is not None:
+            trans["past_way"] = past_way_tensor
+            trans["past_mask"] = past_mask_tensor
+
+        logits = ae.decoder.score_candidates(
+            way_embedder=ae.way_enc,
+            latent_tokens=z,
+            route_cond=route_cond_use,
+            trans=trans,
+            cond_emb=cond_emb,
+        )
+
+        with torch.no_grad():
+            pred_idx = torch.argmax(logits, dim=-1)
+            pred_next = cand_way[torch.arange(T, device=device), pred_idx]
+            # For invalid expert_idx (e.g., expert_policy="skip"), fall back to model prediction.
+            expert_next = torch.where(
+                (expert_idx >= 0),
+                cand_way[torch.arange(T, device=device), torch.clamp(expert_idx, min=0)],
+                pred_next,
+            )
+
+        valid = expert_idx >= 0
+        if bool(valid.any().item()):
+            tgt = expert_idx[valid]
+            loss = F.cross_entropy(logits[valid], tgt, reduction="mean")
+            loss.backward()
+            n_valid = int(valid.long().sum().item())
+            total_loss += float(loss.detach().item()) * float(n_valid)
+            total_steps += int(n_valid)
+            total_acc += float((pred_idx[valid] == tgt).float().sum().item())
+
+        with torch.no_grad():
+            if float(p_ss) > 0.0:
+                use_pred = (torch.rand((T,), device=device) < float(p_ss))
+            else:
+                use_pred = torch.zeros((T,), dtype=torch.bool, device=device)
+            n_use_pred += int(use_pred.long().sum().item())
+            nxt = torch.where(use_pred, pred_next, expert_next)
+
+            for i, ri in enumerate(route_idx.detach().cpu().tolist()):
+                w = int(nxt[int(i)].item())
+                cur_way[int(ri)] = int(w)
+                paths[int(ri)].append(int(w))
+                if dest_way is not None and int(w) == int(dest_way[int(ri)].item()):
+                    done[int(ri)] = True
+
+    torch.nn.utils.clip_grad_norm_(params, max_norm=float(max_grad_norm))
+    opt.step()
+
+    denom = max(1, int(total_steps))
+    return {
+        "loss": float(total_loss / float(denom)),
+        "acc": float(total_acc / float(denom)),
+        "n_steps": float(int(total_steps)),
+        "p_ss": float(p_ss),
+        "use_pred_frac": float(n_use_pred / float(max(1, total_steps))),
+        "off_gt_frac": float(n_off_gt / float(max(1, total_steps + n_skipped))),
+        "skipped_frac": float(n_skipped / float(max(1, total_steps + n_skipped))),
+    }
+
+
 @torch.no_grad()
 def _eval_epoch(
     *,
@@ -356,6 +672,21 @@ def main() -> None:
     p.add_argument("--save_every", type=int, default=1)
     p.add_argument("--early_stop_patience", type=int, default=0)
     p.add_argument("--max_grad_norm", type=float, default=1.0)
+    p.add_argument("--scheduled_sampling_max_p", type=float, default=0.0, help="Scheduled sampling max p (0=disable).")
+    p.add_argument("--scheduled_sampling_warmup_epochs", type=int, default=20, help="Warmup epochs to reach max_p.")
+    p.add_argument(
+        "--scheduled_sampling_expert",
+        type=str,
+        default="destdist",
+        choices=["destdist", "skip"],
+        help="Expert fallback when GT next is not a successor under self-play state.",
+    )
+    p.add_argument(
+        "--focus_train_route_ids_json",
+        type=Path,
+        default=None,
+        help="Optional: further restrict training set to these route_ids (json list or {route_ids:[...]}).",
+    )
     args = p.parse_args()
 
     out_dir = Path(args.out_dir)
@@ -378,6 +709,10 @@ def main() -> None:
         save_every=int(args.save_every),
         early_stop_patience=int(args.early_stop_patience),
         max_grad_norm=float(args.max_grad_norm),
+        scheduled_sampling_max_p=float(args.scheduled_sampling_max_p),
+        scheduled_sampling_warmup_epochs=int(args.scheduled_sampling_warmup_epochs),
+        scheduled_sampling_expert=str(args.scheduled_sampling_expert),
+        focus_train_route_ids_json=(str(args.focus_train_route_ids_json) if args.focus_train_route_ids_json is not None else None),
         split_json=(str(args.split_json) if args.split_json is not None else None),
     )
 
@@ -414,6 +749,17 @@ def main() -> None:
         )
     train_set = Subset(dataset, tr_idx.tolist())
     val_set = Subset(dataset, va_idx.tolist())
+    if args.focus_train_route_ids_json is not None:
+        focus_rids = _read_json_ids(Path(args.focus_train_route_ids_json))
+        focus_idx = _subset_indices_from_route_ids(dataset, focus_rids)
+        if int(focus_idx.size) == 0:
+            raise SystemExit(f"[FATAL] focus_train_route_ids_json produced empty subset: {args.focus_train_route_ids_json}")
+        tr_mask = np.isin(tr_idx.astype(np.int64, copy=False), focus_idx.astype(np.int64, copy=False), assume_unique=False)
+        tr_idx2 = tr_idx[tr_mask]
+        if int(tr_idx2.size) == 0:
+            raise SystemExit("[FATAL] focus_train_route_ids_json removed all training samples (intersection empty).")
+        train_set = Subset(dataset, tr_idx2.tolist())
+        log.info(f"focus_train_route_ids_json={args.focus_train_route_ids_json} => train={len(train_set)} (was {int(tr_idx.size)})")
     log.info(f"routes: total={len(dataset)} train={len(train_set)} val={len(val_set)} min_hops={cfg.min_hops} max_way_len={cfg.max_way_len}")
 
     # Load models
@@ -442,6 +788,8 @@ def main() -> None:
 
     # Collate (for candidate sets and past context).
     wg = np.load(str(args.way_graph_npz), allow_pickle=True)
+    ptr = np.asarray(wg["way_adj_ptr"], dtype=np.int64)
+    adj = np.asarray(wg["way_adj_idx"], dtype=np.int64)
     collate_fn = make_way_casd_collate_fn(
         way_adj_ptr=wg["way_adj_ptr"],
         way_adj_idx=wg["way_adj_idx"],
@@ -494,8 +842,32 @@ def main() -> None:
     for epoch in range(start_epoch, int(cfg.n_epochs) + 1):
         ae.train()
         losses: list[float] = []
+        ss_stats: list[Dict[str, float]] = []
         for batch in train_loader:
             b = _to_device(batch, device)
+
+            p_ss = _ss_p(epoch, max_p=float(cfg.scheduled_sampling_max_p), warmup_epochs=int(cfg.scheduled_sampling_warmup_epochs))
+            if float(p_ss) > 0.0:
+                st = _train_batch_scheduled_sampling(
+                    ae=ae,
+                    flow=flow,
+                    batch=b,
+                    ptr=ptr,
+                    idx=adj,
+                    way_region=way_region,
+                    solver_steps=cfg.flow_solver_steps,
+                    p_ss=float(p_ss),
+                    expert_policy=str(cfg.scheduled_sampling_expert),
+                    opt=opt,
+                    params=params,
+                    max_grad_norm=float(cfg.max_grad_norm),
+                    device=device,
+                )
+                losses.append(float(st["loss"]))
+                ss_stats.append(st)
+                continue
+
+            # Teacher forcing (default)
             route_cond = b["route_cond"]
             route_cond_use = {
                 "start_pos": route_cond["start_pos"],
@@ -529,9 +901,21 @@ def main() -> None:
             losses.append(float(loss.detach().item()))
 
         tr_loss = float(np.mean(losses)) if losses else float("nan")
+        train_ss: Dict[str, float] = {}
+        if ss_stats:
+            keys = ["p_ss", "acc", "use_pred_frac", "off_gt_frac", "skipped_frac", "n_steps"]
+            train_ss = {k: float(np.mean([float(s.get(k, float("nan"))) for s in ss_stats])) for k in keys}
         va = _eval_epoch(ae=ae, flow=flow, loader=val_loader, device=device, way_region=way_region, solver_steps=cfg.flow_solver_steps)
         va_loss = float(va["loss"])
-        log.info(f"epoch={epoch} train_loss={tr_loss:.6f} val_loss={va_loss:.6f} best={best_val:.6f}@{best_epoch}")
+        if train_ss:
+            log.info(
+                f"epoch={epoch} train_loss={tr_loss:.6f} val_loss={va_loss:.6f} best={best_val:.6f}@{best_epoch} "
+                f"ss(p={train_ss.get('p_ss', 0.0):.3f}, acc={train_ss.get('acc', float('nan')):.3f}, "
+                f"use_pred={train_ss.get('use_pred_frac', 0.0):.3f}, off_gt={train_ss.get('off_gt_frac', 0.0):.3f}, "
+                f"skip={train_ss.get('skipped_frac', 0.0):.3f}, steps={int(train_ss.get('n_steps', 0.0))})"
+            )
+        else:
+            log.info(f"epoch={epoch} train_loss={tr_loss:.6f} val_loss={va_loss:.6f} best={best_val:.6f}@{best_epoch}")
 
         # Save progress snapshot (single-file, easy to sync).
         progress = {
@@ -540,6 +924,7 @@ def main() -> None:
             "created_at": datetime.now(tz=TZ_SHANGHAI).isoformat(),
             "epoch": int(epoch),
             "train": {"loss": float(tr_loss)},
+            "train_ss": train_ss,
             "val": {"loss": float(va_loss)},
             "best_val_loss": float(best_val),
             "best_epoch": int(best_epoch),

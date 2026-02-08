@@ -82,4 +82,4 @@ echo "  2. shortest_path_baseline.json → detour_gt_over_sp (p50 >> 1.0 说明�
 echo "  3. way_graph_audit.txt → 出度分布, 连通性"
 echo ""
 echo "快速查看 detour ratio:"
-echo "  python -c \"import json; d=json.load(open('${DIAG_DIR}/shortest_path_baseline.json')); print('detour_gt_over_sp:', {k:round(v,3) for k,v in d['summary']['overall'].items() if 'detour' in k})\""
+echo "  python -c \"import json; d=json.load(open('${DIAG_DIR}/shortest_path_baseline.json')); print('detour_gt_over_sp:', d['overall']['detour_gt_over_sp'])\""

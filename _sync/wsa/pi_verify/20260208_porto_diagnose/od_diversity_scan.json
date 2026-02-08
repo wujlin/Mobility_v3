@@ -1,0 +1,444 @@
+{
+  "ok": true,
+  "task": "porto_od_diversity_scan",
+  "elapsed_s": 149.5,
+  "inputs": {
+    "way_routes_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD0_waydata_porto_seed0/W4_way_routes_labeled/way_routes_labeled.npz",
+    "way_features_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD0_waydata_porto_seed0/W3_way_features/way_features.npz"
+  },
+  "cfg": {
+    "od_bin_deg": 0.01,
+    "grid_bin": 53.39037433155043,
+    "min_routes_per_bin": 5,
+    "min_hops": 5,
+    "max_way_len": 160,
+    "max_sigs_per_bin": 32,
+    "lcs_sep_thr": 0.5,
+    "seed": 0,
+    "sample_bins": 5000
+  },
+  "summary": {
+    "n_routes_total": 1630527,
+    "n_routes_filtered": 1621423,
+    "n_od_bins_total": 20488,
+    "n_od_bins_valid": 8779,
+    "n_od_bins_analyzed": 5000,
+    "n_multimodal": 4980,
+    "multimodal_frac": 0.996,
+    "routes_per_bin": {
+      "p50": 23,
+      "p90": 344,
+      "p99": 2599,
+      "max": 18836
+    },
+    "diversity_mean_lcs_dist": {
+      "mean": 0.7423,
+      "p25": 0.6748,
+      "p50": 0.7629,
+      "p75": 0.8284,
+      "p90": 0.8709
+    }
+  },
+  "multimodal_examples": [
+    {
+      "od_bin": [
+        12,
+        9,
+        4,
+        8
+      ],
+      "n_routes": 10,
+      "n_sampled": 10,
+      "max_lcs_dist": 1.0,
+      "mean_lcs_dist": 0.621,
+      "pair_hops": [
+        40,
+        37
+      ],
+      "pair_route_ids": [
+        26712,
+        1533895
+      ]
+    },
+    {
+      "od_bin": [
+        10,
+        9,
+        12,
+        9
+      ],
+      "n_routes": 1542,
+      "n_sampled": 32,
+      "max_lcs_dist": 1.0,
+      "mean_lcs_dist": 0.741,
+      "pair_hops": [
+        23,
+        47
+      ],
+      "pair_route_ids": [
+        360947,
+        1143173
+      ]
+    },
+    {
+      "od_bin": [
+        9,
+        9,
+        8,
+        5
+      ],
+      "n_routes": 251,
+      "n_sampled": 32,
+      "max_lcs_dist": 1.0,
+      "mean_lcs_dist": 0.783,
+      "pair_hops": [
+        27,
+        22
+      ],
+      "pair_route_ids": [
+        450322,
+        447264
+      ]
+    },
+    {
+      "od_bin": [
+        6,
+        8,
+        8,
+        9
+      ],
+      "n_routes": 8,
+      "n_sampled": 8,
+      "max_lcs_dist": 1.0,
+      "mean_lcs_dist": 0.902,
+      "pair_hops": [
+        25,
+        15
+      ],
+      "pair_route_ids": [
+        13903,
+        705024
+      ]
+    },
+    {
+      "od_bin": [
+        14,
+        9,
+        10,
+        10
+      ],
+      "n_routes": 9,
+      "n_sampled": 9,
+      "max_lcs_dist": 1.0,
+      "mean_lcs_dist": 0.733,
+      "pair_hops": [
+        17,
+        21
+      ],
+      "pair_route_ids": [
+        24339,
+        370220
+      ]
+    },
+    {
+      "od_bin": [
+        15,
+        10,
+        12,
+        9
+      ],
+      "n_routes": 5,
+      "n_sampled": 5,
+      "max_lcs_dist": 1.0,
+      "mean_lcs_dist": 0.889,
+      "pair_hops": [
+        30,
+        67
+      ],
+      "pair_route_ids": [
+        46431,
+        76357
+      ]
+    },
+    {
+      "od_bin": [
+        12,
+        5,
+        14,
+        5
+      ],
+      "n_routes": 5,
+      "n_sampled": 5,
+      "max_lcs_dist": 1.0,
+      "mean_lcs_dist": 0.823,
+      "pair_hops": [
+        13,
+        10
+      ],
+      "pair_route_ids": [
+        4224,
+        83285
+      ]
+    },
+    {
+      "od_bin": [
+        9,
+        2,
+        12,
+        12
+      ],
+      "n_routes": 9,
+      "n_sampled": 9,
+      "max_lcs_dist": 1.0,
+      "mean_lcs_dist": 0.784,
+      "pair_hops": [
+        71,
+        46
+      ],
+      "pair_route_ids": [
+        23780,
+        213952
+      ]
+    },
+    {
+      "od_bin": [
+        11,
+        12,
+        11,
+        11
+      ],
+      "n_routes": 190,
+      "n_sampled": 32,
+      "max_lcs_dist": 1.0,
+      "mean_lcs_dist": 0.756,
+      "pair_hops": [
+        7,
+        114
+      ],
+      "pair_route_ids": [
+        193273,
+        758740
+      ]
+    },
+    {
+      "od_bin": [
+        9,
+        14,
+        7,
+        10
+      ],
+      "n_routes": 6,
+      "n_sampled": 6,
+      "max_lcs_dist": 0.977,
+      "mean_lcs_dist": 0.834,
+      "pair_hops": [
+        36,
+        43
+      ],
+      "pair_route_ids": [
+        1306123,
+        1474441
+      ]
+    },
+    {
+      "od_bin": [
+        9,
+        6,
+        12,
+        6
+      ],
+      "n_routes": 60,
+      "n_sampled": 32,
+      "max_lcs_dist": 1.0,
+      "mean_lcs_dist": 0.746,
+      "pair_hops": [
+        20,
+        30
+      ],
+      "pair_route_ids": [
+        1186989,
+        33564
+      ]
+    },
+    {
+      "od_bin": [
+        11,
+        11,
+        12,
+        15
+      ],
+      "n_routes": 112,
+      "n_sampled": 32,
+      "max_lcs_dist": 0.96,
+      "mean_lcs_dist": 0.705,
+      "pair_hops": [
+        25,
+        20
+      ],
+      "pair_route_ids": [
+        502611,
+        759045
+      ]
+    },
+    {
+      "od_bin": [
+        7,
+        5,
+        12,
+        8
+      ],
+      "n_routes": 13,
+      "n_sampled": 13,
+      "max_lcs_dist": 1.0,
+      "mean_lcs_dist": 0.891,
+      "pair_hops": [
+        66,
+        53
+      ],
+      "pair_route_ids": [
+        90488,
+        1413489
+      ]
+    },
+    {
+      "od_bin": [
+        9,
+        7,
+        13,
+        12
+      ],
+      "n_routes": 6,
+      "n_sampled": 6,
+      "max_lcs_dist": 0.846,
+      "mean_lcs_dist": 0.711,
+      "pair_hops": [
+        43,
+        52
+      ],
+      "pair_route_ids": [
+        519642,
+        576709
+      ]
+    },
+    {
+      "od_bin": [
+        9,
+        12,
+        9,
+        3
+      ],
+      "n_routes": 7,
+      "n_sampled": 7,
+      "max_lcs_dist": 1.0,
+      "mean_lcs_dist": 0.82,
+      "pair_hops": [
+        50,
+        48
+      ],
+      "pair_route_ids": [
+        577704,
+        584107
+      ]
+    },
+    {
+      "od_bin": [
+        12,
+        7,
+        9,
+        10
+      ],
+      "n_routes": 78,
+      "n_sampled": 32,
+      "max_lcs_dist": 1.0,
+      "mean_lcs_dist": 0.532,
+      "pair_hops": [
+        46,
+        51
+      ],
+      "pair_route_ids": [
+        1099723,
+        12244
+      ]
+    },
+    {
+      "od_bin": [
+        10,
+        5,
+        10,
+        12
+      ],
+      "n_routes": 76,
+      "n_sampled": 32,
+      "max_lcs_dist": 1.0,
+      "mean_lcs_dist": 0.674,
+      "pair_hops": [
+        75,
+        36
+      ],
+      "pair_route_ids": [
+        1026446,
+        1334308
+      ]
+    },
+    {
+      "od_bin": [
+        8,
+        8,
+        6,
+        11
+      ],
+      "n_routes": 13,
+      "n_sampled": 13,
+      "max_lcs_dist": 1.0,
+      "mean_lcs_dist": 0.878,
+      "pair_hops": [
+        35,
+        26
+      ],
+      "pair_route_ids": [
+        81175,
+        355379
+      ]
+    },
+    {
+      "od_bin": [
+        10,
+        8,
+        11,
+        12
+      ],
+      "n_routes": 46,
+      "n_sampled": 32,
+      "max_lcs_dist": 1.0,
+      "mean_lcs_dist": 0.87,
+      "pair_hops": [
+        31,
+        71
+      ],
+      "pair_route_ids": [
+        291640,
+        283189
+      ]
+    },
+    {
+      "od_bin": [
+        7,
+        5,
+        0,
+        1
+      ],
+      "n_routes": 7,
+      "n_sampled": 7,
+      "max_lcs_dist": 0.893,
+      "mean_lcs_dist": 0.74,
+      "pair_hops": [
+        56,
+        19
+      ],
+      "pair_route_ids": [
+        693903,
+        719158
+      ]
+    }
+  ]
+}

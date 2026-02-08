@@ -53,6 +53,16 @@ Shortest path baseline（detour ratio）：
 - 已对 `n=500` routes 计算并保存：`A_porto_diagnose/shortest_path_baseline.json`
 - 下一步必须读取该文件确认 **GT 是否明显偏离最短路**（否则 Porto 也会退化成“图搜索/最短路”问题）
 
+OD bin 路径多样性扫描（corridor diversity）：
+- 产物：`A_porto_diagnose/od_diversity_scan.json`（从 coarse OD bin 内的多条 way 序列计算 LCS distance）
+- 统计（一次采样分析 `5000` 个 OD bins，阈值 `max_pairwise_LCS_dist>=0.5` 判为 multimodal）：
+  - `unique OD bins=20,488`，其中 `>=5 routes` 的 valid bins=8,779
+  - routes per bin（valid）：p50=23，p90=344，p99=2,599，max=18,836
+  - multimodal bins：`4,980/5,000 = 99.6%`
+  - mean LCS distance（bin 内 pairwise 平均）：mean=0.742，p50=0.763，p90=0.871
+- 解释：Porto 在**粗粒度 OD 口径**下存在非常显著的 corridor 多样性（这正是 Way-CASD / Flow latent diversity 能发挥作用的前提）。
+- ⚠️ 注意：当前 `max_step_m` 尾部很重（p95≈14.9km），说明仍存在“way 间跳跃/teleport edge”风险；建议在用 detour/SP 或更严格指标前先做异常过滤或用 OSM topology 重建 graph。
+
 ### 前置条件
 1. `train.csv` 已存在于 `$RAW_ROOT/porto_taxi/raw/`（✅ 已完成）
 2. `portugal-latest.osm.pbf` 已存在于 `$RAW_ROOT/osm/`（✅ 已完成，382MB）

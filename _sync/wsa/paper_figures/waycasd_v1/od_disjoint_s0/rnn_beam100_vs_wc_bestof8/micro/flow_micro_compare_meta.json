@@ -1,0 +1,50 @@
+{
+  "ok": true,
+  "task": "waycasd_plot_flow_micro_compare",
+  "created_at": "2026-02-08T10:32:35.327578+08:00",
+  "decode": "beam",
+  "baseline": "RNN_beam100",
+  "methods": [
+    {
+      "name": "RNN_beam100",
+      "path": "_sync/wsa/pi_verify/20260206_od_disjoint_s0/viz_rnn_vs_wc_bestof8/rnn_ar_beam100_dump.json"
+    },
+    {
+      "name": "WC_bestof8",
+      "path": "_sync/wsa/pi_verify/20260206_od_disjoint_s0/viz_rnn_vs_wc_bestof8/per_route_wc_bestof8_dest_dump.json"
+    }
+  ],
+  "picked": {
+    "0:easy": [
+      1757,
+      1829,
+      1229
+    ],
+    "0:improved": [
+      1067,
+      1569,
+      1986
+    ],
+    "0:hard": [
+      1324,
+      1562,
+      597
+    ],
+    "1:easy": [
+      4123,
+      3272,
+      6364
+    ],
+    "1:improved": [
+      4543
+    ],
+    "1:hard": [
+      3215,
+      4363,
+      4873
+    ]
+  },
+  "way_features_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD1_waydata_rustbelt_seed0_strict_v1/W4_way_features_sem/way_features.npz",
+  "way_regions_npz": "/home/jinlin/projects/Mobility_v3/_sync/wsa/pi_verify/20260201_min5_candq1_past8_len160_s0/regions_louvain_res1p0_v1/way_regions_louvain_per_city_res1p0_seed0.npz",
+  "corridor_draw": true
+}

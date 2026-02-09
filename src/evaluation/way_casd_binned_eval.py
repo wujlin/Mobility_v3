@@ -960,10 +960,11 @@ def main() -> None:
 
             # Build region_seq once if needed by decoder constraint or by Flow conditioning.
             region_seq_use: Optional[List[List[int]]] = None
+            region_routes: Optional[List[List[int]]] = None
             if (str(cfg.region_constraint) != "none") or (flow is not None and bool(flow.cfg.use_region_seq)):
                 if way_region_np is None or way_region_t is None:
                     raise RuntimeError("region_seq required but way_region is missing (need --way_regions_npz).")
-                region_routes: List[List[int]] = []
+                region_routes = []
                 if str(cfg.region_constraint) == "ar":
                     if region_ar_model is None or region_ar_adj is None:
                         raise RuntimeError("region_constraint=ar but region_ar_model is not loaded")

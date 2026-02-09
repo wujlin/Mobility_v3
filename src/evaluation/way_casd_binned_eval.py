@@ -10,6 +10,7 @@ from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
 import numpy as np
 import torch
+import torch.nn as nn
 
 from src.data.way_graph.way_sequence_dataset import load_way_routes_npz
 from src.evaluation.shape_metrics import dtw_distance, frechet_distance, summarize
@@ -20,6 +21,40 @@ from src.models.way_casd.region_ar import RegionARCfg, RegionARModel
 from src.models.way_casd.value_fn import WayValueFn, WayValueFnCfg
 
 TZ_SHANGHAI = timezone(timedelta(hours=8))
+
+
+class _CachedWayEmbedder(nn.Module):
+    """
+    Exact-speedup wrapper for WayEncoder during eval.
+
+    Motivation: decoding calls WayEncoder many times per step (cur/cand/past). On large graphs or
+    best-of-K eval, repeated MLP runs dominate wall time. This wrapper precomputes all way
+    embeddings once (in eval mode) and serves them via indexing.
+    """
+
+    def __init__(self, *, base: nn.Module, emb_table: torch.Tensor, pad_emb: torch.Tensor) -> None:
+        super().__init__()
+        self.base = base
+        self.register_buffer("emb_table", emb_table, persistent=False)  # (N, d_model)
+        self.register_buffer("pad_emb", pad_emb, persistent=False)  # (d_model,)
+
+    @property
+    def coord_scale(self) -> float:
+        return float(getattr(self.base, "coord_scale", 0.0))
+
+    def _lookup(self, way_ids: torch.Tensor):  # noqa: ANN001
+        # Decoder uses _lookup to build distance-to-dest features; keep base behavior.
+        return self.base._lookup(way_ids)  # type: ignore[attr-defined]
+
+    def forward(self, way_ids: torch.Tensor):  # type: ignore[override]
+        way_ids = way_ids.to(dtype=torch.long)
+        mask = way_ids >= 0
+        ids = torch.clamp_min(way_ids, 0)
+        emb = self.emb_table[ids]
+        if not bool(mask.all()):
+            emb = torch.where(mask.unsqueeze(-1), emb, self.pad_emb)
+        return emb, mask
+
 
 def _set_seed(seed: int) -> None:
     # Route sampling already uses a fixed-seed numpy Generator. This seed mainly stabilizes
@@ -542,6 +577,12 @@ def main() -> None:
     )
 
     p.add_argument("--eval_batch_size", type=int, default=64, help="Eval batch size (routes per forward, before K replication).")
+    p.add_argument(
+        "--cache_way_emb",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Cache all way embeddings on device for faster decoding (exact, eval-only).",
+    )
     p.add_argument("--n_routes", type=int, default=200, help="Per city (0 and 1).")
     p.add_argument("--min_hops", type=int, default=5)
     p.add_argument("--max_way_len", type=int, default=160)
@@ -807,6 +848,21 @@ def main() -> None:
         ae.load_state_dict(state, strict=False)
     ae.eval()
 
+    way_embedder: nn.Module = ae.way_enc
+    if bool(args.cache_way_emb):
+        # Precompute (N, d_model) once; identical to WayEncoder outputs in eval mode.
+        n_ways = int(getattr(ae.way_enc, "way_len_m").numel())
+        d_model = int(getattr(ae.way_enc, "d_model", ae.cfg.d_model))
+        emb_table = torch.empty((n_ways, d_model), dtype=torch.float32, device=device)
+        chunk = 8192
+        ids_all = torch.arange(n_ways, dtype=torch.long, device=device)
+        for i0 in range(0, n_ways, chunk):
+            i1 = min(n_ways, i0 + chunk)
+            emb, _mask = ae.way_enc(ids_all[i0:i1])
+            emb_table[i0:i1] = emb.to(dtype=torch.float32)
+        pad_emb, _m = ae.way_enc(torch.as_tensor([-1], dtype=torch.long, device=device))
+        way_embedder = _CachedWayEmbedder(base=ae.way_enc, emb_table=emb_table, pad_emb=pad_emb[0].to(dtype=torch.float32))
+
     flow: Optional[LatentFlowMatching] = None
     flow_cfg_dict: Dict[str, object] = {}
     if str(cfg.latent_source) == "flow":
@@ -1038,7 +1094,7 @@ def main() -> None:
                 z_use = flow.sample(route_cond=route_cond_use, solver_steps=cfg.flow_solver_steps, cfg_scale=float(cfg.flow_cfg_scale))
 
             greedy = ae.decoder.greedy_decode_batched(
-                way_embedder=ae.way_enc,
+                way_embedder=way_embedder,
                 latent_tokens=z_use,
                 route_cond=route_cond_use,
                 start_way=sw_use,
@@ -1063,7 +1119,7 @@ def main() -> None:
             beam: Optional[List[List[int]]] = None
             if bool(cfg.compare_beam):
                 beam = ae.decoder.beam_search_batched(
-                    way_embedder=ae.way_enc,
+                    way_embedder=way_embedder,
                     latent_tokens=z_use,
                     route_cond=route_cond_use,
                     start_way=sw_use,

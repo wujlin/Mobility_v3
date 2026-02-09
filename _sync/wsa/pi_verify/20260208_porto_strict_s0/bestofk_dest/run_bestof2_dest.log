@@ -2,15 +2,36 @@
   warnings.warn(
 [city0] start n_routes=2000 latent_source=flow region_constraint=none compare_beam=True
 [city0] batch 0:64/2000
-Traceback (most recent call last):
-  File "<frozen runpy>", line 198, in _run_module_as_main
-  File "<frozen runpy>", line 88, in _run_code
-  File "/home/jinlin/projects/Mobility_v3/src/evaluation/way_casd_binned_eval.py", line 1349, in <module>
-    main()
-  File "/home/jinlin/miniconda3/envs/dpl/lib/python3.11/site-packages/torch/utils/_contextlib.py", line 120, in decorate_context
-    return func(*args, **kwargs)
-           ^^^^^^^^^^^^^^^^^^^^^
-  File "/home/jinlin/projects/Mobility_v3/src/evaluation/way_casd_binned_eval.py", line 1194, in main
-    if region_routes is not None:
-       ^^^^^^^^^^^^^
-UnboundLocalError: cannot access local variable 'region_routes' where it is not associated with a value
+[city0] batch 64:128/2000
+[city0] batch 128:192/2000
+[city0] batch 192:256/2000
+[city0] batch 256:320/2000
+[city0] batch 320:384/2000
+[city0] batch 384:448/2000
+[city0] batch 448:512/2000
+[city0] batch 512:576/2000
+[city0] batch 576:640/2000
+[city0] batch 640:704/2000
+[city0] batch 704:768/2000
+[city0] batch 768:832/2000
+[city0] batch 832:896/2000
+[city0] batch 896:960/2000
+[city0] batch 960:1024/2000
+[city0] batch 1024:1088/2000
+[city0] batch 1088:1152/2000
+[city0] batch 1152:1216/2000
+[city0] batch 1216:1280/2000
+[city0] batch 1280:1344/2000
+[city0] batch 1344:1408/2000
+[city0] batch 1408:1472/2000
+[city0] batch 1472:1536/2000
+[city0] batch 1536:1600/2000
+[city0] batch 1600:1664/2000
+[city0] batch 1664:1728/2000
+[city0] batch 1728:1792/2000
+[city0] batch 1792:1856/2000
+[city0] batch 1856:1920/2000
+[city0] batch 1920:1984/2000
+[city0] batch 1984:2000/2000
+[city0] done=2000 routes
+[OK] saved: _sync/wsa/pi_verify/20260208_porto_strict_s0/bestofk_dest/binned_flow_bestof2_dest_beam10_n2000.json

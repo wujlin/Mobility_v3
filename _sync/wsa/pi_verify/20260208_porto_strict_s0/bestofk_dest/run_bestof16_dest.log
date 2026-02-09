@@ -2,15 +2,8 @@
   warnings.warn(
 [city0] start n_routes=2000 latent_source=flow region_constraint=none compare_beam=True
 [city0] batch 0:64/2000
-Traceback (most recent call last):
-  File "<frozen runpy>", line 198, in _run_module_as_main
-  File "<frozen runpy>", line 88, in _run_code
-  File "/home/jinlin/projects/Mobility_v3/src/evaluation/way_casd_binned_eval.py", line 1349, in <module>
-    main()
-  File "/home/jinlin/miniconda3/envs/dpl/lib/python3.11/site-packages/torch/utils/_contextlib.py", line 120, in decorate_context
-    return func(*args, **kwargs)
-           ^^^^^^^^^^^^^^^^^^^^^
-  File "/home/jinlin/projects/Mobility_v3/src/evaluation/way_casd_binned_eval.py", line 1194, in main
-    if region_routes is not None:
-       ^^^^^^^^^^^^^
-UnboundLocalError: cannot access local variable 'region_routes' where it is not associated with a value
+[city0] batch 64:128/2000
+[city0] batch 128:192/2000
+[city0] batch 192:256/2000
+[city0] batch 256:320/2000
+[city0] batch 320:384/2000

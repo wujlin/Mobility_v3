@@ -38,6 +38,7 @@ class Cfg:
     n_routes_per_city: int
     tz_offset_hours: float
     val_ratio: float
+    min_hops: int
     max_way_len: int
     max_candidates: int
 
@@ -103,6 +104,53 @@ def _summarize_counts(correct: np.ndarray, total: np.ndarray) -> Dict[str, objec
     return {"acc": float(acc), "n_trans": float(denom), "per_step": per_step, "buckets": buckets}
 
 
+def _outdeg_bins() -> List[Tuple[str, int, Optional[int]]]:
+    # Inclusive ranges [lo, hi], hi=None means +inf.
+    return [
+        ("deg0", 0, 0),
+        ("deg1", 1, 1),
+        ("deg2", 2, 2),
+        ("deg3-4", 3, 4),
+        ("deg5-8", 5, 8),
+        ("deg9-16", 9, 16),
+        ("deg17-32", 17, 32),
+        ("deg33-64", 33, 64),
+        ("deg65+", 65, None),
+    ]
+
+
+def _bucket_outdeg(deg: np.ndarray) -> np.ndarray:
+    d = np.asarray(deg, dtype=np.int64).reshape(-1)
+    b = np.full((int(d.size),), -1, dtype=np.int64)
+    for i, (_name, lo, hi) in enumerate(_outdeg_bins()):
+        if hi is None:
+            m = d >= int(lo)
+        else:
+            m = (d >= int(lo)) & (d <= int(hi))
+        b[m] = int(i)
+    # fall back (shouldn't happen)
+    b[b < 0] = int(len(_outdeg_bins()) - 1)
+    return b
+
+
+def _summarize_outdeg(correct: np.ndarray, total: np.ndarray) -> Dict[str, object]:
+    correct = np.asarray(correct, dtype=np.int64).reshape(-1)
+    total = np.asarray(total, dtype=np.int64).reshape(-1)
+    rep: Dict[str, object] = {"bins": [], "cells": {}}
+    defs = _outdeg_bins()
+    for i, (name, lo, hi) in enumerate(defs):
+        n = int(total[int(i)]) if int(i) < int(total.size) else 0
+        c = int(correct[int(i)]) if int(i) < int(correct.size) else 0
+        rep["bins"].append(str(name))
+        rep["cells"][str(name)] = {
+            "lo": float(lo),
+            "hi": (float(hi) if hi is not None else None),
+            "n": float(n),
+            "acc": float(c / n) if n > 0 else float("nan"),
+        }
+    return rep
+
+
 @torch.no_grad()
 def _eval_subset(
     *,
@@ -110,10 +158,14 @@ def _eval_subset(
     loader: DataLoader,
     device: torch.device,
     max_step: int,
+    outdeg: np.ndarray,
     desc: str,
-) -> Tuple[np.ndarray, np.ndarray]:
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     total = np.zeros((int(max_step),), dtype=np.int64)
     correct = np.zeros((int(max_step),), dtype=np.int64)
+    total_deg = np.zeros((int(len(_outdeg_bins())),), dtype=np.int64)
+    correct_deg = np.zeros((int(len(_outdeg_bins())),), dtype=np.int64)
+    deg_all: List[np.ndarray] = []
 
     for batch in tqdm(loader, desc=str(desc), dynamic_ncols=True):
         b = _to_device(batch, device)
@@ -128,11 +180,18 @@ def _eval_subset(
         tgt = trans["target_idx"].to(dtype=torch.long)
 
         step = step_t.detach().cpu().numpy().astype(np.int64, copy=False)
+        cur = trans["cur_way"].detach().cpu().numpy().astype(np.int64, copy=False)
+        deg = outdeg[np.clip(cur, 0, int(outdeg.size) - 1)]
         ok = (pred == tgt).detach().cpu().numpy().astype(np.int64, copy=False)
         total += np.bincount(step, minlength=int(max_step)).astype(np.int64, copy=False)
         correct += np.bincount(step, weights=ok, minlength=int(max_step)).astype(np.int64, copy=False)
+        bid = _bucket_outdeg(deg)
+        total_deg += np.bincount(bid, minlength=int(total_deg.size)).astype(np.int64, copy=False)
+        correct_deg += np.bincount(bid, weights=ok, minlength=int(correct_deg.size)).astype(np.int64, copy=False)
+        deg_all.append(deg.astype(np.int64, copy=False))
 
-    return correct, total
+    deg_cat = np.concatenate(deg_all, axis=0) if deg_all else np.zeros((0,), dtype=np.int64)
+    return correct, total, correct_deg, total_deg, deg_cat
 
 
 def build_argparser() -> argparse.ArgumentParser:
@@ -151,9 +210,16 @@ def build_argparser() -> argparse.ArgumentParser:
 
     p.add_argument("--tz_offset_hours", type=float, default=None)
     p.add_argument("--val_ratio", type=float, default=None)
+    p.add_argument("--min_hops", type=int, default=None)
     p.add_argument("--max_way_len", type=int, default=None)
     p.add_argument("--max_candidates", type=int, default=None)
 
+    p.add_argument(
+        "--split_json",
+        type=Path,
+        default=None,
+        help="Optional OD-disjoint split json (expects splits.train/val/test route_ids). Overrides val_ratio.",
+    )
     p.add_argument("--splits", type=str, default="train,val", help="Comma-separated: train,val")
     return p
 
@@ -182,6 +248,7 @@ def main() -> None:
         n_routes_per_city=int(args.n_routes_per_city),
         tz_offset_hours=float(args.tz_offset_hours) if args.tz_offset_hours is not None else float(ck_cfg.get("tz_offset_hours", -5.0)),
         val_ratio=float(args.val_ratio) if args.val_ratio is not None else float(ck_cfg.get("val_ratio", 0.1)),
+        min_hops=int(args.min_hops) if args.min_hops is not None else int(ck_cfg.get("min_hops", 1)),
         max_way_len=int(args.max_way_len) if args.max_way_len is not None else int(ck_cfg.get("max_way_len", 128)),
         max_candidates=int(args.max_candidates) if args.max_candidates is not None else int(ck_cfg.get("max_candidates", 32)),
     )
@@ -212,10 +279,38 @@ def main() -> None:
     ae.load_state_dict(state, strict=False)
     ae.eval()
 
+    outdeg = (np.asarray(wg["way_adj_ptr"], dtype=np.int64)[1:] - np.asarray(wg["way_adj_ptr"], dtype=np.int64)[:-1]).astype(np.int64, copy=False)
+
     # Build dataset + split
     max_routes = ck_cfg.get("max_routes", None)
-    dataset = WayRouteDataset(routes, max_routes=(int(max_routes) if max_routes is not None else None), max_way_len=int(cfg.max_way_len))
-    train_idx, val_idx = _split_dataset(len(dataset), float(cfg.val_ratio), int(cfg.seed))
+    dataset = WayRouteDataset(
+        routes,
+        max_routes=(int(max_routes) if max_routes is not None else None),
+        max_way_len=int(cfg.max_way_len),
+        min_hops=int(cfg.min_hops),
+    )
+
+    # Split: prefer OD-disjoint split_json if provided.
+    split_map: Dict[str, np.ndarray] = {}
+    if args.split_json is not None:
+        obj = json.loads(Path(args.split_json).read_text(encoding="utf-8"))
+        splits = obj.get("splits", obj)
+        if not isinstance(splits, dict):
+            raise ValueError(f"bad split_json: {args.split_json} (expect dict)")
+        route_ids = dataset.route_ids.astype(np.int64, copy=False)
+        for part in ["train", "val", "test"]:
+            raw = splits.get(str(part), None)
+            if raw is None:
+                continue
+            ids = np.asarray([int(x) for x in list(raw)], dtype=np.int64).reshape(-1)
+            m = np.isin(route_ids, ids, assume_unique=False)
+            idx_part = np.nonzero(m)[0].astype(np.int64, copy=False)
+            split_map[str(part)] = idx_part
+        if ("train" not in split_map) or ("val" not in split_map):
+            raise ValueError(f"split_json missing train/val: {args.split_json}")
+    else:
+        train_idx, val_idx = _split_dataset(len(dataset), float(cfg.val_ratio), int(cfg.seed))
+        split_map = {"train": train_idx, "val": val_idx}
 
     # City labels per dataset index
     route_ids = dataset.route_ids.astype(np.int64, copy=False)
@@ -227,6 +322,7 @@ def main() -> None:
         way_adj_idx=wg["way_adj_idx"],
         max_candidates=int(cfg.max_candidates),
         tz_offset_hours=float(cfg.tz_offset_hours),
+        past_k=int(ck_cfg.get("decoder_past_k", 8)),
     )
 
     pin = bool(device.type == "cuda")
@@ -234,7 +330,6 @@ def main() -> None:
     prefetch_factor = 4 if num_workers > 0 else None
 
     want_splits = [s.strip() for s in str(args.splits).split(",") if s.strip()]
-    split_map = {"train": train_idx, "val": val_idx}
 
     out: Dict[str, object] = {
         "ok": True,
@@ -252,19 +347,23 @@ def main() -> None:
             "best_epoch": int(ckpt.get("best_epoch", -1)) if isinstance(ckpt, dict) else -1,
             "best_val_loss": float(ckpt.get("best_val_loss", float("nan"))) if isinstance(ckpt, dict) else float("nan"),
         },
+        "split_json": (str(args.split_json) if args.split_json is not None else None),
         "splits": {},
     }
 
     for split_name in want_splits:
         if split_name not in split_map:
-            raise ValueError(f"unknown split: {split_name} (supported: train,val)")
+            raise ValueError(f"unknown split: {split_name} (available: {sorted(split_map.keys())})")
         base_idx = split_map[split_name]
         rng = np.random.default_rng(int(cfg.seed) + (0 if split_name == "train" else 99991))
 
-        split_res: Dict[str, object] = {"by_city": {}, "overall": {}, "cities": cities}
+        split_res: Dict[str, object] = {"by_city": {}, "overall": {}, "cities": cities, "outdeg": {}}
 
         correct_all = np.zeros((int(cfg.max_way_len),), dtype=np.int64)
         total_all = np.zeros((int(cfg.max_way_len),), dtype=np.int64)
+        correct_deg_all = np.zeros((int(len(_outdeg_bins())),), dtype=np.int64)
+        total_deg_all = np.zeros((int(len(_outdeg_bins())),), dtype=np.int64)
+        deg_all: List[np.ndarray] = []
         n_routes_all = 0
 
         for city in cities:
@@ -290,16 +389,45 @@ def main() -> None:
                 prefetch_factor=prefetch_factor,
                 collate_fn=collate_fn,
             )
-            corr, tot = _eval_subset(ae=ae, loader=loader, device=device, max_step=int(cfg.max_way_len), desc=f"{split_name}/city{city}")
+            corr, tot, corr_deg, tot_deg, deg = _eval_subset(
+                ae=ae,
+                loader=loader,
+                device=device,
+                max_step=int(cfg.max_way_len),
+                outdeg=outdeg,
+                desc=f"{split_name}/city{city}",
+            )
             correct_all += corr
             total_all += tot
+            correct_deg_all += corr_deg
+            total_deg_all += tot_deg
+            deg_all.append(deg)
 
             summary = _summarize_counts(correct=corr, total=tot)
             summary["n_routes"] = float(int(pick_n))
+            summary["outdeg_bins"] = _summarize_outdeg(correct=corr_deg, total=tot_deg)
+            if deg.size:
+                a = np.asarray(deg, dtype=np.float64)
+                summary["outdeg_quantiles"] = {
+                    "p50": float(np.quantile(a, 0.50)),
+                    "p90": float(np.quantile(a, 0.90)),
+                    "p99": float(np.quantile(a, 0.99)),
+                    "max": float(np.max(a)),
+                }
             split_res["by_city"][str(int(city))] = summary
 
         split_res["overall"] = _summarize_counts(correct=correct_all, total=total_all)
         split_res["overall"]["n_routes"] = float(int(n_routes_all))
+        split_res["overall"]["outdeg_bins"] = _summarize_outdeg(correct=correct_deg_all, total=total_deg_all)
+        deg_cat = np.concatenate(deg_all, axis=0) if deg_all else np.zeros((0,), dtype=np.int64)
+        if deg_cat.size:
+            a = deg_cat.astype(np.float64, copy=False)
+            split_res["overall"]["outdeg_quantiles"] = {
+                "p50": float(np.quantile(a, 0.50)),
+                "p90": float(np.quantile(a, 0.90)),
+                "p99": float(np.quantile(a, 0.99)),
+                "max": float(np.max(a)),
+            }
         out["splits"][str(split_name)] = split_res
 
     Path(args.out_json).parent.mkdir(parents=True, exist_ok=True)
@@ -309,4 +437,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

@@ -1,0 +1,4 @@
+2026-02-10 02:14:20,126 - INFO - device=cuda
+val/city0:   0%|          | 0/20 [00:00<?, ?it/s]val/city0:   5%|▌         | 1/20 [00:00<00:14,  1.27it/s]val/city0:  25%|██▌       | 5/20 [00:00<00:02,  7.12it/s]val/city0:  45%|████▌     | 9/20 [00:01<00:00, 12.53it/s]val/city0:  65%|██████▌   | 13/20 [00:01<00:00, 17.26it/s]val/city0:  85%|████████▌ | 17/20 [00:01<00:00, 21.37it/s]val/city0: 100%|██████████| 20/20 [00:01<00:00, 15.02it/s]
+2026-02-10 02:14:22,800 - INFO - saved: _sync/wsa/pi_verify/20260209_porto_strict_diag_n1000_s0/d_deg_stepacc/stepacc_outdeg_val.json
+[W210 02:14:23.963033378 AllocatorConfig.cpp:28] Warning: PYTORCH_CUDA_ALLOC_CONF is deprecated, use PYTORCH_ALLOC_CONF instead (function operator())

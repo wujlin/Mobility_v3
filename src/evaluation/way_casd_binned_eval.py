@@ -249,6 +249,8 @@ class Cfg:
     flow_solver_steps: Optional[int]  # None=use ckpt/default
     flow_cfg_scale: float  # only used when latent_source=flow (1.0=disable)
 
+    eval_batch_size: int  # per forward batch (before K replication)
+
     n_routes: int  # per city
     min_hops: int
     max_way_len: int
@@ -539,6 +541,7 @@ def main() -> None:
         help="Flow sampling CFG scale (1.0=disable). NOTE: requires Flow trained with cond_dropout_p>0.",
     )
 
+    p.add_argument("--eval_batch_size", type=int, default=64, help="Eval batch size (routes per forward, before K replication).")
     p.add_argument("--n_routes", type=int, default=200, help="Per city (0 and 1).")
     p.add_argument("--min_hops", type=int, default=5)
     p.add_argument("--max_way_len", type=int, default=160)
@@ -612,6 +615,7 @@ def main() -> None:
         shape_scope=str(args.shape_scope),
         flow_solver_steps=(int(args.flow_solver_steps) if int(args.flow_solver_steps) > 0 else None),
         flow_cfg_scale=float(args.flow_cfg_scale),
+        eval_batch_size=max(1, int(args.eval_batch_size)),
         n_routes=int(args.n_routes),
         min_hops=int(args.min_hops),
         max_way_len=int(args.max_way_len),
@@ -937,8 +941,9 @@ def main() -> None:
 
         # Encode GT -> z_enc in batches.
         B = int(pick.size)
-        for i0 in range(0, B, 64):
-            i1 = min(B, i0 + 64)
+        bs = max(1, int(cfg.eval_batch_size))
+        for i0 in range(0, B, bs):
+            i1 = min(B, i0 + bs)
             print(f"[city{int(city)}] batch {int(i0)}:{int(i1)}/{int(B)}", flush=True)
             gt_b = gt_seqs[i0:i1]
             rid_b = pick[i0:i1].astype(np.int64, copy=False)

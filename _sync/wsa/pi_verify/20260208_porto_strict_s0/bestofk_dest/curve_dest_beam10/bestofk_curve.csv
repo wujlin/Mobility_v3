@@ -1,0 +1,6 @@
+K,success_rate,json_path
+1,0.054,_sync/wsa/pi_verify/20260208_porto_strict_s0/bestofk_dest/binned_flow_bestof1_dest_beam10_n2000.json
+2,0.112,_sync/wsa/pi_verify/20260208_porto_strict_s0/bestofk_dest/binned_flow_bestof2_dest_beam10_n2000.json
+4,0.1705,_sync/wsa/pi_verify/20260208_porto_strict_s0/bestofk_dest/binned_flow_bestof4_dest_beam10_n2000.json
+8,0.2855,_sync/wsa/pi_verify/20260208_porto_strict_s0/bestofk_dest/binned_flow_bestof8_dest_beam10_n2000.json
+16,0.402,_sync/wsa/pi_verify/20260208_porto_strict_s0/bestofk_dest/binned_flow_bestof16_dest_beam10_n2000.json

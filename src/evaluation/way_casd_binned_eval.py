@@ -245,6 +245,7 @@ class Cfg:
     latent_source: str  # "gt" | "flow"
     n_samples_per_route: int  # only used when latent_source=flow
     sample_select: str  # "first" | "best" | "dest"
+    shape_scope: str  # "all" | "selected" | "none"
     flow_solver_steps: Optional[int]  # None=use ckpt/default
     flow_cfg_scale: float  # only used when latent_source=flow (1.0=disable)
 
@@ -524,6 +525,12 @@ def main() -> None:
         "first=use sample0; best=prefer success then min(DTW, Fréchet) [oracle, uses GT]; "
         "dest=prefer success then min(final_error_m) [deployable, GT-free].",
     )
+    p.add_argument(
+        "--shape_scope",
+        choices=["all", "selected", "none"],
+        default="all",
+        help="Compute DTW/Fréchet on: all samples (default), only selected sample (faster), or none (fastest).",
+    )
     p.add_argument("--flow_solver_steps", type=int, default=0, help="Override flow solver steps (0=use ckpt/default).")
     p.add_argument(
         "--flow_cfg_scale",
@@ -602,6 +609,7 @@ def main() -> None:
         latent_source=str(args.latent_source),
         n_samples_per_route=max(1, int(args.n_samples_per_route)),
         sample_select=str(args.sample_select),
+        shape_scope=str(args.shape_scope),
         flow_solver_steps=(int(args.flow_solver_steps) if int(args.flow_solver_steps) > 0 else None),
         flow_cfg_scale=float(args.flow_cfg_scale),
         n_routes=int(args.n_routes),
@@ -629,6 +637,12 @@ def main() -> None:
 
     device = torch.device(cfg.device if (cfg.device != "cuda" or torch.cuda.is_available()) else "cpu")
     _set_seed(int(cfg.seed))
+
+    shape_scope = str(cfg.shape_scope or "all").strip().lower()
+    if shape_scope not in {"all", "selected", "none"}:
+        raise SystemExit(f"[FATAL] bad --shape_scope: {cfg.shape_scope!r}")
+    if str(cfg.sample_select).strip().lower() == "best" and shape_scope != "all":
+        raise SystemExit("[FATAL] --sample_select=best requires --shape_scope=all (needs DTW/Fréchet for selection).")
 
     routes = load_way_routes_npz(Path(args.way_routes_npz))
     wg = np.load(str(args.way_graph_npz), allow_pickle=True)
@@ -1082,7 +1096,7 @@ def main() -> None:
                 gt_len_m = _sum_way_len_m(way_len_m, gt)
                 gt_xy = xy_way[np.asarray(gt, dtype=np.int64)]
 
-                def _eval_pred(pred: List[int]) -> Dict[str, object]:
+                def _eval_pred(pred: List[int], *, compute_shape: bool) -> Dict[str, object]:
                     if not pred:
                         return {
                             "success": False,
@@ -1105,11 +1119,20 @@ def main() -> None:
                     )
                     dead_end = bool((not success) and (not hit_wall) and (outdeg_last == 0))
                     pred_len_m = _sum_way_len_m(way_len_m, pred)
-                    pred_xy = xy_way[np.asarray(pred, dtype=np.int64)]
-                    dtw_m = dtw_distance(pred_xy, gt_xy)
-                    fre_m = frechet_distance(pred_xy, gt_xy)
+                    dtw_m = float("nan")
+                    fre_m = float("nan")
+                    if bool(compute_shape):
+                        pred_xy = xy_way[np.asarray(pred, dtype=np.int64)]
+                        dtw_m = dtw_distance(pred_xy, gt_xy)
+                        fre_m = frechet_distance(pred_xy, gt_xy)
+                        last_xy = pred_xy[-1].astype(np.float64, copy=False)
+                    else:
+                        last_id = int(pred[-1])
+                        if 0 <= last_id < int(xy_way.shape[0]):
+                            last_xy = xy_way[last_id].astype(np.float64, copy=False)
+                        else:
+                            last_xy = np.zeros((2,), dtype=np.float64)
                     # final error to destination position (meters, in same local frame)
-                    last_xy = pred_xy[-1].astype(np.float64, copy=False)
                     err_m = float(np.linalg.norm(last_xy - dpos_xy_m[bi].astype(np.float64, copy=False)))
                     return {
                         "success": bool(success),
@@ -1125,10 +1148,13 @@ def main() -> None:
                         "final_error_m": float(err_m),
                     }
 
-                mg_list = [_eval_pred(p) for p in g_samples]
+                compute_all_shape = bool(shape_scope == "all")
+                mg_list = [_eval_pred(p, compute_shape=compute_all_shape) for p in g_samples]
                 if int(K) > 1:
                     k_sel = 0 if str(cfg.sample_select) == "first" else _select_sample_index(mg_list, policy=str(cfg.sample_select))
                     mg = dict(mg_list[int(k_sel)])
+                    if shape_scope == "selected":
+                        mg.update(_eval_pred(g_samples[int(k_sel)], compute_shape=True))
                     mg.update(
                         {
                             "n_samples": int(K),
@@ -1138,8 +1164,8 @@ def main() -> None:
                             "sample_hit_wall_rate": float(np.mean([1.0 if bool(m.get("hit_wall", False)) else 0.0 for m in mg_list])),
                             "sample_dead_end_rate": float(np.mean([1.0 if bool(m.get("dead_end", False)) else 0.0 for m in mg_list])),
                             "sample_loop_rate": float(np.mean([1.0 if bool(m.get("has_loop", False)) else 0.0 for m in mg_list])),
-                            "sample_dtw_m_mean": _nanmean([float(m.get("dtw_m", float("nan"))) for m in mg_list]),
-                            "sample_frechet_m_mean": _nanmean([float(m.get("frechet_m", float("nan"))) for m in mg_list]),
+                            "sample_dtw_m_mean": (_nanmean([float(m.get("dtw_m", float("nan"))) for m in mg_list]) if compute_all_shape else float("nan")),
+                            "sample_frechet_m_mean": (_nanmean([float(m.get("frechet_m", float("nan"))) for m in mg_list]) if compute_all_shape else float("nan")),
                             "sample_len_ratio_mean": _nanmean([float(m.get("len_ratio", float("nan"))) for m in mg_list]),
                             "sample_final_error_m_mean": _nanmean([float(m.get("final_error_m", float("nan"))) for m in mg_list]),
                         }
@@ -1147,16 +1173,21 @@ def main() -> None:
                 else:
                     k_sel = 0
                     mg = mg_list[0]
+                    if shape_scope == "selected":
+                        mg = dict(mg)
+                        mg.update(_eval_pred(g_samples[0], compute_shape=True))
                 if bool(args.dump_way_seqs):
                     mg = dict(mg)
                     mg["pred_way_ids"] = [int(x) for x in g_samples[int(k_sel)]]
 
                 mb: Optional[Dict[str, object]] = None
                 if b_samples is not None:
-                    mb_list = [_eval_pred(p) for p in b_samples]
+                    mb_list = [_eval_pred(p, compute_shape=compute_all_shape) for p in b_samples]
                     if int(K) > 1:
                         k_sel = 0 if str(cfg.sample_select) == "first" else _select_sample_index(mb_list, policy=str(cfg.sample_select))
                         mb = dict(mb_list[int(k_sel)])
+                        if shape_scope == "selected":
+                            mb.update(_eval_pred(b_samples[int(k_sel)], compute_shape=True))
                         mb.update(
                             {
                                 "n_samples": int(K),
@@ -1166,8 +1197,8 @@ def main() -> None:
                                 "sample_hit_wall_rate": float(np.mean([1.0 if bool(m.get("hit_wall", False)) else 0.0 for m in mb_list])),
                                 "sample_dead_end_rate": float(np.mean([1.0 if bool(m.get("dead_end", False)) else 0.0 for m in mb_list])),
                                 "sample_loop_rate": float(np.mean([1.0 if bool(m.get("has_loop", False)) else 0.0 for m in mb_list])),
-                                "sample_dtw_m_mean": _nanmean([float(m.get("dtw_m", float("nan"))) for m in mb_list]),
-                                "sample_frechet_m_mean": _nanmean([float(m.get("frechet_m", float("nan"))) for m in mb_list]),
+                                "sample_dtw_m_mean": (_nanmean([float(m.get("dtw_m", float("nan"))) for m in mb_list]) if compute_all_shape else float("nan")),
+                                "sample_frechet_m_mean": (_nanmean([float(m.get("frechet_m", float("nan"))) for m in mb_list]) if compute_all_shape else float("nan")),
                                 "sample_len_ratio_mean": _nanmean([float(m.get("len_ratio", float("nan"))) for m in mb_list]),
                                 "sample_final_error_m_mean": _nanmean([float(m.get("final_error_m", float("nan"))) for m in mb_list]),
                             }
@@ -1175,6 +1206,9 @@ def main() -> None:
                     else:
                         k_sel = 0
                         mb = mb_list[0]
+                        if shape_scope == "selected":
+                            mb = dict(mb)
+                            mb.update(_eval_pred(b_samples[0], compute_shape=True))
                     if bool(args.dump_way_seqs):
                         mb = dict(mb)
                         mb["pred_way_ids"] = [int(x) for x in b_samples[int(k_sel)]]
@@ -1315,6 +1349,7 @@ def main() -> None:
             "bins": [b[2] for b in _hops_bins()],
             "latent_source": "gt=oracle (GT->AE.encode->Decoder); flow=Flow.sample->Decoder (generation).",
             "sample_select": "When n_samples_per_route>1: first=use sample0; best=prefer success then min(DTW, Fréchet) [oracle, uses GT]; dest=prefer success then min(final_error_m) [deployable, GT-free].",
+            "shape_scope": "Controls DTW/Fréchet compute: all=all samples; selected=only selected sample per route; none=skip DTW/Fréchet (faster).",
             "region_constraint": "If enabled: use Region seq to filter way candidates by target region (modes: strict/relaxed; fallback: unconstrained/dest_region/stop).",
         },
     }

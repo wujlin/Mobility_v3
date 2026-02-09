@@ -155,6 +155,12 @@ class WayDecoder(nn.Module):
 
         self.register_buffer("way_adj_ptr", torch.as_tensor(way_adj_ptr, dtype=torch.long), persistent=False)
         self.register_buffer("way_adj_idx", torch.as_tensor(way_adj_idx, dtype=torch.long), persistent=False)
+        # Decode-time fast path: store padded successors for batched candidate lookup.
+        # This avoids per-route CSR slicing (and frequent `.item()` sync) inside the decode loop.
+        succ_pad, succ_mask, succ_len = self._build_padded_successors(self.way_adj_ptr, self.way_adj_idx)
+        self.register_buffer("way_succ_pad", succ_pad, persistent=False)  # (n_ways, max_deg), -1 padded
+        self.register_buffer("way_succ_mask", succ_mask, persistent=False)  # (n_ways, max_deg) bool
+        self.register_buffer("way_succ_len", succ_len, persistent=False)  # (n_ways,) long
 
         d_model = int(cfg.d_model)
         hidden = int(cfg.hidden_dim)
@@ -241,6 +247,133 @@ class WayDecoder(nn.Module):
 
     def get_succ_candidates(self, way_id: int) -> torch.Tensor:
         return self._slice_csr(self.way_adj_ptr, self.way_adj_idx, int(way_id))
+
+    @staticmethod
+    def _build_padded_successors(ptr: torch.Tensor, idx: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        """
+        Build padded successor tensor for fast batched lookup.
+
+        Returns:
+          succ_pad: (n_ways, max_deg) long, -1 padded
+          succ_mask: (n_ways, max_deg) bool, True for valid successors
+          succ_len: (n_ways,) long, out-degree per way
+        """
+        ptr = ptr.to(dtype=torch.long)
+        idx = idx.to(dtype=torch.long)
+        n_ways = int(max(0, int(ptr.numel()) - 1))
+        if n_ways == 0:
+            empty = idx.new_full((0, 0), -1)
+            empty_mask = torch.zeros((0, 0), dtype=torch.bool, device=idx.device)
+            empty_len = idx.new_zeros((0,), dtype=torch.long)
+            return empty, empty_mask, empty_len
+
+        deg = (ptr[1:] - ptr[:-1]).to(dtype=torch.long)  # (n_ways,)
+        max_deg = int(deg.max().item()) if int(deg.numel()) else 0
+        if max_deg <= 0:
+            succ_pad = idx.new_full((n_ways, 0), -1)
+            succ_mask = torch.zeros((n_ways, 0), dtype=torch.bool, device=idx.device)
+            return succ_pad, succ_mask, deg
+
+        # Build on CPU if possible (typically ptr/idx are CPU at init). This is one-time cost.
+        succ_pad = idx.new_full((n_ways, max_deg), -1)
+        succ_mask = torch.zeros((n_ways, max_deg), dtype=torch.bool, device=idx.device)
+        for i in range(n_ways):
+            s = int(ptr[int(i)].item())
+            e = int(ptr[int(i) + 1].item())
+            if e <= s:
+                continue
+            n = int(e - s)
+            succ_pad[int(i), :n] = idx[s:e]
+            succ_mask[int(i), :n] = True
+        return succ_pad, succ_mask, deg
+
+    def get_succ_candidates_padded(self, way_ids: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        """
+        Batched successor lookup.
+
+        Args:
+          way_ids: (B,) long
+        Returns:
+          cand_way: (B, Cmax) long, -1 padded
+          cand_mask: (B, Cmax) bool
+          cand_len: (B,) long
+        """
+        way_ids = way_ids.to(dtype=torch.long)
+        n_ways = int(self.way_succ_pad.shape[0])
+        if n_ways <= 0:
+            empty = way_ids.new_full((int(way_ids.numel()), 0), -1)
+            empty_mask = torch.zeros((int(way_ids.numel()), 0), dtype=torch.bool, device=way_ids.device)
+            empty_len = way_ids.new_zeros((int(way_ids.numel()),), dtype=torch.long)
+            return empty, empty_mask, empty_len
+
+        valid = (way_ids >= 0) & (way_ids < n_ways)
+        ids = torch.clamp(way_ids, 0, n_ways - 1)
+        cand_way = self.way_succ_pad[ids]
+        cand_mask = self.way_succ_mask[ids] & valid[:, None]
+        cand_len = self.way_succ_len[ids]
+        cand_len = torch.where(valid, cand_len, torch.zeros((), dtype=cand_len.dtype, device=cand_len.device))
+        return cand_way, cand_mask, cand_len
+
+    def _select_decode_candidates_batched(
+        self,
+        *,
+        way_embedder: nn.Module,
+        cand_way: torch.Tensor,  # (B,C)
+        cand_mask: torch.Tensor,  # (B,C)
+        dest_pos: torch.Tensor,  # (B,2)
+        dest_way: torch.Tensor,  # (B,)
+        max_candidates: Optional[int],
+        candidate_policy: str,
+        include_dest_if_successor: bool,
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        """
+        Batched version of _select_decode_candidates().
+
+        NOTE:
+          This is decode-time only. It returns a (possibly) truncated/reordered candidate set.
+        """
+        if int(cand_way.numel()) == 0:
+            return cand_way, cand_mask
+
+        if max_candidates is None:
+            k = int(self.cfg.max_candidates)
+        else:
+            k = int(max_candidates)
+        if k <= 0:
+            return cand_way, cand_mask
+        if int(cand_way.shape[1]) <= k:
+            return cand_way, cand_mask
+
+        policy = str(candidate_policy).lower().strip()
+        if policy == "destdist":
+            dest = dest_pos.to(dtype=torch.float32)
+            coord_scale = float(getattr(way_embedder, "coord_scale", self.coord_scale))
+            if coord_scale > 0:
+                dest = dest / coord_scale
+            cand_geom, _tier, _hw = way_embedder._lookup(cand_way)
+            cand_center = cand_geom[..., :2].to(dtype=torch.float32)
+            dist = torch.norm(dest[:, None, :] - cand_center, dim=-1)  # (B,C)
+            dist = dist.masked_fill(~cand_mask, float("inf"))
+            order = torch.argsort(dist, dim=1)
+            sel = order[:, :k]
+            cand_way_k = torch.gather(cand_way, dim=1, index=sel)
+            cand_mask_k = torch.gather(cand_mask, dim=1, index=sel)
+        else:
+            cand_way_k = cand_way[:, :k]
+            cand_mask_k = cand_mask[:, :k]
+
+        if bool(include_dest_if_successor):
+            dw = dest_way.to(dtype=torch.long)
+            in_full = ((cand_way == dw[:, None]) & cand_mask).any(dim=1)
+            in_sel = ((cand_way_k == dw[:, None]) & cand_mask_k).any(dim=1)
+            need = in_full & (~in_sel)
+            if bool(need.any().item()):
+                cand_way_k = cand_way_k.clone()
+                cand_mask_k = cand_mask_k.clone()
+                cand_way_k[need, -1] = dw[need]
+                cand_mask_k[need, -1] = True
+
+        return cand_way_k, cand_mask_k
 
     def is_dest_reached(self, way_id: int, dest_way: int) -> bool:
         return int(way_id) == int(dest_way)
@@ -1022,7 +1155,7 @@ class WayDecoder(nn.Module):
 
         Key design:
           - batch all active routes at each step into one score_candidates() forward
-          - candidate selection (CSR slicing) remains per-route (cheap vs forward)
+          - candidate lookup uses padded successors (batched), avoiding per-route CSR slicing
         """
         max_len = int(max_len) if max_len is not None else int(self.cfg.max_len)
         B = int(latent_tokens.shape[0])
@@ -1103,43 +1236,43 @@ class WayDecoder(nn.Module):
                 break
 
             active_ids = torch.nonzero(active, as_tuple=False).reshape(-1)
-            # Build candidates per active route (python loop, cheap).
-            cand_list: List[torch.Tensor] = []
-            keep_ids: List[int] = []
-            for bi in active_ids.tolist():
-                cur = int(cur_way[int(bi)].item())
-                cand_full = self.get_succ_candidates(int(cur))
-                if int(cand_full.numel()) == 0:
-                    active[int(bi)] = False
-                    continue
-                cand = self._select_decode_candidates(
-                    way_embedder=way_embedder,
-                    cand_full=cand_full.to(device=device),
-                    dest_pos=route_cond["dest_pos"][int(bi) : int(bi) + 1],
-                    dest_way=int(dw[int(bi)].item()),
-                    max_candidates=max_candidates,
-                    candidate_policy=candidate_policy,
-                    include_dest_if_successor=include_dest_if_successor,
-                )
-                if int(cand.numel()) == 0:
-                    active[int(bi)] = False
-                    continue
-                cand_list.append(cand.to(dtype=torch.long, device=device))
-                keep_ids.append(int(bi))
-
-            if not keep_ids:
+            cur_active = cur_way[active_ids]
+            cand_way_all, cand_mask_all, cand_len = self.get_succ_candidates_padded(cur_active)
+            row_has = cand_mask_all.any(dim=1)
+            if not bool(row_has.any().item()):
+                active[active_ids] = False
                 break
 
-            keep = torch.tensor(keep_ids, dtype=torch.long, device=device)
-            B2 = int(keep.numel())
-            Cmax = int(max(int(c.numel()) for c in cand_list))
+            bad = active_ids[~row_has]
+            if int(bad.numel()) > 0:
+                active[bad] = False
 
-            cand_way = torch.zeros((B2, Cmax), dtype=torch.long, device=device)
-            cand_mask = torch.zeros((B2, Cmax), dtype=torch.bool, device=device)
-            for i, c in enumerate(cand_list):
-                n = int(c.numel())
-                cand_way[i, :n] = c
-                cand_mask[i, :n] = True
+            keep = active_ids[row_has]
+            cand_way = cand_way_all[row_has]
+            cand_mask = cand_mask_all[row_has]
+            cand_len = cand_len[row_has]
+
+            # Slice to the max out-degree among kept routes (reduce padded compute).
+            Cmax = int(cand_len.max().item()) if int(cand_len.numel()) else int(cand_way.shape[1])
+            if Cmax > 0 and int(cand_way.shape[1]) > Cmax:
+                cand_way = cand_way[:, :Cmax]
+                cand_mask = cand_mask[:, :Cmax]
+
+            # Decode-time candidate truncation / reordering (optional).
+            cand_way, cand_mask = self._select_decode_candidates_batched(
+                way_embedder=way_embedder,
+                cand_way=cand_way,
+                cand_mask=cand_mask,
+                dest_pos=route_cond["dest_pos"][keep],
+                dest_way=dw[keep],
+                max_candidates=max_candidates,
+                candidate_policy=candidate_policy,
+                include_dest_if_successor=include_dest_if_successor,
+            )
+
+            keep_ids = [int(x) for x in keep.tolist()]
+            B2 = int(keep.numel())
+            Cmax = int(cand_way.shape[1])
 
             # Region constraint -> refine cand_mask (strict: allow current/next region).
             if region_paths is not None and region_ptr is not None and way_region is not None:
@@ -1434,42 +1567,41 @@ class WayDecoder(nn.Module):
                 break
 
             active_ids = torch.nonzero(active, as_tuple=False).reshape(-1)
-            cand_list: List[torch.Tensor] = []
-            keep_ids: List[int] = []
-            for bi in active_ids.tolist():
-                cur = int(cur_way[int(bi)].item())
-                cand_full = self.get_succ_candidates(int(cur))
-                if int(cand_full.numel()) == 0:
-                    active[int(bi)] = False
-                    continue
-                cand = self._select_decode_candidates(
-                    way_embedder=way_embedder,
-                    cand_full=cand_full.to(device=device),
-                    dest_pos=route_cond["dest_pos"][int(bi) : int(bi) + 1],
-                    dest_way=int(dw[int(bi)].item()),
-                    max_candidates=max_candidates,
-                    candidate_policy=candidate_policy,
-                    include_dest_if_successor=include_dest_if_successor,
-                )
-                if int(cand.numel()) == 0:
-                    active[int(bi)] = False
-                    continue
-                cand_list.append(cand.to(dtype=torch.long, device=device))
-                keep_ids.append(int(bi))
-
-            if not keep_ids:
+            cur_active = cur_way[active_ids]
+            cand_way_all, cand_mask_all, cand_len = self.get_succ_candidates_padded(cur_active)
+            row_has = cand_mask_all.any(dim=1)
+            if not bool(row_has.any().item()):
+                active[active_ids] = False
                 break
 
-            keep = torch.tensor(keep_ids, dtype=torch.long, device=device)
-            B2 = int(keep.numel())
-            Cmax = int(max(int(c.numel()) for c in cand_list))
+            bad = active_ids[~row_has]
+            if int(bad.numel()) > 0:
+                active[bad] = False
 
-            cand_way = torch.zeros((B2, Cmax), dtype=torch.long, device=device)
-            cand_mask = torch.zeros((B2, Cmax), dtype=torch.bool, device=device)
-            for i, c in enumerate(cand_list):
-                n = int(c.numel())
-                cand_way[i, :n] = c
-                cand_mask[i, :n] = True
+            keep = active_ids[row_has]
+            cand_way = cand_way_all[row_has]
+            cand_mask = cand_mask_all[row_has]
+            cand_len = cand_len[row_has]
+
+            Cmax = int(cand_len.max().item()) if int(cand_len.numel()) else int(cand_way.shape[1])
+            if Cmax > 0 and int(cand_way.shape[1]) > Cmax:
+                cand_way = cand_way[:, :Cmax]
+                cand_mask = cand_mask[:, :Cmax]
+
+            cand_way, cand_mask = self._select_decode_candidates_batched(
+                way_embedder=way_embedder,
+                cand_way=cand_way,
+                cand_mask=cand_mask,
+                dest_pos=route_cond["dest_pos"][keep],
+                dest_way=dw[keep],
+                max_candidates=max_candidates,
+                candidate_policy=candidate_policy,
+                include_dest_if_successor=include_dest_if_successor,
+            )
+
+            keep_ids = [int(x) for x in keep.tolist()]
+            B2 = int(keep.numel())
+            Cmax = int(cand_way.shape[1])
 
             # Region constraint mask (same as greedy_decode_batched)
             if region_paths is not None and region_ptr is not None and way_region is not None:
@@ -1754,46 +1886,57 @@ class WayDecoder(nn.Module):
             route_ids: List[int] = []
             cur_way_list: List[int] = []
             step_list: List[int] = []
-            cand_list: List[torch.Tensor] = []
             score_list: List[float] = []
             rptr_list: List[int] = []
             path_list: List[List[int]] = []
 
             for b, path, score, rptr in states:
                 cur = int(path[-1])
-                cand_full = self.get_succ_candidates(int(cur))
-                if int(cand_full.numel()) == 0:
-                    continue
-                cand = self._select_decode_candidates(
-                    way_embedder=way_embedder,
-                    cand_full=cand_full.to(device=device),
-                    dest_pos=route_cond["dest_pos"][int(b) : int(b) + 1],
-                    dest_way=int(dest_way[int(b)].item()),
-                    max_candidates=max_candidates,
-                    candidate_policy=candidate_policy,
-                    include_dest_if_successor=include_dest_if_successor,
-                )
-                if int(cand.numel()) == 0:
-                    continue
                 route_ids.append(int(b))
                 cur_way_list.append(int(cur))
                 step_list.append(int(len(path) - 1))
-                cand_list.append(cand.to(dtype=torch.long, device=device))
                 score_list.append(float(score))
                 rptr_list.append(int(rptr))
                 path_list.append(path)
 
-            if not cand_list:
+            if not route_ids:
                 break
 
-            T = int(len(cand_list))
-            Cmax = int(max(int(c.numel()) for c in cand_list))
-            cand_way = torch.zeros((T, Cmax), dtype=torch.long, device=device)
-            cand_mask = torch.zeros((T, Cmax), dtype=torch.bool, device=device)
-            for i, c in enumerate(cand_list):
-                n = int(c.numel())
-                cand_way[i, :n] = c
-                cand_mask[i, :n] = True
+            T = int(len(route_ids))
+            cur_way_t = torch.as_tensor(cur_way_list, dtype=torch.long, device=device)
+            cand_way_all, cand_mask_all, cand_len = self.get_succ_candidates_padded(cur_way_t)
+            row_has = cand_mask_all.any(dim=1)
+            if not bool(row_has.any().item()):
+                break
+            if not bool(row_has.all().item()):
+                good = torch.nonzero(row_has, as_tuple=False).reshape(-1).tolist()
+                route_ids = [route_ids[int(i)] for i in good]
+                cur_way_list = [cur_way_list[int(i)] for i in good]
+                step_list = [step_list[int(i)] for i in good]
+                score_list = [score_list[int(i)] for i in good]
+                rptr_list = [rptr_list[int(i)] for i in good]
+                path_list = [path_list[int(i)] for i in good]
+                cand_way_all = cand_way_all[row_has]
+                cand_mask_all = cand_mask_all[row_has]
+                cand_len = cand_len[row_has]
+                T = int(len(route_ids))
+
+            Cmax = int(cand_len.max().item()) if int(cand_len.numel()) else int(cand_way_all.shape[1])
+            cand_way = cand_way_all[:, :Cmax] if (Cmax > 0 and int(cand_way_all.shape[1]) > Cmax) else cand_way_all
+            cand_mask = cand_mask_all[:, :Cmax] if (Cmax > 0 and int(cand_mask_all.shape[1]) > Cmax) else cand_mask_all
+
+            route_ids_t = torch.as_tensor(route_ids, dtype=torch.long, device=device)
+            cand_way, cand_mask = self._select_decode_candidates_batched(
+                way_embedder=way_embedder,
+                cand_way=cand_way,
+                cand_mask=cand_mask,
+                dest_pos=route_cond["dest_pos"][route_ids_t],
+                dest_way=dest_way[route_ids_t],
+                max_candidates=max_candidates,
+                candidate_policy=candidate_policy,
+                include_dest_if_successor=include_dest_if_successor,
+            )
+            Cmax = int(cand_way.shape[1])
 
             # region constraint mask per state
             if region_paths is not None and way_region is not None:

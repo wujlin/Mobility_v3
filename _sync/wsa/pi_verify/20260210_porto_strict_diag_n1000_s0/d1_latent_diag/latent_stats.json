@@ -1,0 +1,185 @@
+{
+  "ok": true,
+  "task": "latent_diagnosis",
+  "created_at": "2026-02-10T10:45:53.062392+08:00",
+  "cfg": {
+    "seed": 0,
+    "device": "cuda",
+    "tz_offset_hours": -5.0,
+    "n_routes": 1000,
+    "min_hops": 5,
+    "max_way_len": 160,
+    "batch_size": 64,
+    "flow_solver_steps": null
+  },
+  "inputs": {
+    "way_routes_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD0_waydata_porto_seed0/W5_way_routes_strict_gate/way_routes_strict_gate.npz",
+    "way_graph_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD0_waydata_porto_seed0/W2_way_graph/way_graph.npz",
+    "way_features_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD0_waydata_porto_seed0/W3_way_features/way_features.npz",
+    "ae_ckpt": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD0_waydata_porto_seed0/W6_train_ae_porto_strict_candq1_past16_s0/ckpt_best.pt",
+    "flow_ckpt": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD0_waydata_porto_seed0/W7_train_flow_porto_strict_add_s0/ckpt_best.pt",
+    "way_regions_npz": null
+  },
+  "ckpt_strict_load_ok": true,
+  "flow_cfg": {
+    "d_model": 256,
+    "n_latent": 64,
+    "n_layers": 6,
+    "n_heads": 8,
+    "dropout": 0.1,
+    "noise_sigma": 1.0,
+    "solver_steps": 20,
+    "cond_dropout_p": 0.0,
+    "cond_inject": "add",
+    "use_region_seq": false,
+    "n_regions": 154,
+    "region_max_len": 16
+  },
+  "cities_obs": [
+    0
+  ],
+  "split_json": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD0_waydata_porto_seed0/W5_way_routes_strict_gate/od_split_min3_max160_seed0.json",
+  "split_part": "test",
+  "overall": {
+    "n": 1000,
+    "mse": {
+      "n": 1000.0,
+      "mean": 10.176431930541993,
+      "p50": 10.142125606536865,
+      "p90": 11.34636173248291,
+      "p95": 11.714092540740966
+    },
+    "cos": {
+      "n": 1000.0,
+      "mean": 0.36345516219735147,
+      "p50": 0.3614727556705475,
+      "p90": 0.4199860453605652,
+      "p95": 0.44405430853366845
+    }
+  },
+  "per_city": [
+    {
+      "city": 0,
+      "city_name": "city0",
+      "n": 1000,
+      "mse": {
+        "n": 1000.0,
+        "mean": 10.176431930541993,
+        "p50": 10.142125606536865,
+        "p90": 11.34636173248291,
+        "p95": 11.714092540740966
+      },
+      "cos": {
+        "n": 1000.0,
+        "mean": 0.36345516219735147,
+        "p50": 0.3614727556705475,
+        "p90": 0.4199860453605652,
+        "p95": 0.44405430853366845
+      },
+      "by_bin": {
+        "[5,10)": {
+          "n": 55,
+          "mse": {
+            "n": 55.0,
+            "mean": 10.108340688185258,
+            "p50": 9.866559982299805,
+            "p90": 11.896490097045898,
+            "p95": 12.320369720458984
+          },
+          "cos": {
+            "n": 55.0,
+            "mean": 0.37111833474852823,
+            "p50": 0.3675711154937744,
+            "p90": 0.42713364362716677,
+            "p95": 0.4418352544307708
+          }
+        },
+        "[10,20)": {
+          "n": 314,
+          "mse": {
+            "n": 314.0,
+            "mean": 10.033407051851794,
+            "p50": 9.993144989013672,
+            "p90": 11.33713893890381,
+            "p95": 11.730921745300291
+          },
+          "cos": {
+            "n": 314.0,
+            "mean": 0.36730392941623735,
+            "p50": 0.3653613030910492,
+            "p90": 0.4236330628395081,
+            "p95": 0.44984704107046125
+          }
+        },
+        "[20,30)": {
+          "n": 292,
+          "mse": {
+            "n": 292.0,
+            "mean": 10.088988921413684,
+            "p50": 10.10192060470581,
+            "p90": 11.187512397766113,
+            "p95": 11.504107141494751
+          },
+          "cos": {
+            "n": 292.0,
+            "mean": 0.3603840643820697,
+            "p50": 0.35784271359443665,
+            "p90": 0.41584352254867557,
+            "p95": 0.4340033337473869
+          }
+        },
+        "[30,40)": {
+          "n": 178,
+          "mse": {
+            "n": 178.0,
+            "mean": 10.224141437016176,
+            "p50": 10.1703782081604,
+            "p90": 11.259250068664551,
+            "p95": 11.426656007766724
+          },
+          "cos": {
+            "n": 178.0,
+            "mean": 0.36323701297299243,
+            "p50": 0.3591621518135071,
+            "p90": 0.4205902218818665,
+            "p95": 0.44958553016185765
+          }
+        },
+        "[40,60)": {
+          "n": 135,
+          "mse": {
+            "n": 135.0,
+            "mean": 10.487600757457592,
+            "p50": 10.512969017028809,
+            "p90": 11.494713592529298,
+            "p95": 11.807259273529052
+          },
+          "cos": {
+            "n": 135.0,
+            "mean": 0.3611795886799141,
+            "p50": 0.3614526391029358,
+            "p90": 0.4163439214229584,
+            "p95": 0.45026392340660093
+          }
+        },
+        "[60,+)": {
+          "n": 26,
+          "mse": {
+            "n": 26.0,
+            "mean": 11.087512896611141,
+            "p50": 10.96064281463623,
+            "p90": 12.100173950195312,
+            "p95": 12.713335275650024
+          },
+          "cos": {
+            "n": 26.0,
+            "mean": 0.34856309111301714,
+            "p50": 0.34181901812553406,
+            "p90": 0.3929900825023651,
+            "p95": 0.41270994395017624
+          }
+        }
+      }
+    }
+  ]
+}

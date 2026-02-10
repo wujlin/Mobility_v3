@@ -1,0 +1,5 @@
+2026-02-10 11:40:09,668 - INFO - device=cuda
+/home/jinlin/miniconda3/envs/dpl/lib/python3.11/site-packages/torch/nn/modules/transformer.py:392: UserWarning: enable_nested_tensor is True, but self.use_nested_tensor is False because encoder_layer.norm_first was True
+  warnings.warn(
+val/city0:   0%|          | 0/20 [00:00<?, ?it/s]val/city0:   5%|▌         | 1/20 [00:00<00:16,  1.15it/s]val/city0:  15%|█▌        | 3/20 [00:01<00:04,  3.63it/s]val/city0:  25%|██▌       | 5/20 [00:01<00:02,  5.80it/s]val/city0:  35%|███▌      | 7/20 [00:01<00:01,  7.65it/s]val/city0:  45%|████▌     | 9/20 [00:01<00:01,  9.12it/s]val/city0:  55%|█████▌    | 11/20 [00:01<00:00, 10.25it/s]val/city0:  65%|██████▌   | 13/20 [00:01<00:00, 11.21it/s]val/city0:  75%|███████▌  | 15/20 [00:01<00:00, 11.95it/s]val/city0:  85%|████████▌ | 17/20 [00:02<00:00, 12.39it/s]val/city0:  95%|█████████▌| 19/20 [00:02<00:00, 12.59it/s]val/city0: 100%|██████████| 20/20 [00:02<00:00,  8.96it/s]
+2026-02-10 11:40:13,355 - INFO - saved: _sync/wsa/pi_verify/20260210_porto_strict_diag_n1000_s0/d4_stepacc_outdeg/stepacc_outdeg_val.json

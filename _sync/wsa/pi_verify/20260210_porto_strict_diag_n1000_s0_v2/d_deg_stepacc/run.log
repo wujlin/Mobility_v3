@@ -1,0 +1,6 @@
+2026-02-10 10:00:08,695 - INFO - device=cuda
+/home/jinlin/miniconda3/envs/dpl/lib/python3.11/site-packages/torch/nn/modules/transformer.py:392: UserWarning: enable_nested_tensor is True, but self.use_nested_tensor is False because encoder_layer.norm_first was True
+  warnings.warn(
+val/city0:   0%|          | 0/20 [00:00<?, ?it/s]val/city0:   5%|▌         | 1/20 [00:00<00:16,  1.17it/s]val/city0:  15%|█▌        | 3/20 [00:00<00:04,  3.79it/s]val/city0:  25%|██▌       | 5/20 [00:01<00:02,  6.18it/s]val/city0:  35%|███▌      | 7/20 [00:01<00:01,  8.35it/s]val/city0:  45%|████▌     | 9/20 [00:01<00:01, 10.14it/s]val/city0:  55%|█████▌    | 11/20 [00:01<00:00, 11.56it/s]val/city0:  65%|██████▌   | 13/20 [00:01<00:00, 12.79it/s]val/city0:  75%|███████▌  | 15/20 [00:01<00:00, 13.97it/s]val/city0:  85%|████████▌ | 17/20 [00:01<00:00, 14.41it/s]val/city0:  95%|█████████▌| 19/20 [00:01<00:00, 14.49it/s]val/city0: 100%|██████████| 20/20 [00:02<00:00,  9.92it/s]
+2026-02-10 10:00:12,102 - INFO - saved: _sync/wsa/pi_verify/20260210_porto_strict_diag_n1000_s0_v2/d_deg_stepacc/stepacc_outdeg_val.json
+[W210 10:00:12.269096010 AllocatorConfig.cpp:28] Warning: PYTORCH_CUDA_ALLOC_CONF is deprecated, use PYTORCH_ALLOC_CONF instead (function operator())

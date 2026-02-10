@@ -100,3 +100,39 @@ def infer_n_ways_from_ptr(ptr: np.ndarray) -> int:
         raise ValueError("way_adj_ptr too small")
     return int(ptr.size) - 1
 
+
+def build_truncated_successors_first(
+    ptr: np.ndarray,
+    idx: np.ndarray,
+    *,
+    max_candidates: int,
+) -> Tuple[np.ndarray, np.ndarray]:
+    """
+    Precompute padded successor rows for candidate policy "first" = successors[:max_candidates].
+
+    Returns:
+      succ_pad: (n_ways, C) int64, -1 padded
+      succ_mask: (n_ways, C) bool
+    """
+    ptr = np.asarray(ptr, dtype=np.int64).reshape(-1)
+    idx = np.asarray(idx, dtype=np.int64).reshape(-1)
+    C = int(max_candidates)
+    if C <= 0:
+        raise ValueError("max_candidates must be > 0")
+    if ptr.size < 2:
+        raise ValueError("way_adj_ptr too small")
+    n_ways = int(ptr.size) - 1
+    succ_pad = np.full((n_ways, C), -1, dtype=np.int64)
+    succ_mask = np.zeros((n_ways, C), dtype=bool)
+    for u in range(n_ways):
+        s = int(ptr[u])
+        e = int(ptr[u + 1])
+        if e <= s:
+            continue
+        e2 = int(min(e, s + C))
+        n = int(e2 - s)
+        if n <= 0:
+            continue
+        succ_pad[u, :n] = idx[s:e2]
+        succ_mask[u, :n] = True
+    return succ_pad, succ_mask

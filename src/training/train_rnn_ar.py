@@ -16,7 +16,8 @@ from torch.utils.data import DataLoader, Subset
 from src.baselines.rnn_ar import WayRNNAR, WayRNNARCfg
 from src.data.way_graph.way_sequence_dataset import WayRouteDataset, load_way_routes_npz
 from src.utils.time_unix import dow_from_unix, hour_from_unix
-from src.utils.way_csr import build_candidate_row, infer_n_ways_from_ptr, slice_csr
+from src.utils.way_csr import build_truncated_successors_first, infer_n_ways_from_ptr
+from src.utils.way_csr_torch import build_candidates_first_with_target
 
 
 def _set_seed(seed: int) -> None:
@@ -95,51 +96,17 @@ def _to_device(batch: Dict[str, object], device: torch.device) -> Dict[str, obje
     return out
 
 
-def _build_candidates_t(
-    *,
-    ptr: np.ndarray,
-    idx: np.ndarray,
-    cur_way: np.ndarray,  # (B,)
-    next_way: np.ndarray,  # (B,)
-    valid: np.ndarray,  # (B,) bool
-    max_candidates: int,
-) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
-    B = int(cur_way.size)
-    C = int(max_candidates)
-    cand = np.full((B, C), -1, dtype=np.int64)
-    mask = np.zeros((B, C), dtype=bool)
-    tgt_idx = np.zeros((B,), dtype=np.int64)
-    tgt_mask = np.asarray(valid, dtype=bool).reshape(-1)
-
-    for i in range(B):
-        if not bool(tgt_mask[i]):
-            continue
-        u = int(cur_way[i])
-        v = int(next_way[i])
-        succ = slice_csr(ptr, idx, u)
-        row = build_candidate_row(succ, max_candidates=C, target=v)
-        cand[i] = row.cand
-        mask[i] = row.mask
-        tgt_idx[i] = int(row.target_idx if row.target_idx is not None else 0)
-
-    cand_t = torch.as_tensor(cand, dtype=torch.long)
-    mask_t = torch.as_tensor(mask, dtype=torch.bool)
-    tgt_t = torch.as_tensor(tgt_idx, dtype=torch.long)
-    tgt_mask_t = torch.as_tensor(tgt_mask, dtype=torch.bool)
-    return cand_t, mask_t, tgt_t, tgt_mask_t
-
-
 def _run_epoch(
     *,
     model: WayRNNAR,
     loader: DataLoader,
     device: torch.device,
-    ptr: np.ndarray,
-    idx: np.ndarray,
-    max_candidates: int,
+    succ_pad: torch.Tensor,
+    succ_mask: torch.Tensor,
     train: bool,
     opt: Optional[torch.optim.Optimizer],
     max_batches: Optional[int],
+    log_every_batches: int,
 ) -> Dict[str, float]:
     if train:
         if opt is None:
@@ -152,73 +119,87 @@ def _run_epoch(
     accs: List[float] = []
     n_steps_total = 0
 
-    for bi, batch in enumerate(loader):
-        b = _to_device(batch, device)
-        way = b["way_seq_pad"]  # (B,K)
-        lens = b["way_seq_len"]  # (B,)
-        rc = b["route_cond"]
+    t0 = time.time()
+    ctx = torch.enable_grad() if train else torch.no_grad()
+    with ctx:
+        for bi, batch in enumerate(loader):
+            b = _to_device(batch, device)
+            way = b["way_seq_pad"]  # (B,K)
+            lens = b["way_seq_len"]  # (B,)
+            rc = b["route_cond"]
 
-        B, K = way.shape
-        cond_emb = model.encode_cond(rc)  # (B,D)
-        h = model.init_state(cond_emb)  # (L,B,D)
+            B, K = way.shape
+            cond_emb = model.encode_cond(rc)  # (B,D)
+            h = model.init_state(cond_emb)  # (L,B,D)
 
-        total = torch.tensor(0.0, device=device)
-        correct = torch.tensor(0.0, device=device)
-        n_tok = torch.tensor(0.0, device=device)
+            total = torch.tensor(0.0, device=device)
+            correct = torch.tensor(0.0, device=device)
+            n_tok = torch.tensor(0.0, device=device)
 
-        K_eff = int(K) - 1
-        for t in range(int(K_eff)):
-            cur = way[:, t]
-            nxt = way[:, t + 1]
-            valid = (t + 1 < lens).detach().cpu().numpy().astype(bool, copy=False)
+            K_eff = int(K) - 1
+            for t in range(int(K_eff)):
+                cur = way[:, t]
+                nxt = way[:, t + 1]
+                valid = (t + 1 < lens)
 
-            token, h_new = model.step(cur, cond_emb=cond_emb, h=h)
-            upd = (cur >= 0).to(dtype=torch.bool).view(1, B, 1)
-            h = torch.where(upd, h_new, h)
+                token, h_new = model.step(cur, cond_emb=cond_emb, h=h)
+                upd = (cur >= 0).to(dtype=torch.bool).view(1, B, 1)
+                h = torch.where(upd, h_new, h)
 
-            cand_t, mask_t, tgt_t, tgt_mask_t = _build_candidates_t(
-                ptr=ptr,
-                idx=idx,
-                cur_way=cur.detach().cpu().numpy(),
-                next_way=nxt.detach().cpu().numpy(),
-                valid=valid,
-                max_candidates=int(max_candidates),
-            )
-            cand_t = cand_t.to(device=device)
-            mask_t = mask_t.to(device=device)
-            tgt_t = tgt_t.to(device=device)
-            tgt_mask_t = tgt_mask_t.to(device=device)
+                cand_t, mask_t, tgt_t, tgt_mask_t = build_candidates_first_with_target(
+                    succ_pad=succ_pad,
+                    succ_mask=succ_mask,
+                    cur_way=cur,
+                    next_way=nxt,
+                    valid=valid,
+                )
 
-            if not bool(tgt_mask_t.any()):
-                continue
+                if not bool(tgt_mask_t.any()):
+                    continue
 
-            logits = model.score_candidates(token, cand_t, mask_t)
-            flat_logits = logits[tgt_mask_t]
-            flat_tgt = tgt_t[tgt_mask_t]
-            loss = F.cross_entropy(flat_logits, flat_tgt, reduction="mean")
-            n_step = int(flat_tgt.numel())
-            total = total + loss * float(n_step)
+                logits = model.score_candidates(token, cand_t, mask_t)
+                flat_logits = logits[tgt_mask_t]
+                flat_tgt = tgt_t[tgt_mask_t]
+                loss = F.cross_entropy(flat_logits, flat_tgt, reduction="mean")
+                n_step = int(flat_tgt.numel())
+                total = total + loss * float(n_step)
 
-            with torch.no_grad():
-                pred = torch.argmax(flat_logits, dim=-1)
-                correct = correct + (pred == flat_tgt).float().sum()
-                n_tok = n_tok + torch.as_tensor(int(n_step), device=device, dtype=torch.float32)
+                with torch.no_grad():
+                    pred = torch.argmax(flat_logits, dim=-1)
+                    correct = correct + (pred == flat_tgt).float().sum()
+                    n_tok = n_tok + torch.as_tensor(int(n_step), device=device, dtype=torch.float32)
 
-        denom = torch.clamp_min(n_tok, 1.0)
-        loss_avg = total / denom
+            denom = torch.clamp_min(n_tok, 1.0)
+            loss_avg = total / denom
 
-        if train and opt is not None:
-            opt.zero_grad(set_to_none=True)
-            loss_avg.backward()
-            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
-            opt.step()
+            if train and opt is not None:
+                opt.zero_grad(set_to_none=True)
+                loss_avg.backward()
+                torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+                opt.step()
 
-        losses.append(float(loss_avg.detach().cpu().item()))
-        accs.append(float((correct / denom).detach().cpu().item()))
-        n_steps_total += int(n_tok.detach().cpu().item())
+            losses.append(float(loss_avg.detach().cpu().item()))
+            accs.append(float((correct / denom).detach().cpu().item()))
+            n_steps_total += int(n_tok.detach().cpu().item())
 
-        if max_batches is not None and int(max_batches) > 0 and (bi + 1) >= int(max_batches):
-            break
+            if int(log_every_batches) > 0 and (bi + 1) % int(log_every_batches) == 0:
+                elapsed = float(time.time() - t0)
+                total_batches = int(len(loader))
+                cap = total_batches
+                if max_batches is not None and int(max_batches) > 0:
+                    cap = min(cap, int(max_batches))
+                done = int(bi + 1)
+                eta = (elapsed / max(done, 1)) * max(cap - done, 0)
+                print(
+                    f"[{'train' if train else 'val'}][batch {done}/{cap}] "
+                    f"loss={float(np.mean(np.asarray(losses[-int(log_every_batches):], dtype=np.float64))):.4f} "
+                    f"acc={float(np.mean(np.asarray(accs[-int(log_every_batches):], dtype=np.float64))):.3f} "
+                    f"tok={int(n_steps_total)} elapsed={elapsed:.1f}s eta={eta:.1f}s",
+                    flush=True,
+                )
+
+            if max_batches is not None and int(max_batches) > 0 and (bi + 1) >= int(max_batches):
+                break
 
     return {
         "loss": float(np.mean(np.asarray(losses, dtype=np.float64))) if losses else float("nan"),
@@ -262,6 +243,7 @@ def main() -> None:
     p.add_argument("--val_ratio", type=float, default=0.05)
     p.add_argument("--save_every", type=int, default=1)
     p.add_argument("--max_batches", type=int, default=None)
+    p.add_argument("--log_every_batches", type=int, default=200)
     args = p.parse_args()
 
     _set_seed(int(args.seed))
@@ -304,6 +286,9 @@ def main() -> None:
     ptr = np.asarray(wg["way_adj_ptr"], dtype=np.int64)
     idx = np.asarray(wg["way_adj_idx"], dtype=np.int64)
     n_ways = infer_n_ways_from_ptr(ptr)
+    succ_pad_np, succ_mask_np = build_truncated_successors_first(ptr, idx, max_candidates=int(args.max_candidates))
+    succ_pad = torch.as_tensor(succ_pad_np, dtype=torch.long, device=device)
+    succ_mask = torch.as_tensor(succ_mask_np, dtype=torch.bool, device=device)
 
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -352,23 +337,23 @@ def main() -> None:
             model=model,
             loader=train_loader,
             device=device,
-            ptr=ptr,
-            idx=idx,
-            max_candidates=int(args.max_candidates),
+            succ_pad=succ_pad,
+            succ_mask=succ_mask,
             train=True,
             opt=opt,
             max_batches=args.max_batches,
+            log_every_batches=int(args.log_every_batches),
         )
         va = _run_epoch(
             model=model,
             loader=val_loader,
             device=device,
-            ptr=ptr,
-            idx=idx,
-            max_candidates=int(args.max_candidates),
+            succ_pad=succ_pad,
+            succ_mask=succ_mask,
             train=False,
             opt=None,
             max_batches=args.max_batches,
+            log_every_batches=int(args.log_every_batches),
         )
         dt = time.time() - t0
         print(

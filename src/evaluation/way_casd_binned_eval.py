@@ -594,7 +594,13 @@ def main() -> None:
     p.add_argument("--decode_guided_dest_alpha", type=float, default=0.0)
 
     p.add_argument("--beam_size", type=int, default=10)
-    p.add_argument("--no_compare_beam", action="store_true", help="If set, only evaluate greedy (skip beam).")
+    g_beam = p.add_mutually_exclusive_group()
+    g_beam.add_argument(
+        "--compare_beam",
+        action="store_true",
+        help="(Deprecated; default behavior) Evaluate beam search in addition to greedy.",
+    )
+    g_beam.add_argument("--no_compare_beam", action="store_true", help="If set, only evaluate greedy (skip beam).")
 
     # Region-constrained decoding (hierarchical P0).
     p.add_argument(

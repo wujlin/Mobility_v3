@@ -43,6 +43,47 @@ class Cfg:
     max_candidates: int
 
 
+def _infer_use_dest_dist(state: Dict[str, torch.Tensor]) -> bool:
+    w = state.get("decoder.scorer.0.weight", None)
+    if not isinstance(w, torch.Tensor) or w.ndim != 2:
+        return True
+    hidden = int(w.shape[0])
+    in_dim = int(w.shape[1])
+    d4 = int(in_dim - hidden * 4)
+    if d4 in (0, 1):
+        return bool(d4 == 1)
+    d3 = int(in_dim - hidden * 3)
+    if d3 in (0, 1):
+        return bool(d3 == 1)
+    return True
+
+
+def _infer_use_cand_contrast(state: Dict[str, torch.Tensor]) -> bool:
+    w = state.get("decoder.scorer.0.weight", None)
+    if not isinstance(w, torch.Tensor) or w.ndim != 2:
+        return False
+    hidden = int(w.shape[0])
+    in_dim = int(w.shape[1])
+    d4 = int(in_dim - hidden * 4)
+    if d4 in (0, 1):
+        return True
+    d3 = int(in_dim - hidden * 3)
+    if d3 in (0, 1):
+        return False
+    return False
+
+
+def _infer_bool_by_prefix(state: Dict[str, torch.Tensor], prefix: str) -> bool:
+    return any(str(k).startswith(prefix) for k in state.keys())
+
+
+def _infer_n_route_cities(state: Dict[str, torch.Tensor]) -> Optional[int]:
+    w = state.get("decoder.cond_enc.route_city_embed.weight", None)
+    if isinstance(w, torch.Tensor) and w.ndim == 2 and int(w.shape[0]) > 0:
+        return int(w.shape[0])
+    return None
+
+
 def _set_seed(seed: int) -> None:
     np.random.seed(int(seed))
     torch.manual_seed(int(seed))
@@ -239,6 +280,8 @@ def main() -> None:
     ckpt = torch.load(str(args.ae_ckpt), map_location=device)
     state = ckpt["model_state_dict"] if isinstance(ckpt, dict) and "model_state_dict" in ckpt else ckpt
     ck_cfg = ckpt.get("config", {}) if isinstance(ckpt, dict) else {}
+    if not isinstance(state, dict):
+        raise SystemExit("[FATAL] unexpected AE ckpt format (state_dict missing).")
 
     cfg = Cfg(
         seed=int(args.seed),
@@ -256,6 +299,28 @@ def main() -> None:
     way_features = load_way_features_from_npz(Path(args.way_features_npz), device=device)
     n_highway_types = int(np.max(np.asarray(wf["way_highway_code"], dtype=np.int64))) + 1
 
+    cities_obs = sorted(set(int(x) for x in np.unique(routes.route_city.astype(np.int64)).tolist()))
+    n_route_cities = _infer_n_route_cities(state)
+    if n_route_cities is None:
+        n_route_cities = int(ck_cfg.get("n_route_cities", 4))
+    n_route_cities = max(int(n_route_cities), int(max(cities_obs) + 1) if cities_obs else 1)
+
+    use_dest_dist = _infer_use_dest_dist(state)
+    use_cand_contrast = _infer_use_cand_contrast(state) or bool(ck_cfg.get("decoder_use_cand_contrast", False))
+    use_cross_attn = _infer_bool_by_prefix(state, "decoder.cross_attn.") or bool(ck_cfg.get("decoder_use_cross_attn", True))
+    use_step_emb = _infer_bool_by_prefix(state, "decoder.step_emb.") or bool(ck_cfg.get("decoder_use_step_emb", False))
+    use_dest_query = _infer_bool_by_prefix(state, "decoder.dest_proj.") or bool(ck_cfg.get("decoder_use_dest_query", False))
+    use_dir_query = _infer_bool_by_prefix(state, "decoder.dir_query_proj.") or bool(ck_cfg.get("decoder_use_dir_query", False))
+    use_cand_query = _infer_bool_by_prefix(state, "decoder.cand_query_proj.") or bool(ck_cfg.get("decoder_use_cand_query", False))
+    use_past_context = _infer_bool_by_prefix(state, "decoder.past_encoder.") or bool(ck_cfg.get("decoder_use_past_context", False))
+    past_k = int(ck_cfg.get("decoder_past_k", 8))
+    if use_past_context:
+        pe = state.get("decoder.past_encoder.pos_emb.weight", None)
+        if isinstance(pe, torch.Tensor) and pe.ndim == 2 and int(pe.shape[0]) > 0:
+            past_k = int(pe.shape[0])
+    past_n_layers = int(ck_cfg.get("decoder_past_n_layers", 2))
+    past_n_heads = int(ck_cfg.get("decoder_past_n_heads", 4))
+
     ae = WayCASDAutoEncoder(
         cfg=WayCASDAECfg(
             d_model=int(ck_cfg.get("d_model", 256)),
@@ -265,16 +330,26 @@ def main() -> None:
             max_candidates=int(ck_cfg.get("max_candidates", cfg.max_candidates)),
             max_len=int(ck_cfg.get("max_len", cfg.max_way_len)),
             coord_scale=float(ck_cfg.get("coord_scale", 1024.0)),
-            decoder_use_dest_dist=bool(ck_cfg.get("decoder_use_dest_dist", True)),
-            decoder_use_cross_attn=bool(ck_cfg.get("decoder_use_cross_attn", True)),
+            segment_size=int(ck_cfg.get("segment_size", 10)),
+            segment_n_latent=int(ck_cfg.get("segment_n_latent", 0)),
+            decoder_use_dest_dist=bool(use_dest_dist),
+            decoder_use_cross_attn=bool(use_cross_attn),
             decoder_n_cross_heads=int(ck_cfg.get("decoder_n_cross_heads", 4)),
-            decoder_use_step_emb=bool(ck_cfg.get("decoder_use_step_emb", False)),
-            decoder_use_dest_query=bool(ck_cfg.get("decoder_use_dest_query", False)),
+            decoder_use_step_emb=bool(use_step_emb),
+            decoder_use_dest_query=bool(use_dest_query),
+            decoder_use_dir_query=bool(use_dir_query),
+            decoder_use_cand_query=bool(use_cand_query),
+            decoder_use_cand_contrast=bool(use_cand_contrast),
+            decoder_use_past_context=bool(use_past_context),
+            decoder_past_k=int(past_k),
+            decoder_past_n_layers=int(past_n_layers),
+            decoder_past_n_heads=int(past_n_heads),
         ),
         way_features=way_features,
         way_adj_ptr=np.asarray(wg["way_adj_ptr"], dtype=np.int64),
         way_adj_idx=np.asarray(wg["way_adj_idx"], dtype=np.int64),
         n_highway_types=int(max(4, n_highway_types)),
+        n_route_cities=int(n_route_cities),
     ).to(device)
     ae.load_state_dict(state, strict=False)
     ae.eval()
@@ -316,6 +391,9 @@ def main() -> None:
     route_ids = dataset.route_ids.astype(np.int64, copy=False)
     city_by_ds = routes.route_city[route_ids].astype(np.int64, copy=False)
     cities = sorted(set(int(x) for x in np.unique(city_by_ds).tolist()))
+    # Sanity check: the ckpt city embedding should cover observed city ids in this dataset.
+    if cities and int(max(cities) + 1) > int(n_route_cities):
+        raise RuntimeError(f"n_route_cities={int(n_route_cities)} < max_city+1={int(max(cities) + 1)} (bad ckpt/config)")
 
     collate_fn = make_way_casd_collate_fn(
         way_adj_ptr=wg["way_adj_ptr"],

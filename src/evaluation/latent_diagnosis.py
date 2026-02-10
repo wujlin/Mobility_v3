@@ -100,6 +100,31 @@ def _pad_int_seqs(*, seqs: List[List[int]], device: torch.device) -> torch.Tenso
     return pad
 
 
+def _parse_city_name_kv(spec: str) -> Tuple[int, str]:
+    s = str(spec or "").strip()
+    if "=" in s:
+        k, v = s.split("=", 1)
+    elif ":" in s:
+        k, v = s.split(":", 1)
+    else:
+        raise ValueError(f"Bad spec (expect CITY=NAME): {spec!r}")
+    return int(str(k).strip()), str(v).strip()
+
+
+def _read_split_ids(*, split_json: Path, split_part: str) -> np.ndarray:
+    obj = json.loads(Path(split_json).read_text(encoding="utf-8"))
+    splits = obj.get("splits", obj)
+    if not isinstance(splits, dict):
+        raise ValueError(f"bad split_json: {split_json} (expect dict)")
+    ids_raw = splits.get(str(split_part), None)
+    if ids_raw is None:
+        raise ValueError(f"split_json missing part={split_part!r} (expects splits.train/val/test).")
+    ids = np.asarray([int(x) for x in list(ids_raw)], dtype=np.int64).reshape(-1)
+    if ids.size == 0:
+        raise ValueError(f"split {split_part!r} is empty in {split_json}")
+    return ids
+
+
 def _hops_bins() -> List[Tuple[int, Optional[int], str]]:
     # Match PI decision: [5,10), [10,20), [20,30), [30,40), [40,60), [60,+)
     return [
@@ -240,8 +265,11 @@ def _plot_pca(
     c_fl = coords[N:]
 
     city = np.asarray(city, dtype=np.int64).reshape(-1)
-    fig, axes = plt.subplots(1, 2, figsize=(9.2, 4.2), dpi=160)
-    for ax, c in zip(axes, [0, 1]):
+    cities = sorted(set(int(x) for x in np.unique(city).astype(np.int64).tolist()))
+    if not cities:
+        return
+    fig, axes = plt.subplots(1, len(cities), figsize=(4.6 * float(len(cities)), 4.2), dpi=160, squeeze=False)
+    for ax, c in zip(list(axes[0]), cities):
         mask = city == int(c)
         ax.scatter(c_gt[mask, 0], c_gt[mask, 1], s=10, alpha=0.7, label="z_gt", c="#1f77b4")
         ax.scatter(c_fl[mask, 0], c_fl[mask, 1], s=10, alpha=0.7, label="z_flow", c="#ff7f0e")
@@ -249,7 +277,7 @@ def _plot_pca(
         ax.set_xticks([])
         ax.set_yticks([])
         ax.set_aspect("equal", adjustable="box")
-    axes[0].legend(frameon=False, loc="best")
+    axes[0][0].legend(frameon=False, loc="best")
     fig.tight_layout()
     out_png.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(out_png)
@@ -274,6 +302,9 @@ def main() -> None:
     p.add_argument("--max_way_len", type=int, default=160)
     p.add_argument("--batch_size", type=int, default=64)
     p.add_argument("--flow_solver_steps", type=int, default=0, help="Override flow solver steps (0=use ckpt).")
+    p.add_argument("--split_json", type=Path, default=None, help="Optional OD-disjoint split json (expects splits.train/val/test route_ids).")
+    p.add_argument("--split_part", choices=["train", "val", "test"], default=None, help="Only used when --split_json is set.")
+    p.add_argument("--city_name", action="append", default=[], help="Optional: CITY=NAME for plots/labels (repeatable).")
     args = p.parse_args()
 
     out_dir = Path(args.out_dir)
@@ -394,12 +425,46 @@ def main() -> None:
             raise SystemExit("[FATAL] way_regions_npz missing key: way_region")
         way_region = np.asarray(wr["way_region"], dtype=np.int64).reshape(-1)
 
-    # Pick routes.
+    # City name map (for PCA plot labels only).
+    city_names: Dict[int, str] = {}
+    for spec in list(args.city_name or []):
+        c, name = _parse_city_name_kv(str(spec))
+        if name:
+            city_names[int(c)] = str(name)
+
+    # Pick routes (per observed city). Prefer OD-disjoint split_json if provided.
+    cities_obs = sorted(set(int(x) for x in np.unique(routes.route_city.astype(np.int64)).tolist()))
+    pick_ids_pool: Optional[np.ndarray] = None
+    split_json_src: Optional[str] = None
+    split_part = None
+    if args.split_json is not None:
+        split_part = str(args.split_part) if args.split_part is not None else "test"
+        pick_ids_pool = _read_split_ids(split_json=Path(args.split_json), split_part=str(split_part))
+        split_json_src = str(Path(args.split_json))
+
     picks: Dict[int, np.ndarray] = {}
-    for city in (0, 1):
-        picks[int(city)] = _pick_routes_per_city(
-            routes, city=int(city), n_routes=int(cfg.n_routes), min_hops=int(cfg.min_hops), max_way_len=int(cfg.max_way_len), seed=int(cfg.seed)
-        )
+    for city in cities_obs:
+        if pick_ids_pool is None:
+            picks[int(city)] = _pick_routes_per_city(
+                routes,
+                city=int(city),
+                n_routes=int(cfg.n_routes),
+                min_hops=int(cfg.min_hops),
+                max_way_len=int(cfg.max_way_len),
+                seed=int(cfg.seed),
+            )
+        else:
+            ids = pick_ids_pool
+            keep = routes.route_city[ids] == int(city)
+            keep &= routes.way_seq_len[ids] >= (int(cfg.min_hops) + 1)
+            keep &= routes.way_seq_len[ids] <= int(cfg.max_way_len)
+            ids2 = ids[np.nonzero(keep)[0]].astype(np.int64, copy=False)
+            if ids2.size == 0:
+                picks[int(city)] = np.zeros((0,), dtype=np.int64)
+                continue
+            rng = np.random.default_rng(int(cfg.seed) + int(city) * 10007)
+            rng.shuffle(ids2)
+            picks[int(city)] = ids2[: int(min(int(cfg.n_routes), int(ids2.size)))]
 
     # Accumulate per-sample metrics + for PCA.
     route_ids: List[int] = []
@@ -410,7 +475,7 @@ def main() -> None:
     zgt_flat: List[np.ndarray] = []
     zfl_flat: List[np.ndarray] = []
 
-    for city in (0, 1):
+    for city in cities_obs:
         pick = picks[int(city)]
         if pick.size == 0:
             continue
@@ -510,6 +575,9 @@ def main() -> None:
         },
         "ckpt_strict_load_ok": bool(ckpt_strict_ok),
         "flow_cfg": asdict(flow_cfg),
+        "cities_obs": [int(c) for c in cities_obs],
+        "split_json": split_json_src,
+        "split_part": (str(split_part) if split_part is not None else None),
         "overall": {
             "n": int(route_id_np.size),
             "mse": _summ(mse_np),
@@ -518,7 +586,7 @@ def main() -> None:
         "per_city": [],
     }
 
-    for city in (0, 1):
+    for city in cities_obs:
         m_city = city_np == int(city)
         mse_c = mse_np[m_city]
         cos_c = cos_np[m_city]
@@ -535,6 +603,7 @@ def main() -> None:
         rep["per_city"].append(
             {
                 "city": int(city),
+                "city_name": str(city_names.get(int(city), f"city{int(city)}")),
                 "n": int(np.sum(m_city)),
                 "mse": _summ(mse_c),
                 "cos": _summ(cos_c),
@@ -552,12 +621,14 @@ def main() -> None:
         mse=mse_np.astype(np.float32, copy=False),
         cos=cos_np.astype(np.float32, copy=False),
     )
+    if not city_names:
+        city_names = {int(c): f"city{int(c)}" for c in cities_obs}
     _plot_pca(
         out_png=out_dir / "latent_pca.png",
         z_gt=zgt,
         z_flow=zfl,
         city=city_np,
-        city_names={0: "Detroit", 1: "Columbus"},
+        city_names=city_names,
     )
 
     print(str(out_dir / "latent_stats.json"))
@@ -565,4 +636,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

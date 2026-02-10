@@ -1,15 +1,4 @@
-usage: latent_diagnosis.py [-h] --way_routes_npz WAY_ROUTES_NPZ
-                           --way_graph_npz WAY_GRAPH_NPZ --way_features_npz
-                           WAY_FEATURES_NPZ --ae_ckpt AE_CKPT --flow_ckpt
-                           FLOW_CKPT [--way_regions_npz WAY_REGIONS_NPZ]
-                           --out_dir OUT_DIR [--seed SEED] [--device DEVICE]
-                           [--tz_offset_hours TZ_OFFSET_HOURS]
-                           [--n_routes N_ROUTES] [--min_hops MIN_HOPS]
-                           [--max_way_len MAX_WAY_LEN]
-                           [--batch_size BATCH_SIZE]
-                           [--flow_solver_steps FLOW_SOLVER_STEPS]
-                           [--split_json SPLIT_JSON]
-                           [--split_part {train,val,test}]
-                           [--city_name CITY_NAME]
-latent_diagnosis.py: error: the following arguments are required: --way_routes_npz
-[W210 15:26:27.389420825 AllocatorConfig.cpp:28] Warning: PYTORCH_CUDA_ALLOC_CONF is deprecated, use PYTORCH_ALLOC_CONF instead (function operator())
+/home/jinlin/miniconda3/envs/dpl/lib/python3.11/site-packages/torch/nn/modules/transformer.py:392: UserWarning: enable_nested_tensor is True, but self.use_nested_tensor is False because encoder_layer.norm_first was True
+  warnings.warn(
+_sync/wsa/pi_verify/20260210_porto_phase0_s0/e0a_latent_diag/latent_stats.json
+[W210 17:44:11.111248880 AllocatorConfig.cpp:28] Warning: PYTORCH_CUDA_ALLOC_CONF is deprecated, use PYTORCH_ALLOC_CONF instead (function operator())

@@ -19,4 +19,4 @@
 [city0] batch 960:1000/1000
 [city0] done=1000 routes
 [OK] saved: _sync/wsa/pi_verify/20260210_porto_phase0_s0/e0a_rescale_k1/binned_flow_k1_rescale_p50_greedy_n1000.json
-[W210 15:42:25.532365555 AllocatorConfig.cpp:28] Warning: PYTORCH_CUDA_ALLOC_CONF is deprecated, use PYTORCH_ALLOC_CONF instead (function operator())
+[W210 17:44:41.484788769 AllocatorConfig.cpp:28] Warning: PYTORCH_CUDA_ALLOC_CONF is deprecated, use PYTORCH_ALLOC_CONF instead (function operator())

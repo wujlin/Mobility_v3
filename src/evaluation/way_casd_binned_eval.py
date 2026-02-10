@@ -283,6 +283,7 @@ class Cfg:
     shape_scope: str  # "all" | "selected" | "none"
     flow_solver_steps: Optional[int]  # None=use ckpt/default
     flow_cfg_scale: float  # only used when latent_source=flow (1.0=disable)
+    flow_latent_scale: float  # only used when latent_source=flow (1.0=disable)
 
     eval_batch_size: int  # per forward batch (before K replication)
 
@@ -311,6 +312,8 @@ class Cfg:
 
     value_ckpt: Optional[str] = None
     value_beta: float = 0.0
+
+    disable_cand_query: bool = False  # decode-time ablation (test if cand_query amplifies z_flow mismatch)
 
     split_json: Optional[str] = None
     split_part: Optional[str] = None
@@ -575,6 +578,12 @@ def main() -> None:
         default=1.0,
         help="Flow sampling CFG scale (1.0=disable). NOTE: requires Flow trained with cond_dropout_p>0.",
     )
+    p.add_argument(
+        "--flow_latent_scale",
+        type=float,
+        default=1.0,
+        help="Optional: multiply sampled z_flow by this scalar before decoding (1.0=disable).",
+    )
 
     p.add_argument("--eval_batch_size", type=int, default=64, help="Eval batch size (routes per forward, before K replication).")
     p.add_argument(
@@ -630,6 +639,7 @@ def main() -> None:
     p.add_argument("--anti_loop_penalty_k", type=int, default=4, help="Soft anti-loop window size K (only used when anti_loop_penalty>0).")
     p.add_argument("--value_ckpt", type=Path, default=None, help="Optional: value function ckpt for lookahead scoring.")
     p.add_argument("--value_beta", type=float, default=0.0, help="Lookahead beta (0=disable).")
+    p.add_argument("--disable_cand_query", action="store_true", help="Decode-time ablation: disable candidate-aware cross-attn query (cand_query).")
 
     p.add_argument(
         "--split_json",
@@ -662,6 +672,7 @@ def main() -> None:
         shape_scope=str(args.shape_scope),
         flow_solver_steps=(int(args.flow_solver_steps) if int(args.flow_solver_steps) > 0 else None),
         flow_cfg_scale=float(args.flow_cfg_scale),
+        flow_latent_scale=float(args.flow_latent_scale),
         eval_batch_size=max(1, int(args.eval_batch_size)),
         n_routes=int(args.n_routes),
         min_hops=int(args.min_hops),
@@ -682,6 +693,7 @@ def main() -> None:
         anti_loop_penalty_k=max(0, int(args.anti_loop_penalty_k)),
         value_ckpt=(str(args.value_ckpt) if args.value_ckpt is not None else None),
         value_beta=float(args.value_beta),
+        disable_cand_query=bool(args.disable_cand_query),
         split_json=(str(args.split_json) if args.split_json is not None else None),
         split_part=(str(args.split_part) if args.split_part is not None else (("test" if args.split_json is not None else None))),
     )
@@ -1098,33 +1110,14 @@ def main() -> None:
                 if flow is None:
                     raise SystemExit("[FATAL] latent_source=flow but Flow is not loaded (missing --flow_ckpt?)")
                 z_use = flow.sample(route_cond=route_cond_use, solver_steps=cfg.flow_solver_steps, cfg_scale=float(cfg.flow_cfg_scale))
+                if abs(float(cfg.flow_latent_scale) - 1.0) > 1e-12:
+                    z_use = z_use * float(cfg.flow_latent_scale)
 
-            greedy = ae.decoder.greedy_decode_batched(
-                way_embedder=way_embedder,
-                latent_tokens=z_use,
-                route_cond=route_cond_use,
-                start_way=sw_use,
-                dest_way=dw_use,
-                way_region=way_region_t,
-                region_seq=region_seq_use,
-                region_adj=region_adj_t,
-                region_constraint_mode=str(cfg.region_constraint_mode),
-                region_constraint_fallback=str(cfg.region_constraint_fallback),
-                max_len=int(cfg.max_decode_len),
-                max_candidates=(None if int(cfg.decode_max_candidates) < 0 else int(max_candidates)),
-                candidate_policy=str(cfg.decode_candidate_policy),
-                include_dest_if_successor=bool(cfg.decode_include_dest_if_successor),
-                guided_dest_alpha=float(cfg.guided_dest_alpha),
-                anti_loop_k=int(cfg.anti_loop_k),
-                anti_loop_penalty=float(cfg.anti_loop_penalty),
-                anti_loop_penalty_k=int(cfg.anti_loop_penalty_k),
-                value_fn=value_fn,
-                value_beta=float(cfg.value_beta),
-            )
-
-            beam: Optional[List[List[int]]] = None
-            if bool(cfg.compare_beam):
-                beam = ae.decoder.beam_search_batched(
+            orig_cand_query = bool(getattr(ae.decoder, "use_cand_query", False))
+            if bool(cfg.disable_cand_query):
+                ae.decoder.use_cand_query = False
+            try:
+                greedy = ae.decoder.greedy_decode_batched(
                     way_embedder=way_embedder,
                     latent_tokens=z_use,
                     route_cond=route_cond_use,
@@ -1135,7 +1128,6 @@ def main() -> None:
                     region_adj=region_adj_t,
                     region_constraint_mode=str(cfg.region_constraint_mode),
                     region_constraint_fallback=str(cfg.region_constraint_fallback),
-                    beam_size=int(cfg.beam_size),
                     max_len=int(cfg.max_decode_len),
                     max_candidates=(None if int(cfg.decode_max_candidates) < 0 else int(max_candidates)),
                     candidate_policy=str(cfg.decode_candidate_policy),
@@ -1147,6 +1139,35 @@ def main() -> None:
                     value_fn=value_fn,
                     value_beta=float(cfg.value_beta),
                 )
+
+                beam: Optional[List[List[int]]] = None
+                if bool(cfg.compare_beam):
+                    beam = ae.decoder.beam_search_batched(
+                        way_embedder=way_embedder,
+                        latent_tokens=z_use,
+                        route_cond=route_cond_use,
+                        start_way=sw_use,
+                        dest_way=dw_use,
+                        way_region=way_region_t,
+                        region_seq=region_seq_use,
+                        region_adj=region_adj_t,
+                        region_constraint_mode=str(cfg.region_constraint_mode),
+                        region_constraint_fallback=str(cfg.region_constraint_fallback),
+                        beam_size=int(cfg.beam_size),
+                        max_len=int(cfg.max_decode_len),
+                        max_candidates=(None if int(cfg.decode_max_candidates) < 0 else int(max_candidates)),
+                        candidate_policy=str(cfg.decode_candidate_policy),
+                        include_dest_if_successor=bool(cfg.decode_include_dest_if_successor),
+                        guided_dest_alpha=float(cfg.guided_dest_alpha),
+                        anti_loop_k=int(cfg.anti_loop_k),
+                        anti_loop_penalty=float(cfg.anti_loop_penalty),
+                        anti_loop_penalty_k=int(cfg.anti_loop_penalty_k),
+                        value_fn=value_fn,
+                        value_beta=float(cfg.value_beta),
+                    )
+            finally:
+                if bool(cfg.disable_cand_query):
+                    ae.decoder.use_cand_query = orig_cand_query
 
             # Metrics per route.
             xy_way = way_xy_m[int(city)]

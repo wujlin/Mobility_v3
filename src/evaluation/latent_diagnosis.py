@@ -7,7 +7,7 @@ Goal:
 
 Outputs (out_dir):
   - latent_stats.json: summary stats (overall + per-city + per-bin)
-  - latent_pairs.npz: per-sample arrays (route_id/city/gt_hops/mse/cos)
+  - latent_pairs.npz: per-sample arrays (route_id/city/gt_hops/mse/cos/norm_gt/norm_flow)
   - latent_pca.png: optional PCA scatter (gt vs flow)
 """
 
@@ -157,6 +157,11 @@ def _summ(values: np.ndarray) -> Dict[str, float]:
         "p90": float(np.quantile(v, 0.90)),
         "p95": float(np.quantile(v, 0.95)),
     }
+
+def _safe_div(num: np.ndarray, den: np.ndarray, *, eps: float = 1e-8) -> np.ndarray:
+    a = np.asarray(num, dtype=np.float64).reshape(-1)
+    b = np.asarray(den, dtype=np.float64).reshape(-1)
+    return a / (b + float(eps))
 
 
 def _infer_decoder_use_dest_dist_from_state(state: Dict[str, torch.Tensor]) -> bool:
@@ -472,6 +477,8 @@ def main() -> None:
     gt_hops_list: List[int] = []
     mse_list: List[float] = []
     cos_list: List[float] = []
+    norm_gt_list: List[float] = []
+    norm_flow_list: List[float] = []
     zgt_flat: List[np.ndarray] = []
     zfl_flat: List[np.ndarray] = []
 
@@ -537,6 +544,13 @@ def main() -> None:
             cos_tok = dot / (nz * ng + 1e-8)
             cos = torch.mean(cos_tok, dim=1).detach().cpu().numpy().astype(np.float64, copy=False)
 
+            # L2 norm stats (flattened latent tokens). Useful for diagnosing scale mismatch.
+            # shape: (B,)
+            norm_gt = torch.norm(z_gt.to(dtype=torch.float32).reshape(int(i1 - i0), -1), dim=-1)
+            norm_flow = torch.norm(z_flow.to(dtype=torch.float32).reshape(int(i1 - i0), -1), dim=-1)
+            norm_gt = norm_gt.detach().cpu().numpy().astype(np.float64, copy=False)
+            norm_flow = norm_flow.detach().cpu().numpy().astype(np.float64, copy=False)
+
             for k in range(int(i1 - i0)):
                 rid = int(rid_b[k])
                 L = int(routes.way_seq_len[rid])
@@ -546,6 +560,8 @@ def main() -> None:
                 gt_hops_list.append(int(hops))
                 mse_list.append(float(mse[k]))
                 cos_list.append(float(cos[k]))
+                norm_gt_list.append(float(norm_gt[k]))
+                norm_flow_list.append(float(norm_flow[k]))
 
             # Flatten for PCA (float32 to reduce memory).
             zgt_flat.append(z_gt.detach().cpu().numpy().reshape(int(i1 - i0), -1).astype(np.float32, copy=False))
@@ -556,8 +572,19 @@ def main() -> None:
     gt_hops_np = np.asarray(gt_hops_list, dtype=np.int64)
     mse_np = np.asarray(mse_list, dtype=np.float64)
     cos_np = np.asarray(cos_list, dtype=np.float64)
+    norm_gt_np = np.asarray(norm_gt_list, dtype=np.float64)
+    norm_flow_np = np.asarray(norm_flow_list, dtype=np.float64)
     zgt = np.concatenate(zgt_flat, axis=0) if zgt_flat else np.zeros((0, int(flow_cfg.n_latent) * int(flow_cfg.d_model)), dtype=np.float32)
     zfl = np.concatenate(zfl_flat, axis=0) if zfl_flat else np.zeros_like(zgt)
+
+    # Recommended global rescaling factor to roughly match z_flow magnitude to z_gt.
+    # Use p50 (median) for robustness.
+    scale_p50 = float("nan")
+    if np.isfinite(norm_gt_np).any() and np.isfinite(norm_flow_np).any():
+        ng_p50 = float(np.quantile(norm_gt_np[np.isfinite(norm_gt_np)], 0.50))
+        nf_p50 = float(np.quantile(norm_flow_np[np.isfinite(norm_flow_np)], 0.50))
+        if nf_p50 > 0:
+            scale_p50 = float(ng_p50 / nf_p50)
 
     # Summaries.
     rep: Dict[str, Any] = {
@@ -582,6 +609,12 @@ def main() -> None:
             "n": int(route_id_np.size),
             "mse": _summ(mse_np),
             "cos": _summ(cos_np),
+            "norm_gt": _summ(norm_gt_np),
+            "norm_flow": _summ(norm_flow_np),
+            "norm_ratio_gt_over_flow": _summ(_safe_div(norm_gt_np, norm_flow_np)),
+            "recommended": {
+                "flow_latent_scale_p50": scale_p50,
+            },
         },
         "per_city": [],
     }
@@ -590,6 +623,8 @@ def main() -> None:
         m_city = city_np == int(city)
         mse_c = mse_np[m_city]
         cos_c = cos_np[m_city]
+        ng_c = norm_gt_np[m_city]
+        nf_c = norm_flow_np[m_city]
         hops_c = gt_hops_np[m_city]
         by_bin: Dict[str, Any] = {}
         for _lo, _hi, name in _hops_bins():
@@ -599,6 +634,9 @@ def main() -> None:
                 "n": int(np.sum(sel)),
                 "mse": _summ(mse_c[sel]),
                 "cos": _summ(cos_c[sel]),
+                "norm_gt": _summ(ng_c[sel]),
+                "norm_flow": _summ(nf_c[sel]),
+                "norm_ratio_gt_over_flow": _summ(_safe_div(ng_c[sel], nf_c[sel])),
             }
         rep["per_city"].append(
             {
@@ -607,6 +645,9 @@ def main() -> None:
                 "n": int(np.sum(m_city)),
                 "mse": _summ(mse_c),
                 "cos": _summ(cos_c),
+                "norm_gt": _summ(ng_c),
+                "norm_flow": _summ(nf_c),
+                "norm_ratio_gt_over_flow": _summ(_safe_div(ng_c, nf_c)),
                 "by_bin": by_bin,
             }
         )
@@ -620,6 +661,8 @@ def main() -> None:
         gt_hops=gt_hops_np,
         mse=mse_np.astype(np.float32, copy=False),
         cos=cos_np.astype(np.float32, copy=False),
+        norm_gt=norm_gt_np.astype(np.float32, copy=False),
+        norm_flow=norm_flow_np.astype(np.float32, copy=False),
     )
     if not city_names:
         city_names = {int(c): f"city{int(c)}" for c in cities_obs}

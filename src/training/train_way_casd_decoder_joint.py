@@ -18,6 +18,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import time
 from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -61,6 +62,9 @@ class TrainCfg:
     scheduled_sampling_expert: str
     focus_train_route_ids_json: Optional[str] = None
     split_json: Optional[str] = None
+    max_train_batches: int = 0
+    max_val_batches: int = 0
+    log_every_batches: int = 200
 
 
 def _set_seed(seed: int) -> None:
@@ -609,38 +613,42 @@ def _eval_epoch(
     device: torch.device,
     way_region: Optional[np.ndarray],
     solver_steps: Optional[int],
+    max_batches: int,
 ) -> Dict[str, float]:
     ae.eval()
     flow.eval()
     losses: list[float] = []
     n_items = 0
-    for batch in loader:
-        b = _to_device(batch, device)
-        route_cond = b["route_cond"]
-        route_cond_use = {
-            "start_pos": route_cond["start_pos"],
-            "dest_pos": route_cond["dest_pos"],
-            "hour": route_cond["hour"],
-            "dow": route_cond["dow"],
-            "route_city": route_cond["route_city"],
-        }
-        if bool(flow.cfg.use_region_seq):
-            if way_region is None:
-                raise RuntimeError("Flow requires region_seq conditioning, but way_region is missing.")
-            pad = b["way_seq_pad"].detach().cpu().numpy()
-            lens = b["way_seq_len"].detach().cpu().numpy()
-            seqs: list[list[int]] = []
-            for i in range(int(pad.shape[0])):
-                L = int(lens[i])
-                seq = pad[i, :L].astype(np.int64, copy=False)
-                seqs.append(_region_seq_from_way_seq(seq, way_region))
-            route_cond_use["region_seq_pad"] = _pad_region_seqs(seqs, device=device)
-        z = flow.sample(route_cond=route_cond_use, solver_steps=solver_steps)
-        logits = ae.decoder.score_candidates(way_embedder=ae.way_enc, latent_tokens=z, route_cond=route_cond_use, trans=b["trans"])
-        tgt = b["trans"]["target_idx"].to(dtype=torch.long)
-        loss = F.cross_entropy(logits, tgt, reduction="mean")
-        losses.append(float(loss.detach().item()))
-        n_items += 1
+    with torch.no_grad():
+        for bi, batch in enumerate(loader):
+            if int(max_batches) > 0 and (bi + 1) > int(max_batches):
+                break
+            b = _to_device(batch, device)
+            route_cond = b["route_cond"]
+            route_cond_use = {
+                "start_pos": route_cond["start_pos"],
+                "dest_pos": route_cond["dest_pos"],
+                "hour": route_cond["hour"],
+                "dow": route_cond["dow"],
+                "route_city": route_cond["route_city"],
+            }
+            if bool(flow.cfg.use_region_seq):
+                if way_region is None:
+                    raise RuntimeError("Flow requires region_seq conditioning, but way_region is missing.")
+                pad = b["way_seq_pad"].detach().cpu().numpy()
+                lens = b["way_seq_len"].detach().cpu().numpy()
+                seqs: list[list[int]] = []
+                for i in range(int(pad.shape[0])):
+                    L = int(lens[i])
+                    seq = pad[i, :L].astype(np.int64, copy=False)
+                    seqs.append(_region_seq_from_way_seq(seq, way_region))
+                route_cond_use["region_seq_pad"] = _pad_region_seqs(seqs, device=device)
+            z = flow.sample(route_cond=route_cond_use, solver_steps=solver_steps)
+            logits = ae.decoder.score_candidates(way_embedder=ae.way_enc, latent_tokens=z, route_cond=route_cond_use, trans=b["trans"])
+            tgt = b["trans"]["target_idx"].to(dtype=torch.long)
+            loss = F.cross_entropy(logits, tgt, reduction="mean")
+            losses.append(float(loss.detach().item()))
+            n_items += 1
     return {"loss": float(np.mean(losses)) if n_items > 0 else float("nan")}
 
 
@@ -676,6 +684,9 @@ def main() -> None:
     p.add_argument("--save_every", type=int, default=1)
     p.add_argument("--early_stop_patience", type=int, default=0)
     p.add_argument("--max_grad_norm", type=float, default=1.0)
+    p.add_argument("--max_train_batches", type=int, default=0, help="Limit batches per epoch for faster iteration (0=all).")
+    p.add_argument("--max_val_batches", type=int, default=0, help="Limit val batches per epoch for faster iteration (0=all).")
+    p.add_argument("--log_every_batches", type=int, default=200, help="Log training progress every N batches (0=disable).")
     p.add_argument("--scheduled_sampling_max_p", type=float, default=0.0, help="Scheduled sampling max p (0=disable).")
     p.add_argument("--scheduled_sampling_warmup_epochs", type=int, default=20, help="Warmup epochs to reach max_p.")
     p.add_argument(
@@ -718,6 +729,9 @@ def main() -> None:
         scheduled_sampling_expert=str(args.scheduled_sampling_expert),
         focus_train_route_ids_json=(str(args.focus_train_route_ids_json) if args.focus_train_route_ids_json is not None else None),
         split_json=(str(args.split_json) if args.split_json is not None else None),
+        max_train_batches=int(args.max_train_batches),
+        max_val_batches=int(args.max_val_batches),
+        log_every_batches=int(args.log_every_batches),
     )
 
     _set_seed(cfg.seed)
@@ -847,7 +861,13 @@ def main() -> None:
         ae.train()
         losses: list[float] = []
         ss_stats: list[Dict[str, float]] = []
-        for batch in train_loader:
+        t_epoch = time.perf_counter()
+        n_total = len(train_loader)
+        n_cap = int(cfg.max_train_batches) if int(cfg.max_train_batches) > 0 else int(n_total)
+        n_cap = min(int(n_cap), int(n_total))
+        for bi, batch in enumerate(train_loader):
+            if int(cfg.max_train_batches) > 0 and (bi + 1) > int(cfg.max_train_batches):
+                break
             b = _to_device(batch, device)
 
             p_ss = _ss_p(epoch, max_p=float(cfg.scheduled_sampling_max_p), warmup_epochs=int(cfg.scheduled_sampling_warmup_epochs))
@@ -904,12 +924,31 @@ def main() -> None:
             opt.step()
             losses.append(float(loss.detach().item()))
 
+            if int(cfg.log_every_batches) > 0 and ((bi + 1) % int(cfg.log_every_batches) == 0):
+                dt = max(1e-6, float(time.perf_counter() - t_epoch))
+                steps = int(bi + 1)
+                it_s = float(steps / dt)
+                eta_s = float((max(0, int(n_cap) - steps)) / max(1e-6, it_s))
+                log.info(
+                    f"epoch={epoch} batch={steps}/{int(n_cap)} "
+                    f"train_loss={float(np.mean(losses)) if losses else float('nan'):.4f} "
+                    f"it/s={it_s:.2f} eta={eta_s/60.0:.1f}m"
+                )
+
         tr_loss = float(np.mean(losses)) if losses else float("nan")
         train_ss: Dict[str, float] = {}
         if ss_stats:
             keys = ["p_ss", "acc", "use_pred_frac", "off_gt_frac", "skipped_frac", "n_steps"]
             train_ss = {k: float(np.mean([float(s.get(k, float("nan"))) for s in ss_stats])) for k in keys}
-        va = _eval_epoch(ae=ae, flow=flow, loader=val_loader, device=device, way_region=way_region, solver_steps=cfg.flow_solver_steps)
+        va = _eval_epoch(
+            ae=ae,
+            flow=flow,
+            loader=val_loader,
+            device=device,
+            way_region=way_region,
+            solver_steps=cfg.flow_solver_steps,
+            max_batches=int(cfg.max_val_batches),
+        )
         va_loss = float(va["loss"])
         if train_ss:
             log.info(

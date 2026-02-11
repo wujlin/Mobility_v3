@@ -1,0 +1,27 @@
+2026-02-11 13:17:02,688 - INFO - device=cuda
+2026-02-11 13:17:03,438 - INFO - split_json=/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD0_waydata_porto_seed0/W5_way_routes_strict_gate/od_split_min3_max160_seed0_dev10p.json train_routes=108153 val_routes=13086 => train_idx=108153 val_idx=13086
+2026-02-11 13:17:03,440 - INFO - routes: total=1349045 train=108153 val=13086 min_hops=3 max_way_len=160
+/home/jinlin/miniconda3/envs/dpl/lib/python3.11/site-packages/torch/nn/modules/transformer.py:392: UserWarning: enable_nested_tensor is True, but self.use_nested_tensor is False because encoder_layer.norm_first was True
+  warnings.warn(
+2026-02-11 13:17:05,955 - INFO - init best_val_loss=8.269657 from current weights (epoch=0)
+2026-02-11 13:17:30,488 - INFO - epoch=1 train_loss=5.7079 val_loss=5.2494
+2026-02-11 13:17:55,663 - INFO - epoch=2 train_loss=5.1738 val_loss=5.0393
+2026-02-11 13:18:21,375 - INFO - epoch=3 train_loss=4.9981 val_loss=4.8910
+2026-02-11 13:18:47,267 - INFO - epoch=4 train_loss=4.8626 val_loss=4.7473
+2026-02-11 13:19:13,390 - INFO - epoch=5 train_loss=4.7411 val_loss=4.6364
+2026-02-11 13:19:39,448 - INFO - epoch=6 train_loss=4.6275 val_loss=4.5246
+2026-02-11 13:20:05,580 - INFO - epoch=7 train_loss=4.5234 val_loss=4.4243
+2026-02-11 13:20:31,677 - INFO - epoch=8 train_loss=4.4238 val_loss=4.3240
+2026-02-11 13:20:57,825 - INFO - epoch=9 train_loss=4.3304 val_loss=4.2378
+2026-02-11 13:21:23,995 - INFO - epoch=10 train_loss=4.2396 val_loss=4.1503
+2026-02-11 13:21:50,163 - INFO - epoch=11 train_loss=4.1512 val_loss=4.0536
+2026-02-11 13:22:16,292 - INFO - epoch=12 train_loss=4.0690 val_loss=3.9667
+2026-02-11 13:22:42,449 - INFO - epoch=13 train_loss=3.9818 val_loss=3.8805
+2026-02-11 13:23:08,495 - INFO - epoch=14 train_loss=3.8987 val_loss=3.7962
+2026-02-11 13:23:34,505 - INFO - epoch=15 train_loss=3.8151 val_loss=3.7160
+2026-02-11 13:24:00,474 - INFO - epoch=16 train_loss=3.7340 val_loss=3.6329
+2026-02-11 13:24:26,463 - INFO - epoch=17 train_loss=3.6559 val_loss=3.5258
+2026-02-11 13:24:52,523 - INFO - epoch=18 train_loss=3.5743 val_loss=3.4629
+2026-02-11 13:25:18,505 - INFO - epoch=19 train_loss=3.4992 val_loss=3.3920
+2026-02-11 13:25:44,496 - INFO - epoch=20 train_loss=3.4259 val_loss=3.3020
+2026-02-11 13:25:44,629 - INFO - saved: _sync/wsa/pi_verify/20260210_porto_phase1_s0/E3_flow_xattn_dev10p_s0/report.json

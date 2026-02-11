@@ -1,0 +1,48 @@
+2026-02-11 16:49:45,909 - INFO - device=cuda
+2026-02-11 16:49:46,662 - INFO - split_json=/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD0_waydata_porto_seed0/W5_way_routes_strict_gate/od_split_min3_max160_seed0_dev10p.json train_routes=108153 val_routes=13086 => train_idx=108136 val_idx=13085
+2026-02-11 16:49:46,664 - INFO - routes: total=1348793 train=108136 val=13085 min_hops=3 max_way_len=128
+/home/jinlin/miniconda3/envs/dpl/lib/python3.11/site-packages/torch/nn/modules/transformer.py:392: UserWarning: enable_nested_tensor is True, but self.use_nested_tensor is False because encoder_layer.norm_first was True
+  warnings.warn(
+2026-02-11 16:49:47,724 - WARNING - resume: flow state mismatch: missing=6 unexpected=0
+2026-02-11 16:49:47,724 - INFO - resume_ckpt=_sync/wsa/pi_verify/20260210_porto_phase1_s0/E3_flow_xattn_dev10p_s0/ckpt_best.pt start_epoch=21 best_val_loss=3.301980972290039 best_epoch=20
+2026-02-11 16:50:09,241 - INFO - epoch=21 train_loss=3.2862 val_loss=3.0351
+2026-02-11 16:50:30,764 - INFO - epoch=22 train_loss=3.0024 val_loss=2.7930
+2026-02-11 16:50:53,089 - INFO - epoch=23 train_loss=2.7667 val_loss=2.5479
+2026-02-11 16:51:15,864 - INFO - epoch=24 train_loss=2.5603 val_loss=2.3468
+2026-02-11 16:51:38,956 - INFO - epoch=25 train_loss=2.3723 val_loss=2.1661
+2026-02-11 16:52:02,354 - INFO - epoch=26 train_loss=2.2120 val_loss=2.0295
+2026-02-11 16:52:25,891 - INFO - epoch=27 train_loss=2.0637 val_loss=1.8621
+2026-02-11 16:52:49,553 - INFO - epoch=28 train_loss=1.9416 val_loss=1.7481
+2026-02-11 16:53:13,329 - INFO - epoch=29 train_loss=1.8354 val_loss=1.6418
+2026-02-11 16:53:37,154 - INFO - epoch=30 train_loss=1.7315 val_loss=1.5644
+2026-02-11 16:54:01,006 - INFO - epoch=31 train_loss=1.6589 val_loss=1.4514
+2026-02-11 16:54:25,027 - INFO - epoch=32 train_loss=1.5868 val_loss=1.4030
+2026-02-11 16:54:49,063 - INFO - epoch=33 train_loss=1.5257 val_loss=1.3400
+2026-02-11 16:55:13,059 - INFO - epoch=34 train_loss=1.4816 val_loss=1.2929
+2026-02-11 16:55:37,176 - INFO - epoch=35 train_loss=1.4362 val_loss=1.2529
+2026-02-11 16:56:01,233 - INFO - epoch=36 train_loss=1.4027 val_loss=1.2173
+2026-02-11 16:56:25,374 - INFO - epoch=37 train_loss=1.3742 val_loss=1.1737
+2026-02-11 16:56:49,538 - INFO - epoch=38 train_loss=1.3537 val_loss=1.1400
+2026-02-11 16:57:13,609 - INFO - epoch=39 train_loss=1.3198 val_loss=1.1506
+2026-02-11 16:57:37,702 - INFO - epoch=40 train_loss=1.3058 val_loss=1.1238
+2026-02-11 16:58:01,860 - INFO - epoch=41 train_loss=1.2761 val_loss=1.0629
+2026-02-11 16:58:25,886 - INFO - epoch=42 train_loss=1.2548 val_loss=1.0627
+2026-02-11 16:58:49,953 - INFO - epoch=43 train_loss=1.2313 val_loss=1.0314
+2026-02-11 16:59:13,848 - INFO - epoch=44 train_loss=1.2087 val_loss=1.0156
+2026-02-11 16:59:37,781 - INFO - epoch=45 train_loss=1.1901 val_loss=0.9929
+2026-02-11 17:00:01,796 - INFO - epoch=46 train_loss=1.1716 val_loss=0.9873
+2026-02-11 17:00:25,772 - INFO - epoch=47 train_loss=1.1528 val_loss=0.9738
+2026-02-11 17:00:49,739 - INFO - epoch=48 train_loss=1.1344 val_loss=0.9541
+2026-02-11 17:01:13,725 - INFO - epoch=49 train_loss=1.1200 val_loss=0.9355
+2026-02-11 17:01:37,637 - INFO - epoch=50 train_loss=1.1143 val_loss=0.9080
+2026-02-11 17:02:01,683 - INFO - epoch=51 train_loss=1.1014 val_loss=0.9002
+2026-02-11 17:02:25,663 - INFO - epoch=52 train_loss=1.0920 val_loss=0.8960
+2026-02-11 17:02:49,612 - INFO - epoch=53 train_loss=1.0921 val_loss=0.8834
+2026-02-11 17:03:13,503 - INFO - epoch=54 train_loss=1.0896 val_loss=0.9113
+2026-02-11 17:03:37,421 - INFO - epoch=55 train_loss=1.0837 val_loss=0.8996
+2026-02-11 17:04:01,405 - INFO - epoch=56 train_loss=1.0797 val_loss=0.8962
+2026-02-11 17:04:25,399 - INFO - epoch=57 train_loss=1.0683 val_loss=0.8922
+2026-02-11 17:04:49,338 - INFO - epoch=58 train_loss=1.0726 val_loss=0.8634
+2026-02-11 17:05:13,305 - INFO - epoch=59 train_loss=1.0608 val_loss=0.8764
+2026-02-11 17:05:37,239 - INFO - epoch=60 train_loss=1.0592 val_loss=0.8817
+2026-02-11 17:05:37,401 - INFO - saved: _sync/wsa/pi_verify/20260211_porto_phase2_s0/E3_xattn_cont_e60_dev10p_s0/report.json

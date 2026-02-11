@@ -217,6 +217,10 @@ def main() -> None:
     ap.add_argument("--min_routes_per_od", type=int, default=3, help="Keep OD groups with at least this many GT routes.")
     ap.add_argument("--jaccard_threshold", type=float, default=0.5, help="GT route is covered if max Jaccard >= threshold.")
     ap.add_argument("--save_per_od", action="store_true", help="If set, keep per-OD detail rows in output JSON.")
+    # Backward-compatible passthrough args: accepted but not used in this script.
+    ap.add_argument("--way_routes_npz", type=Path, default=None, help="Unused in this script; accepted for compatibility.")
+    ap.add_argument("--split_json", type=Path, default=None, help="Unused in this script; accepted for compatibility.")
+    ap.add_argument("--split_part", choices=["train", "val", "test"], default=None, help="Unused in this script; accepted for compatibility.")
     args = ap.parse_args()
 
     specs = [_parse_method_spec(s) for s in list(args.method)]
@@ -263,6 +267,9 @@ def main() -> None:
             "min_routes_per_od": int(args.min_routes_per_od),
             "jaccard_threshold": float(args.jaccard_threshold),
             "save_per_od": bool(args.save_per_od),
+            "compat_way_routes_npz": (str(args.way_routes_npz) if args.way_routes_npz is not None else None),
+            "compat_split_json": (str(args.split_json) if args.split_json is not None else None),
+            "compat_split_part": (str(args.split_part) if args.split_part is not None else None),
             "methods": [asdict(s) for s in specs],
         },
         "summary_table": table,

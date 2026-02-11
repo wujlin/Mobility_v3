@@ -532,6 +532,12 @@ def main() -> None:
 
     p.add_argument("--dump_way_seqs", action="store_true")
     p.add_argument(
+        "--out_per_route_json",
+        type=Path,
+        default=None,
+        help="Optional: dump per-route records into a standalone JSON (same schema as way_casd_binned_eval).",
+    )
+    p.add_argument(
         "--split_json",
         type=Path,
         default=None,
@@ -1049,6 +1055,27 @@ def main() -> None:
     out_json.parent.mkdir(parents=True, exist_ok=True)
     out_json.write_text(json.dumps(out, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     print(f"[OK] saved: {out_json}")
+
+    if args.out_per_route_json is not None:
+        out_rec = Path(args.out_per_route_json)
+        out_rec.parent.mkdir(parents=True, exist_ok=True)
+        out_rec.write_text(
+            json.dumps(
+                {
+                    "ok": True,
+                    "task": str(out.get("task", "")),
+                    "created_at": str(out.get("created_at", "")),
+                    "cfg": dict(out.get("cfg", {})),
+                    "inputs": dict(out.get("inputs", {})),
+                    "per_route": per_route,
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        print(f"[OK] saved: {out_rec}")
 
 
 if __name__ == "__main__":

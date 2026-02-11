@@ -19,7 +19,7 @@ from src.evaluation.shape_metrics import dtw_distance, frechet_distance, summari
 from src.sota.difftraj import DiffTrajCfg, DiffTrajModel
 from src.sota.gtg import GTGCostNet, GTGCostNetCfg
 from src.utils.time_unix import dow_from_unix, hour_from_unix
-from src.utils.way_csr import infer_n_ways_from_ptr, out_degree, slice_csr
+from src.utils.way_csr import build_truncated_successors_first, infer_n_ways_from_ptr, out_degree, slice_csr
 
 TZ_SHANGHAI = timezone(timedelta(hours=8))
 
@@ -727,6 +727,12 @@ def main() -> None:
             assert isinstance(m, WayRNNAR)
             max_candidates = None if int(cfg.decode_max_candidates) < 0 else int(cfg.decode_max_candidates)
             mc_use = max_candidates
+            succ_pad_t: Optional[torch.Tensor] = None
+            succ_mask_t: Optional[torch.Tensor] = None
+            if mc_use is not None and int(mc_use) > 0:
+                succ_pad_np, succ_mask_np = build_truncated_successors_first(ptr, idx, max_candidates=int(mc_use))
+                succ_pad_t = torch.as_tensor(succ_pad_np, dtype=torch.long, device=device)
+                succ_mask_t = torch.as_tensor(succ_mask_np, dtype=torch.bool, device=device)
             bs = max(1, int(cfg.eval_batch_size))
             total = int(pick.size)
             for st_i in range(0, total, bs):
@@ -752,6 +758,8 @@ def main() -> None:
                     route_cond=route_cond_chunk,
                     max_len=int(cfg.max_decode_len),
                     max_candidates=mc_use,
+                    succ_pad=succ_pad_t,
+                    succ_mask=succ_mask_t,
                 )
                 pred_b_list: Optional[List[List[int]]] = None
                 if bool(cfg.compare_beam):
@@ -765,6 +773,8 @@ def main() -> None:
                         max_len=int(cfg.max_decode_len),
                         max_candidates=mc_use,
                         state_batch_size=max(1024, int(bs) * int(cfg.beam_size)),
+                        succ_pad=succ_pad_t,
+                        succ_mask=succ_mask_t,
                     )
                 for j, rid_j in enumerate(rid_chunk.tolist()):
                     rj = int(rid_j)

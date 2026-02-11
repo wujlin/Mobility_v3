@@ -159,6 +159,19 @@ class WayRNNAR(nn.Module):
         mask_t = torch.as_tensor(mask_np, dtype=torch.bool, device=device)
         return cand_t, mask_t
 
+    def _build_cand_tensors_from_pad(
+        self,
+        *,
+        succ_pad: torch.Tensor,
+        succ_mask: torch.Tensor,
+        cur_way: np.ndarray,
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        cur_idx = torch.as_tensor(cur_way.astype(np.int64, copy=False), dtype=torch.long, device=succ_pad.device)
+        cur_idx = torch.clamp(cur_idx, min=0)
+        cand = succ_pad[cur_idx].clone()
+        mask = succ_mask[cur_idx].clone().to(dtype=torch.bool)
+        return cand, mask
+
     @torch.no_grad()
     def greedy_decode_batch(
         self,
@@ -170,6 +183,8 @@ class WayRNNAR(nn.Module):
         route_cond: Dict[str, torch.Tensor],
         max_len: Optional[int] = None,
         max_candidates: Optional[int] = None,
+        succ_pad: Optional[torch.Tensor] = None,
+        succ_mask: Optional[torch.Tensor] = None,
     ) -> List[List[int]]:
         self.eval()
         device = next(self.parameters()).device
@@ -196,13 +211,16 @@ class WayRNNAR(nn.Module):
                 break
             idx = np.nonzero(active)[0].astype(np.int64, copy=False)
             cur_act = cur[idx]
-            cand_t, mask_t = self._build_cand_tensors(
-                way_adj_ptr=way_adj_ptr,
-                way_adj_idx=way_adj_idx,
-                cur_way=cur_act,
-                max_candidates=mc,
-                device=device,
-            )
+            if succ_pad is not None and succ_mask is not None and mc > 0:
+                cand_t, mask_t = self._build_cand_tensors_from_pad(succ_pad=succ_pad, succ_mask=succ_mask, cur_way=cur_act)
+            else:
+                cand_t, mask_t = self._build_cand_tensors(
+                    way_adj_ptr=way_adj_ptr,
+                    way_adj_idx=way_adj_idx,
+                    cur_way=cur_act,
+                    max_candidates=mc,
+                    device=device,
+                )
             has_cand = torch.any(mask_t, dim=1).detach().cpu().numpy().astype(np.bool_, copy=False)
             if not bool(np.any(has_cand)):
                 active[idx] = False
@@ -243,6 +261,8 @@ class WayRNNAR(nn.Module):
         max_len: Optional[int] = None,
         max_candidates: Optional[int] = None,
         state_batch_size: int = 4096,
+        succ_pad: Optional[torch.Tensor] = None,
+        succ_mask: Optional[torch.Tensor] = None,
     ) -> List[List[int]]:
         self.eval()
         device = next(self.parameters()).device
@@ -292,13 +312,16 @@ class WayRNNAR(nn.Module):
                     continue
                 cur_np = np.asarray([c[4] for c in chunk], dtype=np.int64)
                 rid_np = np.asarray([c[0] for c in chunk], dtype=np.int64)
-                cand_t, mask_t = self._build_cand_tensors(
-                    way_adj_ptr=way_adj_ptr,
-                    way_adj_idx=way_adj_idx,
-                    cur_way=cur_np,
-                    max_candidates=mc,
-                    device=device,
-                )
+                if succ_pad is not None and succ_mask is not None and mc > 0:
+                    cand_t, mask_t = self._build_cand_tensors_from_pad(succ_pad=succ_pad, succ_mask=succ_mask, cur_way=cur_np)
+                else:
+                    cand_t, mask_t = self._build_cand_tensors(
+                        way_adj_ptr=way_adj_ptr,
+                        way_adj_idx=way_adj_idx,
+                        cur_way=cur_np,
+                        max_candidates=mc,
+                        device=device,
+                    )
                 has_cand = torch.any(mask_t, dim=1).detach().cpu().numpy().astype(np.bool_, copy=False)
                 if not bool(np.any(has_cand)):
                     continue

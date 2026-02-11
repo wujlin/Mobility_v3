@@ -1,0 +1,34 @@
+[device] cuda
+[split] /home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD0_waydata_porto_seed0/W5_way_routes_strict_gate/od_split_min3_max160_seed0.json train_routes=1081535 val_routes=130867 => train_idx=1081535 val_idx=130867
+[data] total=1349045 train=1081535 val=130867
+[train][batch 50/4225] loss=2.8993 acc=0.193 tok=331369 elapsed=67.4s eta=5626.7s
+[train][batch 100/4225] loss=2.2068 acc=0.397 tok=661408 elapsed=136.7s eta=5637.4s
+[train][batch 150/4225] loss=1.8315 acc=0.498 tok=990475 elapsed=197.7s eta=5370.7s
+[train][batch 200/4225] loss=1.6093 acc=0.555 tok=1320335 elapsed=264.2s eta=5316.3s
+[train][batch 250/4225] loss=1.4902 acc=0.581 tok=1650159 elapsed=337.3s eta=5362.3s
+[train][batch 300/4225] loss=1.4085 acc=0.599 tok=1980819 elapsed=398.0s eta=5206.8s
+[train][batch 350/4225] loss=1.3470 acc=0.612 tok=2312403 elapsed=464.9s eta=5146.8s
+[train][batch 400/4225] loss=1.2903 acc=0.624 tok=2642907 elapsed=534.5s eta=5110.8s
+[train][batch 450/4225] loss=1.2583 acc=0.630 tok=2976586 elapsed=596.9s eta=5007.3s
+[train][batch 500/4225] loss=1.2242 acc=0.637 tok=3308120 elapsed=665.3s eta=4956.8s
+[train][batch 550/4225] loss=1.1987 acc=0.642 tok=3639009 elapsed=733.6s eta=4901.6s
+[train][batch 600/4225] loss=1.1764 acc=0.646 tok=3968726 elapsed=793.6s eta=4794.5s
+[train][batch 650/4225] loss=1.1559 acc=0.648 tok=4303144 elapsed=864.1s eta=4752.7s
+[train][batch 700/4225] loss=1.1326 acc=0.655 tok=4633964 elapsed=932.0s eta=4693.2s
+[train][batch 750/4225] loss=1.1145 acc=0.658 tok=4965917 elapsed=994.8s eta=4609.3s
+[train][batch 800/4225] loss=1.1086 acc=0.658 tok=5297001 elapsed=1062.6s eta=4549.4s
+[train][batch 850/4225] loss=1.0866 acc=0.663 tok=5626850 elapsed=1129.8s eta=4485.8s
+[train][batch 900/4225] loss=1.0768 acc=0.665 tok=5958074 elapsed=1189.7s eta=4395.1s
+[train][batch 950/4225] loss=1.0632 acc=0.669 tok=6292762 elapsed=1257.9s eta=4336.5s
+[train][batch 1000/4225] loss=1.0617 acc=0.668 tok=6620761 elapsed=1324.7s eta=4272.0s
+[train][batch 1050/4225] loss=1.0624 acc=0.666 tok=6953036 elapsed=1388.7s eta=4199.3s
+[train][batch 1100/4225] loss=1.0398 acc=0.672 tok=7283664 elapsed=1458.1s eta=4142.3s
+[train][batch 1150/4225] loss=1.0344 acc=0.672 tok=7616487 elapsed=1527.1s eta=4083.3s
+[train][batch 1200/4225] loss=1.0350 acc=0.672 tok=7948195 elapsed=1590.1s eta=4008.4s
+[train][batch 1250/4225] loss=1.0276 acc=0.673 tok=8278488 elapsed=1657.1s eta=3944.0s
+[train][batch 1300/4225] loss=1.0133 acc=0.677 tok=8612966 elapsed=1725.7s eta=3882.9s
+[train][batch 1350/4225] loss=1.0151 acc=0.676 tok=8945199 elapsed=1791.6s eta=3815.5s
+[train][batch 1400/4225] loss=1.0048 acc=0.679 tok=9276120 elapsed=1860.0s eta=3753.1s
+[train][batch 1450/4225] loss=1.0011 acc=0.678 tok=9605790 elapsed=1925.8s eta=3685.7s
+[train][batch 1500/4225] loss=0.9995 acc=0.679 tok=9937864 elapsed=1988.3s eta=3612.0s
+[train][batch 1550/4225] loss=0.9919 acc=0.681 tok=10269018 elapsed=2056.2s eta=3548.7s

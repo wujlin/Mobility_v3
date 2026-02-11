@@ -1,0 +1,36 @@
+[device] cuda
+[split] /home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD0_waydata_porto_seed0/W5_way_routes_strict_gate/od_split_min3_max160_seed0_dev1p.json train_routes=10815 val_routes=1308 => train_idx=10815 val_idx=1308
+[data] total=1349045 train=10815 val=1308
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "/home/jinlin/projects/Mobility_v3/src/training/train_transformer_ar.py", line 386, in <module>
+    main()
+  File "/home/jinlin/projects/Mobility_v3/src/training/train_transformer_ar.py", line 337, in main
+    tr = _run_epoch(
+         ^^^^^^^^^^^
+  File "/home/jinlin/projects/Mobility_v3/src/training/train_transformer_ar.py", line 136, in _run_epoch
+    h_all = model.forward_tokens(way_in, route_cond=rc)  # (B,K-1,D)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jinlin/projects/Mobility_v3/src/baselines/transformer_ar.py", line 225, in forward_tokens
+    x = blk(x, key_padding_mask=key_pad)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jinlin/miniconda3/envs/dpl/lib/python3.11/site-packages/torch/nn/modules/module.py", line 1775, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jinlin/miniconda3/envs/dpl/lib/python3.11/site-packages/torch/nn/modules/module.py", line 1786, in _call_impl
+    return forward_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jinlin/projects/Mobility_v3/src/baselines/transformer_ar.py", line 145, in forward
+    x = x + self.drop(self.attn(h, key_padding_mask=key_padding_mask))
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jinlin/miniconda3/envs/dpl/lib/python3.11/site-packages/torch/nn/modules/module.py", line 1775, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jinlin/miniconda3/envs/dpl/lib/python3.11/site-packages/torch/nn/modules/module.py", line 1786, in _call_impl
+    return forward_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jinlin/projects/Mobility_v3/src/baselines/transformer_ar.py", line 64, in forward
+    att = torch.matmul(q, k.transpose(-2, -1)) * scale  # (B,H,T,T)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+torch.OutOfMemoryError: CUDA out of memory. Tried to allocate 492.00 MiB. GPU 0 has a total capacity of 47.34 GiB of which 129.62 MiB is free. Process 3699739 has 5.98 GiB memory in use. Including non-PyTorch memory, this process has 41.17 GiB memory in use. Of the allocated memory 40.21 GiB is allocated by PyTorch, and 578.23 MiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True to avoid fragmentation.  See documentation for Memory Management  (https://pytorch.org/docs/stable/notes/cuda.html#environment-variables)

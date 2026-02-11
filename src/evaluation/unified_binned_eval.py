@@ -366,6 +366,7 @@ class Cfg:
     beam_size: int
     compare_beam: bool
     eval_batch_size: int
+    fast_metrics: bool
 
     n_samples_per_route: int
     sample_select: str
@@ -521,6 +522,7 @@ def main() -> None:
     p.add_argument("--beam_size", type=int, default=10)
     p.add_argument("--no_compare_beam", action="store_true")
     p.add_argument("--eval_batch_size", type=int, default=256, help="Batch size for baseline batched decode paths (currently rnn_ar).")
+    p.add_argument("--fast_metrics", action="store_true", help="Skip DTW/Frechet/len_ratio/final_error_m for faster eval.")
 
     # Multi-sample (for diffusion-like methods; also useful to keep schema aligned).
     p.add_argument("--n_samples_per_route", type=int, default=1)
@@ -574,6 +576,7 @@ def main() -> None:
         beam_size=int(args.beam_size),
         compare_beam=(not bool(args.no_compare_beam)),
         eval_batch_size=max(1, int(args.eval_batch_size)),
+        fast_metrics=bool(args.fast_metrics),
         n_samples_per_route=max(1, int(args.n_samples_per_route)),
         sample_select=str(args.sample_select),
         difftraj_sample_steps=(int(args.difftraj_sample_steps) if args.difftraj_sample_steps is not None else None),
@@ -814,9 +817,14 @@ def main() -> None:
             }
 
             gt_hops = int(max(0, len(gt_ids) - 1))
-            gt_len_m = _sum_way_len_m(way_len_m, gt_ids)
-            gt_xy = xy_way[np.asarray(gt_ids, dtype=np.int64)]
-            dpos_xy_m = _grid_yx_to_xy_m(np.asarray([dest_pos[0]]), np.asarray([dest_pos[1]]), meta=city_meta[int(city)])[0]
+            if bool(cfg.fast_metrics):
+                gt_len_m = float("nan")
+                gt_xy = None
+                dpos_xy_m = None
+            else:
+                gt_len_m = _sum_way_len_m(way_len_m, gt_ids)
+                gt_xy = xy_way[np.asarray(gt_ids, dtype=np.int64)]
+                dpos_xy_m = _grid_yx_to_xy_m(np.asarray([dest_pos[0]]), np.asarray([dest_pos[1]]), meta=city_meta[int(city)])[0]
 
             def _eval_pred(pred: List[int], *, force_hit_wall: bool = False, extra: Optional[Dict[str, object]] = None) -> Dict[str, object]:
                 if not pred:
@@ -843,12 +851,18 @@ def main() -> None:
                     hit_wall = True
                 outdeg_last = out_degree(ptr, int(pred[-1]))
                 dead_end = bool((not success) and (not hit_wall) and (outdeg_last == 0))
-                pred_len_m = _sum_way_len_m(way_len_m, pred)
-                pred_xy = xy_way[np.asarray(pred, dtype=np.int64)] if pred else np.zeros((0, 2), dtype=np.float64)
-                dtw_m = dtw_distance(pred_xy, gt_xy)
-                fre_m = frechet_distance(pred_xy, gt_xy)
-                last_xy = pred_xy[-1].astype(np.float64, copy=False)
-                err_m = float(np.linalg.norm(last_xy - dpos_xy_m.astype(np.float64, copy=False)))
+                if bool(cfg.fast_metrics):
+                    pred_len_m = float("nan")
+                    dtw_m = float("nan")
+                    fre_m = float("nan")
+                    err_m = float("nan")
+                else:
+                    pred_len_m = _sum_way_len_m(way_len_m, pred)
+                    pred_xy = xy_way[np.asarray(pred, dtype=np.int64)] if pred else np.zeros((0, 2), dtype=np.float64)
+                    dtw_m = dtw_distance(pred_xy, gt_xy)
+                    fre_m = frechet_distance(pred_xy, gt_xy)
+                    last_xy = pred_xy[-1].astype(np.float64, copy=False)
+                    err_m = float(np.linalg.norm(last_xy - dpos_xy_m.astype(np.float64, copy=False)))
                 out1 = {
                     "success": bool(success),
                     "hit_wall": bool(hit_wall),

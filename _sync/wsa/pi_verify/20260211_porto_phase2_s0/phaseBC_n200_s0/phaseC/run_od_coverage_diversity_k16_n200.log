@@ -1,1 +1,6 @@
-/home/jinlin/miniconda3/envs/dpl/bin/python: No module named src.evaluation.od_coverage_diversity_eval
+usage: od_coverage_diversity_eval.py [-h] --method METHOD --out_json OUT_JSON
+                                     [--k K]
+                                     [--min_routes_per_od MIN_ROUTES_PER_OD]
+                                     [--jaccard_threshold JACCARD_THRESHOLD]
+                                     [--save_per_od]
+od_coverage_diversity_eval.py: error: unrecognized arguments: --way_routes_npz /home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD0_waydata_porto_seed0/W5_way_routes_strict_gate/way_routes_strict_gate.npz --split_json /home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD0_waydata_porto_seed0/W5_way_routes_strict_gate/od_split_min3_max160_seed0_dev10p.json --split_part test

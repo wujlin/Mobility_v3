@@ -320,6 +320,12 @@ def build_argparser() -> argparse.ArgumentParser:
         default=None,
         help="Optional OD-disjoint split json (expects splits.train/val/test route_ids). Overrides val_ratio.",
     )
+    p.add_argument(
+        "--split_part",
+        choices=["train", "val", "test"],
+        default=None,
+        help="Compatibility arg (ignored in training). train_way_casd_flow always uses split train+val.",
+    )
 
     p.add_argument("--d_model", type=int, default=_DEFAULT_D_MODEL)
     p.add_argument("--n_latent", type=int, default=64)
@@ -427,6 +433,9 @@ def main() -> None:
         way_regions_npz=(str(way_regions_npz) if way_regions_npz is not None else None),
         split_json=(str(args.split_json) if args.split_json is not None else None),
     )
+
+    if args.split_part is not None:
+        log.warning("--split_part=%s is ignored by train_way_casd_flow (train uses split train+val).", str(args.split_part))
 
     _set_seed(cfg.seed)
     device = torch.device(cfg.device if (cfg.device != "cuda" or torch.cuda.is_available()) else "cpu")

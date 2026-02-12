@@ -30,6 +30,10 @@ def _decode_meta(meta_obj: object) -> Optional[dict]:
     return meta_obj if isinstance(meta_obj, dict) else None
 
 
+def _read_json(path: Path) -> dict:
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
 def _load_region_meta(
     *, way_regions_npz: Path, way_features_npz: Path, coord_scale: float
 ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, Dict[str, object]]:
@@ -395,6 +399,18 @@ def build_argparser() -> argparse.ArgumentParser:
     p.add_argument("--decode", type=str, default="greedy", choices=["greedy", "beam"])
     p.add_argument("--beam_size", type=int, default=5)
     p.add_argument("--coord_scale", type=float, default=1024.0)
+    p.add_argument(
+        "--split_json",
+        type=Path,
+        default=None,
+        help="Optional OD-disjoint split json (expects splits.train/val/test route_ids).",
+    )
+    p.add_argument(
+        "--split_part",
+        choices=["train", "val", "test"],
+        default=None,
+        help="Which split subset to evaluate when --split_json is provided (default=test).",
+    )
     return p
 
 
@@ -417,9 +433,38 @@ def main() -> None:
         tz_offset_hours=float(args.tz_offset_hours),
         max_routes=None,
     )
-    n_total = len(ds)
+    all_idx = np.arange(len(ds), dtype=np.int64)
+    if args.split_json is not None:
+        split_part = str(args.split_part) if args.split_part is not None else "test"
+        split = _read_json(Path(args.split_json))
+        splits = split.get("splits", split)
+        ids_raw = splits.get(str(split_part), None) if isinstance(splits, dict) else None
+        if ids_raw is None:
+            raise SystemExit(f"[FATAL] split_json missing part={split_part!r} (expects splits.train/val/test).")
+        route_ids = np.asarray(ids_raw, dtype=np.int64).reshape(-1)
+        if route_ids.size == 0:
+            raise SystemExit(f"[FATAL] split {split_part!r} is empty in {args.split_json}")
+        rid_per_idx = np.asarray(ds.region_seq.route_id[ds.row_ids], dtype=np.int64).reshape(-1)
+        keep_mask = np.isin(rid_per_idx, route_ids, assume_unique=False)
+        all_idx = np.nonzero(keep_mask)[0].astype(np.int64, copy=False)
+        if all_idx.size == 0:
+            raise SystemExit(
+                f"[FATAL] split_json produced empty subset for part={split_part!r}; "
+                "check region_seq_npz and split min_hops/max_way_len consistency."
+            )
+        log.info(
+            "split_json=%s part=%s split_route_ids=%d matched_rows=%d",
+            str(args.split_json),
+            split_part,
+            int(route_ids.size),
+            int(all_idx.size),
+        )
+    n_total = int(all_idx.size)
     n_eval = int(min(int(args.n_routes), int(n_total)))
-    idx = rng.choice(np.arange(n_total, dtype=np.int64), size=n_eval, replace=False) if n_eval < n_total else np.arange(n_total, dtype=np.int64)
+    if n_eval < n_total:
+        idx = rng.choice(all_idx, size=n_eval, replace=False)
+    else:
+        idx = all_idx
 
     device = torch.device(str(args.device) if (str(args.device) != "cuda" or torch.cuda.is_available()) else "cpu")
     use_model = (args.model_ckpt is not None) and (str(args.baseline) == "none")
@@ -542,6 +587,8 @@ def main() -> None:
             "beam_size": int(args.beam_size),
             "baseline": str(args.baseline),
             "use_model": bool(use_model),
+            "split_json": (str(args.split_json) if args.split_json is not None else None),
+            "split_part": (str(args.split_part) if args.split_part is not None else ("test" if args.split_json is not None else None)),
         },
         "inputs": {
             "way_routes_npz": str(args.way_routes_npz),

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
 import torch
@@ -234,6 +234,42 @@ class WayTransformerAR(nn.Module):
         logits = logits.masked_fill(~cand_mask.to(dtype=torch.bool), float("-inf"))
         return logits
 
+    def _build_cand_tensors(
+        self,
+        *,
+        way_adj_ptr: np.ndarray,
+        way_adj_idx: np.ndarray,
+        cur_way: np.ndarray,
+        max_candidates: int,
+        device: torch.device,
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        rows: List[np.ndarray] = []
+        max_c = 0
+        for w in cur_way.tolist():
+            succ = slice_csr(way_adj_ptr, way_adj_idx, int(w))
+            if int(max_candidates) == 0:
+                cand = succ.astype(np.int64, copy=False)
+            else:
+                cand = succ[: int(max_candidates)].astype(np.int64, copy=False)
+            rows.append(cand)
+            if int(cand.size) > max_c:
+                max_c = int(cand.size)
+        if max_c <= 0:
+            cand_t = torch.full((len(rows), 1), -1, dtype=torch.long, device=device)
+            mask_t = torch.zeros((len(rows), 1), dtype=torch.bool, device=device)
+            return cand_t, mask_t
+        cand_np = np.full((len(rows), int(max_c)), -1, dtype=np.int64)
+        mask_np = np.zeros((len(rows), int(max_c)), dtype=np.bool_)
+        for i, cand in enumerate(rows):
+            n = int(cand.size)
+            if n <= 0:
+                continue
+            cand_np[i, :n] = cand
+            mask_np[i, :n] = True
+        cand_t = torch.as_tensor(cand_np, dtype=torch.long, device=device)
+        mask_t = torch.as_tensor(mask_np, dtype=torch.bool, device=device)
+        return cand_t, mask_t
+
     def _alloc_cache(self, *, B: int, max_len: int, device: torch.device) -> Tuple[List[torch.Tensor], List[torch.Tensor]]:
         H = int(self.cfg.n_heads)
         dh = int(self.cfg.d_model) // H
@@ -253,6 +289,241 @@ class WayTransformerAR(nn.Module):
         for li, blk in enumerate(self.blocks):
             h = blk.step(h, k_cache=k_list[li], v_cache=v_list[li], t=int(t))
         return self.out_ln(h)
+
+    @torch.no_grad()
+    def greedy_decode_batch(
+        self,
+        *,
+        way_adj_ptr: np.ndarray,
+        way_adj_idx: np.ndarray,
+        start_way: Sequence[int],
+        dest_way: Sequence[int],
+        route_cond: Dict[str, torch.Tensor],
+        max_len: Optional[int] = None,
+        max_candidates: Optional[int] = None,
+    ) -> List[List[int]]:
+        self.eval()
+        device = next(self.parameters()).device
+        max_len = int(max_len) if max_len is not None else int(self.cfg.max_len)
+        mc = int(self.cfg.max_candidates) if max_candidates is None else int(max_candidates)
+
+        sw = np.asarray(start_way, dtype=np.int64).reshape(-1)
+        dw = np.asarray(dest_way, dtype=np.int64).reshape(-1)
+        B = int(sw.size)
+        if B == 0:
+            return []
+
+        rc = {
+            "start_pos": route_cond["start_pos"].to(device=device),
+            "dest_pos": route_cond["dest_pos"].to(device=device),
+            "hour": route_cond["hour"].to(device=device),
+            "dow": route_cond["dow"].to(device=device),
+            "route_city": route_cond["route_city"].to(device=device),
+        }
+        cond = self.encode_cond(rc)  # (B,D)
+        k_list, v_list = self._alloc_cache(B=B, max_len=max_len, device=device)
+
+        cur = sw.copy()
+        out: List[List[int]] = [[int(x)] for x in sw.tolist()]
+        active = np.ones((B,), dtype=np.bool_)
+
+        pos_ids_all = torch.arange(B, dtype=torch.long, device=device)
+        del pos_ids_all  # silence linter for deterministic style
+
+        for t in range(int(max_len)):
+            active &= (cur != dw)
+            if not bool(np.any(active)):
+                break
+            idx = np.nonzero(active)[0].astype(np.int64, copy=False)
+            cur_act = cur[idx]
+            cand_t, mask_t = self._build_cand_tensors(
+                way_adj_ptr=way_adj_ptr,
+                way_adj_idx=way_adj_idx,
+                cur_way=cur_act,
+                max_candidates=mc,
+                device=device,
+            )
+            has_cand = torch.any(mask_t, dim=1).detach().cpu().numpy().astype(np.bool_, copy=False)
+            if not bool(np.any(has_cand)):
+                active[idx] = False
+                continue
+
+            idx_has = idx[has_cand]
+            idx_has_t = torch.as_tensor(idx_has, dtype=torch.long, device=device)
+            cur_t = torch.as_tensor(cur[idx_has], dtype=torch.long, device=device)
+            x_t = self.way_emb(cur_t)
+            pos_t = torch.full((int(cur_t.shape[0]),), int(t), dtype=torch.long, device=device)
+            x_t = x_t + self.pos_emb(pos_t)
+            x_t = x_t + self.cond_to_tok(cond[idx_has_t])
+
+            k_sub: List[torch.Tensor] = []
+            v_sub: List[torch.Tensor] = []
+            for li in range(len(self.blocks)):
+                kk = k_list[li][idx_has_t].contiguous()
+                vv = v_list[li][idx_has_t].contiguous()
+                k_sub.append(kk)
+                v_sub.append(vv)
+            token = self._step_with_cache(x_t, k_list=k_sub, v_list=v_sub, t=int(t))
+            for li in range(len(self.blocks)):
+                k_list[li][idx_has_t] = k_sub[li]
+                v_list[li][idx_has_t] = v_sub[li]
+
+            cand_c = cand_t[torch.as_tensor(has_cand, dtype=torch.bool, device=device)]
+            mask_c = mask_t[torch.as_tensor(has_cand, dtype=torch.bool, device=device)]
+            logits = self.score_candidates(token, cand_c, mask_c)
+            pick = torch.argmax(logits, dim=1)
+            nxt = cand_c[torch.arange(int(cand_c.size(0)), device=device), pick].detach().cpu().numpy().astype(np.int64, copy=False)
+            for j, rid in enumerate(idx_has.tolist()):
+                n = int(nxt[j])
+                cur[rid] = n
+                out[rid].append(n)
+
+            idx_noc = idx[~has_cand]
+            if idx_noc.size > 0:
+                active[idx_noc] = False
+        return out
+
+    @torch.no_grad()
+    def beam_search_batch(
+        self,
+        *,
+        way_adj_ptr: np.ndarray,
+        way_adj_idx: np.ndarray,
+        start_way: Sequence[int],
+        dest_way: Sequence[int],
+        route_cond: Dict[str, torch.Tensor],
+        beam_size: int = 10,
+        max_len: Optional[int] = None,
+        max_candidates: Optional[int] = None,
+        state_batch_size: int = 512,
+    ) -> List[List[int]]:
+        self.eval()
+        device = next(self.parameters()).device
+        max_len = int(max_len) if max_len is not None else int(self.cfg.max_len)
+        beam_size = max(1, int(beam_size))
+        mc = int(self.cfg.max_candidates) if max_candidates is None else int(max_candidates)
+        state_batch_size = max(64, int(state_batch_size))
+
+        sw = np.asarray(start_way, dtype=np.int64).reshape(-1)
+        dw = np.asarray(dest_way, dtype=np.int64).reshape(-1)
+        B = int(sw.size)
+        if B == 0:
+            return []
+
+        rc = {
+            "start_pos": route_cond["start_pos"].to(device=device),
+            "dest_pos": route_cond["dest_pos"].to(device=device),
+            "hour": route_cond["hour"].to(device=device),
+            "dow": route_cond["dow"].to(device=device),
+            "route_city": route_cond["route_city"].to(device=device),
+        }
+        cond_all = self.encode_cond(rc)  # (B,D)
+
+        beams: List[List[Tuple[float, List[int], List[torch.Tensor], List[torch.Tensor]]]] = []
+        for i in range(B):
+            k0, v0 = self._alloc_cache(B=1, max_len=max_len, device=device)
+            beams.append([(0.0, [int(sw[i])], k0, v0)])
+
+        for t in range(int(max_len)):
+            done_cnt = 0
+            new_beams: List[List[Tuple[float, List[int], List[torch.Tensor], List[torch.Tensor]]]] = [[] for _ in range(B)]
+
+            expand_items: List[Tuple[int, float, List[int], List[torch.Tensor], List[torch.Tensor], int]] = []
+            for rid in range(B):
+                route_done = True
+                for score, seq, k_list, v_list in beams[rid]:
+                    cur = int(seq[-1])
+                    if cur == int(dw[rid]):
+                        new_beams[rid].append((float(score), list(seq), k_list, v_list))
+                        continue
+                    route_done = False
+                    expand_items.append((rid, float(score), seq, k_list, v_list, cur))
+                if route_done:
+                    done_cnt += 1
+            if done_cnt == B:
+                beams = new_beams
+                break
+
+            for st in range(0, len(expand_items), state_batch_size):
+                chunk = expand_items[st : st + state_batch_size]
+                if not chunk:
+                    continue
+                cur_np = np.asarray([c[5] for c in chunk], dtype=np.int64)
+                rid_np = np.asarray([c[0] for c in chunk], dtype=np.int64)
+                cand_t, mask_t = self._build_cand_tensors(
+                    way_adj_ptr=way_adj_ptr,
+                    way_adj_idx=way_adj_idx,
+                    cur_way=cur_np,
+                    max_candidates=mc,
+                    device=device,
+                )
+                has_cand = torch.any(mask_t, dim=1).detach().cpu().numpy().astype(np.bool_, copy=False)
+
+                idx_noc = np.nonzero(~has_cand)[0].astype(np.int64, copy=False)
+                for src in idx_noc.tolist():
+                    rid = int(chunk[src][0])
+                    new_beams[rid].append((float(chunk[src][1]), list(chunk[src][2]), chunk[src][3], chunk[src][4]))
+
+                if not bool(np.any(has_cand)):
+                    continue
+
+                idx_has = np.nonzero(has_cand)[0].astype(np.int64, copy=False)
+                rid_has = rid_np[idx_has]
+                rid_has_t = torch.as_tensor(rid_has, dtype=torch.long, device=device)
+                cur_has_t = torch.as_tensor(cur_np[idx_has], dtype=torch.long, device=device)
+
+                x_t = self.way_emb(cur_has_t)
+                pos_t = torch.full((int(cur_has_t.shape[0]),), int(t), dtype=torch.long, device=device)
+                x_t = x_t + self.pos_emb(pos_t)
+                x_t = x_t + self.cond_to_tok(cond_all[rid_has_t])
+
+                k_cat: List[torch.Tensor] = []
+                v_cat: List[torch.Tensor] = []
+                for li in range(len(self.blocks)):
+                    kk = torch.cat([chunk[i][3][li] for i in idx_has.tolist()], dim=0).contiguous()
+                    vv = torch.cat([chunk[i][4][li] for i in idx_has.tolist()], dim=0).contiguous()
+                    k_cat.append(kk)
+                    v_cat.append(vv)
+
+                token = self._step_with_cache(x_t, k_list=k_cat, v_list=v_cat, t=int(t))
+                cand_has = cand_t[torch.as_tensor(has_cand, dtype=torch.bool, device=device)]
+                mask_has = mask_t[torch.as_tensor(has_cand, dtype=torch.bool, device=device)]
+                logits = self.score_candidates(token, cand_has, mask_has)
+                logp = F.log_softmax(logits, dim=-1)
+
+                topk = min(int(beam_size), int(logp.size(1)))
+                topv, topi = torch.topk(logp, k=topk, dim=-1)
+                cand_cpu = cand_has.detach().cpu().numpy()
+                topv_cpu = topv.detach().cpu().numpy()
+                topi_cpu = topi.detach().cpu().numpy()
+
+                for local_j, src_j in enumerate(idx_has.tolist()):
+                    rid = int(rid_has[local_j])
+                    base_score, base_seq = float(chunk[src_j][1]), list(chunk[src_j][2])
+                    for kk in range(int(topk)):
+                        nxt = int(cand_cpu[local_j, int(topi_cpu[local_j, kk])])
+                        sc = float(base_score + float(topv_cpu[local_j, kk]))
+                        child_k = [x[local_j : local_j + 1].clone() for x in k_cat]
+                        child_v = [x[local_j : local_j + 1].clone() for x in v_cat]
+                        new_beams[rid].append((sc, base_seq + [nxt], child_k, child_v))
+
+            for rid in range(B):
+                if len(new_beams[rid]) == 0:
+                    new_beams[rid] = beams[rid]
+                    continue
+                new_beams[rid].sort(key=lambda x: float(x[0]), reverse=True)
+                new_beams[rid] = new_beams[rid][: int(beam_size)]
+            beams = new_beams
+
+        outs: List[List[int]] = []
+        for i in range(B):
+            cand = beams[i]
+            if not cand:
+                outs.append([int(sw[i])])
+                continue
+            cand.sort(key=lambda b: (0 if int(b[1][-1]) == int(dw[i]) else 1, -float(b[0])))
+            outs.append(list(cand[0][1]))
+        return outs
 
     @torch.no_grad()
     def greedy_decode(
@@ -394,4 +665,3 @@ class WayTransformerAR(nn.Module):
 
     def ckpt_payload(self) -> Dict[str, object]:
         return {"cfg": asdict(self.cfg), "model_state_dict": self.state_dict_cpu()}
-

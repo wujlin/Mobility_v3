@@ -290,6 +290,12 @@ def build_argparser() -> argparse.ArgumentParser:
         default=None,
         help="Optional OD-disjoint split json (expects splits.train/val/test route_ids). Overrides val_ratio.",
     )
+    p.add_argument(
+        "--split_part",
+        choices=["train", "val", "test"],
+        default=None,
+        help="Compatibility arg (ignored in training). Train always uses split_json train+val subsets.",
+    )
 
     p.add_argument("--d_model", type=int, default=256)
     p.add_argument("--n_heads", type=int, default=8)
@@ -328,6 +334,9 @@ def main() -> None:
         use_candidate_mask=bool(args.use_candidate_mask),
         split_json=(str(args.split_json) if args.split_json is not None else None),
     )
+
+    if args.split_part is not None:
+        log.warning("--split_part=%s is ignored by train_way_casd_region_ar (train uses split train+val).", str(args.split_part))
 
     _set_seed(cfg.seed)
     device = torch.device(cfg.device if (cfg.device != "cuda" or torch.cuda.is_available()) else "cpu")

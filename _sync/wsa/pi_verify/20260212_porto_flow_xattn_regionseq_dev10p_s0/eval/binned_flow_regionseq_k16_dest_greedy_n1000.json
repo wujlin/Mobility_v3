@@ -1,0 +1,1050 @@
+{
+  "ok": true,
+  "task": "way_casd_binned_eval",
+  "created_at": "2026-02-12T17:48:09.438103+08:00",
+  "cfg": {
+    "seed": 0,
+    "device": "cuda",
+    "tz_offset_hours": -5.0,
+    "latent_source": "flow",
+    "n_samples_per_route": 16,
+    "sample_select": "dest",
+    "shape_scope": "none",
+    "flow_solver_steps": null,
+    "flow_cfg_scale": 1.0,
+    "flow_latent_scale": 1.0,
+    "eval_batch_size": 64,
+    "n_routes": 1000,
+    "min_hops": 5,
+    "max_way_len": 160,
+    "max_decode_len": 160,
+    "decode_max_candidates": -1,
+    "decode_candidate_policy": "first",
+    "decode_include_dest_if_successor": false,
+    "guided_dest_alpha": 0.0,
+    "beam_size": 10,
+    "compare_beam": true,
+    "region_constraint": "none",
+    "region_constraint_mode": "strict",
+    "region_constraint_fallback": "unconstrained",
+    "region_ar_max_len": 16,
+    "anti_loop_k": 0,
+    "anti_loop_penalty": 2.0,
+    "anti_loop_penalty_k": 4,
+    "value_ckpt": null,
+    "value_beta": 0.0,
+    "disable_cand_query": false,
+    "split_json": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD0_waydata_porto_seed0/W5_way_routes_strict_gate/od_split_min3_max160_seed0_dev10p.json",
+    "split_part": "test"
+  },
+  "inputs": {
+    "way_routes_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD0_waydata_porto_seed0/W5_way_routes_strict_gate/way_routes_strict_gate.npz",
+    "way_graph_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD0_waydata_porto_seed0/W2_way_graph/way_graph.npz",
+    "way_features_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD0_waydata_porto_seed0/W3_way_features/way_features.npz",
+    "ae_ckpt": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD0_waydata_porto_seed0/W6_train_ae_porto_strict_candq1_past16_s0/ckpt_best.pt",
+    "flow_ckpt": "_sync/wsa/pi_verify/20260212_porto_flow_xattn_regionseq_dev10p_s0/ckpt_best.pt",
+    "way_regions_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD0_waydata_porto_seed0/region_sweep/way_regions_louvain_res5_seed0.npz",
+    "region_ar_ckpt": null,
+    "city_grid_meta": {
+      "0": "/home/jinlin/data/geoexplicit_data/porto_taxi/semantic/osm_road_prob_meta.json"
+    },
+    "split_json": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD0_waydata_porto_seed0/W5_way_routes_strict_gate/od_split_min3_max160_seed0_dev10p.json",
+    "split_part": "test"
+  },
+  "ckpt_strict_load_ok": true,
+  "ae_cfg_inferred": {
+    "decoder_use_dest_dist": true,
+    "decoder_use_cross_attn": true,
+    "decoder_use_step_emb": false,
+    "decoder_use_dest_query": false,
+    "decoder_use_dir_query": false,
+    "decoder_use_cand_query": true,
+    "decoder_use_cand_contrast": false,
+    "decoder_use_past_context": true,
+    "decoder_past_k": 16,
+    "decoder_past_n_layers": 2,
+    "decoder_past_n_heads": 4,
+    "n_route_cities": 4
+  },
+  "flow_cfg_inferred": {
+    "d_model": 256,
+    "n_latent": 64,
+    "n_layers": 4,
+    "n_heads": 8,
+    "dropout": 0.1,
+    "noise_sigma": 0.2,
+    "solver_steps": 20
+  },
+  "per_city": [
+    {
+      "city": 0,
+      "n": 1000,
+      "greedy": {
+        "bins": [
+          "[5,10)",
+          "[10,20)",
+          "[20,30)",
+          "[30,40)",
+          "[40,60)",
+          "[60,+)"
+        ],
+        "cells": {
+          "[5,10)": {
+            "n": 61,
+            "success_rate": 0.22950819672131148,
+            "dtw_m": {
+              "n": 0,
+              "mean": NaN,
+              "p50": NaN,
+              "p75": NaN,
+              "p95": NaN
+            },
+            "frechet_m": {
+              "n": 0,
+              "mean": NaN,
+              "p50": NaN,
+              "p75": NaN,
+              "p95": NaN
+            },
+            "len_ratio": {
+              "n": 61,
+              "mean": 15.550375476885026,
+              "p50": 13.416157525288154,
+              "p75": 21.5139862758331,
+              "p95": 33.40060802328923
+            },
+            "final_error_m": {
+              "n": 61,
+              "mean": 463.55363138619447,
+              "p50": 363.88853215319216,
+              "p75": 743.7482223692916,
+              "p95": 1308.2524724432285
+            },
+            "hit_wall_rate": 0.7704918032786885,
+            "dead_end_rate": 0.0,
+            "loop_rate": 0.9016393442622951
+          },
+          "[10,20)": {
+            "n": 308,
+            "success_rate": 0.16558441558441558,
+            "dtw_m": {
+              "n": 0,
+              "mean": NaN,
+              "p50": NaN,
+              "p75": NaN,
+              "p95": NaN
+            },
+            "frechet_m": {
+              "n": 0,
+              "mean": NaN,
+              "p50": NaN,
+              "p75": NaN,
+              "p95": NaN
+            },
+            "len_ratio": {
+              "n": 308,
+              "mean": 8.972425774858278,
+              "p50": 8.442475218574653,
+              "p75": 12.012256618465123,
+              "p95": 18.73699480560074
+            },
+            "final_error_m": {
+              "n": 308,
+              "mean": 692.9738376709043,
+              "p50": 599.4110557729641,
+              "p75": 1000.4940334807202,
+              "p95": 1736.0530087184795
+            },
+            "hit_wall_rate": 0.827922077922078,
+            "dead_end_rate": 0.006493506493506494,
+            "loop_rate": 0.9383116883116883
+          },
+          "[20,30)": {
+            "n": 267,
+            "success_rate": 0.11610486891385768,
+            "dtw_m": {
+              "n": 0,
+              "mean": NaN,
+              "p50": NaN,
+              "p75": NaN,
+              "p95": NaN
+            },
+            "frechet_m": {
+              "n": 0,
+              "mean": NaN,
+              "p50": NaN,
+              "p75": NaN,
+              "p95": NaN
+            },
+            "len_ratio": {
+              "n": 267,
+              "mean": 5.782819113368318,
+              "p50": 5.503180449501494,
+              "p75": 7.114922766674745,
+              "p95": 12.082540575410095
+            },
+            "final_error_m": {
+              "n": 267,
+              "mean": 876.115005003633,
+              "p50": 744.6234177024039,
+              "p75": 1265.0737786044142,
+              "p95": 2200.047100505332
+            },
+            "hit_wall_rate": 0.8838951310861424,
+            "dead_end_rate": 0.0,
+            "loop_rate": 0.9700374531835206
+          },
+          "[30,40)": {
+            "n": 186,
+            "success_rate": 0.12903225806451613,
+            "dtw_m": {
+              "n": 0,
+              "mean": NaN,
+              "p50": NaN,
+              "p75": NaN,
+              "p95": NaN
+            },
+            "frechet_m": {
+              "n": 0,
+              "mean": NaN,
+              "p50": NaN,
+              "p75": NaN,
+              "p95": NaN
+            },
+            "len_ratio": {
+              "n": 186,
+              "mean": 4.222567962849636,
+              "p50": 4.054157195613561,
+              "p75": 5.477146875104137,
+              "p95": 7.886560646539726
+            },
+            "final_error_m": {
+              "n": 186,
+              "mean": 1111.1584588519854,
+              "p50": 986.1522879137419,
+              "p75": 1608.8644620026632,
+              "p95": 2541.8820904083827
+            },
+            "hit_wall_rate": 0.8494623655913979,
+            "dead_end_rate": 0.021505376344086023,
+            "loop_rate": 0.9301075268817204
+          },
+          "[40,60)": {
+            "n": 152,
+            "success_rate": 0.3684210526315789,
+            "dtw_m": {
+              "n": 0,
+              "mean": NaN,
+              "p50": NaN,
+              "p75": NaN,
+              "p95": NaN
+            },
+            "frechet_m": {
+              "n": 0,
+              "mean": NaN,
+              "p50": NaN,
+              "p75": NaN,
+              "p95": NaN
+            },
+            "len_ratio": {
+              "n": 152,
+              "mean": 2.730624431451821,
+              "p50": 2.3310997698617246,
+              "p75": 3.656834888389447,
+              "p95": 6.106332538572399
+            },
+            "final_error_m": {
+              "n": 152,
+              "mean": 934.0349714192431,
+              "p50": 657.6715233844477,
+              "p75": 1386.2151594463219,
+              "p95": 2994.721263006324
+            },
+            "hit_wall_rate": 0.6118421052631579,
+            "dead_end_rate": 0.019736842105263157,
+            "loop_rate": 0.8881578947368421
+          },
+          "[60,+)": {
+            "n": 26,
+            "success_rate": 0.3076923076923077,
+            "dtw_m": {
+              "n": 0,
+              "mean": NaN,
+              "p50": NaN,
+              "p75": NaN,
+              "p95": NaN
+            },
+            "frechet_m": {
+              "n": 0,
+              "mean": NaN,
+              "p50": NaN,
+              "p75": NaN,
+              "p95": NaN
+            },
+            "len_ratio": {
+              "n": 26,
+              "mean": 2.108043064946073,
+              "p50": 1.5577586356093533,
+              "p75": 2.7753102579927598,
+              "p95": 4.7888629667523555
+            },
+            "final_error_m": {
+              "n": 26,
+              "mean": 1326.5955818752443,
+              "p50": 331.858642880078,
+              "p75": 2202.8439381152866,
+              "p95": 4782.621189546927
+            },
+            "hit_wall_rate": 0.6923076923076923,
+            "dead_end_rate": 0.0,
+            "loop_rate": 0.9230769230769231
+          }
+        }
+      },
+      "beam": {
+        "bins": [
+          "[5,10)",
+          "[10,20)",
+          "[20,30)",
+          "[30,40)",
+          "[40,60)",
+          "[60,+)"
+        ],
+        "cells": {
+          "[5,10)": {
+            "n": 61,
+            "success_rate": 0.4098360655737705,
+            "dtw_m": {
+              "n": 0,
+              "mean": NaN,
+              "p50": NaN,
+              "p75": NaN,
+              "p95": NaN
+            },
+            "frechet_m": {
+              "n": 0,
+              "mean": NaN,
+              "p50": NaN,
+              "p75": NaN,
+              "p95": NaN
+            },
+            "len_ratio": {
+              "n": 61,
+              "mean": 11.784420378347889,
+              "p50": 11.230657316012481,
+              "p75": 17.214963865122282,
+              "p95": 33.67384935777202
+            },
+            "final_error_m": {
+              "n": 61,
+              "mean": 349.7780768144642,
+              "p50": 183.60287774951533,
+              "p75": 575.0533665830611,
+              "p95": 1054.7939318430801
+            },
+            "hit_wall_rate": 0.5901639344262295,
+            "dead_end_rate": 0.0,
+            "loop_rate": 0.7868852459016393
+          },
+          "[10,20)": {
+            "n": 308,
+            "success_rate": 0.262987012987013,
+            "dtw_m": {
+              "n": 0,
+              "mean": NaN,
+              "p50": NaN,
+              "p75": NaN,
+              "p95": NaN
+            },
+            "frechet_m": {
+              "n": 0,
+              "mean": NaN,
+              "p50": NaN,
+              "p75": NaN,
+              "p95": NaN
+            },
+            "len_ratio": {
+              "n": 308,
+              "mean": 8.071145981940738,
+              "p50": 7.873813000274509,
+              "p75": 11.493036690423759,
+              "p95": 16.80155351792968
+            },
+            "final_error_m": {
+              "n": 308,
+              "mean": 581.5657956816319,
+              "p50": 487.94372690600164,
+              "p75": 874.4279488387436,
+              "p95": 1629.4074133199936
+            },
+            "hit_wall_rate": 0.737012987012987,
+            "dead_end_rate": 0.0,
+            "loop_rate": 0.8603896103896104
+          },
+          "[20,30)": {
+            "n": 267,
+            "success_rate": 0.20599250936329588,
+            "dtw_m": {
+              "n": 0,
+              "mean": NaN,
+              "p50": NaN,
+              "p75": NaN,
+              "p95": NaN
+            },
+            "frechet_m": {
+              "n": 0,
+              "mean": NaN,
+              "p50": NaN,
+              "p75": NaN,
+              "p95": NaN
+            },
+            "len_ratio": {
+              "n": 267,
+              "mean": 5.570686322198223,
+              "p50": 5.376189507326689,
+              "p75": 7.260035581090121,
+              "p95": 12.399886935982053
+            },
+            "final_error_m": {
+              "n": 267,
+              "mean": 734.9453012513864,
+              "p50": 565.54299534673,
+              "p75": 1191.193987829377,
+              "p95": 2036.3584674108447
+            },
+            "hit_wall_rate": 0.7940074906367042,
+            "dead_end_rate": 0.0,
+            "loop_rate": 0.898876404494382
+          },
+          "[30,40)": {
+            "n": 186,
+            "success_rate": 0.1827956989247312,
+            "dtw_m": {
+              "n": 0,
+              "mean": NaN,
+              "p50": NaN,
+              "p75": NaN,
+              "p95": NaN
+            },
+            "frechet_m": {
+              "n": 0,
+              "mean": NaN,
+              "p50": NaN,
+              "p75": NaN,
+              "p95": NaN
+            },
+            "len_ratio": {
+              "n": 186,
+              "mean": 4.230926617484998,
+              "p50": 4.089612723053419,
+              "p75": 5.637709451248361,
+              "p95": 8.180628548509562
+            },
+            "final_error_m": {
+              "n": 186,
+              "mean": 1065.0807798864307,
+              "p50": 1005.8062058044297,
+              "p75": 1549.5695125941106,
+              "p95": 2560.3661919300566
+            },
+            "hit_wall_rate": 0.8172043010752689,
+            "dead_end_rate": 0.0,
+            "loop_rate": 0.9408602150537635
+          },
+          "[40,60)": {
+            "n": 152,
+            "success_rate": 0.40131578947368424,
+            "dtw_m": {
+              "n": 0,
+              "mean": NaN,
+              "p50": NaN,
+              "p75": NaN,
+              "p95": NaN
+            },
+            "frechet_m": {
+              "n": 0,
+              "mean": NaN,
+              "p50": NaN,
+              "p75": NaN,
+              "p95": NaN
+            },
+            "len_ratio": {
+              "n": 152,
+              "mean": 2.9437429666549466,
+              "p50": 2.711811036246104,
+              "p75": 4.095571807173102,
+              "p95": 6.06264269047235
+            },
+            "final_error_m": {
+              "n": 152,
+              "mean": 929.4563589409192,
+              "p50": 536.3241597882511,
+              "p75": 1356.7319756710115,
+              "p95": 3155.0255235308687
+            },
+            "hit_wall_rate": 0.5986842105263158,
+            "dead_end_rate": 0.0,
+            "loop_rate": 0.7894736842105263
+          },
+          "[60,+)": {
+            "n": 26,
+            "success_rate": 0.34615384615384615,
+            "dtw_m": {
+              "n": 0,
+              "mean": NaN,
+              "p50": NaN,
+              "p75": NaN,
+              "p95": NaN
+            },
+            "frechet_m": {
+              "n": 0,
+              "mean": NaN,
+              "p50": NaN,
+              "p75": NaN,
+              "p95": NaN
+            },
+            "len_ratio": {
+              "n": 26,
+              "mean": 2.039140112377716,
+              "p50": 1.559081237527551,
+              "p75": 2.638577884121177,
+              "p95": 5.387696302945995
+            },
+            "final_error_m": {
+              "n": 26,
+              "mean": 1398.3200853617357,
+              "p50": 341.1604209621788,
+              "p75": 2275.2683498183933,
+              "p95": 4670.437599103933
+            },
+            "hit_wall_rate": 0.6538461538461539,
+            "dead_end_rate": 0.0,
+            "loop_rate": 0.8846153846153846
+          }
+        }
+      },
+      "beam_gain": {
+        "bins": [
+          "[5,10)",
+          "[10,20)",
+          "[20,30)",
+          "[30,40)",
+          "[40,60)",
+          "[60,+)"
+        ],
+        "cells": {
+          "[5,10)": {
+            "delta_success_rate": 0.18032786885245902
+          },
+          "[10,20)": {
+            "delta_success_rate": 0.09740259740259741
+          },
+          "[20,30)": {
+            "delta_success_rate": 0.0898876404494382
+          },
+          "[30,40)": {
+            "delta_success_rate": 0.05376344086021506
+          },
+          "[40,60)": {
+            "delta_success_rate": 0.03289473684210531
+          },
+          "[60,+)": {
+            "delta_success_rate": 0.038461538461538436
+          }
+        }
+      }
+    }
+  ],
+  "overall": {
+    "n": 1000,
+    "greedy": {
+      "bins": [
+        "[5,10)",
+        "[10,20)",
+        "[20,30)",
+        "[30,40)",
+        "[40,60)",
+        "[60,+)"
+      ],
+      "cells": {
+        "[5,10)": {
+          "n": 61,
+          "success_rate": 0.22950819672131148,
+          "dtw_m": {
+            "n": 0,
+            "mean": NaN,
+            "p50": NaN,
+            "p75": NaN,
+            "p95": NaN
+          },
+          "frechet_m": {
+            "n": 0,
+            "mean": NaN,
+            "p50": NaN,
+            "p75": NaN,
+            "p95": NaN
+          },
+          "len_ratio": {
+            "n": 61,
+            "mean": 15.550375476885026,
+            "p50": 13.416157525288154,
+            "p75": 21.5139862758331,
+            "p95": 33.40060802328923
+          },
+          "final_error_m": {
+            "n": 61,
+            "mean": 463.55363138619447,
+            "p50": 363.88853215319216,
+            "p75": 743.7482223692916,
+            "p95": 1308.2524724432285
+          },
+          "hit_wall_rate": 0.7704918032786885,
+          "dead_end_rate": 0.0,
+          "loop_rate": 0.9016393442622951
+        },
+        "[10,20)": {
+          "n": 308,
+          "success_rate": 0.16558441558441558,
+          "dtw_m": {
+            "n": 0,
+            "mean": NaN,
+            "p50": NaN,
+            "p75": NaN,
+            "p95": NaN
+          },
+          "frechet_m": {
+            "n": 0,
+            "mean": NaN,
+            "p50": NaN,
+            "p75": NaN,
+            "p95": NaN
+          },
+          "len_ratio": {
+            "n": 308,
+            "mean": 8.972425774858278,
+            "p50": 8.442475218574653,
+            "p75": 12.012256618465123,
+            "p95": 18.73699480560074
+          },
+          "final_error_m": {
+            "n": 308,
+            "mean": 692.9738376709043,
+            "p50": 599.4110557729641,
+            "p75": 1000.4940334807202,
+            "p95": 1736.0530087184795
+          },
+          "hit_wall_rate": 0.827922077922078,
+          "dead_end_rate": 0.006493506493506494,
+          "loop_rate": 0.9383116883116883
+        },
+        "[20,30)": {
+          "n": 267,
+          "success_rate": 0.11610486891385768,
+          "dtw_m": {
+            "n": 0,
+            "mean": NaN,
+            "p50": NaN,
+            "p75": NaN,
+            "p95": NaN
+          },
+          "frechet_m": {
+            "n": 0,
+            "mean": NaN,
+            "p50": NaN,
+            "p75": NaN,
+            "p95": NaN
+          },
+          "len_ratio": {
+            "n": 267,
+            "mean": 5.782819113368318,
+            "p50": 5.503180449501494,
+            "p75": 7.114922766674745,
+            "p95": 12.082540575410095
+          },
+          "final_error_m": {
+            "n": 267,
+            "mean": 876.115005003633,
+            "p50": 744.6234177024039,
+            "p75": 1265.0737786044142,
+            "p95": 2200.047100505332
+          },
+          "hit_wall_rate": 0.8838951310861424,
+          "dead_end_rate": 0.0,
+          "loop_rate": 0.9700374531835206
+        },
+        "[30,40)": {
+          "n": 186,
+          "success_rate": 0.12903225806451613,
+          "dtw_m": {
+            "n": 0,
+            "mean": NaN,
+            "p50": NaN,
+            "p75": NaN,
+            "p95": NaN
+          },
+          "frechet_m": {
+            "n": 0,
+            "mean": NaN,
+            "p50": NaN,
+            "p75": NaN,
+            "p95": NaN
+          },
+          "len_ratio": {
+            "n": 186,
+            "mean": 4.222567962849636,
+            "p50": 4.054157195613561,
+            "p75": 5.477146875104137,
+            "p95": 7.886560646539726
+          },
+          "final_error_m": {
+            "n": 186,
+            "mean": 1111.1584588519854,
+            "p50": 986.1522879137419,
+            "p75": 1608.8644620026632,
+            "p95": 2541.8820904083827
+          },
+          "hit_wall_rate": 0.8494623655913979,
+          "dead_end_rate": 0.021505376344086023,
+          "loop_rate": 0.9301075268817204
+        },
+        "[40,60)": {
+          "n": 152,
+          "success_rate": 0.3684210526315789,
+          "dtw_m": {
+            "n": 0,
+            "mean": NaN,
+            "p50": NaN,
+            "p75": NaN,
+            "p95": NaN
+          },
+          "frechet_m": {
+            "n": 0,
+            "mean": NaN,
+            "p50": NaN,
+            "p75": NaN,
+            "p95": NaN
+          },
+          "len_ratio": {
+            "n": 152,
+            "mean": 2.730624431451821,
+            "p50": 2.3310997698617246,
+            "p75": 3.656834888389447,
+            "p95": 6.106332538572399
+          },
+          "final_error_m": {
+            "n": 152,
+            "mean": 934.0349714192431,
+            "p50": 657.6715233844477,
+            "p75": 1386.2151594463219,
+            "p95": 2994.721263006324
+          },
+          "hit_wall_rate": 0.6118421052631579,
+          "dead_end_rate": 0.019736842105263157,
+          "loop_rate": 0.8881578947368421
+        },
+        "[60,+)": {
+          "n": 26,
+          "success_rate": 0.3076923076923077,
+          "dtw_m": {
+            "n": 0,
+            "mean": NaN,
+            "p50": NaN,
+            "p75": NaN,
+            "p95": NaN
+          },
+          "frechet_m": {
+            "n": 0,
+            "mean": NaN,
+            "p50": NaN,
+            "p75": NaN,
+            "p95": NaN
+          },
+          "len_ratio": {
+            "n": 26,
+            "mean": 2.108043064946073,
+            "p50": 1.5577586356093533,
+            "p75": 2.7753102579927598,
+            "p95": 4.7888629667523555
+          },
+          "final_error_m": {
+            "n": 26,
+            "mean": 1326.5955818752443,
+            "p50": 331.858642880078,
+            "p75": 2202.8439381152866,
+            "p95": 4782.621189546927
+          },
+          "hit_wall_rate": 0.6923076923076923,
+          "dead_end_rate": 0.0,
+          "loop_rate": 0.9230769230769231
+        }
+      }
+    },
+    "beam": {
+      "bins": [
+        "[5,10)",
+        "[10,20)",
+        "[20,30)",
+        "[30,40)",
+        "[40,60)",
+        "[60,+)"
+      ],
+      "cells": {
+        "[5,10)": {
+          "n": 61,
+          "success_rate": 0.4098360655737705,
+          "dtw_m": {
+            "n": 0,
+            "mean": NaN,
+            "p50": NaN,
+            "p75": NaN,
+            "p95": NaN
+          },
+          "frechet_m": {
+            "n": 0,
+            "mean": NaN,
+            "p50": NaN,
+            "p75": NaN,
+            "p95": NaN
+          },
+          "len_ratio": {
+            "n": 61,
+            "mean": 11.784420378347889,
+            "p50": 11.230657316012481,
+            "p75": 17.214963865122282,
+            "p95": 33.67384935777202
+          },
+          "final_error_m": {
+            "n": 61,
+            "mean": 349.7780768144642,
+            "p50": 183.60287774951533,
+            "p75": 575.0533665830611,
+            "p95": 1054.7939318430801
+          },
+          "hit_wall_rate": 0.5901639344262295,
+          "dead_end_rate": 0.0,
+          "loop_rate": 0.7868852459016393
+        },
+        "[10,20)": {
+          "n": 308,
+          "success_rate": 0.262987012987013,
+          "dtw_m": {
+            "n": 0,
+            "mean": NaN,
+            "p50": NaN,
+            "p75": NaN,
+            "p95": NaN
+          },
+          "frechet_m": {
+            "n": 0,
+            "mean": NaN,
+            "p50": NaN,
+            "p75": NaN,
+            "p95": NaN
+          },
+          "len_ratio": {
+            "n": 308,
+            "mean": 8.071145981940738,
+            "p50": 7.873813000274509,
+            "p75": 11.493036690423759,
+            "p95": 16.80155351792968
+          },
+          "final_error_m": {
+            "n": 308,
+            "mean": 581.5657956816319,
+            "p50": 487.94372690600164,
+            "p75": 874.4279488387436,
+            "p95": 1629.4074133199936
+          },
+          "hit_wall_rate": 0.737012987012987,
+          "dead_end_rate": 0.0,
+          "loop_rate": 0.8603896103896104
+        },
+        "[20,30)": {
+          "n": 267,
+          "success_rate": 0.20599250936329588,
+          "dtw_m": {
+            "n": 0,
+            "mean": NaN,
+            "p50": NaN,
+            "p75": NaN,
+            "p95": NaN
+          },
+          "frechet_m": {
+            "n": 0,
+            "mean": NaN,
+            "p50": NaN,
+            "p75": NaN,
+            "p95": NaN
+          },
+          "len_ratio": {
+            "n": 267,
+            "mean": 5.570686322198223,
+            "p50": 5.376189507326689,
+            "p75": 7.260035581090121,
+            "p95": 12.399886935982053
+          },
+          "final_error_m": {
+            "n": 267,
+            "mean": 734.9453012513864,
+            "p50": 565.54299534673,
+            "p75": 1191.193987829377,
+            "p95": 2036.3584674108447
+          },
+          "hit_wall_rate": 0.7940074906367042,
+          "dead_end_rate": 0.0,
+          "loop_rate": 0.898876404494382
+        },
+        "[30,40)": {
+          "n": 186,
+          "success_rate": 0.1827956989247312,
+          "dtw_m": {
+            "n": 0,
+            "mean": NaN,
+            "p50": NaN,
+            "p75": NaN,
+            "p95": NaN
+          },
+          "frechet_m": {
+            "n": 0,
+            "mean": NaN,
+            "p50": NaN,
+            "p75": NaN,
+            "p95": NaN
+          },
+          "len_ratio": {
+            "n": 186,
+            "mean": 4.230926617484998,
+            "p50": 4.089612723053419,
+            "p75": 5.637709451248361,
+            "p95": 8.180628548509562
+          },
+          "final_error_m": {
+            "n": 186,
+            "mean": 1065.0807798864307,
+            "p50": 1005.8062058044297,
+            "p75": 1549.5695125941106,
+            "p95": 2560.3661919300566
+          },
+          "hit_wall_rate": 0.8172043010752689,
+          "dead_end_rate": 0.0,
+          "loop_rate": 0.9408602150537635
+        },
+        "[40,60)": {
+          "n": 152,
+          "success_rate": 0.40131578947368424,
+          "dtw_m": {
+            "n": 0,
+            "mean": NaN,
+            "p50": NaN,
+            "p75": NaN,
+            "p95": NaN
+          },
+          "frechet_m": {
+            "n": 0,
+            "mean": NaN,
+            "p50": NaN,
+            "p75": NaN,
+            "p95": NaN
+          },
+          "len_ratio": {
+            "n": 152,
+            "mean": 2.9437429666549466,
+            "p50": 2.711811036246104,
+            "p75": 4.095571807173102,
+            "p95": 6.06264269047235
+          },
+          "final_error_m": {
+            "n": 152,
+            "mean": 929.4563589409192,
+            "p50": 536.3241597882511,
+            "p75": 1356.7319756710115,
+            "p95": 3155.0255235308687
+          },
+          "hit_wall_rate": 0.5986842105263158,
+          "dead_end_rate": 0.0,
+          "loop_rate": 0.7894736842105263
+        },
+        "[60,+)": {
+          "n": 26,
+          "success_rate": 0.34615384615384615,
+          "dtw_m": {
+            "n": 0,
+            "mean": NaN,
+            "p50": NaN,
+            "p75": NaN,
+            "p95": NaN
+          },
+          "frechet_m": {
+            "n": 0,
+            "mean": NaN,
+            "p50": NaN,
+            "p75": NaN,
+            "p95": NaN
+          },
+          "len_ratio": {
+            "n": 26,
+            "mean": 2.039140112377716,
+            "p50": 1.559081237527551,
+            "p75": 2.638577884121177,
+            "p95": 5.387696302945995
+          },
+          "final_error_m": {
+            "n": 26,
+            "mean": 1398.3200853617357,
+            "p50": 341.1604209621788,
+            "p75": 2275.2683498183933,
+            "p95": 4670.437599103933
+          },
+          "hit_wall_rate": 0.6538461538461539,
+          "dead_end_rate": 0.0,
+          "loop_rate": 0.8846153846153846
+        }
+      }
+    },
+    "beam_gain": {
+      "bins": [
+        "[5,10)",
+        "[10,20)",
+        "[20,30)",
+        "[30,40)",
+        "[40,60)",
+        "[60,+)"
+      ],
+      "cells": {
+        "[5,10)": {
+          "delta_success_rate": 0.18032786885245902
+        },
+        "[10,20)": {
+          "delta_success_rate": 0.09740259740259741
+        },
+        "[20,30)": {
+          "delta_success_rate": 0.0898876404494382
+        },
+        "[30,40)": {
+          "delta_success_rate": 0.05376344086021506
+        },
+        "[40,60)": {
+          "delta_success_rate": 0.03289473684210531
+        },
+        "[60,+)": {
+          "delta_success_rate": 0.038461538461538436
+        }
+      }
+    }
+  },
+  "notes": {
+    "shape_metric": "DTW/Fréchet on way-center sequences (meters, equirectangular projection from osm_road_prob_meta.json bbox).",
+    "bins": [
+      "[5,10)",
+      "[10,20)",
+      "[20,30)",
+      "[30,40)",
+      "[40,60)",
+      "[60,+)"
+    ],
+    "latent_source": "gt=oracle (GT->AE.encode->Decoder); flow=Flow.sample->Decoder (generation).",
+    "sample_select": "When n_samples_per_route>1: first=use sample0; best=prefer success then min(DTW, Fréchet) [oracle, uses GT]; dest=prefer success then min(final_error_m) [deployable, GT-free].",
+    "shape_scope": "Controls DTW/Fréchet compute: all=all samples; selected=only selected sample per route; none=skip DTW/Fréchet (faster).",
+    "region_constraint": "If enabled: use Region seq to filter way candidates by target region (modes: strict/relaxed; fallback: unconstrained/dest_region/stop)."
+  }
+}

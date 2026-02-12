@@ -1,0 +1,8 @@
+2026-02-12 11:02:16,571 - WARNING - way_regions_npz meta/per_city missing; fallback to single-city mapping (all regions -> city 0).
+2026-02-12 11:02:17,653 - INFO - Loaded model_ckpt=_sync/wsa/pi_verify/20260212_porto_region_ar_res5_s0/ckpt_best.pt use_candidate_mask=True
+2026-02-12 11:02:19,978 - INFO - progress 200/1000
+2026-02-12 11:02:21,763 - INFO - progress 400/1000
+2026-02-12 11:02:23,714 - INFO - progress 600/1000
+2026-02-12 11:02:25,763 - INFO - progress 800/1000
+2026-02-12 11:02:27,605 - INFO - progress 1000/1000
+2026-02-12 11:02:27,619 - INFO - [OK] saved: _sync/wsa/pi_verify/20260212_porto_region_ar_res5_s0/eval_region_ar_n1000.json

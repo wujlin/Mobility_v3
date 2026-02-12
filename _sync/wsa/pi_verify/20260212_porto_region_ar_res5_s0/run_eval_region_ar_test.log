@@ -1,0 +1,14 @@
+usage: region_ar_rollout_eval.py [-h] --way_routes_npz WAY_ROUTES_NPZ
+                                 --way_regions_npz WAY_REGIONS_NPZ
+                                 --region_seq_npz REGION_SEQ_NPZ
+                                 --way_features_npz WAY_FEATURES_NPZ
+                                 [--model_ckpt MODEL_CKPT]
+                                 [--baseline {none,dest,markov,random}]
+                                 --out_json OUT_JSON [--seed SEED]
+                                 [--device DEVICE]
+                                 [--tz_offset_hours TZ_OFFSET_HOURS]
+                                 [--n_routes N_ROUTES] [--max_len MAX_LEN]
+                                 [--decode {greedy,beam}]
+                                 [--beam_size BEAM_SIZE]
+                                 [--coord_scale COORD_SCALE]
+region_ar_rollout_eval.py: error: unrecognized arguments: --split_json /home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD0_waydata_porto_seed0/W5_way_routes_strict_gate/od_split_min3_max160_seed0_dev10p.json --split_part test

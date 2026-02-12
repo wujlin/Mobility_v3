@@ -1,0 +1,14 @@
+{
+  "ok": true,
+  "task": "train_way_casd_value_fn",
+  "created_at": "2026-02-08T17:25:51.358646+08:00",
+  "epoch": 20,
+  "train": {
+    "loss": 0.009898384101688862
+  },
+  "val": {
+    "loss": 1.996604084968567
+  },
+  "best_val_loss": 0.5248559564352036,
+  "best_epoch": 1
+}

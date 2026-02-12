@@ -1,0 +1,7 @@
+2026-02-11 16:49:09,441 - INFO - device=cuda
+2026-02-11 16:49:10,162 - INFO - split_json=/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD0_waydata_porto_seed0/W5_way_routes_strict_gate/od_split_min3_max160_seed0_dev10p.json train_routes=108153 val_routes=13086 => train_idx=108153 val_idx=13086
+2026-02-11 16:49:10,164 - INFO - routes: total=1349045 train=108153 val=13086 min_hops=3 max_way_len=160
+/home/jinlin/miniconda3/envs/dpl/lib/python3.11/site-packages/torch/nn/modules/transformer.py:392: UserWarning: enable_nested_tensor is True, but self.use_nested_tensor is False because encoder_layer.norm_first was True
+  warnings.warn(
+2026-02-11 17:18:00,902 - INFO - epoch=1 train_loss=nan val_loss=1.640693 best=inf@0 ss(p=0.015, acc=0.398, use_pred=0.015, off_gt=0.035, skip=0.000, steps=6424)
+2026-02-11 17:23:16,314 - INFO - epoch=2 train_loss=nan val_loss=1.570438 best=1.640693@1 ss(p=0.030, acc=0.451, use_pred=0.030, off_gt=0.059, skip=0.000, steps=6331)

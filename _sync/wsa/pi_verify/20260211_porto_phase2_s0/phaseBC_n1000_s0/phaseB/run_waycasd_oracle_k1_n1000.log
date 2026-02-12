@@ -1,1 +1,22 @@
-python -u -m src.evaluation.way_casd_binned_eval     --way_routes_npz "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD0_waydata_porto_seed0/W5_way_routes_strict_gate/way_routes_strict_gate.npz" --way_graph_npz "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD0_waydata_porto_seed0/W2_way_graph/way_graph.npz" --way_features_npz "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD0_waydata_porto_seed0/W3_way_features/way_features.npz"     --ae_ckpt "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD0_waydata_porto_seed0/W6_train_ae_porto_strict_candq1_past16_s0/ckpt_best.pt" --latent_source gt     --n_routes 1000 --min_hops 5 --max_way_len 160 --max_decode_len 160     --split_json "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD0_waydata_porto_seed0/W5_way_routes_strict_gate/od_split_min3_max160_seed0_dev10p.json" --split_part test     --shape_scope none     --decode_max_candidates 0 --decode_candidate_policy first --beam_size 10 --compare_beam     --anti_loop_penalty 2.0 --anti_loop_penalty_k 4     --city_grid_meta "0=/home/jinlin/data/geoexplicit_data/porto_taxi/semantic/osm_road_prob_meta.json" --dump_way_seqs     --out_json "_sync/wsa/pi_verify/20260211_porto_phase2_s0/phaseBC_n1000_s0/phaseB/binned_waycasd_oracle_k1_n1000.json"     --out_per_route_json "_sync/wsa/pi_verify/20260211_porto_phase2_s0/phaseBC_n1000_s0/phaseB/per_route_waycasd_oracle_k1_n1000.json"     --device cuda --seed 0
+/home/jinlin/miniconda3/envs/dpl/lib/python3.11/site-packages/torch/nn/modules/transformer.py:392: UserWarning: enable_nested_tensor is True, but self.use_nested_tensor is False because encoder_layer.norm_first was True
+  warnings.warn(
+[city0] start n_routes=1000 latent_source=gt region_constraint=none compare_beam=True
+[city0] batch 0:64/1000
+[city0] batch 64:128/1000
+[city0] batch 128:192/1000
+[city0] batch 192:256/1000
+[city0] batch 256:320/1000
+[city0] batch 320:384/1000
+[city0] batch 384:448/1000
+[city0] batch 448:512/1000
+[city0] batch 512:576/1000
+[city0] batch 576:640/1000
+[city0] batch 640:704/1000
+[city0] batch 704:768/1000
+[city0] batch 768:832/1000
+[city0] batch 832:896/1000
+[city0] batch 896:960/1000
+[city0] batch 960:1000/1000
+[city0] done=1000 routes
+[OK] saved: _sync/wsa/pi_verify/20260211_porto_phase2_s0/phaseBC_n1000_s0/phaseB/binned_waycasd_oracle_k1_n1000.json
+[OK] saved: _sync/wsa/pi_verify/20260211_porto_phase2_s0/phaseBC_n1000_s0/phaseB/per_route_waycasd_oracle_k1_n1000.json

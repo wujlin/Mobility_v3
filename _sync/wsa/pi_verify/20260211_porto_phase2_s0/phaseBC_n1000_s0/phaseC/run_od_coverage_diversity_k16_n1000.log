@@ -1,1 +1,7 @@
-[FATAL] no valid route records found; decode=beam, missing_gt_way_ids=0, missing_beam_block=1000, missing_pred_way_ids=0. Re-run eval with --dump_way_seqs and per-route dumping enabled.
+[OK] saved: _sync/wsa/pi_verify/20260211_porto_phase2_s0/phaseBC_n1000_s0/phaseC/od_coverage_diversity_k16_n1000.json
+Method | Decode | Arrival | GT Coverage@K | Self-Diversity@K | n_OD
+------ | ------ | ------- | ------------- | ---------------- | ----
+Way-CASD_E2_K16 | beam | 0.3940 | 0.1554 | 0.6522 | 8
+Way-CASD_Oracle_K1 | beam | 0.8800 | 0.9283 | 0.5366 | 8
+RNN_AR_b10 | beam | 0.1930 | 0.0294 | 0.0744 | 8
+Transformer_AR_b10 | beam | 0.2320 | 0.0000 | 0.2212 | 8

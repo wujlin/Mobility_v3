@@ -9,3 +9,5 @@
 [city0] batch 320:384/1000
 [city0] batch 384:448/1000
 [city0] batch 448:512/1000
+[city0] batch 512:576/1000
+[city0] batch 576:640/1000

@@ -1,0 +1,20 @@
+usage: train_way_casd_region_ar.py [-h] --way_routes_npz WAY_ROUTES_NPZ
+                                   --way_regions_npz WAY_REGIONS_NPZ
+                                   --region_seq_npz REGION_SEQ_NPZ
+                                   --way_features_npz WAY_FEATURES_NPZ
+                                   --out_dir OUT_DIR [--batch_size BATCH_SIZE]
+                                   [--num_workers NUM_WORKERS]
+                                   [--n_epochs N_EPOCHS] [--lr LR]
+                                   [--weight_decay WEIGHT_DECAY]
+                                   [--val_ratio VAL_RATIO] [--seed SEED]
+                                   [--device DEVICE]
+                                   [--tz_offset_hours TZ_OFFSET_HOURS]
+                                   [--max_routes MAX_ROUTES]
+                                   [--split_json SPLIT_JSON]
+                                   [--d_model D_MODEL] [--n_heads N_HEADS]
+                                   [--n_layers N_LAYERS] [--dropout DROPOUT]
+                                   [--max_len MAX_LEN]
+                                   [--coord_scale COORD_SCALE]
+                                   [--n_route_cities N_ROUTE_CITIES]
+                                   [--use_candidate_mask]
+train_way_casd_region_ar.py: error: unrecognized arguments: --split_part train

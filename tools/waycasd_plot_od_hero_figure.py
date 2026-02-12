@@ -11,6 +11,7 @@ if str(_REPO_ROOT) not in sys.path:
 
 import argparse
 import json
+import math
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Sequence, Tuple
@@ -21,6 +22,7 @@ import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+from matplotlib.lines import Line2D
 
 from src.plot_style import OKABE_ITO, add_panel_label, paper_style, save_figure
 
@@ -73,6 +75,98 @@ def _parse_method_spec(spec: str) -> MethodSpec:
     if not label:
         raise SystemExit(f"[FATAL] empty label in --method spec: {spec!r}")
     return MethodSpec(label=label, decode=decode, path=path)
+
+
+def _parse_city_kv(spec: str) -> Tuple[int, Path]:
+    s = str(spec or "").strip()
+    if "=" in s:
+        k, v = s.split("=", 1)
+    elif ":" in s:
+        k, v = s.split(":", 1)
+    else:
+        raise ValueError(f"Bad spec (expect CITY=PATH): {spec!r}")
+    return int(str(k).strip()), Path(str(v).strip()).expanduser()
+
+
+def _decode_meta(meta_obj: object) -> Dict[str, Any] | None:
+    if meta_obj is None:
+        return None
+    if isinstance(meta_obj, np.ndarray):
+        if meta_obj.size != 1:
+            return None
+        meta_obj = meta_obj.item()
+    return meta_obj if isinstance(meta_obj, dict) else None
+
+
+def _grid_bbox_from_meta(meta: Dict[str, Any]) -> Tuple[int, int, float, float, float, float] | None:
+    grid = meta.get("grid", {}) if isinstance(meta, dict) else {}
+    if not isinstance(grid, dict):
+        return None
+    bbox = grid.get("bbox", {})
+    if not isinstance(bbox, dict):
+        return None
+    try:
+        H = int(grid["H"])
+        W = int(grid["W"])
+        min_lon = float(bbox["min_lon"])
+        min_lat = float(bbox["min_lat"])
+        max_lon = float(bbox["max_lon"])
+        max_lat = float(bbox["max_lat"])
+    except Exception:
+        return None
+    if H <= 0 or W <= 0:
+        return None
+    return (H, W, min_lon, min_lat, max_lon, max_lat)
+
+
+def _meta_from_city_grid_meta(path: Path) -> Dict[str, Any]:
+    if str(path).endswith(".npz"):
+        wf = np.load(str(path), allow_pickle=True)
+        meta = _decode_meta(wf.get("meta", None))
+        if meta is None:
+            raise ValueError(f"{path} missing meta (need grid.H/W/bbox).")
+    else:
+        meta = _read_json(path)
+    if _grid_bbox_from_meta(meta) is None:
+        if isinstance(meta, dict) and ("H" in meta) and ("W" in meta) and ("bbox" in meta):
+            meta = {"grid": {"H": meta["H"], "W": meta["W"], "bbox": meta["bbox"]}}
+    if _grid_bbox_from_meta(meta) is None:
+        raise ValueError(f"{path} missing grid meta (need grid.H/W/bbox).")
+    return meta
+
+
+def _grid_xy_to_lonlat(y: np.ndarray, x: np.ndarray, *, meta: Dict[str, Any]) -> Tuple[np.ndarray, np.ndarray]:
+    bb = _grid_bbox_from_meta(meta)
+    if bb is None:
+        raise ValueError("city meta missing grid bbox")
+    H, W, min_lon, min_lat, max_lon, max_lat = bb
+    y = np.asarray(y, dtype=np.float64)
+    x = np.asarray(x, dtype=np.float64)
+    lon = min_lon + (x / float(W)) * (max_lon - min_lon)
+    lat = max_lat - (y / float(H)) * (max_lat - min_lat)
+    return lon, lat
+
+
+def _aspect_for_latlon(meta: Dict[str, Any]) -> float:
+    bb = _grid_bbox_from_meta(meta)
+    if bb is None:
+        return 1.0
+    _, _, _, min_lat, _, max_lat = bb
+    mean_lat = 0.5 * (min_lat + max_lat)
+    c = max(math.cos(math.radians(float(mean_lat))), 1e-6)
+    return 1.0 / c
+
+
+def _resolve_ctx_provider(ctx: Any, provider_name: str) -> Any:
+    cur: Any = ctx.providers
+    for p in str(provider_name).split("."):
+        if hasattr(cur, p):
+            cur = getattr(cur, p)
+        elif isinstance(cur, dict) and p in cur:
+            cur = cur[p]
+        else:
+            raise ValueError(f"Unknown provider path: {provider_name}")
+    return cur
 
 
 def _extract_records(per_route_json: Path, decode: str) -> List[RouteRec]:
@@ -232,6 +326,16 @@ def build_argparser() -> argparse.ArgumentParser:
     ap.add_argument("--method", action="append", required=True, help="Repeatable: LABEL|DECODE=PER_ROUTE_JSON.")
     ap.add_argument("--way_features_npz", type=Path, required=True)
     ap.add_argument("--out_dir", type=Path, required=True)
+    ap.add_argument(
+        "--city_grid_meta",
+        action="append",
+        default=[],
+        help="Optional CITY=PATH mapping to osm_road_prob_meta.json (needed for --coord_mode latlon).",
+    )
+    ap.add_argument("--coord_mode", choices=["grid", "latlon"], default="grid")
+    ap.add_argument("--use_basemap", action="store_true", help="Draw web basemap (only in latlon mode).")
+    ap.add_argument("--basemap_provider", type=str, default="CartoDB.Positron")
+    ap.add_argument("--basemap_zoom", type=int, default=-1, help="<=0 means auto zoom.")
     ap.add_argument("--city", type=int, default=0)
     ap.add_argument("--min_gt_routes", type=int, default=10)
     ap.add_argument("--min_pred_success", type=int, default=4)
@@ -268,6 +372,34 @@ def main() -> None:
     wf = np.load(str(args.way_features_npz), allow_pickle=True)
     way_center_x = np.asarray(wf["way_center_x"], dtype=np.float64).reshape(-1)
     way_center_y = np.asarray(wf["way_center_y"], dtype=np.float64).reshape(-1)
+
+    city_meta: Dict[int, Dict[str, Any]] = {}
+    for spec in list(args.city_grid_meta or []):
+        try:
+            c, p = _parse_city_kv(spec)
+            _require_file(p)
+            city_meta[int(c)] = _meta_from_city_grid_meta(p)
+        except Exception as e:
+            raise SystemExit(f"[FATAL] bad --city_grid_meta {spec!r}: {e}") from e
+
+    coord_mode = str(args.coord_mode)
+    if coord_mode == "latlon":
+        if int(args.city) not in city_meta:
+            raise SystemExit(
+                f"[FATAL] coord_mode=latlon requires --city_grid_meta for city={int(args.city)}."
+            )
+        lon_all, lat_all = _grid_xy_to_lonlat(way_center_y, way_center_x, meta=city_meta[int(args.city)])
+        plot_x_all = lon_all
+        plot_y_all = lat_all
+        latlon_aspect = _aspect_for_latlon(city_meta[int(args.city)])
+    else:
+        plot_x_all = way_center_x
+        plot_y_all = way_center_y
+        latlon_aspect = 1.0
+
+    use_basemap = bool(args.use_basemap)
+    if use_basemap and coord_mode != "latlon":
+        raise SystemExit("[FATAL] --use_basemap requires --coord_mode latlon.")
 
     rec_by_method: Dict[str, List[RouteRec]] = {}
     for m in methods:
@@ -339,27 +471,27 @@ def main() -> None:
     xs: List[np.ndarray] = []
     ys: List[np.ndarray] = []
     for s in gt_seqs:
-        x, y = _seq_to_xy(s, way_center_x, way_center_y)
+        x, y = _seq_to_xy(s, plot_x_all, plot_y_all)
         xs.append(x)
         ys.append(y)
     for ms in method_pred.values():
         for s in ms:
-            x, y = _seq_to_xy(s, way_center_x, way_center_y)
+            x, y = _seq_to_xy(s, plot_x_all, plot_y_all)
             xs.append(x)
             ys.append(y)
     xmin, xmax, ymin, ymax = _bbox(xs, ys, float(args.pad_frac))
 
     # Start/dest marker from GT first route.
-    sxy = _seq_to_xy(gt_rows[0].gt_way_ids, way_center_x, way_center_y)
+    sxy = _seq_to_xy(gt_rows[0].gt_way_ids, plot_x_all, plot_y_all)
     sx, sy = float(sxy[0][0]), float(sxy[1][0])
     dx, dy = float(sxy[0][-1]), float(sxy[1][-1])
 
     # Plot 2x2
-    method_colors = [
-        OKABE_ITO["vermillion"],
-        OKABE_ITO["bluish_green"],
-        OKABE_ITO["blue"],
-    ]
+    method_colors = {
+        methods[0].label: OKABE_ITO["vermillion"],
+        methods[1].label: OKABE_ITO["bluish_green"],
+        methods[2].label: OKABE_ITO["blue"],
+    }
     with paper_style():
         fig, axes = plt.subplots(2, 2, figsize=(12.8, 9.2), constrained_layout=True)
         axs = [axes[0, 0], axes[0, 1], axes[1, 0], axes[1, 1]]
@@ -370,21 +502,41 @@ def main() -> None:
             (way_center_y >= ymin) & (way_center_y <= ymax)
         )
         for ax in axs:
-            ax.scatter(
-                way_center_x[mask], way_center_y[mask],
-                s=float(args.bg_s), c="#DADADA", alpha=float(args.bg_alpha), linewidths=0, zorder=1
-            )
+            if not use_basemap:
+                ax.scatter(
+                    plot_x_all[mask], plot_y_all[mask],
+                    s=float(args.bg_s), c="#DADADA", alpha=float(args.bg_alpha), linewidths=0, zorder=1
+                )
             ax.set_xlim(xmin, xmax)
             ax.set_ylim(ymin, ymax)
-            ax.set_aspect("equal", adjustable="box")
-            ax.invert_yaxis()
+            if coord_mode == "latlon":
+                ax.set_aspect(latlon_aspect, adjustable="box")
+            else:
+                ax.set_aspect("equal", adjustable="box")
+                ax.invert_yaxis()
             ax.set_xticks([])
             ax.set_yticks([])
+            if use_basemap:
+                try:
+                    import contextily as ctx  # type: ignore[import-not-found]
+
+                    src = _resolve_ctx_provider(ctx, str(args.basemap_provider))
+                    zoom = None if int(args.basemap_zoom) <= 0 else int(args.basemap_zoom)
+                    ctx.add_basemap(
+                        ax,
+                        source=src,
+                        crs="EPSG:4326",
+                        zoom=zoom,
+                        attribution=False,
+                        alpha=0.95,
+                    )
+                except Exception as e:
+                    print(f"[WARN] basemap render failed on one panel: {e}")
 
         # (a) all GT routes
         ax = axs[0]
         for s in gt_seqs:
-            x, y = _seq_to_xy(s, way_center_x, way_center_y)
+            x, y = _seq_to_xy(s, plot_x_all, plot_y_all)
             ax.plot(x, y, color=OKABE_ITO["black"], lw=1.2, alpha=0.35, zorder=3)
         ax.scatter([sx], [sy], s=80, c="#000000", marker="o", edgecolors="white", linewidths=0.8, zorder=4)
         ax.scatter([dx], [dy], s=90, c="#000000", marker="*", edgecolors="white", linewidths=0.8, zorder=4)
@@ -396,11 +548,11 @@ def main() -> None:
             ax = axs[i]
             # Faint GT context
             for s in gt_seqs:
-                x, y = _seq_to_xy(s, way_center_x, way_center_y)
+                x, y = _seq_to_xy(s, plot_x_all, plot_y_all)
                 ax.plot(x, y, color=OKABE_ITO["gray"], lw=0.9, alpha=0.16, zorder=2)
-            color = method_colors[(i - 1) % len(method_colors)]
+            color = method_colors.get(m.label, OKABE_ITO["vermillion"])
             for s in method_pred[m.label]:
-                x, y = _seq_to_xy(s, way_center_x, way_center_y)
+                x, y = _seq_to_xy(s, plot_x_all, plot_y_all)
                 ax.plot(x, y, color=color, lw=2.1, alpha=0.9, zorder=4)
             ax.scatter([sx], [sy], s=80, c="#000000", marker="o", edgecolors="white", linewidths=0.8, zorder=5)
             ax.scatter([dx], [dy], s=90, c="#000000", marker="*", edgecolors="white", linewidths=0.8, zorder=5)
@@ -411,10 +563,29 @@ def main() -> None:
             )
             add_panel_label(ax, chr(ord("a") + i))
 
+        legend_handles: List[Any] = [
+            Line2D([0], [0], color=OKABE_ITO["black"], lw=1.6, alpha=0.6, label="GT routes"),
+            Line2D([0], [0], color=method_colors.get(methods[0].label, OKABE_ITO["vermillion"]), lw=2.4, label=methods[0].label),
+            Line2D([0], [0], color=method_colors.get(methods[1].label, OKABE_ITO["bluish_green"]), lw=2.4, label=methods[1].label),
+            Line2D([0], [0], color=method_colors.get(methods[2].label, OKABE_ITO["blue"]), lw=2.4, label=methods[2].label),
+            Line2D([0], [0], marker="o", color="none", markerfacecolor="#000000", markeredgecolor="white", markersize=8, label="Origin"),
+            Line2D([0], [0], marker="*", color="none", markerfacecolor="#000000", markeredgecolor="white", markersize=10, label="Destination"),
+        ]
+        fig.legend(
+            handles=legend_handles,
+            labels=[h.get_label() for h in legend_handles],
+            loc="lower center",
+            ncol=6,
+            frameon=True,
+            framealpha=0.9,
+            fontsize=9,
+            bbox_to_anchor=(0.5, -0.01),
+        )
+
         # Global title
         fig.suptitle(
             f"Hero OD Comparison (city={int(args.city)}, OD=({sw},{dw}), "
-            f"gt_hops_med={gt_hops_med:.1f})",
+            f"gt_hops_med={gt_hops_med:.1f}, coord={coord_mode})",
             y=1.01,
         )
 
@@ -440,6 +611,9 @@ def main() -> None:
         "inputs": {
             "phasec_json": str(args.phasec_json),
             "way_features_npz": str(args.way_features_npz),
+            "coord_mode": coord_mode,
+            "use_basemap": bool(use_basemap),
+            "city_grid_meta": {str(k): str(v) for k, v in city_meta.items()},
         },
         "outputs": {
             "png": str(out_png),

@@ -1,0 +1,7 @@
+[OK] saved: _sync/wsa/pi_verify/20260213_porto_e2e60_p1_s0/P1_phaseC_k4_n5000/od_coverage_diversity_k4_n5000.json
+Method | Decode | Arrival | GT Coverage@K | Self-Diversity@K | n_OD
+------ | ------ | ------- | ------------- | ---------------- | ----
+Way-CASD_E2e60_K4 | greedy | 0.3390 | 0.0350 | 0.6350 | 154
+Way-CASD_Oracle_K1 | beam | 0.7064 | 0.4432 | 0.5720 | 154
+RNN_AR_b10 | beam | 0.1904 | 0.0270 | 0.2254 | 154
+Transformer_AR_b10 | beam | 0.2322 | 0.0190 | 0.2617 | 154

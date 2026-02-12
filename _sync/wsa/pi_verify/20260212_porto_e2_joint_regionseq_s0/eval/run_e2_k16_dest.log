@@ -17,3 +17,6 @@
 [city0] batch 832:896/1000
 [city0] batch 896:960/1000
 [city0] batch 960:1000/1000
+[city0] done=1000 routes
+[OK] saved: _sync/wsa/pi_verify/20260212_porto_e2_joint_regionseq_s0/eval/binned_e2_flow_k16_dest_greedy_n1000.json
+[OK] saved: _sync/wsa/pi_verify/20260212_porto_e2_joint_regionseq_s0/eval/per_route_e2_flow_k16_dest_greedy_n1000.json

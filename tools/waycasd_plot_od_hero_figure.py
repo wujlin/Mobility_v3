@@ -498,8 +498,8 @@ def main() -> None:
 
         # Common background.
         mask = (
-            (way_center_x >= xmin) & (way_center_x <= xmax) &
-            (way_center_y >= ymin) & (way_center_y <= ymax)
+            (plot_x_all >= xmin) & (plot_x_all <= xmax) &
+            (plot_y_all >= ymin) & (plot_y_all <= ymax)
         )
         for ax in axs:
             if not use_basemap:
@@ -521,15 +521,24 @@ def main() -> None:
                     import contextily as ctx  # type: ignore[import-not-found]
 
                     src = _resolve_ctx_provider(ctx, str(args.basemap_provider))
-                    zoom = None if int(args.basemap_zoom) <= 0 else int(args.basemap_zoom)
-                    ctx.add_basemap(
-                        ax,
-                        source=src,
-                        crs="EPSG:4326",
-                        zoom=zoom,
-                        attribution=False,
-                        alpha=0.95,
-                    )
+                    if int(args.basemap_zoom) > 0:
+                        ctx.add_basemap(
+                            ax,
+                            source=src,
+                            crs="EPSG:4326",
+                            zoom=int(args.basemap_zoom),
+                            attribution=False,
+                            alpha=0.95,
+                        )
+                    else:
+                        # Let contextily pick zoom automatically.
+                        ctx.add_basemap(
+                            ax,
+                            source=src,
+                            crs="EPSG:4326",
+                            attribution=False,
+                            alpha=0.95,
+                        )
                 except Exception as e:
                     print(f"[WARN] basemap render failed on one panel: {e}")
 

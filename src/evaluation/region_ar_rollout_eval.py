@@ -40,7 +40,7 @@ def _load_region_meta(
       - region_adj: (R,R) bool (diag=True)
     """
     wr = np.load(str(way_regions_npz), allow_pickle=True)
-    need = {"region_way_ptr", "region_way_idx", "region_adj_ptr", "region_adj_idx", "meta"}
+    need = {"region_way_ptr", "region_way_idx", "region_adj_ptr", "region_adj_idx"}
     missing = sorted(list(need - set(wr.files)))
     if missing:
         raise SystemExit(f"[FATAL] way_regions_npz missing keys: {missing}")
@@ -49,29 +49,29 @@ def _load_region_meta(
     region_way_idx = np.asarray(wr["region_way_idx"], dtype=np.int64).reshape(-1)
     region_adj_ptr = np.asarray(wr["region_adj_ptr"], dtype=np.int64).reshape(-1)
     region_adj_idx = np.asarray(wr["region_adj_idx"], dtype=np.int64).reshape(-1)
-    meta = _decode_meta(wr["meta"])
-    if meta is None:
-        raise SystemExit("[FATAL] way_regions_npz meta missing or invalid.")
-    per_city = meta.get("per_city", {})
-    if not isinstance(per_city, dict) or not per_city:
-        raise SystemExit("[FATAL] way_regions_npz meta missing per_city.")
-
     n_regions = int(region_way_ptr.size) - 1
-    region_city = np.full((n_regions,), -1, dtype=np.int64)
-    n_cities = 0
-    for k, v in per_city.items():
-        try:
-            city = int(k)
-            off = int(v.get("region_id_offset", 0))
-            nr = int(v.get("n_regions", 0))
-        except Exception:
-            continue
-        if nr <= 0:
-            continue
-        region_city[off : off + nr] = int(city)
-        n_cities = max(n_cities, city + 1)
-    if int(np.sum(region_city < 0)) > 0:
-        raise SystemExit(f"[FATAL] region_city has unassigned entries: {int(np.sum(region_city < 0))}/{n_regions}")
+    meta = _decode_meta(wr["meta"]) if "meta" in wr.files else None
+    per_city = (meta or {}).get("per_city", {})
+    if not isinstance(per_city, dict) or not per_city:
+        log.warning("way_regions_npz meta/per_city missing; fallback to single-city mapping (all regions -> city 0).")
+        region_city = np.zeros((n_regions,), dtype=np.int64)
+        n_cities = 1
+    else:
+        region_city = np.full((n_regions,), -1, dtype=np.int64)
+        n_cities = 0
+        for k, v in per_city.items():
+            try:
+                city = int(k)
+                off = int(v.get("region_id_offset", 0))
+                nr = int(v.get("n_regions", 0))
+            except Exception:
+                continue
+            if nr <= 0:
+                continue
+            region_city[off : off + nr] = int(city)
+            n_cities = max(n_cities, city + 1)
+        if int(np.sum(region_city < 0)) > 0:
+            raise SystemExit(f"[FATAL] region_city has unassigned entries: {int(np.sum(region_city < 0))}/{n_regions}")
 
     wf = np.load(str(way_features_npz), allow_pickle=True)
     need = {"way_center_y", "way_center_x"}

@@ -1,0 +1,7 @@
+[OK] saved: _sync/wsa/pi_verify/20260212_porto_phaseBC_n5000_s0/phaseC/od_coverage_diversity_k16_n5000.json
+Method | Decode | Arrival | GT Coverage@K | Self-Diversity@K | n_OD
+------ | ------ | ------- | ------------- | ---------------- | ----
+Way-CASD_E2_K16 | greedy | 0.3834 | 0.0092 | 0.7699 | 154
+Way-CASD_Oracle_K1 | beam | 0.7064 | 0.4709 | 0.5754 | 154
+RNN_AR_b10 | beam | 0.1904 | 0.0271 | 0.2181 | 154
+Transformer_AR_b10 | beam | 0.2322 | 0.0200 | 0.2616 | 154

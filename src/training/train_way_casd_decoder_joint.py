@@ -241,7 +241,15 @@ def _infer_decoder_past_k_from_state(state: Dict[str, torch.Tensor]) -> int:
     return int(pe.shape[0])
 
 
-def _load_ae(*, ae_ckpt: Path, way_graph_npz: Path, way_features_npz: Path, device: torch.device) -> WayCASDAutoEncoder:
+def _load_ae(
+    *,
+    ae_ckpt: Path,
+    way_graph_npz: Path,
+    way_features_npz: Path,
+    device: torch.device,
+    force_decoder_use_step_emb: Optional[bool] = None,
+    force_decoder_past_k: Optional[int] = None,
+) -> WayCASDAutoEncoder:
     wg = np.load(str(way_graph_npz), allow_pickle=True)
     wf = np.load(str(way_features_npz), allow_pickle=True)
     ptr = np.asarray(wg["way_adj_ptr"], dtype=np.int64)
@@ -264,6 +272,10 @@ def _load_ae(*, ae_ckpt: Path, way_graph_npz: Path, way_features_npz: Path, devi
     use_cand_query = bool(cfg_dict.get("decoder_use_cand_query", False)) or _infer_decoder_use_cand_query_from_state(state)
     use_past_ctx = bool(cfg_dict.get("decoder_use_past_context", False)) or _infer_decoder_use_past_context_from_state(state)
     past_k = int(cfg_dict.get("decoder_past_k", _infer_decoder_past_k_from_state(state)))
+    if force_decoder_use_step_emb is not None:
+        use_step_emb = bool(force_decoder_use_step_emb)
+    if force_decoder_past_k is not None and int(force_decoder_past_k) > 0:
+        past_k = int(force_decoder_past_k)
 
     ae = WayCASDAutoEncoder(
         cfg=WayCASDAECfg(
@@ -295,6 +307,16 @@ def _load_ae(*, ae_ckpt: Path, way_graph_npz: Path, way_features_npz: Path, devi
         n_highway_types=int(max(4, n_highway_types)),
     ).to(device)
     ae.load_state_dict(state, strict=False)
+    log.info(
+        "AE decoder cfg inferred/override: step_emb=%s past_k=%d cross_attn=%s cand_query=%s past_ctx=%s dest_query=%s dir_query=%s",
+        bool(ae.cfg.decoder_use_step_emb),
+        int(ae.cfg.decoder_past_k),
+        bool(ae.cfg.decoder_use_cross_attn),
+        bool(ae.cfg.decoder_use_cand_query),
+        bool(ae.cfg.decoder_use_past_context),
+        bool(ae.cfg.decoder_use_dest_query),
+        bool(ae.cfg.decoder_use_dir_query),
+    )
     return ae
 
 
@@ -687,6 +709,8 @@ def main() -> None:
     p.add_argument("--max_train_batches", type=int, default=0, help="Limit batches per epoch for faster iteration (0=all).")
     p.add_argument("--max_val_batches", type=int, default=0, help="Limit val batches per epoch for faster iteration (0=all).")
     p.add_argument("--log_every_batches", type=int, default=200, help="Log training progress every N batches (0=disable).")
+    p.add_argument("--force_decoder_use_step_emb", action="store_true", help="Force-enable decoder step embedding even if AE ckpt did not use it.")
+    p.add_argument("--force_decoder_past_k", type=int, default=0, help="Override decoder past_k (0=use ckpt inferred).")
     p.add_argument("--scheduled_sampling_max_p", type=float, default=0.0, help="Scheduled sampling max p (0=disable).")
     p.add_argument("--scheduled_sampling_warmup_epochs", type=int, default=20, help="Warmup epochs to reach max_p.")
     p.add_argument(
@@ -781,7 +805,14 @@ def main() -> None:
     log.info(f"routes: total={len(dataset)} train={len(train_set)} val={len(val_set)} min_hops={cfg.min_hops} max_way_len={cfg.max_way_len}")
 
     # Load models
-    ae = _load_ae(ae_ckpt=Path(args.ae_ckpt), way_graph_npz=Path(args.way_graph_npz), way_features_npz=Path(args.way_features_npz), device=device)
+    ae = _load_ae(
+        ae_ckpt=Path(args.ae_ckpt),
+        way_graph_npz=Path(args.way_graph_npz),
+        way_features_npz=Path(args.way_features_npz),
+        device=device,
+        force_decoder_use_step_emb=(True if bool(args.force_decoder_use_step_emb) else None),
+        force_decoder_past_k=(int(args.force_decoder_past_k) if int(args.force_decoder_past_k) > 0 else None),
+    )
     flow = _load_flow(flow_ckpt=Path(args.flow_ckpt), ae=ae, device=device)
 
     # Freeze everything except decoder.*
@@ -1006,6 +1037,10 @@ def main() -> None:
         "last_ckpt": str(out_dir / "ckpt_last.pt"),
         "best_epoch": int(best_epoch),
         "cfg": asdict(cfg),
+        "decoder_overrides": {
+            "force_decoder_use_step_emb": bool(args.force_decoder_use_step_emb),
+            "force_decoder_past_k": int(args.force_decoder_past_k),
+        },
         "flow_cfg": asdict(flow.cfg),
         "ae_cfg": asdict(ae.cfg),
     }

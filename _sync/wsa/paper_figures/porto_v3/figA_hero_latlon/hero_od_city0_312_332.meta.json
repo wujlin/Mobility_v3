@@ -54,8 +54,9 @@
     "way_features_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD0_waydata_porto_seed0/W3_way_features/way_features.npz",
     "coord_mode": "latlon",
     "use_basemap": true,
+    "basemap_active_final": true,
     "city_grid_meta": {
-      "0": "{'grid': {'H': 1024, 'W': 1024, 'bbox': {'min_lon': -8.72, 'min_lat': 41.08, 'max_lon': -8.5, 'max_lat': 41.25}}, '_comment': 'Porto 都会区 bbox + grid 定义，与 build_way_features_from_osm_pbf.py 所需的 osm_road_prob_meta.json 格式一致'}"
+      "0": "/home/jinlin/data/geoexplicit_data/porto_taxi/semantic/osm_road_prob_meta.json"
     }
   },
   "outputs": {

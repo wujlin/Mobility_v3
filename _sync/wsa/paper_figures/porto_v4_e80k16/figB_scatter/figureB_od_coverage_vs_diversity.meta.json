@@ -1,0 +1,54 @@
+{
+  "ok": true,
+  "task": "waycasd_plot_od_diversity_scatter",
+  "note": "Only ODs with finite coverage and finite diversity are plotted (diversity requires >=2 successful predictions).",
+  "input_phasec_json": "_sync/wsa/pi_verify/20260213_porto_e2e80_k16_n5000_s0/phaseC_k16_n5000/od_coverage_diversity_k16_n5000.json",
+  "plot_opts": {
+    "show_panel_label": false,
+    "legend_show_counts": false,
+    "show_note_text": false,
+    "mean_marker_size": 120.0
+  },
+  "summary_points": [
+    {
+      "method": "Way-CASD_E2e80_K16",
+      "n_points_finite": 106,
+      "n_od_groups_kept": 154,
+      "n_coverage_finite": 154,
+      "n_diversity_finite": 106,
+      "coverage_mean_emp": 0.058043345543345545,
+      "diversity_mean_emp": 0.6478063041924965
+    },
+    {
+      "method": "Way-CASD_Oracle_K1",
+      "n_points_finite": 113,
+      "n_od_groups_kept": 154,
+      "n_coverage_finite": 154,
+      "n_diversity_finite": 113,
+      "coverage_mean_emp": 0.608451455132871,
+      "diversity_mean_emp": 0.5754250670252372
+    },
+    {
+      "method": "RNN_AR_b10",
+      "n_points_finite": 46,
+      "n_od_groups_kept": 154,
+      "n_coverage_finite": 154,
+      "n_diversity_finite": 46,
+      "coverage_mean_emp": 0.09070910973084886,
+      "diversity_mean_emp": 0.21814279503361128
+    },
+    {
+      "method": "Transformer_AR_b10",
+      "n_points_finite": 51,
+      "n_od_groups_kept": 154,
+      "n_coverage_finite": 154,
+      "n_diversity_finite": 51,
+      "coverage_mean_emp": 0.06043956043956043,
+      "diversity_mean_emp": 0.26164657422752874
+    }
+  ],
+  "outputs": {
+    "png": "_sync/wsa/paper_figures/porto_v4_e80k16/figB_scatter/figureB_od_coverage_vs_diversity.png",
+    "pdf": "_sync/wsa/paper_figures/porto_v4_e80k16/figB_scatter/figureB_od_coverage_vs_diversity.pdf"
+  }
+}

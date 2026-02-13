@@ -1,0 +1,8 @@
+[OK] saved: _sync/wsa/pi_verify/20260213_porto_p0p1_stepemb_s0/P1_phaseC_k16_n5000/od_coverage_diversity_k16_n5000_stepemb_e20.json
+Method | Decode | Arrival | GT Coverage@K | Self-Diversity@K | n_OD
+------ | ------ | ------- | ------------- | ---------------- | ----
+Way-CASD_E2e80_K16 | greedy | 0.4940 | 0.0400 | 0.6478 | 154
+Way-CASD_StepEmbE20_K16 | greedy | 0.6156 | 0.0850 | 0.6690 | 154
+Way-CASD_Oracle_K1 | beam | 0.7064 | 0.4709 | 0.5754 | 154
+RNN_AR_b10 | beam | 0.1904 | 0.0271 | 0.2181 | 154
+Transformer_AR_b10 | beam | 0.2322 | 0.0200 | 0.2616 | 154

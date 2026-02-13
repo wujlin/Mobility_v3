@@ -374,11 +374,13 @@ def main() -> None:
     way_center_y = np.asarray(wf["way_center_y"], dtype=np.float64).reshape(-1)
 
     city_meta: Dict[int, Dict[str, Any]] = {}
+    city_meta_src: Dict[int, str] = {}
     for spec in list(args.city_grid_meta or []):
         try:
             c, p = _parse_city_kv(spec)
             _require_file(p)
             city_meta[int(c)] = _meta_from_city_grid_meta(p)
+            city_meta_src[int(c)] = str(p)
         except Exception as e:
             raise SystemExit(f"[FATAL] bad --city_grid_meta {spec!r}: {e}") from e
 
@@ -495,6 +497,8 @@ def main() -> None:
     with paper_style():
         fig, axes = plt.subplots(2, 2, figsize=(12.8, 9.2), constrained_layout=True)
         axs = [axes[0, 0], axes[0, 1], axes[1, 0], axes[1, 1]]
+        basemap_active = bool(use_basemap)
+        basemap_warned = False
 
         # Common background.
         mask = (
@@ -502,7 +506,7 @@ def main() -> None:
             (plot_y_all >= ymin) & (plot_y_all <= ymax)
         )
         for ax in axs:
-            if not use_basemap:
+            if not basemap_active:
                 ax.scatter(
                     plot_x_all[mask], plot_y_all[mask],
                     s=float(args.bg_s), c="#DADADA", alpha=float(args.bg_alpha), linewidths=0, zorder=1
@@ -516,7 +520,7 @@ def main() -> None:
                 ax.invert_yaxis()
             ax.set_xticks([])
             ax.set_yticks([])
-            if use_basemap:
+            if basemap_active:
                 try:
                     import contextily as ctx  # type: ignore[import-not-found]
 
@@ -540,7 +544,14 @@ def main() -> None:
                             alpha=0.95,
                         )
                 except Exception as e:
-                    print(f"[WARN] basemap render failed on one panel: {e}")
+                    if not basemap_warned:
+                        print(f"[WARN] basemap render failed, fallback to local road background: {e}")
+                        basemap_warned = True
+                    basemap_active = False
+                    ax.scatter(
+                        plot_x_all[mask], plot_y_all[mask],
+                        s=float(args.bg_s), c="#DADADA", alpha=float(args.bg_alpha), linewidths=0, zorder=1
+                    )
 
         # (a) all GT routes
         ax = axs[0]
@@ -622,7 +633,8 @@ def main() -> None:
             "way_features_npz": str(args.way_features_npz),
             "coord_mode": coord_mode,
             "use_basemap": bool(use_basemap),
-            "city_grid_meta": {str(k): str(v) for k, v in city_meta.items()},
+            "basemap_active_final": bool(basemap_active),
+            "city_grid_meta": {str(k): str(v) for k, v in sorted(city_meta_src.items(), key=lambda kv: kv[0])},
         },
         "outputs": {
             "png": str(out_png),

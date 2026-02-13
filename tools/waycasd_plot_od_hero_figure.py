@@ -46,6 +46,19 @@ class RouteRec:
     success: bool
 
 
+def _pretty_method_label(label: str) -> str:
+    s = str(label).lower()
+    if "way-casd" in s or "waycasd" in s:
+        return "Way-CASD"
+    if "oracle" in s:
+        return "Oracle"
+    if "rnn" in s:
+        return "RNN"
+    if "transformer" in s or "tr-ar" in s:
+        return "Transformer"
+    return str(label)
+
+
 def _require_file(path: Path) -> None:
     if not path.exists():
         raise SystemExit(f"[FATAL] file not found: {path}")
@@ -350,6 +363,13 @@ def build_argparser() -> argparse.ArgumentParser:
     ap.add_argument("--od_start_way", type=int, default=None, help="Manual override start_way.")
     ap.add_argument("--od_dest_way", type=int, default=None, help="Manual override dest_way.")
     ap.add_argument("--keep_method_order", action="store_true", help="Keep --method order; default auto: Way-CASD, RNN, Transformer.")
+    ap.add_argument(
+        "--figure_title",
+        type=str,
+        default="Route Diversity for a Representative Origin-Destination Pair",
+        help="Figure-level title. Use empty string to suppress.",
+    )
+    ap.add_argument("--no_panel_labels", action="store_true", help="Disable a/b/c/d panel labels.")
     return ap
 
 
@@ -560,8 +580,9 @@ def main() -> None:
             ax.plot(x, y, color=OKABE_ITO["black"], lw=1.2, alpha=0.35, zorder=3)
         ax.scatter([sx], [sy], s=80, c="#000000", marker="o", edgecolors="white", linewidths=0.8, zorder=4)
         ax.scatter([dx], [dy], s=90, c="#000000", marker="*", edgecolors="white", linewidths=0.8, zorder=4)
-        ax.set_title(f"Ground Truth (n={len(gt_seqs)})")
-        add_panel_label(ax, "a")
+        ax.set_title(f"Ground Truth ({len(gt_seqs)} routes)")
+        if not bool(args.no_panel_labels):
+            add_panel_label(ax, "a")
 
         # (b,c,d) methods
         for i, m in enumerate(methods, start=1):
@@ -577,17 +598,21 @@ def main() -> None:
             ax.scatter([sx], [sy], s=80, c="#000000", marker="o", edgecolors="white", linewidths=0.8, zorder=5)
             ax.scatter([dx], [dy], s=90, c="#000000", marker="*", edgecolors="white", linewidths=0.8, zorder=5)
             mm = method_meta[m.label]
-            ax.set_title(
-                f"{m.label} ({m.decode})\n"
-                f"success_in_OD={mm['n_success_od']}/{mm['n_routes_od']}, shown={mm['n_unique_drawn']}"
-            )
-            add_panel_label(ax, chr(ord("a") + i))
+            pretty = _pretty_method_label(m.label)
+            shown = int(mm["n_unique_drawn"])
+            if shown <= 0:
+                t = f"{pretty} (0 routes arrived)"
+            else:
+                t = f"{pretty} ({shown} routes)"
+            ax.set_title(t)
+            if not bool(args.no_panel_labels):
+                add_panel_label(ax, chr(ord("a") + i))
 
         legend_handles: List[Any] = [
             Line2D([0], [0], color=OKABE_ITO["black"], lw=1.6, alpha=0.6, label="GT routes"),
-            Line2D([0], [0], color=method_colors.get(methods[0].label, OKABE_ITO["vermillion"]), lw=2.4, label=methods[0].label),
-            Line2D([0], [0], color=method_colors.get(methods[1].label, OKABE_ITO["bluish_green"]), lw=2.4, label=methods[1].label),
-            Line2D([0], [0], color=method_colors.get(methods[2].label, OKABE_ITO["blue"]), lw=2.4, label=methods[2].label),
+            Line2D([0], [0], color=method_colors.get(methods[0].label, OKABE_ITO["vermillion"]), lw=2.4, label=_pretty_method_label(methods[0].label)),
+            Line2D([0], [0], color=method_colors.get(methods[1].label, OKABE_ITO["bluish_green"]), lw=2.4, label=_pretty_method_label(methods[1].label)),
+            Line2D([0], [0], color=method_colors.get(methods[2].label, OKABE_ITO["blue"]), lw=2.4, label=_pretty_method_label(methods[2].label)),
             Line2D([0], [0], marker="o", color="none", markerfacecolor="#000000", markeredgecolor="white", markersize=8, label="Origin"),
             Line2D([0], [0], marker="*", color="none", markerfacecolor="#000000", markeredgecolor="white", markersize=10, label="Destination"),
         ]
@@ -595,19 +620,16 @@ def main() -> None:
             handles=legend_handles,
             labels=[h.get_label() for h in legend_handles],
             loc="lower center",
-            ncol=6,
+            ncol=3,
             frameon=True,
             framealpha=0.9,
             fontsize=9,
-            bbox_to_anchor=(0.5, -0.01),
+            bbox_to_anchor=(0.5, 0.01),
         )
 
-        # Global title
-        fig.suptitle(
-            f"Hero OD Comparison (city={int(args.city)}, OD=({sw},{dw}), "
-            f"gt_hops_med={gt_hops_med:.1f}, coord={coord_mode})",
-            y=1.01,
-        )
+        fig_title = str(args.figure_title).strip()
+        if fig_title:
+            fig.suptitle(fig_title, y=0.995)
 
         stem = f"hero_od_city{int(args.city)}_{int(sw)}_{int(dw)}"
         out_png = out_dir / f"{stem}.png"
@@ -627,6 +649,7 @@ def main() -> None:
             "phasec_row": od_row,
         },
         "methods": [{"label": m.label, "decode": m.decode, "path": str(m.path)} for m in methods],
+        "pretty_method_labels": {m.label: _pretty_method_label(m.label) for m in methods},
         "method_meta": method_meta,
         "inputs": {
             "phasec_json": str(args.phasec_json),

@@ -60,6 +60,28 @@ def _color_for_label(label: str) -> str:
     return OKABE_ITO["gray"]
 
 
+def _pretty_method_label(label: str) -> str:
+    s = str(label).lower()
+    if "way-casd" in s or "waycasd" in s:
+        return "Way-CASD"
+    if "oracle" in s:
+        return "Oracle"
+    if "rnn" in s:
+        return "RNN"
+    if "transformer" in s or "tr-ar" in s:
+        return "Transformer"
+    return str(label)
+
+
+def _line_style(label: str) -> Tuple[str, float, float]:
+    s = str(label).lower()
+    if "way-casd" in s or "waycasd" in s:
+        return "-", 2.6, 0.98
+    if "oracle" in s:
+        return "-", 2.4, 0.98
+    return "--", 1.9, 0.92
+
+
 def build_argparser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(description="Figure C: success-vs-hops curves from binned eval json.")
     ap.add_argument("--series", action="append", required=True, help="Repeatable: LABEL=BINNED_JSON")
@@ -68,6 +90,8 @@ def build_argparser() -> argparse.ArgumentParser:
     ap.add_argument("--out_dir", type=Path, required=True)
     ap.add_argument("--title", type=str, default="Success Rate vs GT Hops")
     ap.add_argument("--hide_bin_n", action="store_true", help="Hide per-bin sample size n on x-axis labels.")
+    ap.add_argument("--show_panel_label", action="store_true", help="Add panel label 'a' for combined figures.")
+    ap.add_argument("--y_ref", type=float, default=0.5, help="Add dashed horizontal reference line if in [0,1].")
     return ap
 
 
@@ -103,19 +127,23 @@ def main() -> None:
 
     with paper_style():
         fig, ax = plt.subplots(figsize=(6.8, 4.4), constrained_layout=True)
-        add_panel_label(ax, "a")
+        if bool(args.show_panel_label):
+            add_panel_label(ax, "a")
         x = np.arange(len(xs_ref), dtype=np.float64)
+        markers = ["o", "s", "^", "D", "v", "P", "X"]
         for name, ys, ns in curves:
             color = _color_for_label(name)
+            ls, lw, alpha = _line_style(name)
             yarr = np.asarray(ys, dtype=np.float64)
             ax.plot(
                 x, yarr,
-                marker="o",
-                lw=2.0,
+                marker=markers[len(ax.lines) % len(markers)],
+                lw=float(lw),
                 ms=5.0,
+                linestyle=ls,
                 color=color,
-                alpha=0.95,
-                label=name,
+                alpha=float(alpha),
+                label=_pretty_method_label(name),
             )
         ns_ref = curves[0][2] if curves else [0 for _ in xs_ref]
         if bool(args.hide_bin_n):
@@ -133,6 +161,8 @@ def main() -> None:
         ax.set_ylabel(ylabel)
         ax.set_xlabel("GT Hops Bins")
         ax.set_title(str(args.title))
+        if 0.0 <= float(args.y_ref) <= 1.0:
+            ax.axhline(float(args.y_ref), color="#666666", linestyle=":", linewidth=1.2, alpha=0.85, zorder=1)
         ax.grid(alpha=0.22, linewidth=0.6)
         ax.legend(loc="best", framealpha=0.9)
 
@@ -148,6 +178,11 @@ def main() -> None:
         "task": "waycasd_plot_success_by_hops",
         "decode": str(args.decode),
         "metric": str(args.metric),
+        "plot_opts": {
+            "show_panel_label": bool(args.show_panel_label),
+            "y_ref": float(args.y_ref),
+            "hide_bin_n": bool(args.hide_bin_n),
+        },
         "bins": xs_ref,
         "series": [{"name": n, "n_per_bin": ns, "y": ys} for n, ys, ns in curves],
         "outputs": {"png": str(out_png), "pdf": str(out_pdf)},

@@ -56,6 +56,19 @@ def _safe_float(x: Any) -> float:
     return v
 
 
+def _pretty_method_label(label: str) -> str:
+    s = str(label).lower()
+    if "way-casd" in s or "waycasd" in s:
+        return "Way-CASD"
+    if "oracle" in s:
+        return "Oracle"
+    if "rnn" in s:
+        return "RNN"
+    if "transformer" in s or "tr-ar" in s:
+        return "Transformer"
+    return str(label)
+
+
 def _mean_label_offset(label: str) -> Tuple[float, float]:
     s = str(label).lower()
     if "way-casd" in s or "waycasd" in s:
@@ -74,9 +87,13 @@ def build_argparser() -> argparse.ArgumentParser:
     ap.add_argument("--phasec_json", type=Path, required=True)
     ap.add_argument("--out_dir", type=Path, required=True)
     ap.add_argument("--title", type=str, default="OD-level Coverage vs Diversity")
-    ap.add_argument("--point_alpha", type=float, default=0.42)
-    ap.add_argument("--point_size", type=float, default=14.0)
+    ap.add_argument("--point_alpha", type=float, default=0.46)
+    ap.add_argument("--point_size", type=float, default=20.0)
     ap.add_argument("--show_mean_label", action="store_true")
+    ap.add_argument("--show_panel_label", action="store_true", help="Add panel label 'a' for combined multi-panel figures.")
+    ap.add_argument("--legend_show_counts", action="store_true", help="Show finite/kept counts in legend.")
+    ap.add_argument("--show_note_text", action="store_true", help="Show finite-point note inside plot area.")
+    ap.add_argument("--mean_marker_size", type=float, default=120.0)
     return ap
 
 
@@ -100,7 +117,8 @@ def main() -> None:
 
     with paper_style():
         fig, ax = plt.subplots(figsize=(6.2, 4.8), constrained_layout=True)
-        add_panel_label(ax, "a")
+        if bool(args.show_panel_label):
+            add_panel_label(ax, "a")
 
         legend_handles: List[Any] = []
         legend_labels: List[str] = []
@@ -142,19 +160,23 @@ def main() -> None:
                 zorder=2,
             )
             legend_handles.append(sc)
-            legend_labels.append(f"{method_name} (finite={len(xs)}/{len(per_od)})")
+            pretty = _pretty_method_label(str(method_name))
+            if bool(args.legend_show_counts):
+                legend_labels.append(f"{pretty} (finite={len(xs)}/{len(per_od)})")
+            else:
+                legend_labels.append(pretty)
 
             # mean point from summary_table if available, otherwise from per_od.
             st = summary_by_method.get(str(method_name), {})
             mx = _safe_float(st.get("gt_coverage_at_k_mean", np.mean(xs)))
             my = _safe_float(st.get("self_diversity_at_k_mean", np.mean(ys)))
             if np.isfinite(mx) and np.isfinite(my):
-                ax.scatter([mx], [my], s=95, marker="X", c=color, edgecolors="white", linewidths=0.7, zorder=4)
+                ax.scatter([mx], [my], s=float(args.mean_marker_size), marker="X", c=color, edgecolors="white", linewidths=0.8, zorder=4)
                 if bool(args.show_mean_label):
                     off_x, off_y = _mean_label_offset(str(method_name))
                     tx = min(1.0, max(0.0, float(mx) + float(off_x)))
                     ty = min(1.0, max(0.0, float(my) + float(off_y)))
-                    ax.text(tx, ty, f"{method_name}", fontsize=8, color=color, zorder=5)
+                    ax.text(tx, ty, _pretty_method_label(str(method_name)), fontsize=8, color=color, zorder=5)
 
             out_rows.append(
                 {
@@ -174,18 +196,19 @@ def main() -> None:
         ax.grid(alpha=0.22, linewidth=0.6)
         ax.set_xlim(-0.02, 1.02)
         ax.set_ylim(-0.02, 1.02)
-        ax.text(
-            0.02, 0.98,
-            "Only ODs with finite coverage & diversity are plotted.\n"
-            "Diversity is undefined when successful predictions < 2.",
-            transform=ax.transAxes,
-            ha="left",
-            va="top",
-            fontsize=8,
-            color="#555555",
-            bbox={"facecolor": "white", "alpha": 0.78, "edgecolor": "none", "pad": 2.5},
-            zorder=6,
-        )
+        if bool(args.show_note_text):
+            ax.text(
+                0.02, 0.98,
+                "Only ODs with finite coverage & diversity are plotted.\n"
+                "Diversity is undefined when successful predictions < 2.",
+                transform=ax.transAxes,
+                ha="left",
+                va="top",
+                fontsize=8,
+                color="#555555",
+                bbox={"facecolor": "white", "alpha": 0.78, "edgecolor": "none", "pad": 2.5},
+                zorder=6,
+            )
         if legend_handles:
             ax.legend(legend_handles, legend_labels, loc="lower right", framealpha=0.9)
 
@@ -202,6 +225,12 @@ def main() -> None:
         "task": "waycasd_plot_od_diversity_scatter",
         "note": "Only ODs with finite coverage and finite diversity are plotted (diversity requires >=2 successful predictions).",
         "input_phasec_json": str(args.phasec_json),
+        "plot_opts": {
+            "show_panel_label": bool(args.show_panel_label),
+            "legend_show_counts": bool(args.legend_show_counts),
+            "show_note_text": bool(args.show_note_text),
+            "mean_marker_size": float(args.mean_marker_size),
+        },
         "summary_points": out_rows,
         "outputs": {"png": str(out_png), "pdf": str(out_pdf)},
     }

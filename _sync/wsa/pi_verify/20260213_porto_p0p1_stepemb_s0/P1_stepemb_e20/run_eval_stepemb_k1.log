@@ -1,0 +1,22 @@
+/home/jinlin/miniconda3/envs/dpl/lib/python3.11/site-packages/torch/nn/modules/transformer.py:392: UserWarning: enable_nested_tensor is True, but self.use_nested_tensor is False because encoder_layer.norm_first was True
+  warnings.warn(
+[city0] start n_routes=1000 latent_source=flow region_constraint=none compare_beam=True
+[city0] batch 0:64/1000
+[city0] batch 64:128/1000
+[city0] batch 128:192/1000
+[city0] batch 192:256/1000
+[city0] batch 256:320/1000
+[city0] batch 320:384/1000
+[city0] batch 384:448/1000
+[city0] batch 448:512/1000
+[city0] batch 512:576/1000
+[city0] batch 576:640/1000
+[city0] batch 640:704/1000
+[city0] batch 704:768/1000
+[city0] batch 768:832/1000
+[city0] batch 832:896/1000
+[city0] batch 896:960/1000
+[city0] batch 960:1000/1000
+[city0] done=1000 routes
+[OK] saved: _sync/wsa/pi_verify/20260213_porto_p0p1_stepemb_s0/P1_stepemb_e20/binned_stepemb_k1_beam10_antiloop_n1000.json
+[OK] saved: _sync/wsa/pi_verify/20260213_porto_p0p1_stepemb_s0/P1_stepemb_e20/per_route_stepemb_k1_beam10_antiloop_n1000.json

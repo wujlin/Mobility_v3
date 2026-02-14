@@ -94,6 +94,18 @@ def _split_dataset(n: int, val_ratio: float, seed: int) -> Tuple[np.ndarray, np.
     return train_idx.astype(np.int64, copy=False), val_idx.astype(np.int64, copy=False)
 
 
+def _read_json(path: Path) -> dict:
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _subset_indices_from_route_ids(dataset: WayRouteDataset, route_ids: np.ndarray) -> np.ndarray:
+    route_ids = np.asarray(route_ids, dtype=np.int64).reshape(-1)
+    if route_ids.size == 0:
+        return np.zeros((0,), dtype=np.int64)
+    mask = np.isin(dataset.route_ids.astype(np.int64, copy=False), route_ids, assume_unique=False)
+    return np.nonzero(mask)[0].astype(np.int64, copy=False)
+
+
 def _infer_decoder_use_dest_dist_from_state(state: Dict[str, torch.Tensor]) -> bool:
     # Old: in_dim = 3*hidden (+1 if dest_dist)
     # New: in_dim = 4*hidden (+1 if dest_dist) when cand_contrast enabled.
@@ -548,6 +560,19 @@ def build_argparser() -> argparse.ArgumentParser:
     p.add_argument("--min_hops", type=int, default=5)
     p.add_argument("--max_way_len", type=int, default=160)
     p.add_argument("--max_routes", type=int, default=None, help="Debug: cap number of routes (after filtering).")
+    p.add_argument(
+        "--split_json",
+        type=Path,
+        default=None,
+        help="Optional split json (expects splits.train/val/test route_ids). If set, uses train/val from split and ignores --val_ratio.",
+    )
+    p.add_argument(
+        "--split_part",
+        type=str,
+        default=None,
+        choices=["train", "val", "test"],
+        help="Compatibility arg (ignored in RL training; train always uses split train+val).",
+    )
 
     p.add_argument("--latent_source", type=str, default="gt", choices=["gt", "flow"])
     p.add_argument("--flow_solver_steps", type=int, default=-1, help="-1=use ckpt cfg; >0=override.")
@@ -910,8 +935,34 @@ def main() -> None:
 
     # Dataset
     routes = load_way_routes_npz(Path(args.way_routes_npz))
-    dataset = WayRouteDataset(routes, max_routes=cfg.max_routes, max_way_len=int(cfg.max_way_len), min_hops=int(cfg.min_hops))
-    tr_idx, va_idx = _split_dataset(len(dataset), cfg.val_ratio, cfg.seed)
+    if args.split_part is not None:
+        log.warning("--split_part=%s is ignored by train_way_casd_decoder_rl (training uses split train+val).", str(args.split_part))
+    if args.split_json is not None and args.max_routes is not None:
+        log.warning("--split_json is set, ignoring --max_routes to avoid inconsistent splits.")
+    dataset = WayRouteDataset(
+        routes,
+        max_routes=(None if args.split_json is not None else cfg.max_routes),
+        max_way_len=int(cfg.max_way_len),
+        min_hops=int(cfg.min_hops),
+    )
+    if args.split_json is None:
+        tr_idx, va_idx = _split_dataset(len(dataset), cfg.val_ratio, cfg.seed)
+    else:
+        split = _read_json(Path(args.split_json))
+        splits = split.get("splits", split)
+        tr_rids = np.asarray(splits.get("train", []), dtype=np.int64).reshape(-1)
+        va_rids = np.asarray(splits.get("val", []), dtype=np.int64).reshape(-1)
+        tr_idx = _subset_indices_from_route_ids(dataset, tr_rids)
+        va_idx = _subset_indices_from_route_ids(dataset, va_rids)
+        if int(tr_idx.size) == 0 or int(va_idx.size) == 0:
+            raise SystemExit(
+                f"[FATAL] split_json produced empty subsets: train_idx={int(tr_idx.size)} val_idx={int(va_idx.size)}. "
+                "Check min_hops/max_way_len match split generation."
+            )
+        log.info(
+            f"split_json={args.split_json} train_routes={int(tr_rids.size)} val_routes={int(va_rids.size)} "
+            f"=> train_idx={int(tr_idx.size)} val_idx={int(va_idx.size)}"
+        )
     train_set = Subset(dataset, tr_idx.tolist())
     val_set = Subset(dataset, va_idx.tolist())
     log.info(f"routes: total={len(dataset)} train={len(train_set)} val={len(val_set)} min_hops={cfg.min_hops} max_way_len={cfg.max_way_len}")
@@ -1191,6 +1242,7 @@ def main() -> None:
             "flow_ckpt": (str(args.flow_ckpt) if args.flow_ckpt is not None else None),
             "way_regions_npz": (str(args.way_regions_npz) if args.way_regions_npz is not None else None),
             "region_ar_ckpt": (str(args.region_ar_ckpt) if getattr(args, "region_ar_ckpt", None) is not None else None),
+            "split_json": (str(args.split_json) if args.split_json is not None else None),
         },
         "out_dir": str(out_dir),
         "best_score": float(best),

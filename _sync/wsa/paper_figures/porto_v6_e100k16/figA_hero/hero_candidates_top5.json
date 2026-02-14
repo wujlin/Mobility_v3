@@ -1,0 +1,118 @@
+{
+  "ok": true,
+  "task": "waycasd_select_hero_od_candidates",
+  "cfg": {
+    "phasec_json": "_sync/wsa/pi_verify/20260214_porto_p1_stepemb_cont_e100_s0/phaseC_k16_n5000/od_coverage_diversity_k16_n5000.json",
+    "hero_label": "Way-CASD_E2e100_K16",
+    "hero_method_label": "Way-CASD",
+    "city": 0,
+    "hops_min": 20,
+    "hops_max": 40,
+    "min_gt_routes": 5,
+    "min_hero_success": 3,
+    "max_baseline_success": 2,
+    "min_gt_jaccard_dist": 0.5,
+    "topk": 5,
+    "max_gt_pairs": 5000,
+    "seed": 0,
+    "baseline_labels": [
+      "RNN",
+      "Transformer"
+    ],
+    "methods": [
+      {
+        "label": "Way-CASD",
+        "decode": "greedy",
+        "path": "_sync/wsa/pi_verify/20260214_porto_p1_stepemb_cont_e100_s0/phaseB_k16_n5000/per_route_waycasd_e2e100_k16_dest_n5000.json"
+      },
+      {
+        "label": "RNN",
+        "decode": "beam",
+        "path": "_sync/wsa/pi_verify/20260212_porto_phaseBC_n5000_s0/phaseB/per_route_rnn_beam10_n5000.json"
+      },
+      {
+        "label": "Transformer",
+        "decode": "beam",
+        "path": "_sync/wsa/pi_verify/20260212_porto_phaseBC_n5000_s0/phaseB/per_route_transformer_beam10_n5000.json"
+      }
+    ]
+  },
+  "n_candidates_total": 6,
+  "top_candidates": [
+    {
+      "start_way": 25250,
+      "dest_way": 20600,
+      "n_gt_routes": 10,
+      "gt_hops_median": 26.5,
+      "gt_jaccard_dist_mean": 0.5221177406037332,
+      "hero_success": 10,
+      "baseline_success": {
+        "RNN": 0,
+        "Transformer": 0
+      },
+      "phasec_gt_coverage_at_k": 0.4,
+      "phasec_self_diversity_at_k": 0.24265184447196625,
+      "phasec_n_pred_success_used": 10
+    },
+    {
+      "start_way": 312,
+      "dest_way": 332,
+      "n_gt_routes": 10,
+      "gt_hops_median": 32.5,
+      "gt_jaccard_dist_mean": 0.772194889034576,
+      "hero_success": 9,
+      "baseline_success": {
+        "RNN": 0,
+        "Transformer": 0
+      },
+      "phasec_gt_coverage_at_k": 0.0,
+      "phasec_self_diversity_at_k": 0.7460349211370474,
+      "phasec_n_pred_success_used": 9
+    },
+    {
+      "start_way": 7529,
+      "dest_way": 7665,
+      "n_gt_routes": 11,
+      "gt_hops_median": 36.0,
+      "gt_jaccard_dist_mean": 0.5865247271272225,
+      "hero_success": 8,
+      "baseline_success": {
+        "RNN": 0,
+        "Transformer": 0
+      },
+      "phasec_gt_coverage_at_k": 0.2727272727272727,
+      "phasec_self_diversity_at_k": 0.6269104319020077,
+      "phasec_n_pred_success_used": 8
+    },
+    {
+      "start_way": 20591,
+      "dest_way": 22047,
+      "n_gt_routes": 7,
+      "gt_hops_median": 30.0,
+      "gt_jaccard_dist_mean": 0.6840636968782864,
+      "hero_success": 7,
+      "baseline_success": {
+        "RNN": 0,
+        "Transformer": 0
+      },
+      "phasec_gt_coverage_at_k": 0.0,
+      "phasec_self_diversity_at_k": 0.7380648823471456,
+      "phasec_n_pred_success_used": 7
+    },
+    {
+      "start_way": 22074,
+      "dest_way": 332,
+      "n_gt_routes": 7,
+      "gt_hops_median": 20.0,
+      "gt_jaccard_dist_mean": 0.6204600334096222,
+      "hero_success": 7,
+      "baseline_success": {
+        "RNN": 0,
+        "Transformer": 0
+      },
+      "phasec_gt_coverage_at_k": 0.0,
+      "phasec_self_diversity_at_k": 0.7286271116829667,
+      "phasec_n_pred_success_used": 7
+    }
+  ]
+}

@@ -8,10 +8,10 @@
     "city": 0,
     "hops_min": 20,
     "hops_max": 40,
-    "min_gt_routes": 5,
+    "min_gt_routes": 3,
     "min_hero_success": 3,
     "max_baseline_success": 2,
-    "min_gt_jaccard_dist": 0.5,
+    "min_gt_jaccard_dist": 0.4,
     "topk": 5,
     "max_gt_pairs": 5000,
     "seed": 0,
@@ -37,7 +37,7 @@
       }
     ]
   },
-  "n_candidates_total": 6,
+  "n_candidates_total": 24,
   "top_candidates": [
     {
       "start_way": 25250,

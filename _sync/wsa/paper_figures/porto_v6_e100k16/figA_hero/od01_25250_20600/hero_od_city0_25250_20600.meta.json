@@ -1,0 +1,68 @@
+{
+  "ok": true,
+  "task": "waycasd_plot_od_hero_figure",
+  "selected_od": {
+    "city": 0,
+    "start_way": 25250,
+    "dest_way": 20600,
+    "gt_hops_median": 26.5,
+    "phasec_row": {
+      "start_way": 25250,
+      "dest_way": 20600,
+      "manual": true
+    }
+  },
+  "methods": [
+    {
+      "label": "Way-CASD",
+      "decode": "greedy",
+      "path": "_sync/wsa/pi_verify/20260214_porto_p1_stepemb_cont_e100_s0/phaseB_k16_n5000/per_route_waycasd_e2e100_k16_dest_n5000.json"
+    },
+    {
+      "label": "RNN",
+      "decode": "beam",
+      "path": "_sync/wsa/pi_verify/20260212_porto_phaseBC_n5000_s0/phaseB/per_route_rnn_beam10_n5000.json"
+    },
+    {
+      "label": "Transformer",
+      "decode": "beam",
+      "path": "_sync/wsa/pi_verify/20260212_porto_phaseBC_n5000_s0/phaseB/per_route_transformer_beam10_n5000.json"
+    }
+  ],
+  "pretty_method_labels": {
+    "Way-CASD": "Way-CASD",
+    "RNN": "RNN",
+    "Transformer": "Transformer"
+  },
+  "method_meta": {
+    "Way-CASD": {
+      "n_routes_od": 10,
+      "n_success_od": 10,
+      "n_unique_drawn": 8
+    },
+    "RNN": {
+      "n_routes_od": 10,
+      "n_success_od": 0,
+      "n_unique_drawn": 0
+    },
+    "Transformer": {
+      "n_routes_od": 10,
+      "n_success_od": 0,
+      "n_unique_drawn": 0
+    }
+  },
+  "inputs": {
+    "phasec_json": "_sync/wsa/pi_verify/20260214_porto_p1_stepemb_cont_e100_s0/phaseC_k16_n5000/od_coverage_diversity_k16_n5000.json",
+    "way_features_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD0_waydata_porto_seed0/W3_way_features/way_features.npz",
+    "coord_mode": "latlon",
+    "use_basemap": true,
+    "basemap_active_final": true,
+    "city_grid_meta": {
+      "0": "/home/jinlin/data/geoexplicit_data/porto_taxi/semantic/osm_road_prob_meta.json"
+    }
+  },
+  "outputs": {
+    "png": "_sync/wsa/paper_figures/porto_v6_e100k16/figA_hero/od01_25250_20600/hero_od_city0_25250_20600.png",
+    "pdf": "_sync/wsa/paper_figures/porto_v6_e100k16/figA_hero/od01_25250_20600/hero_od_city0_25250_20600.pdf"
+  }
+}

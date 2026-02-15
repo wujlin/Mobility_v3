@@ -1,0 +1,21 @@
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "/home/jinlin/projects/Mobility_v3/src/evaluation/way_casd_binned_eval.py", line 1475, in <module>
+    main()
+  File "/home/jinlin/miniconda3/envs/dpl/lib/python3.11/site-packages/torch/utils/_contextlib.py", line 120, in decorate_context
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jinlin/projects/Mobility_v3/src/evaluation/way_casd_binned_eval.py", line 808, in main
+    ckpt = torch.load(str(args.ae_ckpt), map_location=device)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jinlin/miniconda3/envs/dpl/lib/python3.11/site-packages/torch/serialization.py", line 1484, in load
+    with _open_file_like(f, "rb") as opened_file:
+         ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jinlin/miniconda3/envs/dpl/lib/python3.11/site-packages/torch/serialization.py", line 759, in _open_file_like
+    return _open_file(name_or_buffer, mode)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jinlin/miniconda3/envs/dpl/lib/python3.11/site-packages/torch/serialization.py", line 740, in __init__
+    super().__init__(open(name, mode))
+                     ^^^^^^^^^^^^^^^^
+FileNotFoundError: [Errno 2] No such file or directory: '_sync/wsa/pi_verify/20260214_porto_rl_from_e100_lenratio_s0/ckpt_best.pt'

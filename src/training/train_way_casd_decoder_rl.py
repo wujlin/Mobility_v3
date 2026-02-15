@@ -76,6 +76,12 @@ class TrainCfg:
     ce_weight: float
     max_grad_norm: float
 
+    # Dense reward (per-step shaping via graph distance).
+    dense_reward: bool
+    graph_dist_npz: Optional[str]
+    dense_shaping_coef: float  # weight for per-step distance-decrease reward
+    dense_arrival_bonus: float  # bonus added at final step upon reaching dest
+
 
 def _set_seed(seed: int) -> None:
     np.random.seed(int(seed))
@@ -615,6 +621,12 @@ def build_argparser() -> argparse.ArgumentParser:
     p.add_argument("--ce_weight", type=float, default=0.0, help="Optional: mix teacher-forcing CE loss (0=disable).")
     p.add_argument("--max_grad_norm", type=float, default=1.0)
 
+    # Dense reward args.
+    p.add_argument("--dense_reward", action="store_true", help="Enable per-step dense reward via graph hop distance shaping.")
+    p.add_argument("--graph_dist_npz", type=Path, default=None, help="Precomputed graph distance matrix (dist_matrix: int16 (N,N)).")
+    p.add_argument("--dense_shaping_coef", type=float, default=0.1, help="Weight for per-step distance-decrease shaping reward.")
+    p.add_argument("--dense_arrival_bonus", type=float, default=1.0, help="Bonus added at final step upon reaching destination.")
+
     p.add_argument("--log_every", type=int, default=20)
     p.add_argument("--save_every", type=int, default=1)
     return p
@@ -640,6 +652,7 @@ def _decode_and_reward(
     region_adj_t: Optional[torch.Tensor],
     region_adj_np: Optional[np.ndarray],
     region_ar_model: Optional[RegionARModel],
+    graph_dist_np: Optional[np.ndarray],
     device: torch.device,
     rng: np.random.Generator,
     baseline_ema: float,
@@ -747,6 +760,148 @@ def _decode_and_reward(
                 route_cond["region_seq_pad"] = pad
             z = flow.sample(route_cond=route_cond, solver_steps=steps_use)
 
+    # ---- Dense-reward branch: per-step shaping via graph distance ----
+    if bool(cfg.dense_reward) and graph_dist_np is not None:
+        paths, logp_steps, ent_steps = ae.decoder.sample_decode_batched_dense(
+            way_embedder=ae.way_enc,
+            latent_tokens=z,
+            route_cond=route_cond,
+            start_way=start_way,
+            dest_way=dest_way,
+            way_region=(way_region_t if str(cfg.region_constraint) != "none" else None),
+            region_seq=(region_seq_use if str(cfg.region_constraint) != "none" else None),
+            region_adj=region_adj_t,
+            region_constraint_mode=str(cfg.region_constraint_mode),
+            region_constraint_fallback=str(cfg.region_constraint_fallback),
+            max_len=int(cfg.max_decode_len),
+            max_candidates=(None if int(cfg.decode_max_candidates) < 0 else int(cfg.decode_max_candidates)),
+            candidate_policy=str(cfg.decode_candidate_policy),
+            include_dest_if_successor=bool(cfg.decode_include_dest_if_successor),
+            guided_dest_alpha=float(cfg.guided_dest_alpha),
+            temperature=float(cfg.temperature),
+            anti_loop_k=int(cfg.anti_loop_k),
+            anti_loop_penalty=float(cfg.anti_loop_penalty),
+            anti_loop_penalty_k=int(cfg.anti_loop_penalty_k),
+        )
+
+        # Compute per-step dense reward: r_t = d(way_{t-1}, dest) - d(way_t, dest)
+        # Positive when moving closer, negative when moving away.
+        dest_np = dest_way.detach().cpu().numpy().astype(np.int64, copy=False).reshape(-1)
+        N_ways = int(graph_dist_np.shape[0])
+        max_hop = int(np.iinfo(graph_dist_np.dtype).max)  # sentinel for unreachable
+
+        per_step_rewards: List[List[float]] = []
+        for i in range(B):
+            p = paths[i]
+            dw_i = int(dest_np[i])
+            T = len(p) - 1  # number of transitions (= len(logp_steps[i]))
+            rewards_i: List[float] = []
+            for t in range(T):
+                w_prev = int(p[t])
+                w_cur = int(p[t + 1])
+                d_prev = int(graph_dist_np[w_prev, dw_i]) if (0 <= w_prev < N_ways and 0 <= dw_i < N_ways) else max_hop
+                d_cur = int(graph_dist_np[w_cur, dw_i]) if (0 <= w_cur < N_ways and 0 <= dw_i < N_ways) else max_hop
+                # Clamp unreachable to a large finite value.
+                if d_prev >= max_hop:
+                    d_prev = N_ways
+                if d_cur >= max_hop:
+                    d_cur = N_ways
+                shaping = float(d_prev - d_cur)  # +1 if one hop closer, -1 if one hop farther
+                rewards_i.append(float(cfg.dense_shaping_coef) * shaping)
+            # Arrival bonus at last step.
+            if T > 0 and int(p[-1]) == int(dw_i):
+                rewards_i[-1] += float(cfg.dense_arrival_bonus)
+            per_step_rewards.append(rewards_i)
+
+        # Build per-step advantage and policy gradient loss.
+        # advantage_t = R_t - baseline, where R_t = sum_{t'>=t} gamma^{t'-t} * r_{t'} (gamma=1 for simplicity).
+        # For simplicity (and stability), use return-to-go as reward signal per step.
+        loss_rl = torch.tensor(0.0, device=device)
+        total_entropy = torch.tensor(0.0, device=device)
+        n_steps_total = 0
+        for i in range(B):
+            T = len(logp_steps[i])
+            if T == 0:
+                continue
+            # Compute return-to-go for each step (undiscounted).
+            returns = [0.0] * T
+            running = 0.0
+            for t in range(T - 1, -1, -1):
+                running += per_step_rewards[i][t]
+                returns[t] = running
+
+            returns_t = torch.as_tensor(returns, dtype=torch.float32, device=device)
+            # Keep autograd graph from decoder sampling (do NOT detach/cpu/tolist here).
+            logp_t = torch.stack(logp_steps[i], dim=0).to(dtype=torch.float32)
+            ent_t = torch.stack(ent_steps[i], dim=0).to(dtype=torch.float32)
+
+            # Per-step baseline: mean of returns across this trajectory (simple).
+            baseline_step = returns_t.mean()
+            adv_t = returns_t - baseline_step
+
+            loss_rl = loss_rl - (adv_t.detach() * logp_t).sum()
+            total_entropy = total_entropy + ent_t.sum()
+            n_steps_total += T
+
+        if n_steps_total > 0:
+            loss_rl = loss_rl / float(n_steps_total)
+            total_entropy = total_entropy / float(n_steps_total)
+
+        loss_rl = loss_rl - float(cfg.entropy_coef) * total_entropy
+
+        # Also build trajectory-level stats for logging (reuse original metrics).
+        last_way = torch.as_tensor([int(p[-1]) if p else int(start_way[i].item()) for i, p in enumerate(paths)], device=device, dtype=torch.long)
+        success = (last_way == dest_way.to(dtype=torch.long)).to(dtype=torch.float32)
+        hops = torch.as_tensor([max(0, len(p) - 1) for p in paths], device=device, dtype=torch.float32)
+        has_loop = torch.as_tensor([1.0 if _has_loop(p) else 0.0 for p in paths], device=device, dtype=torch.float32)
+        hit_wall = ((hops >= float(cfg.max_decode_len)) & (success < 0.5)).to(dtype=torch.float32)
+
+        # Trajectory-level reward for logging only (sum of per-step rewards).
+        reward = torch.as_tensor(
+            [sum(per_step_rewards[i]) if per_step_rewards[i] else 0.0 for i in range(B)],
+            device=device, dtype=torch.float32,
+        )
+
+        # Optional: CE loss.
+        ce_loss = torch.tensor(0.0, device=device)
+        if float(cfg.ce_weight) > 0.0:
+            tgt = b["trans"]["target_idx"].to(dtype=torch.long)
+            if int(tgt.numel()) > 0:
+                logits = ae.decoder.score_candidates(
+                    way_embedder=ae.way_enc,
+                    latent_tokens=z.detach(),
+                    route_cond=route_cond,
+                    trans=b["trans"],
+                )
+                ce_loss = F.cross_entropy(logits, tgt, reduction="mean")
+
+        loss = loss_rl + float(cfg.ce_weight) * ce_loss
+        # Dummy entropy_sum for compatibility.
+        ent_sums: List[torch.Tensor] = []
+        for i in range(B):
+            if len(ent_steps[i]) > 0:
+                ent_sums.append(torch.stack(ent_steps[i], dim=0).sum().to(dtype=torch.float32))
+            else:
+                ent_sums.append(torch.zeros((), device=device, dtype=torch.float32))
+        entropy_sum = torch.stack(ent_sums, dim=0)
+
+        stats = {
+            "loss": float(loss.detach().item()),
+            "loss_rl": float(loss_rl.detach().item()),
+            "loss_ce": float(ce_loss.detach().item()) if float(cfg.ce_weight) > 0.0 else 0.0,
+            "reward_mean": float(reward.detach().mean().item()) if reward.numel() else float("nan"),
+            "success_rate": float(success.detach().mean().item()) if success.numel() else float("nan"),
+            "dist_mean": 0.0,
+            "hops_mean": float(hops.detach().mean().item()) if hops.numel() else float("nan"),
+            "loop_rate": float(has_loop.detach().mean().item()) if has_loop.numel() else float("nan"),
+            "hit_wall_rate": float(hit_wall.detach().mean().item()) if hit_wall.numel() else float("nan"),
+            "turn_cost_mean": 0.0,
+            "wall_prox_mean": 0.0,
+            "reward": _summarize_reward(reward),
+        }
+        return loss, reward.detach(), success.detach(), entropy_sum.detach(), stats, float(baseline_ema)
+
+    # ---- Original sparse-reward branch ----
     # Sampling decode (policy).
     paths, logp_sum, entropy_sum = ae.decoder.sample_decode_batched(
         way_embedder=ae.way_enc,
@@ -927,6 +1082,10 @@ def main() -> None:
         baseline_ema_beta=float(args.baseline_ema_beta),
         ce_weight=float(args.ce_weight),
         max_grad_norm=float(args.max_grad_norm),
+        dense_reward=bool(args.dense_reward),
+        graph_dist_npz=(str(args.graph_dist_npz) if args.graph_dist_npz is not None else None),
+        dense_shaping_coef=float(args.dense_shaping_coef),
+        dense_arrival_bonus=float(args.dense_arrival_bonus),
     )
 
     _set_seed(cfg.seed)
@@ -1039,6 +1198,17 @@ def main() -> None:
         past_k=int(ae.cfg.decoder_past_k),
     )
 
+    # Load graph distance matrix for dense reward (optional).
+    graph_dist_np: Optional[np.ndarray] = None
+    if bool(cfg.dense_reward):
+        if cfg.graph_dist_npz is None:
+            raise SystemExit("[FATAL] --graph_dist_npz is required when --dense_reward is set.")
+        gd = np.load(str(cfg.graph_dist_npz), allow_pickle=True)
+        if "dist_matrix" not in gd.files:
+            raise SystemExit(f"[FATAL] graph_dist_npz missing key: dist_matrix (found: {gd.files})")
+        graph_dist_np = np.asarray(gd["dist_matrix"], dtype=np.int16)
+        log.info(f"loaded graph_dist_matrix: shape={graph_dist_np.shape} dtype={graph_dist_np.dtype}")
+
     pin = bool(device.type == "cuda")
     num_workers = max(0, int(cfg.num_workers))
     prefetch_factor = 4 if num_workers > 0 else None
@@ -1097,6 +1267,7 @@ def main() -> None:
                 region_adj_t=region_adj_t,
                 region_adj_np=region_adj_np,
                 region_ar_model=region_ar_model,
+                graph_dist_np=graph_dist_np,
                 device=device,
                 rng=rng_tr,
                 baseline_ema=baseline_ema,
@@ -1134,17 +1305,18 @@ def main() -> None:
                     ae=ae,
                     flow=flow,
                     batch=batch,
-                cfg=cfg,
-                way_region_t=way_region_t,
-                way_region_np=way_region_np,
-                region_adj_t=region_adj_t,
-                region_adj_np=region_adj_np,
-                region_ar_model=region_ar_model,
-                device=device,
-                rng=rng_va,
-                baseline_ema=baseline_ema,
-                train=False,
-            )
+                    cfg=cfg,
+                    way_region_t=way_region_t,
+                    way_region_np=way_region_np,
+                    region_adj_t=region_adj_t,
+                    region_adj_np=region_adj_np,
+                    region_ar_model=region_ar_model,
+                    graph_dist_np=graph_dist_np,
+                    device=device,
+                    rng=rng_va,
+                    baseline_ema=baseline_ema,
+                    train=False,
+                )
                 v_loss += float(stats["loss"])
                 v_reward += float(stats["reward_mean"]) if np.isfinite(float(stats["reward_mean"])) else 0.0
                 v_succ += float(stats["success_rate"]) if np.isfinite(float(stats["success_rate"])) else 0.0

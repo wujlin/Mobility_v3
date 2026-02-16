@@ -28,14 +28,31 @@ FLOW_CKPT="_sync/wsa/pi_verify/20260212_porto_flow_xattn_regionseq_dev10p_s0/ckp
 
 # Output.
 GRAPH_DIST_NPZ="${DATA_ROOT}/W2_way_graph/graph_dist_bfs.npz"
-OUT_DIR="_sync/wsa/pi_verify/$(date +%Y%m%d)_porto_rl_dense_from_e100_s0"
+RUN_TAG="${RUN_TAG:-dense_sched09to03}"
+OUT_DIR="_sync/wsa/pi_verify/$(date +%Y%m%d)_porto_rl_${RUN_TAG}_from_e100_s0"
 BFS_WORKERS="${BFS_WORKERS:-8}"
 BFS_CHUNK_SIZE="${BFS_CHUNK_SIZE:-64}"
 # 1=fast save (larger file), 0=compressed save (slower)
 BFS_NO_COMPRESS="${BFS_NO_COMPRESS:-1}"
 # Decode-time speed knobs for RL training
-DECODE_MAX_CANDIDATES="${DECODE_MAX_CANDIDATES:-64}"
-DECODE_CANDIDATE_POLICY="${DECODE_CANDIDATE_POLICY:-destdist}"
+DECODE_MAX_CANDIDATES="${DECODE_MAX_CANDIDATES:-0}"
+DECODE_CANDIDATE_POLICY="${DECODE_CANDIDATE_POLICY:-first}"
+
+# RL training knobs
+BATCH_SIZE="${BATCH_SIZE:-64}"
+NUM_WORKERS="${NUM_WORKERS:-4}"
+N_EPOCHS="${N_EPOCHS:-20}"
+CE_WEIGHT_START="${CE_WEIGHT_START:-0.9}"
+CE_WEIGHT_END="${CE_WEIGHT_END:-0.3}"
+DENSE_SHAPING_COEF="${DENSE_SHAPING_COEF:-0.3}"
+DENSE_ARRIVAL_BONUS="${DENSE_ARRIVAL_BONUS:-2.0}"
+BEST_METRIC="${BEST_METRIC:-val_success}"
+AMP_BF16="${AMP_BF16:-1}"
+
+AMP_FLAG=""
+if [ "${AMP_BF16}" = "1" ]; then
+    AMP_FLAG="--amp_bf16"
+fi
 
 # =====================================================================
 # Step 1: Precompute graph hop-distance matrix (if not already done)
@@ -72,8 +89,9 @@ python -m src.training.train_way_casd_decoder_rl \
     --split_json "${SPLIT_JSON}" \
     --out_dir "${OUT_DIR}" \
     --latent_source flow \
-    --batch_size 32 \
-    --n_epochs 10 \
+    --batch_size "${BATCH_SIZE}" \
+    --num_workers "${NUM_WORKERS}" \
+    --n_epochs "${N_EPOCHS}" \
     --lr 1e-5 \
     --seed 0 \
     --device cuda \
@@ -88,12 +106,16 @@ python -m src.training.train_way_casd_decoder_rl \
     --anti_loop_penalty_k 4 \
     --dense_reward \
     --graph_dist_npz "${GRAPH_DIST_NPZ}" \
-    --dense_shaping_coef 0.1 \
-    --dense_arrival_bonus 1.0 \
-    --ce_weight 0.95 \
+    --dense_shaping_coef "${DENSE_SHAPING_COEF}" \
+    --dense_arrival_bonus "${DENSE_ARRIVAL_BONUS}" \
+    --ce_weight "${CE_WEIGHT_START}" \
+    --ce_weight_start "${CE_WEIGHT_START}" \
+    --ce_weight_end "${CE_WEIGHT_END}" \
     --entropy_coef 0.01 \
     --baseline ema \
     --baseline_ema_beta 0.98 \
+    --best_metric "${BEST_METRIC}" \
+    ${AMP_FLAG} \
     --reward_success 0.0 \
     --reward_dist 0.0 \
     --penalty_len 0.0 \

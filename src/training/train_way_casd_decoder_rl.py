@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+from contextlib import nullcontext
 from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -74,13 +75,23 @@ class TrainCfg:
     baseline: str  # {"mean","ema"}
     baseline_ema_beta: float
     ce_weight: float
+    ce_weight_start: Optional[float]
+    ce_weight_end: Optional[float]
     max_grad_norm: float
+    amp_bf16: bool
+    best_metric: str  # {"val_reward","val_success"}
 
     # Dense reward (per-step shaping via graph distance).
     dense_reward: bool
     graph_dist_npz: Optional[str]
     dense_shaping_coef: float  # weight for per-step distance-decrease reward
     dense_arrival_bonus: float  # bonus added at final step upon reaching dest
+
+
+def _autocast_ctx(cfg: TrainCfg, device: torch.device):
+    if (not bool(cfg.amp_bf16)) or (device.type != "cuda"):
+        return nullcontext()
+    return torch.autocast(device_type="cuda", dtype=torch.bfloat16)
 
 
 def _set_seed(seed: int) -> None:
@@ -619,7 +630,11 @@ def build_argparser() -> argparse.ArgumentParser:
     p.add_argument("--baseline", type=str, default="mean", choices=["mean", "ema"])
     p.add_argument("--baseline_ema_beta", type=float, default=0.98)
     p.add_argument("--ce_weight", type=float, default=0.0, help="Optional: mix teacher-forcing CE loss (0=disable).")
+    p.add_argument("--ce_weight_start", type=float, default=None, help="Optional: start CE weight for linear schedule.")
+    p.add_argument("--ce_weight_end", type=float, default=None, help="Optional: end CE weight for linear schedule.")
     p.add_argument("--max_grad_norm", type=float, default=1.0)
+    p.add_argument("--amp_bf16", action="store_true", help="Enable bf16 autocast on CUDA for decode/scoring.")
+    p.add_argument("--best_metric", type=str, default="val_reward", choices=["val_reward", "val_success"])
 
     # Dense reward args.
     p.add_argument("--dense_reward", action="store_true", help="Enable per-step dense reward via graph hop distance shaping.")
@@ -657,12 +672,14 @@ def _decode_and_reward(
     rng: np.random.Generator,
     baseline_ema: float,
     train: bool,
+    ce_weight_override: Optional[float] = None,
 ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, Dict[str, float], float]:
     b = _to_device(batch, device)
     route_cond = b["route_cond"]
     start_way = route_cond["start_way"]
     dest_way = route_cond["dest_way"]
     B = int(start_way.shape[0])
+    ce_weight_cur = float(cfg.ce_weight if ce_weight_override is None else ce_weight_override)
 
     # Build region_seq (for constraint and/or Flow conditioning).
     need_region_seq = (str(cfg.region_constraint) != "none") or (flow is not None and bool(flow.cfg.use_region_seq))
@@ -741,48 +758,50 @@ def _decode_and_reward(
 
     # Latent source.
     with torch.no_grad():
-        if str(cfg.latent_source) == "gt":
-            z, _ = ae.encode(b["way_seq_pad"])
-        else:
-            if flow is None:
-                raise RuntimeError("latent_source=flow requires --flow_ckpt.")
-            steps = cfg.flow_solver_steps
-            steps_use = int(steps) if steps is not None else None
-            if bool(flow.cfg.use_region_seq):
-                if region_seq_use is None:
-                    raise RuntimeError("Flow requires region_seq conditioning, but region_seq is missing.")
-                maxS = max(1, max(len(x) for x in region_seq_use))
-                pad = torch.full((B, maxS), -1, dtype=torch.long, device=device)
-                for i, rs in enumerate(region_seq_use):
-                    if rs:
-                        pad[i, : len(rs)] = torch.as_tensor(rs, dtype=torch.long, device=device)
-                route_cond = dict(route_cond)
-                route_cond["region_seq_pad"] = pad
-            z = flow.sample(route_cond=route_cond, solver_steps=steps_use)
+        with _autocast_ctx(cfg, device):
+            if str(cfg.latent_source) == "gt":
+                z, _ = ae.encode(b["way_seq_pad"])
+            else:
+                if flow is None:
+                    raise RuntimeError("latent_source=flow requires --flow_ckpt.")
+                steps = cfg.flow_solver_steps
+                steps_use = int(steps) if steps is not None else None
+                if bool(flow.cfg.use_region_seq):
+                    if region_seq_use is None:
+                        raise RuntimeError("Flow requires region_seq conditioning, but region_seq is missing.")
+                    maxS = max(1, max(len(x) for x in region_seq_use))
+                    pad = torch.full((B, maxS), -1, dtype=torch.long, device=device)
+                    for i, rs in enumerate(region_seq_use):
+                        if rs:
+                            pad[i, : len(rs)] = torch.as_tensor(rs, dtype=torch.long, device=device)
+                    route_cond = dict(route_cond)
+                    route_cond["region_seq_pad"] = pad
+                z = flow.sample(route_cond=route_cond, solver_steps=steps_use)
 
     # ---- Dense-reward branch: per-step shaping via graph distance ----
     if bool(cfg.dense_reward) and graph_dist_np is not None:
-        paths, logp_steps, ent_steps = ae.decoder.sample_decode_batched_dense(
-            way_embedder=ae.way_enc,
-            latent_tokens=z,
-            route_cond=route_cond,
-            start_way=start_way,
-            dest_way=dest_way,
-            way_region=(way_region_t if str(cfg.region_constraint) != "none" else None),
-            region_seq=(region_seq_use if str(cfg.region_constraint) != "none" else None),
-            region_adj=region_adj_t,
-            region_constraint_mode=str(cfg.region_constraint_mode),
-            region_constraint_fallback=str(cfg.region_constraint_fallback),
-            max_len=int(cfg.max_decode_len),
-            max_candidates=(None if int(cfg.decode_max_candidates) < 0 else int(cfg.decode_max_candidates)),
-            candidate_policy=str(cfg.decode_candidate_policy),
-            include_dest_if_successor=bool(cfg.decode_include_dest_if_successor),
-            guided_dest_alpha=float(cfg.guided_dest_alpha),
-            temperature=float(cfg.temperature),
-            anti_loop_k=int(cfg.anti_loop_k),
-            anti_loop_penalty=float(cfg.anti_loop_penalty),
-            anti_loop_penalty_k=int(cfg.anti_loop_penalty_k),
-        )
+        with _autocast_ctx(cfg, device):
+            paths, logp_steps, ent_steps = ae.decoder.sample_decode_batched_dense(
+                way_embedder=ae.way_enc,
+                latent_tokens=z,
+                route_cond=route_cond,
+                start_way=start_way,
+                dest_way=dest_way,
+                way_region=(way_region_t if str(cfg.region_constraint) != "none" else None),
+                region_seq=(region_seq_use if str(cfg.region_constraint) != "none" else None),
+                region_adj=region_adj_t,
+                region_constraint_mode=str(cfg.region_constraint_mode),
+                region_constraint_fallback=str(cfg.region_constraint_fallback),
+                max_len=int(cfg.max_decode_len),
+                max_candidates=(None if int(cfg.decode_max_candidates) < 0 else int(cfg.decode_max_candidates)),
+                candidate_policy=str(cfg.decode_candidate_policy),
+                include_dest_if_successor=bool(cfg.decode_include_dest_if_successor),
+                guided_dest_alpha=float(cfg.guided_dest_alpha),
+                temperature=float(cfg.temperature),
+                anti_loop_k=int(cfg.anti_loop_k),
+                anti_loop_penalty=float(cfg.anti_loop_penalty),
+                anti_loop_penalty_k=int(cfg.anti_loop_penalty_k),
+            )
 
         # Compute per-step dense reward: r_t = d(way_{t-1}, dest) - d(way_t, dest)
         # Positive when moving closer, negative when moving away.
@@ -864,18 +883,19 @@ def _decode_and_reward(
 
         # Optional: CE loss.
         ce_loss = torch.tensor(0.0, device=device)
-        if float(cfg.ce_weight) > 0.0:
+        if ce_weight_cur > 0.0:
             tgt = b["trans"]["target_idx"].to(dtype=torch.long)
             if int(tgt.numel()) > 0:
-                logits = ae.decoder.score_candidates(
-                    way_embedder=ae.way_enc,
-                    latent_tokens=z.detach(),
-                    route_cond=route_cond,
-                    trans=b["trans"],
-                )
+                with _autocast_ctx(cfg, device):
+                    logits = ae.decoder.score_candidates(
+                        way_embedder=ae.way_enc,
+                        latent_tokens=z.detach(),
+                        route_cond=route_cond,
+                        trans=b["trans"],
+                    )
                 ce_loss = F.cross_entropy(logits, tgt, reduction="mean")
 
-        loss = loss_rl + float(cfg.ce_weight) * ce_loss
+        loss = loss_rl + ce_weight_cur * ce_loss
         # Dummy entropy_sum for compatibility.
         ent_sums: List[torch.Tensor] = []
         for i in range(B):
@@ -888,7 +908,8 @@ def _decode_and_reward(
         stats = {
             "loss": float(loss.detach().item()),
             "loss_rl": float(loss_rl.detach().item()),
-            "loss_ce": float(ce_loss.detach().item()) if float(cfg.ce_weight) > 0.0 else 0.0,
+            "loss_ce": float(ce_loss.detach().item()) if ce_weight_cur > 0.0 else 0.0,
+            "ce_weight": float(ce_weight_cur),
             "reward_mean": float(reward.detach().mean().item()) if reward.numel() else float("nan"),
             "success_rate": float(success.detach().mean().item()) if success.numel() else float("nan"),
             "dist_mean": 0.0,
@@ -903,27 +924,28 @@ def _decode_and_reward(
 
     # ---- Original sparse-reward branch ----
     # Sampling decode (policy).
-    paths, logp_sum, entropy_sum = ae.decoder.sample_decode_batched(
-        way_embedder=ae.way_enc,
-        latent_tokens=z,
-        route_cond=route_cond,
-        start_way=start_way,
-        dest_way=dest_way,
-        way_region=(way_region_t if str(cfg.region_constraint) != "none" else None),
-        region_seq=(region_seq_use if str(cfg.region_constraint) != "none" else None),
-        region_adj=region_adj_t,
-        region_constraint_mode=str(cfg.region_constraint_mode),
-        region_constraint_fallback=str(cfg.region_constraint_fallback),
-        max_len=int(cfg.max_decode_len),
-        max_candidates=(None if int(cfg.decode_max_candidates) < 0 else int(cfg.decode_max_candidates)),
-        candidate_policy=str(cfg.decode_candidate_policy),
-        include_dest_if_successor=bool(cfg.decode_include_dest_if_successor),
-        guided_dest_alpha=float(cfg.guided_dest_alpha),
-        temperature=float(cfg.temperature),
-        anti_loop_k=int(cfg.anti_loop_k),
-        anti_loop_penalty=float(cfg.anti_loop_penalty),
-        anti_loop_penalty_k=int(cfg.anti_loop_penalty_k),
-    )
+    with _autocast_ctx(cfg, device):
+        paths, logp_sum, entropy_sum = ae.decoder.sample_decode_batched(
+            way_embedder=ae.way_enc,
+            latent_tokens=z,
+            route_cond=route_cond,
+            start_way=start_way,
+            dest_way=dest_way,
+            way_region=(way_region_t if str(cfg.region_constraint) != "none" else None),
+            region_seq=(region_seq_use if str(cfg.region_constraint) != "none" else None),
+            region_adj=region_adj_t,
+            region_constraint_mode=str(cfg.region_constraint_mode),
+            region_constraint_fallback=str(cfg.region_constraint_fallback),
+            max_len=int(cfg.max_decode_len),
+            max_candidates=(None if int(cfg.decode_max_candidates) < 0 else int(cfg.decode_max_candidates)),
+            candidate_policy=str(cfg.decode_candidate_policy),
+            include_dest_if_successor=bool(cfg.decode_include_dest_if_successor),
+            guided_dest_alpha=float(cfg.guided_dest_alpha),
+            temperature=float(cfg.temperature),
+            anti_loop_k=int(cfg.anti_loop_k),
+            anti_loop_penalty=float(cfg.anti_loop_penalty),
+            anti_loop_penalty_k=int(cfg.anti_loop_penalty_k),
+        )
 
     # Compute rewards (torch on device for convenience; reward itself is treated as constant in REINFORCE).
     last_way = torch.as_tensor([int(p[-1]) if p else int(start_way[i].item()) for i, p in enumerate(paths)], device=device, dtype=torch.long)
@@ -1003,24 +1025,26 @@ def _decode_and_reward(
 
     # Optional: CE loss (teacher forcing) to stabilize.
     ce_loss = torch.tensor(0.0, device=device)
-    if float(cfg.ce_weight) > 0.0:
+    if ce_weight_cur > 0.0:
         tgt = b["trans"]["target_idx"].to(dtype=torch.long)
         if int(tgt.numel()) > 0:
-            logits = ae.decoder.score_candidates(
-                way_embedder=ae.way_enc,
-                latent_tokens=z.detach(),
-                route_cond=route_cond,
-                trans=b["trans"],
-            )
+            with _autocast_ctx(cfg, device):
+                logits = ae.decoder.score_candidates(
+                    way_embedder=ae.way_enc,
+                    latent_tokens=z.detach(),
+                    route_cond=route_cond,
+                    trans=b["trans"],
+                )
             ce_loss = F.cross_entropy(logits, tgt, reduction="mean")
 
     loss_rl = -(adv * logp_sum).mean() - float(cfg.entropy_coef) * entropy_sum.mean()
-    loss = loss_rl + float(cfg.ce_weight) * ce_loss
+    loss = loss_rl + ce_weight_cur * ce_loss
 
     stats = {
         "loss": float(loss.detach().item()),
         "loss_rl": float(loss_rl.detach().item()),
-        "loss_ce": float(ce_loss.detach().item()) if float(cfg.ce_weight) > 0.0 else 0.0,
+        "loss_ce": float(ce_loss.detach().item()) if ce_weight_cur > 0.0 else 0.0,
+        "ce_weight": float(ce_weight_cur),
         "reward_mean": float(reward.detach().mean().item()) if reward.numel() else float("nan"),
         "success_rate": float(success.detach().mean().item()) if success.numel() else float("nan"),
         "dist_mean": float(dist.detach().mean().item()) if dist.numel() else float("nan"),
@@ -1081,7 +1105,11 @@ def main() -> None:
         baseline=str(args.baseline),
         baseline_ema_beta=float(args.baseline_ema_beta),
         ce_weight=float(args.ce_weight),
+        ce_weight_start=(float(args.ce_weight_start) if args.ce_weight_start is not None else None),
+        ce_weight_end=(float(args.ce_weight_end) if args.ce_weight_end is not None else None),
         max_grad_norm=float(args.max_grad_norm),
+        amp_bf16=bool(args.amp_bf16),
+        best_metric=str(args.best_metric),
         dense_reward=bool(args.dense_reward),
         graph_dist_npz=(str(args.graph_dist_npz) if args.graph_dist_npz is not None else None),
         dense_shaping_coef=float(args.dense_shaping_coef),
@@ -1091,6 +1119,8 @@ def main() -> None:
     _set_seed(cfg.seed)
     device = torch.device(cfg.device if (cfg.device != "cuda" or torch.cuda.is_available()) else "cpu")
     log.info(f"device={device}")
+    if bool(cfg.amp_bf16) and device.type != "cuda":
+        log.warning("--amp_bf16 is set but device is not CUDA; autocast will be disabled.")
 
     # Dataset
     routes = load_way_routes_npz(Path(args.way_routes_npz))
@@ -1247,6 +1277,14 @@ def main() -> None:
     log_every = max(1, int(args.log_every))
 
     for epoch in range(1, int(cfg.n_epochs) + 1):
+        if (cfg.ce_weight_start is not None) or (cfg.ce_weight_end is not None):
+            ce_w_start = float(cfg.ce_weight if cfg.ce_weight_start is None else cfg.ce_weight_start)
+            ce_w_end = float(ce_w_start if cfg.ce_weight_end is None else cfg.ce_weight_end)
+            frac = min(1.0, float(epoch - 1) / float(max(1, int(cfg.n_epochs) - 1)))
+            ce_w_cur = ce_w_start + (ce_w_end - ce_w_start) * frac
+        else:
+            ce_w_cur = float(cfg.ce_weight)
+
         rng_tr = np.random.default_rng(int(cfg.seed) + 10007 * int(epoch))
         rng_va = np.random.default_rng(int(cfg.seed) + 10007 * int(epoch) + 999_983)
         ae.train()
@@ -1272,6 +1310,7 @@ def main() -> None:
                 rng=rng_tr,
                 baseline_ema=baseline_ema,
                 train=True,
+                ce_weight_override=float(ce_w_cur),
             )
             loss.backward()
             if float(cfg.max_grad_norm) > 0:
@@ -1287,11 +1326,17 @@ def main() -> None:
                 log.info(
                     f"epoch={epoch} step={step} "
                     f"loss={stats['loss']:.4f} r={stats['reward_mean']:.4f} succ={stats['success_rate']:.3f} "
-                    f"dist={stats['dist_mean']:.3f} loop={stats['loop_rate']:.3f} ent={float(entropy_sum.mean().item()):.3f}"
+                    f"dist={stats['dist_mean']:.3f} loop={stats['loop_rate']:.3f} ent={float(entropy_sum.mean().item()):.3f} "
+                    f"ce_w={float(ce_w_cur):.3f}"
                 )
 
         denom = max(1, int(total_batches))
-        tr_report = {"loss": float(total_loss / denom), "reward_mean": float(total_reward / denom), "success_rate": float(total_succ / denom)}
+        tr_report = {
+            "loss": float(total_loss / denom),
+            "reward_mean": float(total_reward / denom),
+            "success_rate": float(total_succ / denom),
+            "ce_weight": float(ce_w_cur),
+        }
 
         # Val (sampling, no grad)
         ae.eval()
@@ -1316,17 +1361,24 @@ def main() -> None:
                     rng=rng_va,
                     baseline_ema=baseline_ema,
                     train=False,
+                    ce_weight_override=float(ce_w_cur),
                 )
                 v_loss += float(stats["loss"])
                 v_reward += float(stats["reward_mean"]) if np.isfinite(float(stats["reward_mean"])) else 0.0
                 v_succ += float(stats["success_rate"]) if np.isfinite(float(stats["success_rate"])) else 0.0
                 v_batches += 1
             denom_v = max(1, int(v_batches))
-            va_report = {"loss": float(v_loss / denom_v), "reward_mean": float(v_reward / denom_v), "success_rate": float(v_succ / denom_v)}
+            va_report = {
+                "loss": float(v_loss / denom_v),
+                "reward_mean": float(v_reward / denom_v),
+                "success_rate": float(v_succ / denom_v),
+                "ce_weight": float(ce_w_cur),
+            }
 
         log.info(
             f"epoch={epoch} train(loss={tr_report['loss']:.4f}, r={tr_report['reward_mean']:.4f}, succ={tr_report['success_rate']:.3f}) "
-            f"val(loss={va_report['loss']:.4f}, r={va_report['reward_mean']:.4f}, succ={va_report['success_rate']:.3f})"
+            f"val(loss={va_report['loss']:.4f}, r={va_report['reward_mean']:.4f}, succ={va_report['success_rate']:.3f}) "
+            f"ce_w={float(ce_w_cur):.3f}"
         )
 
         with hist_path.open("a", encoding="utf-8") as f:
@@ -1343,7 +1395,7 @@ def main() -> None:
                 + "\n"
             )
 
-        score = float(va_report["reward_mean"])
+        score = float(va_report["success_rate"]) if str(cfg.best_metric) == "val_success" else float(va_report["reward_mean"])
         if float(score) > float(best):
             best = float(score)
             best_epoch = int(epoch)

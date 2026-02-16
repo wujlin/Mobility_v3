@@ -23,8 +23,8 @@ WAY_REGIONS="${DATA_ROOT}/region_sweep/way_regions_louvain_res5_seed0.npz"
 SPLIT_JSON="${DATA_ROOT}/W5_way_routes_strict_gate/od_split_min3_max160_seed0_dev10p.json"
 
 # Checkpoints (relative to project root).
-AE_CKPT="_sync/wsa/pi_verify/20260214_porto_p1_stepemb_cont_e100_s0/ckpt_best.pt"
-FLOW_CKPT="_sync/wsa/pi_verify/20260212_porto_flow_xattn_regionseq_dev10p_s0/ckpt_best.pt"
+AE_CKPT="${AE_CKPT:-_sync/wsa/pi_verify/20260214_porto_p1_stepemb_cont_e100_s0/ckpt_best.pt}"
+FLOW_CKPT="${FLOW_CKPT:-_sync/wsa/pi_verify/20260212_porto_flow_xattn_regionseq_dev10p_s0/ckpt_best.pt}"
 
 # Output.
 GRAPH_DIST_NPZ="${DATA_ROOT}/W2_way_graph/graph_dist_bfs.npz"

@@ -472,6 +472,7 @@ class WayDecoder(nn.Module):
         past_way: Optional[torch.Tensor] = None,  # (T, K) past way IDs, -1 for padding
         past_mask: Optional[torch.Tensor] = None,  # (T, K) bool, True=valid
         return_attn_weights: bool = False,
+        drop_past_context: bool = False,  # SIB: skip past_context bypass
     ) -> torch.Tensor:
         """
         Compute context vector for each transition.
@@ -531,7 +532,7 @@ class WayDecoder(nn.Module):
                 pass
 
         # Past context: encode history using Transformer
-        if self.use_past_context and self.past_encoder is not None:
+        if self.use_past_context and self.past_encoder is not None and not drop_past_context:
             if past_way is not None and past_mask is not None:
                 # Embed past ways
                 past_emb, _ = way_embedder(past_way)  # (T, K, d_model)
@@ -623,6 +624,8 @@ class WayDecoder(nn.Module):
         route_cond: Dict[str, torch.Tensor],
         trans: Dict[str, torch.Tensor],
         cond_emb: Optional[torch.Tensor] = None,  # (B,d_model) optional cache
+        drop_dest_dist: bool = False,  # SIB: zero out dest_dist bypass
+        drop_past_context: bool = False,  # SIB: skip past_context bypass
     ) -> torch.Tensor:
         route_idx = trans["route_idx"].to(dtype=torch.long)
         cur_way = trans["cur_way"].to(dtype=torch.long)
@@ -675,6 +678,7 @@ class WayDecoder(nn.Module):
             dest_pos=route_cond["dest_pos"],
             past_way=past_way,
             past_mask=past_way_mask,
+            drop_past_context=drop_past_context,
         )
 
         # Current way projection
@@ -709,6 +713,9 @@ class WayDecoder(nn.Module):
             except Exception:
                 cand_center = torch.zeros((T, C, 2), dtype=torch.float32, device=dest.device)
             dist = torch.norm(dest[:, None, :] - cand_center, dim=-1, keepdim=True)
+            # SIB: zero out dest_dist bypass to force latent-dependent navigation
+            if drop_dest_dist:
+                dist = torch.zeros_like(dist)
             if diff_from_mean is not None:
                 x = torch.cat([ctx_h, cur_h2, cand_h, diff_from_mean, dist], dim=-1)
             else:

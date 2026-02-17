@@ -62,6 +62,11 @@ class TrainCfg:
     # E8 (optional): multi-scale latent (segment tokens)
     segment_size: int
     segment_n_latent: int
+    # SIB: Stochastic Information Bottleneck
+    latent_noise_std: float = 0.0
+    drop_dest_dist_p: float = 0.0
+    drop_past_context_p: float = 0.0
+    noise_warmup_epochs: int = 0  # Linear ramp noise_std from 0 to latent_noise_std over this many epochs
     split_json: Optional[str] = None
 
 
@@ -101,7 +106,7 @@ def _subset_indices_from_route_ids(dataset: WayRouteDataset, route_ids: np.ndarr
     return np.nonzero(mask)[0].astype(np.int64, copy=False)
 
 
-def train_epoch(model: WayCASDAutoEncoder, loader: DataLoader, opt: torch.optim.Optimizer, device: torch.device) -> Dict[str, float]:
+def train_epoch(model: WayCASDAutoEncoder, loader: DataLoader, opt: torch.optim.Optimizer, device: torch.device, *, current_noise_std: float = 0.0) -> Dict[str, float]:
     model.train()
     total_loss = 0.0
     total_acc = 0.0
@@ -110,7 +115,7 @@ def train_epoch(model: WayCASDAutoEncoder, loader: DataLoader, opt: torch.optim.
     for batch in loader:
         b = _to_device(batch, device)
         opt.zero_grad(set_to_none=True)
-        loss, stats = model.compute_loss(b)
+        loss, stats = model.compute_loss(b, current_noise_std=current_noise_std)
         loss.backward()
         opt.step()
 
@@ -212,6 +217,12 @@ def build_argparser() -> argparse.ArgumentParser:
         help="E8: number of segment latent tokens to overwrite at the tail of z_enc (0=disable).",
     )
 
+    # SIB: Stochastic Information Bottleneck (force decoder to rely on latent)
+    p.add_argument("--latent_noise_std", type=float, default=0.0, help="Max Gaussian noise σ injected into z_enc during AE training (0=disable).")
+    p.add_argument("--drop_dest_dist_p", type=float, default=0.0, help="Probability of zeroing dest_dist bypass per batch (0=disable).")
+    p.add_argument("--drop_past_context_p", type=float, default=0.0, help="Probability of dropping past_context bypass per batch (0=disable).")
+    p.add_argument("--noise_warmup_epochs", type=int, default=0, help="Linear ramp noise_std from 0 to latent_noise_std over N epochs (0=no warmup).")
+
     # Long-run training ergonomics
     p.add_argument("--resume_ckpt", type=Path, default=None, help="Optional: resume from ckpt_last.pt/ckpt_best.pt.")
     p.add_argument("--resume_epoch", type=int, default=None, help="Optional: override resume epoch (when ckpt has no epoch).")
@@ -224,6 +235,16 @@ def main() -> None:
     args = build_argparser().parse_args()
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
+
+    # Parameter sanity checks (fail fast to avoid silent misconfiguration).
+    if float(args.latent_noise_std) < 0.0:
+        raise SystemExit("[FATAL] --latent_noise_std must be >= 0.")
+    if not (0.0 <= float(args.drop_dest_dist_p) <= 1.0):
+        raise SystemExit("[FATAL] --drop_dest_dist_p must be in [0, 1].")
+    if not (0.0 <= float(args.drop_past_context_p) <= 1.0):
+        raise SystemExit("[FATAL] --drop_past_context_p must be in [0, 1].")
+    if int(args.noise_warmup_epochs) < 0:
+        raise SystemExit("[FATAL] --noise_warmup_epochs must be >= 0.")
 
     if bool(args.decoder_use_cand_contrast) and (not bool(args.decoder_use_cand_query)):
         log.warning(
@@ -264,6 +285,10 @@ def main() -> None:
         decoder_past_n_heads=int(args.decoder_past_n_heads),
         segment_size=int(args.segment_size),
         segment_n_latent=int(args.segment_n_latent),
+        latent_noise_std=float(args.latent_noise_std),
+        drop_dest_dist_p=float(args.drop_dest_dist_p),
+        drop_past_context_p=float(args.drop_past_context_p),
+        noise_warmup_epochs=int(args.noise_warmup_epochs),
         split_json=(str(args.split_json) if args.split_json is not None else None),
     )
 
@@ -365,6 +390,9 @@ def main() -> None:
             decoder_past_k=int(cfg.decoder_past_k),
             decoder_past_n_layers=int(cfg.decoder_past_n_layers),
             decoder_past_n_heads=int(cfg.decoder_past_n_heads),
+            latent_noise_std=float(cfg.latent_noise_std),
+            drop_dest_dist_p=float(cfg.drop_dest_dist_p),
+            drop_past_context_p=float(cfg.drop_past_context_p),
         ),
         way_features=way_features,
         way_adj_ptr=wg["way_adj_ptr"],
@@ -431,7 +459,20 @@ def main() -> None:
     early_stop_patience = max(0, int(args.early_stop_patience))
 
     for epoch in range(int(start_epoch), int(cfg.n_epochs) + 1):
-        tr = train_epoch(model, train_loader, opt, device)
+        # SIB: compute current noise_std with optional warmup schedule
+        if cfg.latent_noise_std > 0 and cfg.noise_warmup_epochs > 0:
+            # Ramp starts at 0 on the first epoch and reaches sigma at/after warmup end.
+            if int(cfg.noise_warmup_epochs) <= 1:
+                ramp = 1.0
+            else:
+                ramp = min(
+                    1.0,
+                    max(0.0, float(int(epoch) - 1) / float(int(cfg.noise_warmup_epochs) - 1)),
+                )
+            current_noise_std = float(cfg.latent_noise_std) * ramp
+        else:
+            current_noise_std = float(cfg.latent_noise_std)
+        tr = train_epoch(model, train_loader, opt, device, current_noise_std=current_noise_std)
         va = eval_epoch(model, val_loader, device)
         history.append({"epoch": int(epoch), "train": tr, "val": va})
         log.info(f"epoch={epoch} train_loss={tr['loss']:.4f} train_acc={tr['acc']:.3f} val_loss={va['loss']:.4f} val_acc={va['acc']:.3f}")

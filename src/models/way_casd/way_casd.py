@@ -44,6 +44,10 @@ class WayCASDAECfg:
     # as segment summaries (mean-pooled from encoder tokens).
     segment_size: int = 10
     segment_n_latent: int = 0  # 0=disable; >0=overwrite last S latent tokens with segment tokens
+    # SIB: Stochastic Information Bottleneck — force decoder to rely on latent
+    latent_noise_std: float = 0.0  # Gaussian noise σ injected into z_enc (0=disable)
+    drop_dest_dist_p: float = 0.0  # Prob of zeroing dest_dist bypass per batch (0=disable)
+    drop_past_context_p: float = 0.0  # Prob of dropping past_context bypass per batch (0=disable)
 
 
 class WayCASDAutoEncoder(nn.Module):
@@ -151,14 +155,32 @@ class WayCASDAutoEncoder(nn.Module):
             z = torch.cat([z[:, : L - S, :], seg], dim=1)
         return z, mask
 
-    def compute_loss(self, batch: Dict[str, torch.Tensor]) -> Tuple[torch.Tensor, Dict[str, float]]:
+    def compute_loss(self, batch: Dict[str, torch.Tensor], *, current_noise_std: float = 0.0) -> Tuple[torch.Tensor, Dict[str, float]]:
         way_seq_pad = batch["way_seq_pad"]
         route_cond = batch["route_cond"]
         trans = batch["trans"]
         target_idx = trans["target_idx"].to(dtype=torch.long)
 
         z, _mask = self.encode(way_seq_pad)
-        logits = self.decoder.score_candidates(way_embedder=self.way_enc, latent_tokens=z, route_cond=route_cond, trans=trans)
+
+        # SIB: inject Gaussian noise into latent during training
+        noise_std = current_noise_std if current_noise_std > 0 else float(self.cfg.latent_noise_std)
+        if self.training and noise_std > 0:
+            z = z + torch.randn_like(z) * noise_std
+
+        # SIB: stochastic bypass dropout (batch-level, same flag for all transitions in batch)
+        drop_dd = False
+        drop_pc = False
+        if self.training:
+            if self.cfg.drop_dest_dist_p > 0 and torch.rand(1).item() < self.cfg.drop_dest_dist_p:
+                drop_dd = True
+            if self.cfg.drop_past_context_p > 0 and torch.rand(1).item() < self.cfg.drop_past_context_p:
+                drop_pc = True
+
+        logits = self.decoder.score_candidates(
+            way_embedder=self.way_enc, latent_tokens=z, route_cond=route_cond, trans=trans,
+            drop_dest_dist=drop_dd, drop_past_context=drop_pc,
+        )
         loss = F.cross_entropy(logits, target_idx, reduction="mean")
 
         with torch.no_grad():

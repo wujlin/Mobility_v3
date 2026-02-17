@@ -1,0 +1,15 @@
+{
+  "ok": true,
+  "task": "train_way_casd_decoder_joint",
+  "created_at": "2026-02-18T01:12:43.858084+08:00",
+  "epoch": 60,
+  "train": {
+    "loss": 1.0112640168916018
+  },
+  "train_ss": {},
+  "val": {
+    "loss": 0.9597957724449682
+  },
+  "best_val_loss": 0.9606109921838722,
+  "best_epoch": 59
+}

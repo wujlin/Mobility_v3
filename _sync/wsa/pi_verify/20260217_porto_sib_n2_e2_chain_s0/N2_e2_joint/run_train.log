@@ -1,0 +1,307 @@
+2026-02-17 22:54:41,804 - INFO - device=cuda
+2026-02-17 22:54:42,585 - INFO - split_json=/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD0_waydata_porto_seed0/W5_way_routes_strict_gate/od_split_min3_max160_seed0_dev10p.json train_routes=108153 val_routes=13086 => train_idx=107706 val_idx=13041
+2026-02-17 22:54:42,587 - INFO - routes: total=1343467 train=107706 val=13041 min_hops=5 max_way_len=160
+/home/jinlin/miniconda3/envs/dpl/lib/python3.11/site-packages/torch/nn/modules/transformer.py:392: UserWarning: enable_nested_tensor is True, but self.use_nested_tensor is False because encoder_layer.norm_first was True
+  warnings.warn(
+2026-02-17 22:54:43,085 - INFO - AE decoder cfg inferred/override: step_emb=True past_k=8 cross_attn=True cand_query=False past_ctx=True dest_query=False dir_query=False
+2026-02-17 22:55:12,332 - INFO - epoch=1 batch=200/842 train_loss=2.5265 it/s=6.97 eta=1.5m
+2026-02-17 22:55:41,566 - INFO - epoch=1 batch=400/842 train_loss=2.0393 it/s=6.90 eta=1.1m
+2026-02-17 22:56:11,397 - INFO - epoch=1 batch=600/842 train_loss=1.8485 it/s=6.84 eta=0.6m
+2026-02-17 22:56:41,562 - INFO - epoch=1 batch=800/842 train_loss=1.7405 it/s=6.78 eta=0.1m
+2026-02-17 22:57:00,208 - INFO - epoch=1 train_loss=1.723211 val_loss=1.316487 best=inf@0
+2026-02-17 22:57:30,739 - INFO - epoch=2 batch=200/842 train_loss=1.3809 it/s=6.56 eta=1.6m
+2026-02-17 22:58:01,030 - INFO - epoch=2 batch=400/842 train_loss=1.3669 it/s=6.58 eta=1.1m
+2026-02-17 22:58:31,302 - INFO - epoch=2 batch=600/842 train_loss=1.3566 it/s=6.59 eta=0.6m
+2026-02-17 22:59:01,328 - INFO - epoch=2 batch=800/842 train_loss=1.3463 it/s=6.61 eta=0.1m
+2026-02-17 22:59:19,632 - INFO - epoch=2 train_loss=1.344557 val_loss=1.238740 best=1.316487@1
+2026-02-17 22:59:49,674 - INFO - epoch=3 batch=200/842 train_loss=1.3018 it/s=6.66 eta=1.6m
+2026-02-17 23:00:19,520 - INFO - epoch=3 batch=400/842 train_loss=1.2959 it/s=6.68 eta=1.1m
+2026-02-17 23:00:49,399 - INFO - epoch=3 batch=600/842 train_loss=1.2910 it/s=6.69 eta=0.6m
+2026-02-17 23:01:19,316 - INFO - epoch=3 batch=800/842 train_loss=1.2871 it/s=6.69 eta=0.1m
+2026-02-17 23:01:37,580 - INFO - epoch=3 train_loss=1.285667 val_loss=1.197670 best=1.238740@2
+2026-02-17 23:02:07,755 - INFO - epoch=4 batch=200/842 train_loss=1.2634 it/s=6.64 eta=1.6m
+2026-02-17 23:02:37,640 - INFO - epoch=4 batch=400/842 train_loss=1.2599 it/s=6.66 eta=1.1m
+2026-02-17 23:03:07,524 - INFO - epoch=4 batch=600/842 train_loss=1.2565 it/s=6.67 eta=0.6m
+2026-02-17 23:03:37,425 - INFO - epoch=4 batch=800/842 train_loss=1.2517 it/s=6.68 eta=0.1m
+2026-02-17 23:03:55,751 - INFO - epoch=4 train_loss=1.250630 val_loss=1.169707 best=1.197670@3
+2026-02-17 23:04:25,846 - INFO - epoch=5 batch=200/842 train_loss=1.2353 it/s=6.65 eta=1.6m
+2026-02-17 23:04:55,725 - INFO - epoch=5 batch=400/842 train_loss=1.2316 it/s=6.67 eta=1.1m
+2026-02-17 23:05:25,640 - INFO - epoch=5 batch=600/842 train_loss=1.2294 it/s=6.68 eta=0.6m
+2026-02-17 23:05:55,576 - INFO - epoch=5 batch=800/842 train_loss=1.2258 it/s=6.68 eta=0.1m
+2026-02-17 23:06:13,808 - INFO - epoch=5 train_loss=1.225131 val_loss=1.149492 best=1.169707@4
+2026-02-17 23:06:43,920 - INFO - epoch=6 batch=200/842 train_loss=1.2171 it/s=6.65 eta=1.6m
+2026-02-17 23:07:13,813 - INFO - epoch=6 batch=400/842 train_loss=1.2122 it/s=6.67 eta=1.1m
+2026-02-17 23:07:43,684 - INFO - epoch=6 batch=600/842 train_loss=1.2082 it/s=6.68 eta=0.6m
+2026-02-17 23:08:13,647 - INFO - epoch=6 batch=800/842 train_loss=1.2059 it/s=6.68 eta=0.1m
+2026-02-17 23:08:31,902 - INFO - epoch=6 train_loss=1.205787 val_loss=1.133578 best=1.149492@5
+2026-02-17 23:09:01,971 - INFO - epoch=7 batch=200/842 train_loss=1.1927 it/s=6.66 eta=1.6m
+2026-02-17 23:09:31,888 - INFO - epoch=7 batch=400/842 train_loss=1.1925 it/s=6.67 eta=1.1m
+2026-02-17 23:10:01,784 - INFO - epoch=7 batch=600/842 train_loss=1.1913 it/s=6.68 eta=0.6m
+2026-02-17 23:10:31,772 - INFO - epoch=7 batch=800/842 train_loss=1.1906 it/s=6.68 eta=0.1m
+2026-02-17 23:10:50,033 - INFO - epoch=7 train_loss=1.190484 val_loss=1.120235 best=1.133578@6
+2026-02-17 23:11:20,049 - INFO - epoch=8 batch=200/842 train_loss=1.1829 it/s=6.67 eta=1.6m
+2026-02-17 23:11:49,878 - INFO - epoch=8 batch=400/842 train_loss=1.1789 it/s=6.69 eta=1.1m
+2026-02-17 23:12:19,735 - INFO - epoch=8 batch=600/842 train_loss=1.1789 it/s=6.69 eta=0.6m
+2026-02-17 23:12:49,737 - INFO - epoch=8 batch=800/842 train_loss=1.1783 it/s=6.68 eta=0.1m
+2026-02-17 23:13:08,054 - INFO - epoch=8 train_loss=1.177951 val_loss=1.109023 best=1.120235@7
+2026-02-17 23:13:38,259 - INFO - epoch=9 batch=200/842 train_loss=1.1696 it/s=6.63 eta=1.6m
+2026-02-17 23:14:08,136 - INFO - epoch=9 batch=400/842 train_loss=1.1684 it/s=6.66 eta=1.1m
+2026-02-17 23:14:38,001 - INFO - epoch=9 batch=600/842 train_loss=1.1680 it/s=6.67 eta=0.6m
+2026-02-17 23:15:07,906 - INFO - epoch=9 batch=800/842 train_loss=1.1666 it/s=6.68 eta=0.1m
+2026-02-17 23:15:26,221 - INFO - epoch=9 train_loss=1.166438 val_loss=1.099188 best=1.109023@8
+2026-02-17 23:15:56,257 - INFO - epoch=10 batch=200/842 train_loss=1.1637 it/s=6.67 eta=1.6m
+2026-02-17 23:16:26,187 - INFO - epoch=10 batch=400/842 train_loss=1.1608 it/s=6.67 eta=1.1m
+2026-02-17 23:16:56,014 - INFO - epoch=10 batch=600/842 train_loss=1.1600 it/s=6.68 eta=0.6m
+2026-02-17 23:17:25,901 - INFO - epoch=10 batch=800/842 train_loss=1.1575 it/s=6.69 eta=0.1m
+2026-02-17 23:17:44,144 - INFO - epoch=10 train_loss=1.157006 val_loss=1.090360 best=1.099188@9
+2026-02-17 23:18:14,343 - INFO - epoch=11 batch=200/842 train_loss=1.1512 it/s=6.63 eta=1.6m
+2026-02-17 23:18:44,218 - INFO - epoch=11 batch=400/842 train_loss=1.1498 it/s=6.66 eta=1.1m
+2026-02-17 23:19:14,050 - INFO - epoch=11 batch=600/842 train_loss=1.1483 it/s=6.68 eta=0.6m
+2026-02-17 23:19:43,992 - INFO - epoch=11 batch=800/842 train_loss=1.1482 it/s=6.68 eta=0.1m
+2026-02-17 23:20:02,170 - INFO - epoch=11 train_loss=1.148239 val_loss=1.082715 best=1.090360@10
+2026-02-17 23:20:32,279 - INFO - epoch=12 batch=200/842 train_loss=1.1422 it/s=6.65 eta=1.6m
+2026-02-17 23:21:02,050 - INFO - epoch=12 batch=400/842 train_loss=1.1413 it/s=6.68 eta=1.1m
+2026-02-17 23:21:31,894 - INFO - epoch=12 batch=600/842 train_loss=1.1420 it/s=6.69 eta=0.6m
+2026-02-17 23:22:01,841 - INFO - epoch=12 batch=800/842 train_loss=1.1407 it/s=6.69 eta=0.1m
+2026-02-17 23:22:20,169 - INFO - epoch=12 train_loss=1.139514 val_loss=1.075332 best=1.082715@11
+2026-02-17 23:22:50,326 - INFO - epoch=13 batch=200/842 train_loss=1.1393 it/s=6.64 eta=1.6m
+2026-02-17 23:23:20,234 - INFO - epoch=13 batch=400/842 train_loss=1.1348 it/s=6.66 eta=1.1m
+2026-02-17 23:23:50,178 - INFO - epoch=13 batch=600/842 train_loss=1.1348 it/s=6.67 eta=0.6m
+2026-02-17 23:24:20,057 - INFO - epoch=13 batch=800/842 train_loss=1.1336 it/s=6.67 eta=0.1m
+2026-02-17 23:24:38,301 - INFO - epoch=13 train_loss=1.133105 val_loss=1.069269 best=1.075332@12
+2026-02-17 23:25:08,385 - INFO - epoch=14 batch=200/842 train_loss=1.1309 it/s=6.66 eta=1.6m
+2026-02-17 23:25:38,277 - INFO - epoch=14 batch=400/842 train_loss=1.1284 it/s=6.67 eta=1.1m
+2026-02-17 23:26:08,273 - INFO - epoch=14 batch=600/842 train_loss=1.1273 it/s=6.67 eta=0.6m
+2026-02-17 23:26:38,246 - INFO - epoch=14 batch=800/842 train_loss=1.1274 it/s=6.67 eta=0.1m
+2026-02-17 23:26:56,492 - INFO - epoch=14 train_loss=1.126824 val_loss=1.064036 best=1.069269@13
+2026-02-17 23:27:26,675 - INFO - epoch=15 batch=200/842 train_loss=1.1210 it/s=6.63 eta=1.6m
+2026-02-17 23:27:56,563 - INFO - epoch=15 batch=400/842 train_loss=1.1208 it/s=6.66 eta=1.1m
+2026-02-17 23:28:26,540 - INFO - epoch=15 batch=600/842 train_loss=1.1206 it/s=6.67 eta=0.6m
+2026-02-17 23:28:56,440 - INFO - epoch=15 batch=800/842 train_loss=1.1202 it/s=6.67 eta=0.1m
+2026-02-17 23:29:14,739 - INFO - epoch=15 train_loss=1.120582 val_loss=1.058696 best=1.064036@14
+2026-02-17 23:29:44,959 - INFO - epoch=16 batch=200/842 train_loss=1.1184 it/s=6.63 eta=1.6m
+2026-02-17 23:30:14,782 - INFO - epoch=16 batch=400/842 train_loss=1.1144 it/s=6.67 eta=1.1m
+2026-02-17 23:30:44,642 - INFO - epoch=16 batch=600/842 train_loss=1.1146 it/s=6.68 eta=0.6m
+2026-02-17 23:31:14,574 - INFO - epoch=16 batch=800/842 train_loss=1.1150 it/s=6.68 eta=0.1m
+2026-02-17 23:31:32,791 - INFO - epoch=16 train_loss=1.114989 val_loss=1.052822 best=1.058696@15
+2026-02-17 23:32:02,996 - INFO - epoch=17 batch=200/842 train_loss=1.1105 it/s=6.63 eta=1.6m
+2026-02-17 23:32:32,846 - INFO - epoch=17 batch=400/842 train_loss=1.1092 it/s=6.66 eta=1.1m
+2026-02-17 23:33:02,747 - INFO - epoch=17 batch=600/842 train_loss=1.1110 it/s=6.67 eta=0.6m
+2026-02-17 23:33:32,768 - INFO - epoch=17 batch=800/842 train_loss=1.1103 it/s=6.67 eta=0.1m
+2026-02-17 23:33:51,109 - INFO - epoch=17 train_loss=1.110347 val_loss=1.048750 best=1.052822@16
+2026-02-17 23:34:21,317 - INFO - epoch=18 batch=200/842 train_loss=1.1064 it/s=6.63 eta=1.6m
+2026-02-17 23:34:51,222 - INFO - epoch=18 batch=400/842 train_loss=1.1078 it/s=6.66 eta=1.1m
+2026-02-17 23:35:21,207 - INFO - epoch=18 batch=600/842 train_loss=1.1059 it/s=6.66 eta=0.6m
+2026-02-17 23:35:51,170 - INFO - epoch=18 batch=800/842 train_loss=1.1056 it/s=6.67 eta=0.1m
+2026-02-17 23:36:09,451 - INFO - epoch=18 train_loss=1.105647 val_loss=1.044730 best=1.048750@17
+2026-02-17 23:36:39,619 - INFO - epoch=19 batch=200/842 train_loss=1.0982 it/s=6.64 eta=1.6m
+2026-02-17 23:37:09,509 - INFO - epoch=19 batch=400/842 train_loss=1.1002 it/s=6.66 eta=1.1m
+2026-02-17 23:37:39,512 - INFO - epoch=19 batch=600/842 train_loss=1.1014 it/s=6.66 eta=0.6m
+2026-02-17 23:38:09,528 - INFO - epoch=19 batch=800/842 train_loss=1.1008 it/s=6.66 eta=0.1m
+2026-02-17 23:38:27,853 - INFO - epoch=19 train_loss=1.100872 val_loss=1.040524 best=1.044730@18
+2026-02-17 23:38:58,073 - INFO - epoch=20 batch=200/842 train_loss=1.0980 it/s=6.63 eta=1.6m
+2026-02-17 23:39:28,020 - INFO - epoch=20 batch=400/842 train_loss=1.0973 it/s=6.65 eta=1.1m
+2026-02-17 23:39:57,957 - INFO - epoch=20 batch=600/842 train_loss=1.0973 it/s=6.66 eta=0.6m
+2026-02-17 23:40:27,892 - INFO - epoch=20 batch=800/842 train_loss=1.0965 it/s=6.67 eta=0.1m
+2026-02-17 23:40:46,090 - INFO - epoch=20 train_loss=1.096697 val_loss=1.036639 best=1.040524@19
+2026-02-17 23:41:16,302 - INFO - epoch=21 batch=200/842 train_loss=1.0935 it/s=6.63 eta=1.6m
+2026-02-17 23:41:46,301 - INFO - epoch=21 batch=400/842 train_loss=1.0929 it/s=6.65 eta=1.1m
+2026-02-17 23:42:16,327 - INFO - epoch=21 batch=600/842 train_loss=1.0926 it/s=6.65 eta=0.6m
+2026-02-17 23:42:46,249 - INFO - epoch=21 batch=800/842 train_loss=1.0929 it/s=6.66 eta=0.1m
+2026-02-17 23:43:04,597 - INFO - epoch=21 train_loss=1.092862 val_loss=1.032877 best=1.036639@20
+2026-02-17 23:43:34,667 - INFO - epoch=22 batch=200/842 train_loss=1.0876 it/s=6.66 eta=1.6m
+2026-02-17 23:44:04,632 - INFO - epoch=22 batch=400/842 train_loss=1.0884 it/s=6.67 eta=1.1m
+2026-02-17 23:44:34,614 - INFO - epoch=22 batch=600/842 train_loss=1.0888 it/s=6.67 eta=0.6m
+2026-02-17 23:45:04,615 - INFO - epoch=22 batch=800/842 train_loss=1.0889 it/s=6.67 eta=0.1m
+2026-02-17 23:45:22,945 - INFO - epoch=22 train_loss=1.088750 val_loss=1.029606 best=1.032877@21
+2026-02-17 23:45:53,125 - INFO - epoch=23 batch=200/842 train_loss=1.0841 it/s=6.63 eta=1.6m
+2026-02-17 23:46:23,063 - INFO - epoch=23 batch=400/842 train_loss=1.0869 it/s=6.66 eta=1.1m
+2026-02-17 23:46:52,963 - INFO - epoch=23 batch=600/842 train_loss=1.0854 it/s=6.67 eta=0.6m
+2026-02-17 23:47:22,970 - INFO - epoch=23 batch=800/842 train_loss=1.0853 it/s=6.67 eta=0.1m
+2026-02-17 23:47:41,245 - INFO - epoch=23 train_loss=1.085523 val_loss=1.026067 best=1.029606@22
+2026-02-17 23:48:11,402 - INFO - epoch=24 batch=200/842 train_loss=1.0849 it/s=6.64 eta=1.6m
+2026-02-17 23:48:41,330 - INFO - epoch=24 batch=400/842 train_loss=1.0833 it/s=6.66 eta=1.1m
+2026-02-17 23:49:11,273 - INFO - epoch=24 batch=600/842 train_loss=1.0832 it/s=6.67 eta=0.6m
+2026-02-17 23:49:41,218 - INFO - epoch=24 batch=800/842 train_loss=1.0820 it/s=6.67 eta=0.1m
+2026-02-17 23:49:59,535 - INFO - epoch=24 train_loss=1.081792 val_loss=1.022762 best=1.026067@23
+2026-02-17 23:50:29,666 - INFO - epoch=25 batch=200/842 train_loss=1.0767 it/s=6.64 eta=1.6m
+2026-02-17 23:50:59,625 - INFO - epoch=25 batch=400/842 train_loss=1.0788 it/s=6.66 eta=1.1m
+2026-02-17 23:51:29,444 - INFO - epoch=25 batch=600/842 train_loss=1.0787 it/s=6.68 eta=0.6m
+2026-02-17 23:51:59,323 - INFO - epoch=25 batch=800/842 train_loss=1.0781 it/s=6.68 eta=0.1m
+2026-02-17 23:52:17,621 - INFO - epoch=25 train_loss=1.078345 val_loss=1.020697 best=1.022762@24
+2026-02-17 23:52:47,812 - INFO - epoch=26 batch=200/842 train_loss=1.0784 it/s=6.63 eta=1.6m
+2026-02-17 23:53:17,775 - INFO - epoch=26 batch=400/842 train_loss=1.0771 it/s=6.65 eta=1.1m
+2026-02-17 23:53:47,822 - INFO - epoch=26 batch=600/842 train_loss=1.0760 it/s=6.65 eta=0.6m
+2026-02-17 23:54:17,786 - INFO - epoch=26 batch=800/842 train_loss=1.0751 it/s=6.66 eta=0.1m
+2026-02-17 23:54:36,117 - INFO - epoch=26 train_loss=1.075708 val_loss=1.017537 best=1.020697@25
+2026-02-17 23:55:06,240 - INFO - epoch=27 batch=200/842 train_loss=1.0707 it/s=6.65 eta=1.6m
+2026-02-17 23:55:36,156 - INFO - epoch=27 batch=400/842 train_loss=1.0729 it/s=6.67 eta=1.1m
+2026-02-17 23:56:06,181 - INFO - epoch=27 batch=600/842 train_loss=1.0727 it/s=6.66 eta=0.6m
+2026-02-17 23:56:36,138 - INFO - epoch=27 batch=800/842 train_loss=1.0730 it/s=6.67 eta=0.1m
+2026-02-17 23:56:54,489 - INFO - epoch=27 train_loss=1.073247 val_loss=1.014860 best=1.017537@26
+2026-02-17 23:57:24,756 - INFO - epoch=28 batch=200/842 train_loss=1.0678 it/s=6.61 eta=1.6m
+2026-02-17 23:57:54,606 - INFO - epoch=28 batch=400/842 train_loss=1.0688 it/s=6.66 eta=1.1m
+2026-02-17 23:58:24,554 - INFO - epoch=28 batch=600/842 train_loss=1.0706 it/s=6.66 eta=0.6m
+2026-02-17 23:58:54,448 - INFO - epoch=28 batch=800/842 train_loss=1.0698 it/s=6.67 eta=0.1m
+2026-02-17 23:59:12,751 - INFO - epoch=28 train_loss=1.069679 val_loss=1.011958 best=1.014860@27
+2026-02-17 23:59:42,925 - INFO - epoch=29 batch=200/842 train_loss=1.0680 it/s=6.63 eta=1.6m
+2026-02-18 00:00:12,801 - INFO - epoch=29 batch=400/842 train_loss=1.0662 it/s=6.66 eta=1.1m
+2026-02-18 00:00:42,667 - INFO - epoch=29 batch=600/842 train_loss=1.0663 it/s=6.67 eta=0.6m
+2026-02-18 00:01:12,582 - INFO - epoch=29 batch=800/842 train_loss=1.0670 it/s=6.68 eta=0.1m
+2026-02-18 00:01:30,802 - INFO - epoch=29 train_loss=1.066918 val_loss=1.010480 best=1.011958@28
+2026-02-18 00:02:01,013 - INFO - epoch=30 batch=200/842 train_loss=1.0645 it/s=6.63 eta=1.6m
+2026-02-18 00:02:30,953 - INFO - epoch=30 batch=400/842 train_loss=1.0647 it/s=6.65 eta=1.1m
+2026-02-18 00:03:00,791 - INFO - epoch=30 batch=600/842 train_loss=1.0647 it/s=6.67 eta=0.6m
+2026-02-18 00:03:30,694 - INFO - epoch=30 batch=800/842 train_loss=1.0641 it/s=6.67 eta=0.1m
+2026-02-18 00:03:48,890 - INFO - epoch=30 train_loss=1.064703 val_loss=1.007595 best=1.010480@29
+2026-02-18 00:04:18,934 - INFO - epoch=31 batch=200/842 train_loss=1.0646 it/s=6.66 eta=1.6m
+2026-02-18 00:04:48,876 - INFO - epoch=31 batch=400/842 train_loss=1.0626 it/s=6.67 eta=1.1m
+2026-02-18 00:05:18,751 - INFO - epoch=31 batch=600/842 train_loss=1.0622 it/s=6.68 eta=0.6m
+2026-02-18 00:05:48,639 - INFO - epoch=31 batch=800/842 train_loss=1.0616 it/s=6.68 eta=0.1m
+2026-02-18 00:06:06,892 - INFO - epoch=31 train_loss=1.061637 val_loss=1.005204 best=1.007595@30
+2026-02-18 00:06:37,139 - INFO - epoch=32 batch=200/842 train_loss=1.0556 it/s=6.62 eta=1.6m
+2026-02-18 00:07:07,025 - INFO - epoch=32 batch=400/842 train_loss=1.0578 it/s=6.66 eta=1.1m
+2026-02-18 00:07:36,902 - INFO - epoch=32 batch=600/842 train_loss=1.0584 it/s=6.67 eta=0.6m
+2026-02-18 00:08:06,799 - INFO - epoch=32 batch=800/842 train_loss=1.0588 it/s=6.67 eta=0.1m
+2026-02-18 00:08:25,066 - INFO - epoch=32 train_loss=1.059263 val_loss=1.003134 best=1.005204@31
+2026-02-18 00:08:55,182 - INFO - epoch=33 batch=200/842 train_loss=1.0615 it/s=6.65 eta=1.6m
+2026-02-18 00:09:25,045 - INFO - epoch=33 batch=400/842 train_loss=1.0611 it/s=6.67 eta=1.1m
+2026-02-18 00:09:54,944 - INFO - epoch=33 batch=600/842 train_loss=1.0593 it/s=6.68 eta=0.6m
+2026-02-18 00:10:24,849 - INFO - epoch=33 batch=800/842 train_loss=1.0572 it/s=6.68 eta=0.1m
+2026-02-18 00:10:43,122 - INFO - epoch=33 train_loss=1.057084 val_loss=1.000507 best=1.003134@32
+2026-02-18 00:11:13,342 - INFO - epoch=34 batch=200/842 train_loss=1.0544 it/s=6.63 eta=1.6m
+2026-02-18 00:11:43,225 - INFO - epoch=34 batch=400/842 train_loss=1.0545 it/s=6.66 eta=1.1m
+2026-02-18 00:12:13,063 - INFO - epoch=34 batch=600/842 train_loss=1.0553 it/s=6.67 eta=0.6m
+2026-02-18 00:12:43,035 - INFO - epoch=34 batch=800/842 train_loss=1.0549 it/s=6.67 eta=0.1m
+2026-02-18 00:13:01,353 - INFO - epoch=34 train_loss=1.054946 val_loss=0.999065 best=1.000507@33
+2026-02-18 00:13:31,503 - INFO - epoch=35 batch=200/842 train_loss=1.0543 it/s=6.64 eta=1.6m
+2026-02-18 00:14:01,434 - INFO - epoch=35 batch=400/842 train_loss=1.0538 it/s=6.66 eta=1.1m
+2026-02-18 00:14:31,259 - INFO - epoch=35 batch=600/842 train_loss=1.0536 it/s=6.68 eta=0.6m
+2026-02-18 00:15:01,144 - INFO - epoch=35 batch=800/842 train_loss=1.0522 it/s=6.68 eta=0.1m
+2026-02-18 00:15:19,384 - INFO - epoch=35 train_loss=1.052447 val_loss=0.996636 best=0.999065@34
+2026-02-18 00:15:49,505 - INFO - epoch=36 batch=200/842 train_loss=1.0482 it/s=6.65 eta=1.6m
+2026-02-18 00:16:19,356 - INFO - epoch=36 batch=400/842 train_loss=1.0499 it/s=6.67 eta=1.1m
+2026-02-18 00:16:49,277 - INFO - epoch=36 batch=600/842 train_loss=1.0495 it/s=6.68 eta=0.6m
+2026-02-18 00:17:19,169 - INFO - epoch=36 batch=800/842 train_loss=1.0500 it/s=6.68 eta=0.1m
+2026-02-18 00:17:37,427 - INFO - epoch=36 train_loss=1.050290 val_loss=0.994660 best=0.996636@35
+2026-02-18 00:18:07,562 - INFO - epoch=37 batch=200/842 train_loss=1.0489 it/s=6.64 eta=1.6m
+2026-02-18 00:18:37,524 - INFO - epoch=37 batch=400/842 train_loss=1.0484 it/s=6.66 eta=1.1m
+2026-02-18 00:19:07,509 - INFO - epoch=37 batch=600/842 train_loss=1.0483 it/s=6.66 eta=0.6m
+2026-02-18 00:19:37,342 - INFO - epoch=37 batch=800/842 train_loss=1.0479 it/s=6.67 eta=0.1m
+2026-02-18 00:19:55,635 - INFO - epoch=37 train_loss=1.047759 val_loss=0.992491 best=0.994660@36
+2026-02-18 00:20:25,833 - INFO - epoch=38 batch=200/842 train_loss=1.0471 it/s=6.63 eta=1.6m
+2026-02-18 00:20:55,807 - INFO - epoch=38 batch=400/842 train_loss=1.0481 it/s=6.65 eta=1.1m
+2026-02-18 00:21:25,645 - INFO - epoch=38 batch=600/842 train_loss=1.0467 it/s=6.67 eta=0.6m
+2026-02-18 00:21:55,578 - INFO - epoch=38 batch=800/842 train_loss=1.0459 it/s=6.67 eta=0.1m
+2026-02-18 00:22:13,777 - INFO - epoch=38 train_loss=1.046175 val_loss=0.991042 best=0.992491@37
+2026-02-18 00:22:43,964 - INFO - epoch=39 batch=200/842 train_loss=1.0418 it/s=6.63 eta=1.6m
+2026-02-18 00:23:13,941 - INFO - epoch=39 batch=400/842 train_loss=1.0465 it/s=6.65 eta=1.1m
+2026-02-18 00:23:43,837 - INFO - epoch=39 batch=600/842 train_loss=1.0456 it/s=6.66 eta=0.6m
+2026-02-18 00:24:13,810 - INFO - epoch=39 batch=800/842 train_loss=1.0443 it/s=6.67 eta=0.1m
+2026-02-18 00:24:32,100 - INFO - epoch=39 train_loss=1.043549 val_loss=0.989292 best=0.991042@38
+2026-02-18 00:25:02,341 - INFO - epoch=40 batch=200/842 train_loss=1.0407 it/s=6.62 eta=1.6m
+2026-02-18 00:25:32,291 - INFO - epoch=40 batch=400/842 train_loss=1.0443 it/s=6.65 eta=1.1m
+2026-02-18 00:26:02,219 - INFO - epoch=40 batch=600/842 train_loss=1.0424 it/s=6.66 eta=0.6m
+2026-02-18 00:26:32,053 - INFO - epoch=40 batch=800/842 train_loss=1.0422 it/s=6.67 eta=0.1m
+2026-02-18 00:26:50,326 - INFO - epoch=40 train_loss=1.042153 val_loss=0.987213 best=0.989292@39
+2026-02-18 00:27:20,502 - INFO - epoch=41 batch=200/842 train_loss=1.0364 it/s=6.64 eta=1.6m
+2026-02-18 00:27:50,457 - INFO - epoch=41 batch=400/842 train_loss=1.0400 it/s=6.66 eta=1.1m
+2026-02-18 00:28:20,330 - INFO - epoch=41 batch=600/842 train_loss=1.0405 it/s=6.67 eta=0.6m
+2026-02-18 00:28:50,216 - INFO - epoch=41 batch=800/842 train_loss=1.0401 it/s=6.67 eta=0.1m
+2026-02-18 00:29:08,507 - INFO - epoch=41 train_loss=1.040208 val_loss=0.985846 best=0.987213@40
+2026-02-18 00:29:38,608 - INFO - epoch=42 batch=200/842 train_loss=1.0382 it/s=6.65 eta=1.6m
+2026-02-18 00:30:08,514 - INFO - epoch=42 batch=400/842 train_loss=1.0376 it/s=6.67 eta=1.1m
+2026-02-18 00:30:38,428 - INFO - epoch=42 batch=600/842 train_loss=1.0369 it/s=6.67 eta=0.6m
+2026-02-18 00:31:08,385 - INFO - epoch=42 batch=800/842 train_loss=1.0386 it/s=6.68 eta=0.1m
+2026-02-18 00:31:26,663 - INFO - epoch=42 train_loss=1.038711 val_loss=0.983927 best=0.985846@41
+2026-02-18 00:31:56,755 - INFO - epoch=43 batch=200/842 train_loss=1.0398 it/s=6.65 eta=1.6m
+2026-02-18 00:32:26,618 - INFO - epoch=43 batch=400/842 train_loss=1.0372 it/s=6.68 eta=1.1m
+2026-02-18 00:32:56,567 - INFO - epoch=43 batch=600/842 train_loss=1.0370 it/s=6.68 eta=0.6m
+2026-02-18 00:33:26,527 - INFO - epoch=43 batch=800/842 train_loss=1.0364 it/s=6.68 eta=0.1m
+2026-02-18 00:33:44,842 - INFO - epoch=43 train_loss=1.036517 val_loss=0.982613 best=0.983927@42
+2026-02-18 00:34:14,943 - INFO - epoch=44 batch=200/842 train_loss=1.0361 it/s=6.65 eta=1.6m
+2026-02-18 00:34:44,880 - INFO - epoch=44 batch=400/842 train_loss=1.0348 it/s=6.67 eta=1.1m
+2026-02-18 00:35:14,681 - INFO - epoch=44 batch=600/842 train_loss=1.0351 it/s=6.68 eta=0.6m
+2026-02-18 00:35:44,464 - INFO - epoch=44 batch=800/842 train_loss=1.0352 it/s=6.69 eta=0.1m
+2026-02-18 00:36:02,624 - INFO - epoch=44 train_loss=1.034837 val_loss=0.980427 best=0.982613@43
+2026-02-18 00:36:32,574 - INFO - epoch=45 batch=200/842 train_loss=1.0334 it/s=6.68 eta=1.6m
+2026-02-18 00:37:02,342 - INFO - epoch=45 batch=400/842 train_loss=1.0333 it/s=6.70 eta=1.1m
+2026-02-18 00:37:32,076 - INFO - epoch=45 batch=600/842 train_loss=1.0333 it/s=6.71 eta=0.6m
+2026-02-18 00:38:01,830 - INFO - epoch=45 batch=800/842 train_loss=1.0335 it/s=6.71 eta=0.1m
+2026-02-18 00:38:19,963 - INFO - epoch=45 train_loss=1.033544 val_loss=0.979376 best=0.980427@44
+2026-02-18 00:38:49,913 - INFO - epoch=46 batch=200/842 train_loss=1.0310 it/s=6.68 eta=1.6m
+2026-02-18 00:39:19,681 - INFO - epoch=46 batch=400/842 train_loss=1.0323 it/s=6.70 eta=1.1m
+2026-02-18 00:39:49,469 - INFO - epoch=46 batch=600/842 train_loss=1.0298 it/s=6.71 eta=0.6m
+2026-02-18 00:40:19,318 - INFO - epoch=46 batch=800/842 train_loss=1.0309 it/s=6.70 eta=0.1m
+2026-02-18 00:40:37,507 - INFO - epoch=46 train_loss=1.031494 val_loss=0.977728 best=0.979376@45
+2026-02-18 00:41:07,568 - INFO - epoch=47 batch=200/842 train_loss=1.0267 it/s=6.66 eta=1.6m
+2026-02-18 00:41:37,274 - INFO - epoch=47 batch=400/842 train_loss=1.0298 it/s=6.70 eta=1.1m
+2026-02-18 00:42:07,095 - INFO - epoch=47 batch=600/842 train_loss=1.0286 it/s=6.70 eta=0.6m
+2026-02-18 00:42:36,952 - INFO - epoch=47 batch=800/842 train_loss=1.0301 it/s=6.70 eta=0.1m
+2026-02-18 00:42:54,998 - INFO - epoch=47 train_loss=1.029797 val_loss=0.976230 best=0.977728@46
+2026-02-18 00:43:25,040 - INFO - epoch=48 batch=200/842 train_loss=1.0268 it/s=6.66 eta=1.6m
+2026-02-18 00:43:54,865 - INFO - epoch=48 batch=400/842 train_loss=1.0294 it/s=6.68 eta=1.1m
+2026-02-18 00:44:24,671 - INFO - epoch=48 batch=600/842 train_loss=1.0276 it/s=6.69 eta=0.6m
+2026-02-18 00:44:54,560 - INFO - epoch=48 batch=800/842 train_loss=1.0277 it/s=6.69 eta=0.1m
+2026-02-18 00:45:12,700 - INFO - epoch=48 train_loss=1.027904 val_loss=0.974531 best=0.976230@47
+2026-02-18 00:45:42,791 - INFO - epoch=49 batch=200/842 train_loss=1.0250 it/s=6.65 eta=1.6m
+2026-02-18 00:46:12,697 - INFO - epoch=49 batch=400/842 train_loss=1.0265 it/s=6.67 eta=1.1m
+2026-02-18 00:46:42,515 - INFO - epoch=49 batch=600/842 train_loss=1.0255 it/s=6.68 eta=0.6m
+2026-02-18 00:47:12,356 - INFO - epoch=49 batch=800/842 train_loss=1.0268 it/s=6.69 eta=0.1m
+2026-02-18 00:47:30,504 - INFO - epoch=49 train_loss=1.026679 val_loss=0.973320 best=0.974531@48
+2026-02-18 00:48:00,551 - INFO - epoch=50 batch=200/842 train_loss=1.0274 it/s=6.66 eta=1.6m
+2026-02-18 00:48:30,346 - INFO - epoch=50 batch=400/842 train_loss=1.0264 it/s=6.69 eta=1.1m
+2026-02-18 00:49:00,084 - INFO - epoch=50 batch=600/842 train_loss=1.0268 it/s=6.70 eta=0.6m
+2026-02-18 00:49:29,949 - INFO - epoch=50 batch=800/842 train_loss=1.0254 it/s=6.70 eta=0.1m
+2026-02-18 00:49:48,118 - INFO - epoch=50 train_loss=1.025051 val_loss=0.972126 best=0.973320@49
+2026-02-18 00:50:18,246 - INFO - epoch=51 batch=200/842 train_loss=1.0222 it/s=6.64 eta=1.6m
+2026-02-18 00:50:47,977 - INFO - epoch=51 batch=400/842 train_loss=1.0222 it/s=6.69 eta=1.1m
+2026-02-18 00:51:17,738 - INFO - epoch=51 batch=600/842 train_loss=1.0229 it/s=6.70 eta=0.6m
+2026-02-18 00:51:47,509 - INFO - epoch=51 batch=800/842 train_loss=1.0238 it/s=6.70 eta=0.1m
+2026-02-18 00:52:05,745 - INFO - epoch=51 train_loss=1.023690 val_loss=0.970407 best=0.972126@50
+2026-02-18 00:52:35,875 - INFO - epoch=52 batch=200/842 train_loss=1.0202 it/s=6.64 eta=1.6m
+2026-02-18 00:53:05,612 - INFO - epoch=52 batch=400/842 train_loss=1.0219 it/s=6.68 eta=1.1m
+2026-02-18 00:53:35,345 - INFO - epoch=52 batch=600/842 train_loss=1.0229 it/s=6.70 eta=0.6m
+2026-02-18 00:54:05,118 - INFO - epoch=52 batch=800/842 train_loss=1.0221 it/s=6.70 eta=0.1m
+2026-02-18 00:54:23,372 - INFO - epoch=52 train_loss=1.022078 val_loss=0.969309 best=0.970407@51
+2026-02-18 00:54:53,232 - INFO - epoch=53 batch=200/842 train_loss=1.0233 it/s=6.70 eta=1.6m
+2026-02-18 00:55:22,974 - INFO - epoch=53 batch=400/842 train_loss=1.0213 it/s=6.71 eta=1.1m
+2026-02-18 00:55:52,779 - INFO - epoch=53 batch=600/842 train_loss=1.0211 it/s=6.71 eta=0.6m
+2026-02-18 00:56:22,473 - INFO - epoch=53 batch=800/842 train_loss=1.0204 it/s=6.72 eta=0.1m
+2026-02-18 00:56:40,666 - INFO - epoch=53 train_loss=1.020578 val_loss=0.968251 best=0.969309@52
+2026-02-18 00:57:10,641 - INFO - epoch=54 batch=200/842 train_loss=1.0189 it/s=6.68 eta=1.6m
+2026-02-18 00:57:40,358 - INFO - epoch=54 batch=400/842 train_loss=1.0182 it/s=6.70 eta=1.1m
+2026-02-18 00:58:10,168 - INFO - epoch=54 batch=600/842 train_loss=1.0176 it/s=6.71 eta=0.6m
+2026-02-18 00:58:40,051 - INFO - epoch=54 batch=800/842 train_loss=1.0188 it/s=6.70 eta=0.1m
+2026-02-18 00:58:58,154 - INFO - epoch=54 train_loss=1.018923 val_loss=0.966672 best=0.968251@53
+2026-02-18 00:59:28,172 - INFO - epoch=55 batch=200/842 train_loss=1.0140 it/s=6.67 eta=1.6m
+2026-02-18 00:59:57,968 - INFO - epoch=55 batch=400/842 train_loss=1.0170 it/s=6.69 eta=1.1m
+2026-02-18 01:00:27,811 - INFO - epoch=55 batch=600/842 train_loss=1.0181 it/s=6.69 eta=0.6m
+2026-02-18 01:00:57,577 - INFO - epoch=55 batch=800/842 train_loss=1.0180 it/s=6.70 eta=0.1m
+2026-02-18 01:01:15,737 - INFO - epoch=55 train_loss=1.018497 val_loss=0.965419 best=0.966672@54
+2026-02-18 01:01:45,614 - INFO - epoch=56 batch=200/842 train_loss=1.0165 it/s=6.70 eta=1.6m
+2026-02-18 01:02:15,395 - INFO - epoch=56 batch=400/842 train_loss=1.0153 it/s=6.71 eta=1.1m
+2026-02-18 01:02:45,150 - INFO - epoch=56 batch=600/842 train_loss=1.0162 it/s=6.71 eta=0.6m
+2026-02-18 01:03:14,927 - INFO - epoch=56 batch=800/842 train_loss=1.0163 it/s=6.71 eta=0.1m
+2026-02-18 01:03:33,097 - INFO - epoch=56 train_loss=1.016218 val_loss=0.964523 best=0.965419@55
+2026-02-18 01:04:03,209 - INFO - epoch=57 batch=200/842 train_loss=1.0138 it/s=6.65 eta=1.6m
+2026-02-18 01:04:33,034 - INFO - epoch=57 batch=400/842 train_loss=1.0152 it/s=6.68 eta=1.1m
+2026-02-18 01:05:02,869 - INFO - epoch=57 batch=600/842 train_loss=1.0141 it/s=6.69 eta=0.6m
+2026-02-18 01:05:32,745 - INFO - epoch=57 batch=800/842 train_loss=1.0155 it/s=6.69 eta=0.1m
+2026-02-18 01:05:50,902 - INFO - epoch=57 train_loss=1.015556 val_loss=0.962937 best=0.964523@56
+2026-02-18 01:06:20,894 - INFO - epoch=58 batch=200/842 train_loss=1.0107 it/s=6.67 eta=1.6m
+2026-02-18 01:06:50,701 - INFO - epoch=58 batch=400/842 train_loss=1.0142 it/s=6.69 eta=1.1m
+2026-02-18 01:07:20,590 - INFO - epoch=58 batch=600/842 train_loss=1.0136 it/s=6.69 eta=0.6m
+2026-02-18 01:07:50,398 - INFO - epoch=58 batch=800/842 train_loss=1.0134 it/s=6.70 eta=0.1m
+2026-02-18 01:08:08,579 - INFO - epoch=58 train_loss=1.013806 val_loss=0.961934 best=0.962937@57
+2026-02-18 01:08:38,626 - INFO - epoch=59 batch=200/842 train_loss=1.0164 it/s=6.66 eta=1.6m
+2026-02-18 01:09:08,381 - INFO - epoch=59 batch=400/842 train_loss=1.0137 it/s=6.69 eta=1.1m
+2026-02-18 01:09:38,280 - INFO - epoch=59 batch=600/842 train_loss=1.0117 it/s=6.69 eta=0.6m
+2026-02-18 01:10:08,062 - INFO - epoch=59 batch=800/842 train_loss=1.0128 it/s=6.70 eta=0.1m
+2026-02-18 01:10:26,238 - INFO - epoch=59 train_loss=1.012955 val_loss=0.960611 best=0.961934@58
+2026-02-18 01:10:56,201 - INFO - epoch=60 batch=200/842 train_loss=1.0091 it/s=6.68 eta=1.6m
+2026-02-18 01:11:26,059 - INFO - epoch=60 batch=400/842 train_loss=1.0118 it/s=6.69 eta=1.1m
+2026-02-18 01:11:55,872 - INFO - epoch=60 batch=600/842 train_loss=1.0114 it/s=6.70 eta=0.6m
+2026-02-18 01:12:25,679 - INFO - epoch=60 batch=800/842 train_loss=1.0114 it/s=6.70 eta=0.1m
+2026-02-18 01:12:43,857 - INFO - epoch=60 train_loss=1.011264 val_loss=0.959796 best=0.960611@59
+2026-02-18 01:12:43,886 - INFO - saved: _sync/wsa/pi_verify/20260217_porto_sib_n2_e2_chain_s0/N2_e2_joint/report.json

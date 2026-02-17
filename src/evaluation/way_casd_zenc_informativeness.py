@@ -49,6 +49,7 @@ class Cfg:
     decode_candidate_policy: str
     decode_include_dest_if_successor: bool
     decode_guided_dest_alpha: float
+    decode_batch_size: int
 
 
 def _set_seed(seed: int) -> None:
@@ -272,6 +273,25 @@ def run(
 
     N = len(all_rids)
     print(f"Encoded {N} routes")
+    if N <= 0:
+        raise RuntimeError("No routes selected for diagnosis")
+
+    # Cache route-level tensors for batched decoding.
+    start_pos_all = torch.as_tensor(
+        np.stack([m["start_pos"] for m in all_meta], axis=0),
+        dtype=torch.float32,
+        device=device,
+    )
+    dest_pos_all = torch.as_tensor(
+        np.stack([m["dest_pos"] for m in all_meta], axis=0),
+        dtype=torch.float32,
+        device=device,
+    )
+    hour_all = torch.as_tensor([int(m["hour"]) for m in all_meta], dtype=torch.long, device=device)
+    dow_all = torch.as_tensor([int(m["dow"]) for m in all_meta], dtype=torch.long, device=device)
+    city_all = torch.as_tensor([int(m["city"]) for m in all_meta], dtype=torch.long, device=device)
+    start_way_all = torch.as_tensor([int(m["start_way"]) for m in all_meta], dtype=torch.long, device=device)
+    dest_way_all = torch.as_tensor([int(m["dest_way"]) for m in all_meta], dtype=torch.long, device=device)
 
     # Create shuffle permutation (within each city to stay in-distribution)
     rng = np.random.default_rng(cfg.seed + 999)
@@ -291,25 +311,24 @@ def run(
     # Create zero z_enc
     z_shape = all_z_enc[0].shape
     z_zero = torch.zeros(z_shape, dtype=all_z_enc[0].dtype, device=device)
+    decode_batch_size = max(1, int(cfg.decode_batch_size))
 
-    def decode_with_z(idx: int, z_enc: torch.Tensor) -> Tuple[List[int], bool, float]:
-        """Decode route idx with given z_enc, return (pred, success, jaccard)."""
-        meta = all_meta[idx]
-        gt = all_gt[idx]
-        
+    def _decode_paths_batched(idxs: List[int], z_batch: torch.Tensor) -> List[List[int]]:
+        if len(idxs) <= 0:
+            return []
+        t_idx = torch.as_tensor(idxs, dtype=torch.long, device=device)
         route_cond = {
-            "start_pos": torch.as_tensor(meta["start_pos"][None, :], dtype=torch.float32, device=device),
-            "dest_pos": torch.as_tensor(meta["dest_pos"][None, :], dtype=torch.float32, device=device),
-            "hour": torch.tensor([meta["hour"]], dtype=torch.long, device=device),
-            "dow": torch.tensor([meta["dow"]], dtype=torch.long, device=device),
-            "route_city": torch.tensor([meta["city"]], dtype=torch.long, device=device),
+            "start_pos": start_pos_all[t_idx],
+            "dest_pos": dest_pos_all[t_idx],
+            "hour": hour_all[t_idx],
+            "dow": dow_all[t_idx],
+            "route_city": city_all[t_idx],
         }
-        sw_t = torch.tensor([meta["start_way"]], dtype=torch.long, device=device)
-        dw_t = torch.tensor([meta["dest_way"]], dtype=torch.long, device=device)
-
-        pred = ae.decoder.greedy_decode(
+        sw_t = start_way_all[t_idx]
+        dw_t = dest_way_all[t_idx]
+        paths = ae.decoder.greedy_decode_batched(
             way_embedder=ae.way_enc,
-            latent_tokens=z_enc,
+            latent_tokens=z_batch,
             route_cond=route_cond,
             start_way=sw_t,
             dest_way=dw_t,
@@ -318,31 +337,66 @@ def run(
             candidate_policy=str(cfg.decode_candidate_policy),
             include_dest_if_successor=bool(cfg.decode_include_dest_if_successor),
             guided_dest_alpha=float(cfg.decode_guided_dest_alpha),
-        )[0]
+        )
+        return [[int(x) for x in p] for p in paths]
 
-        pred = [int(x) for x in pred]
-        success = bool(pred and int(pred[-1]) == int(meta["dest_way"]))
-        jac = _jaccard(gt, pred)
-        return pred, success, jac
+    def _run_condition(cond: str) -> List[Dict[str, object]]:
+        out_rows: List[Dict[str, object]] = []
+        for s in range(0, N, decode_batch_size):
+            idxs = list(range(s, min(N, s + decode_batch_size)))
+            if cond == "true":
+                z_batch = torch.cat([all_z_enc[i] for i in idxs], dim=0)
+            elif cond == "shuffle":
+                z_batch = torch.cat([all_z_enc[shuffle_map[i]] for i in idxs], dim=0)
+            elif cond == "zero":
+                z_batch = z_zero.expand(len(idxs), -1, -1)
+            else:
+                raise ValueError(f"unsupported condition: {cond}")
+
+            preds = _decode_paths_batched(idxs, z_batch)
+            for j, ridx in enumerate(idxs):
+                pred = preds[j]
+                gt = all_gt[ridx]
+                succ = bool(pred and int(pred[-1]) == int(all_meta[ridx]["dest_way"]))
+                jac = _jaccard(gt, pred)
+                out_rows.append(
+                    {
+                        "success": bool(succ),
+                        "jaccard": float(jac),
+                        "city": int(all_meta[ridx]["city"]),
+                        "route_id": int(all_rids[ridx]),
+                        "_pred": pred,  # internal use for true analysis
+                        "_gt": gt,      # internal use for true analysis
+                    }
+                )
+        return out_rows
 
     # Run three conditions
     results = {"true": [], "shuffle": [], "zero": []}
     true_per_route: List[Dict[str, object]] = []
-    
-    print("Running true z_enc...")
-    for i in range(N):
-        pred, succ, jac = decode_with_z(i, all_z_enc[i])
-        city = int(all_meta[i]["city"])
-        rid = int(all_rids[i])
-        gt = all_gt[i]
+
+    print("Running true z_enc (batched)...")
+    true_rows = _run_condition("true")
+    for r in true_rows:
+        pred = r["_pred"]
+        gt = r["_gt"]
+        succ = bool(r["success"])
+        jac = float(r["jaccard"])
         div = _first_diverge_step(gt, pred)
         seq_exact = (len(gt) == len(pred)) and all(int(a) == int(b) for a, b in zip(gt, pred))
         jac_1 = bool(abs(float(jac) - 1.0) < 1e-12)
-        results["true"].append({"success": succ, "jaccard": jac, "city": city, "route_id": rid})
+        results["true"].append(
+            {
+                "success": succ,
+                "jaccard": jac,
+                "city": int(r["city"]),
+                "route_id": int(r["route_id"]),
+            }
+        )
         true_per_route.append(
             {
-                "route_id": rid,
-                "city": city,
+                "route_id": int(r["route_id"]),
+                "city": int(r["city"]),
                 "gt_len": int(len(gt)),
                 "pred_len": int(len(pred)),
                 "success": bool(succ),
@@ -353,16 +407,27 @@ def run(
             }
         )
 
-    print("Running shuffle z_enc...")
-    for i in range(N):
-        j = shuffle_map[i]
-        _, succ, jac = decode_with_z(i, all_z_enc[j])
-        results["shuffle"].append({"success": succ, "jaccard": jac, "city": int(all_meta[i]["city"]), "route_id": int(all_rids[i])})
+    print("Running shuffle z_enc (batched)...")
+    for r in _run_condition("shuffle"):
+        results["shuffle"].append(
+            {
+                "success": bool(r["success"]),
+                "jaccard": float(r["jaccard"]),
+                "city": int(r["city"]),
+                "route_id": int(r["route_id"]),
+            }
+        )
 
-    print("Running zero z_enc...")
-    for i in range(N):
-        _, succ, jac = decode_with_z(i, z_zero)
-        results["zero"].append({"success": succ, "jaccard": jac, "city": int(all_meta[i]["city"]), "route_id": int(all_rids[i])})
+    print("Running zero z_enc (batched)...")
+    for r in _run_condition("zero"):
+        results["zero"].append(
+            {
+                "success": bool(r["success"]),
+                "jaccard": float(r["jaccard"]),
+                "city": int(r["city"]),
+                "route_id": int(r["route_id"]),
+            }
+        )
 
     # Aggregate
     def agg(lst: List[Dict]) -> Dict:
@@ -512,6 +577,7 @@ def build_argparser() -> argparse.ArgumentParser:
     p.add_argument("--decode_candidate_policy", type=str, default="first", choices=["first", "destdist"])
     p.add_argument("--decode_include_dest_if_successor", action="store_true")
     p.add_argument("--decode_guided_dest_alpha", type=float, default=0.0)
+    p.add_argument("--decode_batch_size", type=int, default=256)
     return p
 
 
@@ -528,6 +594,7 @@ def main() -> None:
         decode_candidate_policy=str(args.decode_candidate_policy),
         decode_include_dest_if_successor=bool(args.decode_include_dest_if_successor),
         decode_guided_dest_alpha=float(args.decode_guided_dest_alpha),
+        decode_batch_size=int(args.decode_batch_size),
     )
     run(
         cfg,

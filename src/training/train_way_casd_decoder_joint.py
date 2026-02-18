@@ -62,6 +62,9 @@ class TrainCfg:
     scheduled_sampling_expert: str
     drop_dest_dist_p: float = 0.0
     drop_past_context_p: float = 0.0
+    train_decoder_scope: str = "all"
+    z_contrast_lambda: float = 0.0
+    z_contrast_margin: float = 0.5
     focus_train_route_ids_json: Optional[str] = None
     split_json: Optional[str] = None
     max_train_batches: int = 0
@@ -737,6 +740,15 @@ def main() -> None:
     )
     p.add_argument("--drop_dest_dist_p", type=float, default=0.0, help="SIB-style bypass dropout prob for dest_dist during E2 training (0=disable).")
     p.add_argument("--drop_past_context_p", type=float, default=0.0, help="SIB-style bypass dropout prob for past_context during E2 training (0=disable).")
+    p.add_argument(
+        "--train_decoder_scope",
+        type=str,
+        default="all",
+        choices=["all", "scorer"],
+        help="Decoder params to train: all=decoder.* (default), scorer=decoder.scorer.* only.",
+    )
+    p.add_argument("--z_contrast_lambda", type=float, default=0.0, help="z-contrastive regularization weight (0=disable). Forces decoder to distinguish real vs shuffled z.")
+    p.add_argument("--z_contrast_margin", type=float, default=0.5, help="Minimum gap between shuffled-z loss and real-z loss.")
     args = p.parse_args()
 
     out_dir = Path(args.out_dir)
@@ -769,6 +781,9 @@ def main() -> None:
         scheduled_sampling_expert=str(args.scheduled_sampling_expert),
         drop_dest_dist_p=float(args.drop_dest_dist_p),
         drop_past_context_p=float(args.drop_past_context_p),
+        train_decoder_scope=str(args.train_decoder_scope),
+        z_contrast_lambda=float(args.z_contrast_lambda),
+        z_contrast_margin=float(args.z_contrast_margin),
         focus_train_route_ids_json=(str(args.focus_train_route_ids_json) if args.focus_train_route_ids_json is not None else None),
         split_json=(str(args.split_json) if args.split_json is not None else None),
         max_train_batches=int(args.max_train_batches),
@@ -833,11 +848,13 @@ def main() -> None:
     )
     flow = _load_flow(flow_ckpt=Path(args.flow_ckpt), ae=ae, device=device)
 
-    # Freeze everything except decoder.*
+    # Freeze everything except selected decoder scope.
     for p0 in ae.parameters():
         p0.requires_grad_(False)
+    scope = str(cfg.train_decoder_scope).strip().lower()
+    train_prefix = "decoder.scorer." if scope == "scorer" else "decoder."
     for name, p0 in ae.named_parameters():
-        if str(name).startswith("decoder."):
+        if str(name).startswith(train_prefix):
             p0.requires_grad_(True)
     for p0 in flow.parameters():
         p0.requires_grad_(False)
@@ -890,6 +907,11 @@ def main() -> None:
     )
 
     params = [p0 for p0 in ae.parameters() if p0.requires_grad]
+    n_train = int(sum(int(p0.numel()) for p0 in params))
+    n_all = int(sum(int(p0.numel()) for p0 in ae.parameters()))
+    log.info(f"train_decoder_scope={scope} trainable_params={n_train}/{n_all} ({(100.0 * n_train / max(1, n_all)):.2f}%)")
+    if len(params) == 0:
+        raise SystemExit(f"[FATAL] no trainable params selected for scope={scope!r}.")
     opt = torch.optim.AdamW(params, lr=float(cfg.lr), weight_decay=float(cfg.weight_decay))
 
     best_val = float("inf")
@@ -978,12 +1000,34 @@ def main() -> None:
                 drop_past_context=drop_pc,
             )
             tgt = b["trans"]["target_idx"].to(dtype=torch.long)
-            loss = F.cross_entropy(logits, tgt, reduction="mean")
+            loss_real = F.cross_entropy(logits, tgt, reduction="mean")
+
+            # z-Contrastive Regularization: force decoder to distinguish real vs shuffled z
+            z_contrast_lam = float(cfg.z_contrast_lambda)
+            if z_contrast_lam > 0.0:
+                B_z = z.size(0)
+                perm = torch.randperm(B_z, device=z.device)
+                z_shuf = z[perm]
+                logits_shuf = ae.decoder.score_candidates(
+                    way_embedder=ae.way_enc,
+                    latent_tokens=z_shuf,
+                    route_cond=route_cond_use,
+                    trans=b["trans"],
+                    drop_dest_dist=drop_dd,
+                    drop_past_context=drop_pc,
+                )
+                loss_shuf = F.cross_entropy(logits_shuf, tgt, reduction="mean")
+                z_gap = loss_shuf - loss_real
+                z_reg = F.relu(float(cfg.z_contrast_margin) - z_gap)
+                loss = loss_real + z_contrast_lam * z_reg
+            else:
+                loss = loss_real
+
             opt.zero_grad(set_to_none=True)
             loss.backward()
             torch.nn.utils.clip_grad_norm_(params, max_norm=float(cfg.max_grad_norm))
             opt.step()
-            losses.append(float(loss.detach().item()))
+            losses.append(float(loss_real.detach().item()))
 
             if int(cfg.log_every_batches) > 0 and ((bi + 1) % int(cfg.log_every_batches) == 0):
                 dt = max(1e-6, float(time.perf_counter() - t_epoch))

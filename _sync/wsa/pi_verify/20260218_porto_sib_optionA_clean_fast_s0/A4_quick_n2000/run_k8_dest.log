@@ -1,0 +1,38 @@
+/home/jinlin/miniconda3/envs/dpl/lib/python3.11/site-packages/torch/nn/modules/transformer.py:392: UserWarning: enable_nested_tensor is True, but self.use_nested_tensor is False because encoder_layer.norm_first was True
+  warnings.warn(
+[city0] start n_routes=2000 latent_source=flow region_constraint=none compare_beam=False
+[city0] batch 0:64/2000
+[city0] batch 64:128/2000
+[city0] batch 128:192/2000
+[city0] batch 192:256/2000
+[city0] batch 256:320/2000
+[city0] batch 320:384/2000
+[city0] batch 384:448/2000
+[city0] batch 448:512/2000
+[city0] batch 512:576/2000
+[city0] batch 576:640/2000
+[city0] batch 640:704/2000
+[city0] batch 704:768/2000
+[city0] batch 768:832/2000
+[city0] batch 832:896/2000
+[city0] batch 896:960/2000
+[city0] batch 960:1024/2000
+[city0] batch 1024:1088/2000
+[city0] batch 1088:1152/2000
+[city0] batch 1152:1216/2000
+[city0] batch 1216:1280/2000
+[city0] batch 1280:1344/2000
+[city0] batch 1344:1408/2000
+[city0] batch 1408:1472/2000
+[city0] batch 1472:1536/2000
+[city0] batch 1536:1600/2000
+[city0] batch 1600:1664/2000
+[city0] batch 1664:1728/2000
+[city0] batch 1728:1792/2000
+[city0] batch 1792:1856/2000
+[city0] batch 1856:1920/2000
+[city0] batch 1920:1984/2000
+[city0] batch 1984:2000/2000
+[city0] done=2000 routes
+[OK] saved: _sync/wsa/pi_verify/20260218_porto_sib_optionA_clean_fast_s0/A4_quick_n2000/binned_sib_e2_k8_dest_n2000.json
+[OK] saved: _sync/wsa/pi_verify/20260218_porto_sib_optionA_clean_fast_s0/A4_quick_n2000/per_route_sib_e2_k8_dest_n2000.json

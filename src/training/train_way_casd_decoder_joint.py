@@ -60,6 +60,8 @@ class TrainCfg:
     scheduled_sampling_max_p: float
     scheduled_sampling_warmup_epochs: int
     scheduled_sampling_expert: str
+    drop_dest_dist_p: float = 0.0
+    drop_past_context_p: float = 0.0
     focus_train_route_ids_json: Optional[str] = None
     split_json: Optional[str] = None
     max_train_batches: int = 0
@@ -416,6 +418,8 @@ def _train_batch_scheduled_sampling(
     params: List[torch.nn.Parameter],
     max_grad_norm: float,
     device: torch.device,
+    drop_dest_dist_p: float = 0.0,
+    drop_past_context_p: float = 0.0,
 ) -> Dict[str, float]:
     """
     Scheduled sampling / self-play for decoder fine-tuning on Flow latents.
@@ -478,6 +482,9 @@ def _train_batch_scheduled_sampling(
     Cmax = int(ae.cfg.max_candidates)
     Kpast = int(ae.cfg.decoder_past_k)
     use_past = bool(ae.decoder.use_past_context)
+    # SIB-style bypass dropout (sample once per batch, apply to all steps in this batch)
+    drop_dd = bool(float(drop_dest_dist_p) > 0.0 and torch.rand(1).item() < float(drop_dest_dist_p))
+    drop_pc = bool(float(drop_past_context_p) > 0.0 and torch.rand(1).item() < float(drop_past_context_p))
 
     for step_idx in range(int(max_steps)):
         has_next = (way_seq_len > int(step_idx) + 1)
@@ -574,6 +581,8 @@ def _train_batch_scheduled_sampling(
             route_cond=route_cond_use,
             trans=trans,
             cond_emb=cond_emb,
+            drop_dest_dist=drop_dd,
+            drop_past_context=drop_pc,
         )
 
         with torch.no_grad():
@@ -726,10 +735,17 @@ def main() -> None:
         default=None,
         help="Optional: further restrict training set to these route_ids (json list or {route_ids:[...]}).",
     )
+    p.add_argument("--drop_dest_dist_p", type=float, default=0.0, help="SIB-style bypass dropout prob for dest_dist during E2 training (0=disable).")
+    p.add_argument("--drop_past_context_p", type=float, default=0.0, help="SIB-style bypass dropout prob for past_context during E2 training (0=disable).")
     args = p.parse_args()
 
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
+
+    if not (0.0 <= float(args.drop_dest_dist_p) <= 1.0):
+        raise SystemExit("[FATAL] --drop_dest_dist_p must be in [0, 1].")
+    if not (0.0 <= float(args.drop_past_context_p) <= 1.0):
+        raise SystemExit("[FATAL] --drop_past_context_p must be in [0, 1].")
 
     cfg = TrainCfg(
         batch_size=int(args.batch_size),
@@ -751,6 +767,8 @@ def main() -> None:
         scheduled_sampling_max_p=float(args.scheduled_sampling_max_p),
         scheduled_sampling_warmup_epochs=int(args.scheduled_sampling_warmup_epochs),
         scheduled_sampling_expert=str(args.scheduled_sampling_expert),
+        drop_dest_dist_p=float(args.drop_dest_dist_p),
+        drop_past_context_p=float(args.drop_past_context_p),
         focus_train_route_ids_json=(str(args.focus_train_route_ids_json) if args.focus_train_route_ids_json is not None else None),
         split_json=(str(args.split_json) if args.split_json is not None else None),
         max_train_batches=int(args.max_train_batches),
@@ -917,6 +935,8 @@ def main() -> None:
                     params=params,
                     max_grad_norm=float(cfg.max_grad_norm),
                     device=device,
+                    drop_dest_dist_p=float(cfg.drop_dest_dist_p),
+                    drop_past_context_p=float(cfg.drop_past_context_p),
                 )
                 losses.append(float(st["loss"]))
                 ss_stats.append(st)
@@ -946,7 +966,17 @@ def main() -> None:
             with torch.no_grad():
                 z = flow.sample(route_cond=route_cond_use, solver_steps=cfg.flow_solver_steps)
 
-            logits = ae.decoder.score_candidates(way_embedder=ae.way_enc, latent_tokens=z, route_cond=route_cond_use, trans=b["trans"])
+            # SIB-style bypass dropout (sample once per training batch)
+            drop_dd = bool(float(cfg.drop_dest_dist_p) > 0.0 and torch.rand(1).item() < float(cfg.drop_dest_dist_p))
+            drop_pc = bool(float(cfg.drop_past_context_p) > 0.0 and torch.rand(1).item() < float(cfg.drop_past_context_p))
+            logits = ae.decoder.score_candidates(
+                way_embedder=ae.way_enc,
+                latent_tokens=z,
+                route_cond=route_cond_use,
+                trans=b["trans"],
+                drop_dest_dist=drop_dd,
+                drop_past_context=drop_pc,
+            )
             tgt = b["trans"]["target_idx"].to(dtype=torch.long)
             loss = F.cross_entropy(logits, tgt, reduction="mean")
             opt.zero_grad(set_to_none=True)

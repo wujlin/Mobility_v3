@@ -1,0 +1,67 @@
+2026-02-18 16:47:33,757 - INFO - device=cuda
+2026-02-18 16:47:34,497 - INFO - split_json=/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD0_waydata_porto_seed0/W5_way_routes_strict_gate/od_split_min3_max160_seed0_dev10p.json train_routes=108153 val_routes=13086 => train_idx=107706 val_idx=13041
+2026-02-18 16:47:34,499 - INFO - routes: total=1343467 train=107706 val=13041 min_hops=5 max_way_len=160
+/home/jinlin/miniconda3/envs/dpl/lib/python3.11/site-packages/torch/nn/modules/transformer.py:392: UserWarning: enable_nested_tensor is True, but self.use_nested_tensor is False because encoder_layer.norm_first was True
+  warnings.warn(
+2026-02-18 16:47:39,911 - INFO - init best_val_loss=3.162044 from current weights (epoch=0)
+2026-02-18 16:49:02,184 - INFO - epoch=1 train_loss=2.4927 train_acc=0.177 val_loss=1.9689 val_acc=0.300
+2026-02-18 16:50:33,501 - INFO - epoch=2 train_loss=1.8257 train_acc=0.338 val_loss=1.5690 val_acc=0.430
+2026-02-18 16:52:08,357 - INFO - epoch=3 train_loss=1.6030 train_acc=0.413 val_loss=1.4240 val_acc=0.487
+2026-02-18 16:53:43,280 - INFO - epoch=4 train_loss=1.4956 train_acc=0.453 val_loss=1.3343 val_acc=0.519
+2026-02-18 16:55:17,662 - INFO - epoch=5 train_loss=1.4219 train_acc=0.480 val_loss=1.2461 val_acc=0.552
+2026-02-18 16:56:52,140 - INFO - epoch=6 train_loss=1.3682 train_acc=0.501 val_loss=1.1975 val_acc=0.571
+2026-02-18 16:58:26,358 - INFO - epoch=7 train_loss=1.3159 train_acc=0.521 val_loss=1.1256 val_acc=0.599
+2026-02-18 17:00:01,446 - INFO - epoch=8 train_loss=1.2632 train_acc=0.541 val_loss=1.0979 val_acc=0.611
+2026-02-18 17:01:36,040 - INFO - epoch=9 train_loss=1.2259 train_acc=0.555 val_loss=1.0462 val_acc=0.631
+2026-02-18 17:03:09,500 - INFO - epoch=10 train_loss=1.1972 train_acc=0.566 val_loss=1.0006 val_acc=0.646
+2026-02-18 17:04:43,688 - INFO - epoch=11 train_loss=1.1595 train_acc=0.580 val_loss=0.9644 val_acc=0.663
+2026-02-18 17:06:18,808 - INFO - epoch=12 train_loss=1.1209 train_acc=0.595 val_loss=0.9432 val_acc=0.670
+2026-02-18 17:07:51,930 - INFO - epoch=13 train_loss=1.1118 train_acc=0.598 val_loss=0.9203 val_acc=0.678
+2026-02-18 17:09:26,733 - INFO - epoch=14 train_loss=1.0716 train_acc=0.613 val_loss=0.8852 val_acc=0.692
+2026-02-18 17:11:00,995 - INFO - epoch=15 train_loss=1.0532 train_acc=0.620 val_loss=0.8759 val_acc=0.695
+2026-02-18 17:12:35,918 - INFO - epoch=16 train_loss=1.0247 train_acc=0.631 val_loss=0.8392 val_acc=0.711
+2026-02-18 17:14:09,626 - INFO - epoch=17 train_loss=1.0134 train_acc=0.635 val_loss=0.8307 val_acc=0.709
+2026-02-18 17:15:44,179 - INFO - epoch=18 train_loss=0.9877 train_acc=0.645 val_loss=0.7915 val_acc=0.726
+2026-02-18 17:17:19,155 - INFO - epoch=19 train_loss=0.9585 train_acc=0.656 val_loss=0.7763 val_acc=0.731
+2026-02-18 17:18:52,665 - INFO - epoch=20 train_loss=0.9547 train_acc=0.657 val_loss=0.7672 val_acc=0.736
+2026-02-18 17:20:26,490 - INFO - epoch=21 train_loss=0.9309 train_acc=0.667 val_loss=0.7419 val_acc=0.745
+2026-02-18 17:22:01,445 - INFO - epoch=22 train_loss=0.9041 train_acc=0.677 val_loss=0.7163 val_acc=0.757
+2026-02-18 17:23:34,407 - INFO - epoch=23 train_loss=0.8948 train_acc=0.681 val_loss=0.6942 val_acc=0.763
+2026-02-18 17:25:09,426 - INFO - epoch=24 train_loss=0.8462 train_acc=0.699 val_loss=0.6636 val_acc=0.774
+2026-02-18 17:26:43,783 - INFO - epoch=25 train_loss=0.8151 train_acc=0.710 val_loss=0.6411 val_acc=0.784
+2026-02-18 17:28:17,079 - INFO - epoch=26 train_loss=0.7848 train_acc=0.721 val_loss=0.6118 val_acc=0.792
+2026-02-18 17:29:53,234 - INFO - epoch=27 train_loss=0.7296 train_acc=0.742 val_loss=0.5788 val_acc=0.803
+2026-02-18 17:31:28,259 - INFO - epoch=28 train_loss=0.6992 train_acc=0.753 val_loss=0.5499 val_acc=0.814
+2026-02-18 17:33:02,927 - INFO - epoch=29 train_loss=0.6681 train_acc=0.764 val_loss=0.5286 val_acc=0.821
+2026-02-18 17:34:38,404 - INFO - epoch=30 train_loss=0.6395 train_acc=0.774 val_loss=0.5089 val_acc=0.827
+2026-02-18 17:36:11,679 - INFO - epoch=31 train_loss=0.6263 train_acc=0.779 val_loss=0.4930 val_acc=0.832
+2026-02-18 17:37:46,063 - INFO - epoch=32 train_loss=0.6039 train_acc=0.787 val_loss=0.4803 val_acc=0.838
+2026-02-18 17:39:19,637 - INFO - epoch=33 train_loss=0.5921 train_acc=0.792 val_loss=0.4746 val_acc=0.841
+2026-02-18 17:40:55,388 - INFO - epoch=34 train_loss=0.5701 train_acc=0.800 val_loss=0.4622 val_acc=0.844
+2026-02-18 17:42:29,023 - INFO - epoch=35 train_loss=0.5695 train_acc=0.801 val_loss=0.4573 val_acc=0.847
+2026-02-18 17:44:03,201 - INFO - epoch=36 train_loss=0.5551 train_acc=0.806 val_loss=0.4377 val_acc=0.853
+2026-02-18 17:45:37,363 - INFO - epoch=37 train_loss=0.5468 train_acc=0.809 val_loss=0.4398 val_acc=0.853
+2026-02-18 17:47:10,589 - INFO - epoch=38 train_loss=0.5411 train_acc=0.811 val_loss=0.4229 val_acc=0.858
+2026-02-18 17:48:44,635 - INFO - epoch=39 train_loss=0.5313 train_acc=0.815 val_loss=0.4212 val_acc=0.859
+2026-02-18 17:50:20,174 - INFO - epoch=40 train_loss=0.5195 train_acc=0.819 val_loss=0.4158 val_acc=0.862
+2026-02-18 17:52:13,640 - INFO - epoch=41 train_loss=0.5155 train_acc=0.820 val_loss=0.4165 val_acc=0.863
+2026-02-18 17:54:24,694 - INFO - epoch=42 train_loss=0.5112 train_acc=0.822 val_loss=0.4153 val_acc=0.863
+2026-02-18 17:56:35,451 - INFO - epoch=43 train_loss=0.5048 train_acc=0.824 val_loss=0.3990 val_acc=0.866
+2026-02-18 17:58:47,508 - INFO - epoch=44 train_loss=0.4950 train_acc=0.828 val_loss=0.3898 val_acc=0.869
+2026-02-18 18:01:00,907 - INFO - epoch=45 train_loss=0.4830 train_acc=0.832 val_loss=0.3843 val_acc=0.872
+2026-02-18 18:03:12,408 - INFO - epoch=46 train_loss=0.4896 train_acc=0.830 val_loss=0.3869 val_acc=0.873
+2026-02-18 18:05:22,641 - INFO - epoch=47 train_loss=0.4847 train_acc=0.832 val_loss=0.3786 val_acc=0.873
+2026-02-18 18:07:32,189 - INFO - epoch=48 train_loss=0.4790 train_acc=0.834 val_loss=0.3848 val_acc=0.872
+2026-02-18 18:09:43,327 - INFO - epoch=49 train_loss=0.4724 train_acc=0.836 val_loss=0.3735 val_acc=0.876
+2026-02-18 18:11:52,221 - INFO - epoch=50 train_loss=0.4714 train_acc=0.836 val_loss=0.3823 val_acc=0.873
+2026-02-18 18:14:03,838 - INFO - epoch=51 train_loss=0.4617 train_acc=0.840 val_loss=0.3679 val_acc=0.878
+2026-02-18 18:16:15,391 - INFO - epoch=52 train_loss=0.4587 train_acc=0.841 val_loss=0.3702 val_acc=0.876
+2026-02-18 18:18:24,040 - INFO - epoch=53 train_loss=0.4609 train_acc=0.840 val_loss=0.3608 val_acc=0.881
+2026-02-18 18:20:35,871 - INFO - epoch=54 train_loss=0.4491 train_acc=0.845 val_loss=0.3589 val_acc=0.881
+2026-02-18 18:22:38,255 - INFO - epoch=55 train_loss=0.4484 train_acc=0.845 val_loss=0.3619 val_acc=0.881
+2026-02-18 18:24:11,331 - INFO - epoch=56 train_loss=0.4476 train_acc=0.845 val_loss=0.3474 val_acc=0.884
+2026-02-18 18:25:44,790 - INFO - epoch=57 train_loss=0.4428 train_acc=0.847 val_loss=0.3444 val_acc=0.886
+2026-02-18 18:27:17,940 - INFO - epoch=58 train_loss=0.4399 train_acc=0.848 val_loss=0.3460 val_acc=0.886
+2026-02-18 18:28:53,565 - INFO - epoch=59 train_loss=0.4284 train_acc=0.852 val_loss=0.3486 val_acc=0.885
+2026-02-18 18:30:27,321 - INFO - epoch=60 train_loss=0.4324 train_acc=0.851 val_loss=0.3512 val_acc=0.884
+2026-02-18 18:30:27,428 - INFO - saved: _sync/wsa/pi_verify/20260218_porto_bypassdrop_only_reuseflow_s0/B1_ae_bypassdrop_only/report.json

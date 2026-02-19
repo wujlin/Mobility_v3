@@ -279,7 +279,7 @@ class Cfg:
 
     latent_source: str  # "gt" | "flow"
     n_samples_per_route: int  # only used when latent_source=flow
-    sample_select: str  # "first" | "best" | "dest"
+    sample_select: str  # "first" | "best" | "dest" | "dest_efficient"
     shape_scope: str  # "all" | "selected" | "none"
     flow_solver_steps: Optional[int]  # None=use ckpt/default
     flow_cfg_scale: float  # only used when latent_source=flow (1.0=disable)
@@ -509,13 +509,15 @@ def _select_sample_index(samples: List[Dict[str, object]], *, policy: str) -> in
     Policies:
       - "best": prefer success, then minimize (DTW, Fréchet). NOTE: uses GT shape metrics (oracle).
       - "dest": prefer success, then minimize final_error_m (deployable; GT-free).
+      - "dest_efficient": prefer success, then minimize len_ratio (route efficiency);
+                          when no successful sample exists, fallback to min final_error_m.
     """
 
     if not samples:
         return 0
 
     pol = str(policy or "first").strip().lower()
-    if pol not in {"best", "dest"}:
+    if pol not in {"best", "dest", "dest_efficient"}:
         return 0
 
     def _key_best(m: Dict[str, object]) -> Tuple[int, float, float]:
@@ -532,7 +534,23 @@ def _select_sample_index(samples: List[Dict[str, object]], *, policy: str) -> in
         err = err if math.isfinite(err) else float("inf")
         return (succ, err)
 
-    key_fn = _key_best if pol == "best" else _key_dest
+    def _key_dest_efficient(m: Dict[str, object]) -> Tuple[int, float, float]:
+        succ = 0 if bool(m.get("success", False)) else 1
+        lr = float(m.get("len_ratio", float("nan")))
+        lr = lr if math.isfinite(lr) else float("inf")
+        err = float(m.get("final_error_m", float("nan")))
+        err = err if math.isfinite(err) else float("inf")
+        # success first; among success choose min len_ratio; among failures choose min final_error.
+        primary = lr if succ == 0 else err
+        secondary = err if succ == 0 else lr
+        return (succ, primary, secondary)
+
+    if pol == "best":
+        key_fn = _key_best
+    elif pol == "dest":
+        key_fn = _key_dest
+    else:
+        key_fn = _key_dest_efficient
     best_i = 0
     best_k = key_fn(samples[0])
     for i in range(1, len(samples)):
@@ -561,11 +579,12 @@ def main() -> None:
     p.add_argument("--n_samples_per_route", type=int, default=1, help="Only used when --latent_source=flow.")
     p.add_argument(
         "--sample_select",
-        choices=["first", "best", "dest"],
+        choices=["first", "best", "dest", "dest_efficient"],
         default="first",
         help="When n_samples_per_route>1, which sample to report as route-level metrics: "
         "first=use sample0; best=prefer success then min(DTW, Fréchet) [oracle, uses GT]; "
-        "dest=prefer success then min(final_error_m) [deployable, GT-free].",
+        "dest=prefer success then min(final_error_m) [deployable, GT-free]; "
+        "dest_efficient=prefer success then min(len_ratio) [quality-aware, needs per-sample len_ratio].",
     )
     p.add_argument(
         "--shape_scope",
@@ -1328,14 +1347,34 @@ def main() -> None:
     def _agg(records: List[Dict[str, Any]], *, key: str) -> Dict[str, Any]:
         out: Dict[str, Any] = {}
         for _lo, _hi, name in _hops_bins():
-            out[str(name)] = {"n": 0, "success": [], "dtw_m": [], "frechet_m": [], "len_ratio": [], "final_error_m": [], "hit_wall": [], "dead_end": [], "has_loop": []}
+            out[str(name)] = {
+                "n": 0,
+                "success": [],
+                "jaccard": [],
+                "dtw_m": [],
+                "frechet_m": [],
+                "len_ratio": [],
+                "final_error_m": [],
+                "hit_wall": [],
+                "dead_end": [],
+                "has_loop": [],
+                "n_success": 0,
+                "success_only_jaccard": [],
+                "success_only_dtw_m": [],
+                "success_only_frechet_m": [],
+                "success_only_len_ratio": [],
+                "success_only_final_error_m": [],
+            }
         for r in records:
             hops = int(r.get("gt_hops", 0))
             lab = _bin_label(hops)
             cell = out[lab]
             cell["n"] += 1
             m = r.get(key, {}) if isinstance(r.get(key, {}), dict) else {}
-            cell["success"].append(1.0 if bool(m.get("success", False)) else 0.0)
+            succ = bool(m.get("success", False))
+            cell["success"].append(1.0 if succ else 0.0)
+            jacc = float(m.get("jaccard", float("nan")))
+            cell["jaccard"].append(jacc)
             cell["dtw_m"].append(float(m.get("dtw_m", float("nan"))))
             cell["frechet_m"].append(float(m.get("frechet_m", float("nan"))))
             cell["len_ratio"].append(float(m.get("len_ratio", float("nan"))))
@@ -1343,6 +1382,13 @@ def main() -> None:
             cell["hit_wall"].append(1.0 if bool(m.get("hit_wall", False)) else 0.0)
             cell["dead_end"].append(1.0 if bool(m.get("dead_end", False)) else 0.0)
             cell["has_loop"].append(1.0 if bool(m.get("has_loop", False)) else 0.0)
+            if succ:
+                cell["n_success"] += 1
+                cell["success_only_jaccard"].append(jacc)
+                cell["success_only_dtw_m"].append(float(m.get("dtw_m", float("nan"))))
+                cell["success_only_frechet_m"].append(float(m.get("frechet_m", float("nan"))))
+                cell["success_only_len_ratio"].append(float(m.get("len_ratio", float("nan"))))
+                cell["success_only_final_error_m"].append(float(m.get("final_error_m", float("nan"))))
 
         # summarize
         rep: Dict[str, Any] = {"bins": [b[2] for b in _hops_bins()], "cells": {}}
@@ -1351,6 +1397,7 @@ def main() -> None:
             rep["cells"][lab] = {
                 "n": int(n),
                 "success_rate": float(np.mean(np.asarray(cell["success"], dtype=np.float64))) if n else float("nan"),
+                "jaccard": summarize(cell["jaccard"]),
                 "dtw_m": summarize(cell["dtw_m"]),
                 "frechet_m": summarize(cell["frechet_m"]),
                 "len_ratio": summarize(cell["len_ratio"]),
@@ -1358,6 +1405,13 @@ def main() -> None:
                 "hit_wall_rate": float(np.mean(np.asarray(cell["hit_wall"], dtype=np.float64))) if n else float("nan"),
                 "dead_end_rate": float(np.mean(np.asarray(cell["dead_end"], dtype=np.float64))) if n else float("nan"),
                 "loop_rate": float(np.mean(np.asarray(cell["has_loop"], dtype=np.float64))) if n else float("nan"),
+                "success_only_n": int(cell["n_success"]),
+                "success_only_rate": (float(cell["n_success"]) / float(n)) if n else float("nan"),
+                "success_only_jaccard": summarize(cell["success_only_jaccard"]),
+                "success_only_dtw_m": summarize(cell["success_only_dtw_m"]),
+                "success_only_frechet_m": summarize(cell["success_only_frechet_m"]),
+                "success_only_len_ratio": summarize(cell["success_only_len_ratio"]),
+                "success_only_final_error_m": summarize(cell["success_only_final_error_m"]),
             }
         return rep
 
@@ -1438,7 +1492,7 @@ def main() -> None:
             "shape_metric": "DTW/Fréchet on way-center sequences (meters, equirectangular projection from osm_road_prob_meta.json bbox).",
             "bins": [b[2] for b in _hops_bins()],
             "latent_source": "gt=oracle (GT->AE.encode->Decoder); flow=Flow.sample->Decoder (generation).",
-            "sample_select": "When n_samples_per_route>1: first=use sample0; best=prefer success then min(DTW, Fréchet) [oracle, uses GT]; dest=prefer success then min(final_error_m) [deployable, GT-free].",
+            "sample_select": "When n_samples_per_route>1: first=use sample0; best=prefer success then min(DTW, Fréchet) [oracle, uses GT]; dest=prefer success then min(final_error_m) [deployable, GT-free]; dest_efficient=prefer success then min(len_ratio).",
             "shape_scope": "Controls DTW/Fréchet compute: all=all samples; selected=only selected sample per route; none=skip DTW/Fréchet (faster).",
             "region_constraint": "If enabled: use Region seq to filter way candidates by target region (modes: strict/relaxed; fallback: unconstrained/dest_region/stop).",
         },

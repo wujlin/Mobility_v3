@@ -1,0 +1,38 @@
+{
+  "ok": false,
+  "task": "oraclebest_vs_dest_from_existing_per_route",
+  "source_per_route_json": "_sync/wsa/pi_verify/20260214_porto_p1_stepemb_cont_e100_s0/phaseB_k16_n5000/per_route_waycasd_e2e100_k16_dest_n5000.json",
+  "status": "insufficient_data",
+  "reason": "per_route schema lacks per-sample K metrics; only selected sample and sample means are present.",
+  "required_fields": [
+    "per-sample success",
+    "per-sample len_ratio for K samples per route"
+  ],
+  "available_example_fields": [
+    "dead_end",
+    "dtw_m",
+    "final_error_m",
+    "frechet_m",
+    "has_loop",
+    "hit_wall",
+    "hops",
+    "jaccard",
+    "len_m",
+    "len_ratio",
+    "n_samples",
+    "pred_way_ids",
+    "route_any_success",
+    "sample_dead_end_rate",
+    "sample_dtw_m_mean",
+    "sample_final_error_m_mean",
+    "sample_frechet_m_mean",
+    "sample_hit_wall_rate",
+    "sample_len_ratio_mean",
+    "sample_loop_rate",
+    "sample_success_rate",
+    "selected_k",
+    "success"
+  ],
+  "route_any_success_rate": 0.648,
+  "selected_success_rate": 0.648
+}

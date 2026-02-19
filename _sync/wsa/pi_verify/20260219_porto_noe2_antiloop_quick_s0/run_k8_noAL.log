@@ -1,0 +1,16 @@
+[city0] start n_routes=1000 latent_source=flow region_constraint=none compare_beam=False
+[city0] batch 0:128/1000
+[city0] batch 128:256/1000
+[city0] batch 256:384/1000
+[city0] batch 384:512/1000
+[city0] batch 512:640/1000
+[city0] batch 640:768/1000
+[city0] batch 768:896/1000
+[city0] batch 896:1000/1000
+[city0] done=1000 routes
+[OK] saved: _sync/wsa/pi_verify/20260219_porto_noe2_antiloop_quick_s0/binned_noe2_k8_noAL_n1000.json
+[OK] saved: _sync/wsa/pi_verify/20260219_porto_noe2_antiloop_quick_s0/per_route_noe2_k8_noAL_n1000.json
+
+/home/jinlin/miniconda3/envs/dpl/lib/python3.11/site-packages/torch/nn/modules/transformer.py:392: UserWarning: enable_nested_tensor is True, but self.use_nested_tensor is False because encoder_layer.norm_first was True
+  warnings.warn(
+

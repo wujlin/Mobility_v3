@@ -1,0 +1,22 @@
+Encoded 5000 routes
+Running true z_enc (batched)...
+Running shuffle z_enc (batched)...
+Running zero z_enc (batched)...
+Saved to _sync/wsa/pi_verify/20260219_porto_d1_nlatent8_s0/D1b_ae_zenc/zenc_info_ae_nL8_n5000.json
+
+============================================================
+z_enc Informativeness Diagnostic Results
+============================================================
+  true    : success=63.36%, jaccard=0.5621
+  shuffle : success=1.24%, jaccard=0.0541
+  zero    : success=5.40%, jaccard=0.0441
+------------------------------------------------------------
+  [city0] true:63.36%/0.562 | shuffle:1.24%/0.054 | zero:5.40%/0.044
+  [city1] true:0.00%/0.000 | shuffle:0.00%/0.000 | zero:0.00%/0.000
+------------------------------------------------------------
+  → true > shuffle (+62.12%): z_enc 携带可用路径信息，问题在解码策略
+============================================================
+
+/home/jinlin/miniconda3/envs/dpl/lib/python3.11/site-packages/torch/nn/modules/transformer.py:392: UserWarning: enable_nested_tensor is True, but self.use_nested_tensor is False because encoder_layer.norm_first was True
+  warnings.warn(
+

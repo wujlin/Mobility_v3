@@ -1,0 +1,61 @@
+[encode] routes 512
+[encode] routes 1024
+[encode] routes 1536
+[encode] routes 2048
+[encode] routes 2560
+[encode] routes 3072
+[encode] routes 3584
+[encode] routes 4096
+[encode] routes 4608
+Encoded 5000 routes
+Running true z_enc (batched)...
+[true] batch 1/10 routes 512/5000 elapsed=12.9s eta=113.1s
+[true] batch 2/10 routes 1024/5000 elapsed=25.1s eta=97.5s
+[true] batch 3/10 routes 1536/5000 elapsed=37.4s eta=84.4s
+[true] batch 4/10 routes 2048/5000 elapsed=49.7s eta=71.6s
+[true] batch 5/10 routes 2560/5000 elapsed=62.1s eta=59.1s
+[true] batch 6/10 routes 3072/5000 elapsed=74.2s eta=46.6s
+[true] batch 7/10 routes 3584/5000 elapsed=86.5s eta=34.2s
+[true] batch 8/10 routes 4096/5000 elapsed=99.2s eta=21.9s
+[true] batch 9/10 routes 4608/5000 elapsed=111.4s eta=9.5s
+[true] batch 10/10 routes 5000/5000 elapsed=121.1s eta=0.0s
+Running shuffle z_enc (batched)...
+[shuffle] batch 1/10 routes 512/5000 elapsed=13.2s eta=115.7s
+[shuffle] batch 2/10 routes 1024/5000 elapsed=26.3s eta=102.1s
+[shuffle] batch 3/10 routes 1536/5000 elapsed=39.4s eta=88.9s
+[shuffle] batch 4/10 routes 2048/5000 elapsed=52.6s eta=75.8s
+[shuffle] batch 5/10 routes 2560/5000 elapsed=66.0s eta=62.9s
+[shuffle] batch 6/10 routes 3072/5000 elapsed=79.0s eta=49.6s
+[shuffle] batch 7/10 routes 3584/5000 elapsed=92.1s eta=36.4s
+[shuffle] batch 8/10 routes 4096/5000 elapsed=105.4s eta=23.3s
+[shuffle] batch 9/10 routes 4608/5000 elapsed=118.4s eta=10.1s
+[shuffle] batch 10/10 routes 5000/5000 elapsed=128.5s eta=0.0s
+Running zero z_enc (batched)...
+[zero] batch 1/10 routes 512/5000 elapsed=13.2s eta=116.1s
+[zero] batch 2/10 routes 1024/5000 elapsed=26.4s eta=102.4s
+[zero] batch 3/10 routes 1536/5000 elapsed=39.5s eta=89.2s
+[zero] batch 4/10 routes 2048/5000 elapsed=52.8s eta=76.1s
+[zero] batch 5/10 routes 2560/5000 elapsed=66.0s eta=62.9s
+[zero] batch 6/10 routes 3072/5000 elapsed=79.2s eta=49.7s
+[zero] batch 7/10 routes 3584/5000 elapsed=92.4s eta=36.5s
+[zero] batch 8/10 routes 4096/5000 elapsed=105.6s eta=23.3s
+[zero] batch 9/10 routes 4608/5000 elapsed=118.6s eta=10.1s
+[zero] batch 10/10 routes 5000/5000 elapsed=128.8s eta=0.0s
+Saved to _sync/wsa/pi_verify/20260219_porto_d1_nlatent8_s0/D4a_e2_zenc/zenc_info_e2_nL8_n5000.json
+
+============================================================
+z_enc Informativeness Diagnostic Results
+============================================================
+  true    : success=14.66%, jaccard=0.1074
+  shuffle : success=6.02%, jaccard=0.0567
+  zero    : success=5.46%, jaccard=0.0592
+------------------------------------------------------------
+  [city0] true:14.66%/0.107 | shuffle:6.02%/0.057 | zero:5.46%/0.059
+  [city1] true:0.00%/0.000 | shuffle:0.00%/0.000 | zero:0.00%/0.000
+------------------------------------------------------------
+  → true > shuffle (+8.64%): z_enc 携带可用路径信息，问题在解码策略
+============================================================
+
+/home/jinlin/miniconda3/envs/dpl/lib/python3.11/site-packages/torch/nn/modules/transformer.py:392: UserWarning: enable_nested_tensor is True, but self.use_nested_tensor is False because encoder_layer.norm_first was True
+  warnings.warn(
+

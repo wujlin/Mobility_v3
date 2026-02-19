@@ -70,6 +70,11 @@ class TrainCfg:
     max_train_batches: int = 0
     max_val_batches: int = 0
     log_every_batches: int = 200
+    cache_flow_latents: bool = False
+    cache_latent_dtype: str = "fp16"
+    cache_batch_size: int = 0
+    cache_log_every_batches: int = 50
+    cache_resample_every_epochs: int = 0
 
 
 def _set_seed(seed: int) -> None:
@@ -108,6 +113,130 @@ def _to_device(batch: Dict[str, object], device: torch.device) -> Dict[str, obje
     trans = {k: v.to(device) for k, v in batch["trans"].items()}
     route_id = batch["route_id"].to(device)
     return {"way_seq_pad": way_seq_pad, "way_seq_len": way_seq_len, "route_cond": route_cond, "trans": trans, "route_id": route_id}
+
+
+def _build_flow_route_cond(
+    *,
+    batch: Dict[str, object],
+    flow: LatentFlowMatching,
+    way_region: Optional[np.ndarray],
+    device: torch.device,
+) -> Dict[str, torch.Tensor]:
+    route_cond = batch["route_cond"]
+    route_cond_use = {
+        "start_pos": route_cond["start_pos"],
+        "dest_pos": route_cond["dest_pos"],
+        "hour": route_cond["hour"],
+        "dow": route_cond["dow"],
+        "route_city": route_cond["route_city"],
+    }
+    if bool(flow.cfg.use_region_seq):
+        if way_region is None:
+            raise RuntimeError("Flow requires region_seq conditioning, but way_region is missing.")
+        pad = batch["way_seq_pad"].detach().cpu().numpy()
+        lens = batch["way_seq_len"].detach().cpu().numpy()
+        seqs: list[list[int]] = []
+        for i in range(int(pad.shape[0])):
+            L = int(lens[i])
+            seq = pad[i, :L].astype(np.int64, copy=False)
+            seqs.append(_region_seq_from_way_seq(seq, way_region))
+        route_cond_use["region_seq_pad"] = _pad_region_seqs(seqs, device=device)
+    return route_cond_use
+
+
+def _cache_store_dtype(name: str) -> torch.dtype:
+    n = str(name).strip().lower()
+    if n == "fp16":
+        return torch.float16
+    if n == "fp32":
+        return torch.float32
+    raise ValueError(f"unsupported cache dtype: {name!r} (expect fp16/fp32)")
+
+
+def _build_flow_latent_cache(
+    *,
+    flow: LatentFlowMatching,
+    loader: DataLoader,
+    way_region: Optional[np.ndarray],
+    solver_steps: Optional[int],
+    device: torch.device,
+    cache_dtype: str,
+    log_every_batches: int,
+    tag: str,
+) -> Dict[str, object]:
+    flow.eval()
+    dt_store = _cache_store_dtype(cache_dtype)
+    rid_chunks: list[np.ndarray] = []
+    z_chunks: list[torch.Tensor] = []
+    n_batches = len(loader)
+    t0 = time.perf_counter()
+    with torch.no_grad():
+        for bi, batch in enumerate(loader):
+            b = _to_device(batch, device)
+            route_cond_use = _build_flow_route_cond(batch=b, flow=flow, way_region=way_region, device=device)
+            z = flow.sample(route_cond=route_cond_use, solver_steps=solver_steps)
+            z_chunks.append(z.detach().to(device="cpu", dtype=dt_store))
+            rid_chunks.append(b["route_id"].detach().cpu().numpy().astype(np.int64, copy=False))
+            if int(log_every_batches) > 0 and (((bi + 1) % int(log_every_batches)) == 0 or (bi + 1) == int(n_batches)):
+                elapsed = max(1e-6, float(time.perf_counter() - t0))
+                it_s = float((bi + 1) / elapsed)
+                eta = float((int(n_batches) - int(bi + 1)) / max(1e-6, it_s))
+                log.info(
+                    f"[cache:{tag}] batch={bi+1}/{int(n_batches)} it/s={it_s:.2f} eta={eta/60.0:.1f}m"
+                )
+
+    if len(rid_chunks) <= 0 or len(z_chunks) <= 0:
+        raise RuntimeError(f"empty latent cache for {tag}")
+
+    route_ids = np.concatenate(rid_chunks, axis=0).astype(np.int64, copy=False)
+    z_cpu = torch.cat(z_chunks, dim=0).contiguous()
+    if int(route_ids.size) != int(z_cpu.shape[0]):
+        raise RuntimeError(
+            f"latent cache shape mismatch for {tag}: route_ids={int(route_ids.size)} vs z_rows={int(z_cpu.shape[0])}"
+        )
+
+    rid_max = int(route_ids.max()) if route_ids.size > 0 else -1
+    rid_to_row = np.full((rid_max + 1,), -1, dtype=np.int64)
+    rid_to_row[route_ids] = np.arange(route_ids.size, dtype=np.int64)
+    n_unique = int(np.unique(route_ids).size)
+    if n_unique != int(route_ids.size):
+        log.warning(f"[cache:{tag}] duplicated route_id found: unique={n_unique} total={int(route_ids.size)}")
+
+    elapsed = max(1e-6, float(time.perf_counter() - t0))
+    size_mb = float(z_cpu.numel() * z_cpu.element_size()) / (1024.0 * 1024.0)
+    log.info(
+        f"[cache:{tag}] built routes={int(route_ids.size)} unique={n_unique} "
+        f"shape={tuple(int(x) for x in z_cpu.shape)} dtype={str(z_cpu.dtype)} "
+        f"size={size_mb:.1f}MB elapsed={elapsed/60.0:.1f}m"
+    )
+    return {
+        "route_ids": route_ids,
+        "rid_to_row": rid_to_row,
+        "z_cpu": z_cpu,
+    }
+
+
+def _gather_cached_latents(
+    *,
+    route_id: torch.Tensor,
+    cache: Dict[str, object],
+    device: torch.device,
+) -> torch.Tensor:
+    rid = route_id.detach().cpu().numpy().astype(np.int64, copy=False).reshape(-1)
+    rid_to_row = cache["rid_to_row"]
+    if not isinstance(rid_to_row, np.ndarray):
+        raise RuntimeError("invalid cache: rid_to_row")
+    if rid.size > 0 and int(np.max(rid)) >= int(rid_to_row.size):
+        raise RuntimeError("route_id out of cache range")
+    rows = rid_to_row[rid]
+    if int(np.any(rows < 0)):
+        miss = int(rid[int(np.where(rows < 0)[0][0])])
+        raise RuntimeError(f"cached z missing for route_id={miss}")
+    rows_t = torch.as_tensor(rows, dtype=torch.long, device="cpu")
+    z_cpu = cache["z_cpu"]
+    if not isinstance(z_cpu, torch.Tensor):
+        raise RuntimeError("invalid cache: z_cpu")
+    return z_cpu.index_select(0, rows_t).to(device=device, dtype=torch.float32, non_blocking=True)
 
 
 def _compress_consecutive_int(seq) -> list[int]:
@@ -423,6 +552,7 @@ def _train_batch_scheduled_sampling(
     device: torch.device,
     drop_dest_dist_p: float = 0.0,
     drop_past_context_p: float = 0.0,
+    z_override: Optional[torch.Tensor] = None,
 ) -> Dict[str, float]:
     """
     Scheduled sampling / self-play for decoder fine-tuning on Flow latents.
@@ -440,27 +570,12 @@ def _train_batch_scheduled_sampling(
     B = int(way_seq_pad.shape[0])
     coord_scale = float(getattr(ae.way_enc, "coord_scale", ae.cfg.coord_scale))
 
-    route_cond_use = {
-        "start_pos": route_cond["start_pos"],
-        "dest_pos": route_cond["dest_pos"],
-        "hour": route_cond["hour"],
-        "dow": route_cond["dow"],
-        "route_city": route_cond["route_city"],
-    }
-    if bool(flow.cfg.use_region_seq):
-        if way_region is None:
-            raise RuntimeError("Flow requires region_seq conditioning, but way_region is missing.")
-        pad = way_seq_pad.detach().cpu().numpy()
-        lens = way_seq_len.detach().cpu().numpy()
-        seqs: list[list[int]] = []
-        for i in range(int(pad.shape[0])):
-            L = int(lens[i])
-            seq = pad[i, :L].astype(np.int64, copy=False)
-            seqs.append(_region_seq_from_way_seq(seq, way_region))
-        route_cond_use["region_seq_pad"] = _pad_region_seqs(seqs, device=device)
-
-    with torch.no_grad():
-        z = flow.sample(route_cond=route_cond_use, solver_steps=solver_steps)
+    route_cond_use = _build_flow_route_cond(batch=batch, flow=flow, way_region=way_region, device=device)
+    if z_override is None:
+        with torch.no_grad():
+            z = flow.sample(route_cond=route_cond_use, solver_steps=solver_steps)
+    else:
+        z = z_override
 
     cur_way = way_seq_pad[:, 0].detach().clone().to(dtype=torch.long)  # (B,)
     dest_way = route_cond.get("dest_way", None)
@@ -648,6 +763,7 @@ def _eval_epoch(
     way_region: Optional[np.ndarray],
     solver_steps: Optional[int],
     max_batches: int,
+    latent_cache: Optional[Dict[str, object]] = None,
 ) -> Dict[str, float]:
     ae.eval()
     flow.eval()
@@ -658,26 +774,11 @@ def _eval_epoch(
             if int(max_batches) > 0 and (bi + 1) > int(max_batches):
                 break
             b = _to_device(batch, device)
-            route_cond = b["route_cond"]
-            route_cond_use = {
-                "start_pos": route_cond["start_pos"],
-                "dest_pos": route_cond["dest_pos"],
-                "hour": route_cond["hour"],
-                "dow": route_cond["dow"],
-                "route_city": route_cond["route_city"],
-            }
-            if bool(flow.cfg.use_region_seq):
-                if way_region is None:
-                    raise RuntimeError("Flow requires region_seq conditioning, but way_region is missing.")
-                pad = b["way_seq_pad"].detach().cpu().numpy()
-                lens = b["way_seq_len"].detach().cpu().numpy()
-                seqs: list[list[int]] = []
-                for i in range(int(pad.shape[0])):
-                    L = int(lens[i])
-                    seq = pad[i, :L].astype(np.int64, copy=False)
-                    seqs.append(_region_seq_from_way_seq(seq, way_region))
-                route_cond_use["region_seq_pad"] = _pad_region_seqs(seqs, device=device)
-            z = flow.sample(route_cond=route_cond_use, solver_steps=solver_steps)
+            route_cond_use = _build_flow_route_cond(batch=b, flow=flow, way_region=way_region, device=device)
+            if latent_cache is None:
+                z = flow.sample(route_cond=route_cond_use, solver_steps=solver_steps)
+            else:
+                z = _gather_cached_latents(route_id=b["route_id"], cache=latent_cache, device=device)
             logits = ae.decoder.score_candidates(way_embedder=ae.way_enc, latent_tokens=z, route_cond=route_cond_use, trans=b["trans"])
             tgt = b["trans"]["target_idx"].to(dtype=torch.long)
             loss = F.cross_entropy(logits, tgt, reduction="mean")
@@ -721,6 +822,11 @@ def main() -> None:
     p.add_argument("--max_train_batches", type=int, default=0, help="Limit batches per epoch for faster iteration (0=all).")
     p.add_argument("--max_val_batches", type=int, default=0, help="Limit val batches per epoch for faster iteration (0=all).")
     p.add_argument("--log_every_batches", type=int, default=200, help="Log training progress every N batches (0=disable).")
+    p.add_argument("--cache_flow_latents", action="store_true", help="Cache one z_flow per route and reuse during E2 training (deterministic latent per route).")
+    p.add_argument("--cache_latent_dtype", type=str, default="fp16", choices=["fp16", "fp32"], help="CPU dtype for cached z_flow tensors.")
+    p.add_argument("--cache_batch_size", type=int, default=0, help="Batch size for cache precompute (0=use train batch_size).")
+    p.add_argument("--cache_log_every_batches", type=int, default=50, help="Log cache precompute progress every N batches.")
+    p.add_argument("--cache_resample_every_epochs", type=int, default=0, help="If >0, rebuild cache every N epochs (0=build once).")
     p.add_argument("--force_decoder_use_step_emb", action="store_true", help="Force-enable decoder step embedding even if AE ckpt did not use it.")
     p.add_argument("--force_decoder_past_k", type=int, default=0, help="Override decoder past_k (0=use ckpt inferred).")
     p.add_argument("--scheduled_sampling_max_p", type=float, default=0.0, help="Scheduled sampling max p (0=disable).")
@@ -789,6 +895,11 @@ def main() -> None:
         max_train_batches=int(args.max_train_batches),
         max_val_batches=int(args.max_val_batches),
         log_every_batches=int(args.log_every_batches),
+        cache_flow_latents=bool(args.cache_flow_latents),
+        cache_latent_dtype=str(args.cache_latent_dtype),
+        cache_batch_size=int(args.cache_batch_size),
+        cache_log_every_batches=int(args.cache_log_every_batches),
+        cache_resample_every_epochs=int(args.cache_resample_every_epochs),
     )
 
     _set_seed(cfg.seed)
@@ -906,6 +1017,28 @@ def main() -> None:
         collate_fn=collate_fn,
     )
 
+    cache_batch_size = int(cfg.cache_batch_size) if int(cfg.cache_batch_size) > 0 else int(cfg.batch_size)
+    cache_train_loader = DataLoader(
+        train_set,
+        batch_size=int(cache_batch_size),
+        shuffle=False,
+        num_workers=num_workers,
+        pin_memory=pin,
+        persistent_workers=(num_workers > 0),
+        prefetch_factor=prefetch_factor,
+        collate_fn=collate_fn,
+    )
+    cache_val_loader = DataLoader(
+        val_set,
+        batch_size=int(cache_batch_size),
+        shuffle=False,
+        num_workers=num_workers,
+        pin_memory=pin,
+        persistent_workers=(num_workers > 0),
+        prefetch_factor=prefetch_factor,
+        collate_fn=collate_fn,
+    )
+
     params = [p0 for p0 in ae.parameters() if p0.requires_grad]
     n_train = int(sum(int(p0.numel()) for p0 in params))
     n_all = int(sum(int(p0.numel()) for p0 in ae.parameters()))
@@ -913,6 +1046,9 @@ def main() -> None:
     if len(params) == 0:
         raise SystemExit(f"[FATAL] no trainable params selected for scope={scope!r}.")
     opt = torch.optim.AdamW(params, lr=float(cfg.lr), weight_decay=float(cfg.weight_decay))
+
+    train_latent_cache: Optional[Dict[str, object]] = None
+    val_latent_cache: Optional[Dict[str, object]] = None
 
     best_val = float("inf")
     best_epoch = 0
@@ -933,6 +1069,37 @@ def main() -> None:
         losses: list[float] = []
         ss_stats: list[Dict[str, float]] = []
         t_epoch = time.perf_counter()
+        if bool(cfg.cache_flow_latents):
+            need_rebuild = (
+                train_latent_cache is None
+                or val_latent_cache is None
+                or (int(cfg.cache_resample_every_epochs) > 0 and ((int(epoch) - int(start_epoch)) % int(cfg.cache_resample_every_epochs) == 0))
+            )
+            if need_rebuild:
+                log.info(
+                    f"[cache] rebuilding z_flow cache at epoch={int(epoch)} "
+                    f"dtype={cfg.cache_latent_dtype} batch_size={int(cache_batch_size)}"
+                )
+                train_latent_cache = _build_flow_latent_cache(
+                    flow=flow,
+                    loader=cache_train_loader,
+                    way_region=way_region,
+                    solver_steps=cfg.flow_solver_steps,
+                    device=device,
+                    cache_dtype=str(cfg.cache_latent_dtype),
+                    log_every_batches=int(cfg.cache_log_every_batches),
+                    tag=f"train/e{int(epoch)}",
+                )
+                val_latent_cache = _build_flow_latent_cache(
+                    flow=flow,
+                    loader=cache_val_loader,
+                    way_region=way_region,
+                    solver_steps=cfg.flow_solver_steps,
+                    device=device,
+                    cache_dtype=str(cfg.cache_latent_dtype),
+                    log_every_batches=int(cfg.cache_log_every_batches),
+                    tag=f"val/e{int(epoch)}",
+                )
         n_total = len(train_loader)
         n_cap = int(cfg.max_train_batches) if int(cfg.max_train_batches) > 0 else int(n_total)
         n_cap = min(int(n_cap), int(n_total))
@@ -943,6 +1110,9 @@ def main() -> None:
 
             p_ss = _ss_p(epoch, max_p=float(cfg.scheduled_sampling_max_p), warmup_epochs=int(cfg.scheduled_sampling_warmup_epochs))
             if float(p_ss) > 0.0:
+                z_override = None
+                if train_latent_cache is not None:
+                    z_override = _gather_cached_latents(route_id=b["route_id"], cache=train_latent_cache, device=device)
                 st = _train_batch_scheduled_sampling(
                     ae=ae,
                     flow=flow,
@@ -959,34 +1129,19 @@ def main() -> None:
                     device=device,
                     drop_dest_dist_p=float(cfg.drop_dest_dist_p),
                     drop_past_context_p=float(cfg.drop_past_context_p),
+                    z_override=z_override,
                 )
                 losses.append(float(st["loss"]))
                 ss_stats.append(st)
                 continue
 
             # Teacher forcing (default)
-            route_cond = b["route_cond"]
-            route_cond_use = {
-                "start_pos": route_cond["start_pos"],
-                "dest_pos": route_cond["dest_pos"],
-                "hour": route_cond["hour"],
-                "dow": route_cond["dow"],
-                "route_city": route_cond["route_city"],
-            }
-            if bool(flow.cfg.use_region_seq):
-                if way_region is None:
-                    raise RuntimeError("Flow requires region_seq conditioning, but way_region is missing.")
-                pad = b["way_seq_pad"].detach().cpu().numpy()
-                lens = b["way_seq_len"].detach().cpu().numpy()
-                seqs: list[list[int]] = []
-                for i in range(int(pad.shape[0])):
-                    L = int(lens[i])
-                    seq = pad[i, :L].astype(np.int64, copy=False)
-                    seqs.append(_region_seq_from_way_seq(seq, way_region))
-                route_cond_use["region_seq_pad"] = _pad_region_seqs(seqs, device=device)
-
-            with torch.no_grad():
-                z = flow.sample(route_cond=route_cond_use, solver_steps=cfg.flow_solver_steps)
+            route_cond_use = _build_flow_route_cond(batch=b, flow=flow, way_region=way_region, device=device)
+            if train_latent_cache is None:
+                with torch.no_grad():
+                    z = flow.sample(route_cond=route_cond_use, solver_steps=cfg.flow_solver_steps)
+            else:
+                z = _gather_cached_latents(route_id=b["route_id"], cache=train_latent_cache, device=device)
 
             # SIB-style bypass dropout (sample once per training batch)
             drop_dd = bool(float(cfg.drop_dest_dist_p) > 0.0 and torch.rand(1).item() < float(cfg.drop_dest_dist_p))
@@ -1053,6 +1208,7 @@ def main() -> None:
             way_region=way_region,
             solver_steps=cfg.flow_solver_steps,
             max_batches=int(cfg.max_val_batches),
+            latent_cache=val_latent_cache,
         )
         va_loss = float(va["loss"])
         if train_ss:

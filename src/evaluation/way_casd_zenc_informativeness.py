@@ -50,6 +50,7 @@ class Cfg:
     decode_include_dest_if_successor: bool
     decode_guided_dest_alpha: float
     decode_batch_size: int
+    log_every_batches: int
 
 
 def _set_seed(seed: int) -> None:
@@ -270,6 +271,11 @@ def run(
                 "hour": hour,
                 "dow": dow,
             })
+            if len(all_rids) % max(1, int(cfg.log_every_batches) * int(cfg.decode_batch_size)) == 0:
+                print(
+                    f"[encode] routes {len(all_rids)}",
+                    flush=True,
+                )
 
     N = len(all_rids)
     print(f"Encoded {N} routes")
@@ -342,6 +348,8 @@ def run(
 
     def _run_condition(cond: str) -> List[Dict[str, object]]:
         out_rows: List[Dict[str, object]] = []
+        t0 = time.time()
+        n_batches = (N + decode_batch_size - 1) // decode_batch_size
         for s in range(0, N, decode_batch_size):
             idxs = list(range(s, min(N, s + decode_batch_size)))
             if cond == "true":
@@ -368,6 +376,21 @@ def run(
                         "_pred": pred,  # internal use for true analysis
                         "_gt": gt,      # internal use for true analysis
                     }
+                )
+            bidx = (s // decode_batch_size) + 1
+            if (
+                bidx == 1
+                or bidx == n_batches
+                or (bidx % max(1, int(cfg.log_every_batches)) == 0)
+            ):
+                done = min(N, s + decode_batch_size)
+                elapsed = float(time.time() - t0)
+                rps = (float(done) / elapsed) if elapsed > 1e-6 else 0.0
+                eta = (float(N - done) / rps) if rps > 1e-6 else 0.0
+                print(
+                    f"[{cond}] batch {bidx}/{n_batches} routes {done}/{N} "
+                    f"elapsed={elapsed:.1f}s eta={eta:.1f}s",
+                    flush=True,
                 )
         return out_rows
 
@@ -578,6 +601,7 @@ def build_argparser() -> argparse.ArgumentParser:
     p.add_argument("--decode_include_dest_if_successor", action="store_true")
     p.add_argument("--decode_guided_dest_alpha", type=float, default=0.0)
     p.add_argument("--decode_batch_size", type=int, default=256)
+    p.add_argument("--log_every_batches", type=int, default=10)
     return p
 
 
@@ -595,6 +619,7 @@ def main() -> None:
         decode_include_dest_if_successor=bool(args.decode_include_dest_if_successor),
         decode_guided_dest_alpha=float(args.decode_guided_dest_alpha),
         decode_batch_size=int(args.decode_batch_size),
+        log_every_batches=int(args.log_every_batches),
     )
     run(
         cfg,

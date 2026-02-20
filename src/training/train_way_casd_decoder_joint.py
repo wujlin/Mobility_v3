@@ -18,6 +18,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import multiprocessing as mp
 import time
 from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta, timezone
@@ -38,6 +39,38 @@ from src.models.way_casd.way_encoder import load_way_features_from_npz
 TZ_SHANGHAI = timezone(timedelta(hours=8))
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 log = logging.getLogger(__name__)
+
+
+# Shortest-path oracle worker globals (for multiprocessing pool).
+_SP_PTR: Optional[np.ndarray] = None
+_SP_IDX: Optional[np.ndarray] = None
+_SP_WAY_LEN_M: Optional[np.ndarray] = None
+_SP_MAX_VISITS: int = 5000
+
+
+def _init_sp_worker(ptr: np.ndarray, idx: np.ndarray, way_len_m: np.ndarray, max_visits: int) -> None:
+    global _SP_PTR, _SP_IDX, _SP_WAY_LEN_M, _SP_MAX_VISITS
+    _SP_PTR = ptr
+    _SP_IDX = idx
+    _SP_WAY_LEN_M = way_len_m
+    _SP_MAX_VISITS = int(max_visits)
+
+
+def _sp_next_for_pair(pair: Tuple[int, int]) -> Tuple[int, int, int]:
+    global _SP_PTR, _SP_IDX, _SP_WAY_LEN_M, _SP_MAX_VISITS
+    if _SP_PTR is None or _SP_IDX is None or _SP_WAY_LEN_M is None:
+        raise RuntimeError("shortest-path worker is not initialized")
+    cur_node, dest_node = int(pair[0]), int(pair[1])
+    sp = dijkstra_way_path(
+        ptr=_SP_PTR,
+        idx=_SP_IDX,
+        way_len_m=_SP_WAY_LEN_M,
+        start=cur_node,
+        dest=dest_node,
+        max_visits=int(_SP_MAX_VISITS),
+    )
+    sp_next = int(sp[1]) if len(sp) >= 2 else -1
+    return (cur_node, dest_node, sp_next)
 
 
 @dataclass(frozen=True)
@@ -76,6 +109,12 @@ class TrainCfg:
     cache_batch_size: int = 0
     cache_log_every_batches: int = 50
     cache_resample_every_epochs: int = 0
+    scheduled_sampling_sp_max_visits: int = 5000
+    scheduled_sampling_sp_cache_size: int = 2000000
+    scheduled_sampling_sp_workers: int = 0
+    scheduled_sampling_sp_pool_chunksize: int = 64
+    scheduled_sampling_sp_min_parallel: int = 32
+    scheduled_sampling_sp_start_method: str = "auto"
 
 
 def _set_seed(seed: int) -> None:
@@ -555,6 +594,12 @@ def _train_batch_scheduled_sampling(
     drop_past_context_p: float = 0.0,
     z_override: Optional[torch.Tensor] = None,
     way_len_m: Optional[np.ndarray] = None,
+    sp_next_cache: Optional[Dict[Tuple[int, int], int]] = None,
+    sp_max_visits: int = 5000,
+    sp_cache_size: int = 0,
+    sp_pool: Optional[object] = None,
+    sp_pool_chunksize: int = 64,
+    sp_min_parallel: int = 32,
 ) -> Dict[str, float]:
     """
     Scheduled sampling / DAgger for decoder fine-tuning on Flow latents.
@@ -599,6 +644,8 @@ def _train_batch_scheduled_sampling(
     n_use_pred = 0
     n_off_gt = 0
     n_skipped = 0
+    n_sp_queries = 0
+    n_sp_cache_hit = 0
 
     Cmax = int(ae.cfg.max_candidates)
     Kpast = int(ae.cfg.decoder_past_k)
@@ -664,16 +711,70 @@ def _train_batch_scheduled_sampling(
                     raise ValueError("shortest_path expert requires way_len_m (load from way_features_npz)")
                 off_indices = torch.nonzero(off, as_tuple=False).reshape(-1).cpu().tolist()
                 dw_cpu = dest_way[route_idx].cpu().tolist() if dest_way is not None else [0] * T
+
+                # Build unique miss keys per step to avoid repeated Dijkstra calls.
+                miss_keys: List[Tuple[int, int]] = []
+                miss_map: Dict[Tuple[int, int], List[int]] = {}
+                key_for_ii: Dict[int, Tuple[int, int]] = {}
                 for ii in off_indices:
+                    n_sp_queries += 1
                     cur_node = int(cur_t[ii])
                     dest_node = int(dw_cpu[ii])
-                    sp = dijkstra_way_path(
-                        ptr=ptr, idx=idx, way_len_m=way_len_m,
-                        start=cur_node, dest=dest_node, max_visits=5000,
-                    )
-                    if len(sp) >= 2:
-                        sp_next = int(sp[1])
-                        # Find sp_next in candidate set
+                    cache_key = (cur_node, dest_node)
+                    key_for_ii[int(ii)] = cache_key
+                    if sp_next_cache is not None and cache_key in sp_next_cache:
+                        n_sp_cache_hit += 1
+                        continue
+                    if cache_key not in miss_map:
+                        miss_map[cache_key] = [int(ii)]
+                        miss_keys.append(cache_key)
+                    else:
+                        miss_map[cache_key].append(int(ii))
+
+                # Solve misses (parallel if pool is available).
+                if miss_keys:
+                    solved: Dict[Tuple[int, int], int] = {}
+                    use_parallel = (sp_pool is not None and len(miss_keys) >= int(sp_min_parallel))
+                    if use_parallel:
+                        try:
+                            it = sp_pool.imap_unordered(_sp_next_for_pair, miss_keys, chunksize=max(1, int(sp_pool_chunksize)))
+                            for cur_node, dest_node, sp_next in it:
+                                solved[(int(cur_node), int(dest_node))] = int(sp_next)
+                        except Exception:
+                            # Fallback to local solve if pool fails.
+                            for cache_key in miss_keys:
+                                cur_node, dest_node = int(cache_key[0]), int(cache_key[1])
+                                sp = dijkstra_way_path(
+                                    ptr=ptr,
+                                    idx=idx,
+                                    way_len_m=way_len_m,
+                                    start=cur_node,
+                                    dest=dest_node,
+                                    max_visits=int(sp_max_visits),
+                                )
+                                solved[cache_key] = int(sp[1]) if len(sp) >= 2 else -1
+                    else:
+                        for cache_key in miss_keys:
+                            cur_node, dest_node = int(cache_key[0]), int(cache_key[1])
+                            sp = dijkstra_way_path(
+                                ptr=ptr,
+                                idx=idx,
+                                way_len_m=way_len_m,
+                                start=cur_node,
+                                dest=dest_node,
+                                max_visits=int(sp_max_visits),
+                            )
+                            solved[cache_key] = int(sp[1]) if len(sp) >= 2 else -1
+
+                    if sp_next_cache is not None:
+                        for cache_key, sp_next in solved.items():
+                            if int(sp_cache_size) <= 0 or len(sp_next_cache) < int(sp_cache_size):
+                                sp_next_cache[cache_key] = int(sp_next)
+
+                for ii in off_indices:
+                    cache_key = key_for_ii[int(ii)]
+                    sp_next = int(sp_next_cache.get(cache_key, -1)) if sp_next_cache is not None else -1
+                    if sp_next >= 0:
                         cand_row_i = cand_rows[ii]
                         found = -1
                         for ci in range(Cmax):
@@ -683,10 +784,8 @@ def _train_batch_scheduled_sampling(
                         if found >= 0:
                             expert_idx[ii] = found
                         else:
-                            # sp_next not in candidate set (truncated), fall back to destdist
                             n_skipped += 1
                     else:
-                        # No path found, skip
                         n_skipped += 1
             else:
                 raise ValueError(f"unsupported scheduled_sampling_expert: {expert_policy!r}")
@@ -783,6 +882,8 @@ def _train_batch_scheduled_sampling(
         "use_pred_frac": float(n_use_pred / float(max(1, total_steps))),
         "off_gt_frac": float(n_off_gt / float(max(1, total_steps + n_skipped))),
         "skipped_frac": float(n_skipped / float(max(1, total_steps + n_skipped))),
+        "sp_queries": float(int(n_sp_queries)),
+        "sp_cache_hit_frac": float(n_sp_cache_hit / float(max(1, n_sp_queries))),
     }
 
 
@@ -860,6 +961,18 @@ def main() -> None:
     p.add_argument("--cache_batch_size", type=int, default=0, help="Batch size for cache precompute (0=use train batch_size).")
     p.add_argument("--cache_log_every_batches", type=int, default=50, help="Log cache precompute progress every N batches.")
     p.add_argument("--cache_resample_every_epochs", type=int, default=0, help="If >0, rebuild cache every N epochs (0=build once).")
+    p.add_argument("--scheduled_sampling_sp_max_visits", type=int, default=5000, help="Dijkstra max_visits for shortest_path expert.")
+    p.add_argument("--scheduled_sampling_sp_cache_size", type=int, default=2000000, help="Max cached (cur,dest)->next entries for shortest_path expert (0=unlimited).")
+    p.add_argument("--scheduled_sampling_sp_workers", type=int, default=0, help="Process workers for shortest_path expert (0=disable multiprocessing).")
+    p.add_argument("--scheduled_sampling_sp_pool_chunksize", type=int, default=64, help="Pool imap chunksize for shortest_path expert.")
+    p.add_argument("--scheduled_sampling_sp_min_parallel", type=int, default=32, help="Minimum unique shortest-path queries in a step to use multiprocessing.")
+    p.add_argument(
+        "--scheduled_sampling_sp_start_method",
+        type=str,
+        default="auto",
+        choices=["auto", "fork", "spawn", "forkserver"],
+        help="Multiprocessing start method for shortest_path expert pool.",
+    )
     p.add_argument("--force_decoder_use_step_emb", action="store_true", help="Force-enable decoder step embedding even if AE ckpt did not use it.")
     p.add_argument("--force_decoder_past_k", type=int, default=0, help="Override decoder past_k (0=use ckpt inferred).")
     p.add_argument("--scheduled_sampling_max_p", type=float, default=0.0, help="Scheduled sampling max p (0=disable).")
@@ -934,6 +1047,12 @@ def main() -> None:
         cache_batch_size=int(args.cache_batch_size),
         cache_log_every_batches=int(args.cache_log_every_batches),
         cache_resample_every_epochs=int(args.cache_resample_every_epochs),
+        scheduled_sampling_sp_max_visits=int(args.scheduled_sampling_sp_max_visits),
+        scheduled_sampling_sp_cache_size=int(args.scheduled_sampling_sp_cache_size),
+        scheduled_sampling_sp_workers=int(args.scheduled_sampling_sp_workers),
+        scheduled_sampling_sp_pool_chunksize=int(args.scheduled_sampling_sp_pool_chunksize),
+        scheduled_sampling_sp_min_parallel=int(args.scheduled_sampling_sp_min_parallel),
+        scheduled_sampling_sp_start_method=str(args.scheduled_sampling_sp_start_method),
     )
 
     _set_seed(cfg.seed)
@@ -1059,6 +1178,29 @@ def main() -> None:
         collate_fn=collate_fn,
     )
 
+    sp_pool = None
+    if str(cfg.scheduled_sampling_expert) == "shortest_path" and int(cfg.scheduled_sampling_sp_workers) > 0:
+        if _way_len_m is None:
+            raise SystemExit("[FATAL] shortest_path expert requested but way_len_m is not loaded.")
+        method = str(cfg.scheduled_sampling_sp_start_method).strip().lower()
+        if method == "auto":
+            method = "fork" if "fork" in mp.get_all_start_methods() else "spawn"
+        try:
+            ctx = mp.get_context(method)
+            sp_pool = ctx.Pool(
+                processes=int(cfg.scheduled_sampling_sp_workers),
+                initializer=_init_sp_worker,
+                initargs=(ptr, adj, _way_len_m, int(cfg.scheduled_sampling_sp_max_visits)),
+            )
+            log.info(
+                f"shortest_path pool enabled: workers={int(cfg.scheduled_sampling_sp_workers)} "
+                f"start_method={method} chunksize={int(cfg.scheduled_sampling_sp_pool_chunksize)} "
+                f"min_parallel={int(cfg.scheduled_sampling_sp_min_parallel)}"
+            )
+        except Exception as e:
+            sp_pool = None
+            log.warning(f"failed to create shortest_path pool (fallback to local): {e}")
+
     cache_batch_size = int(cfg.cache_batch_size) if int(cfg.cache_batch_size) > 0 else int(cfg.batch_size)
     cache_train_loader = DataLoader(
         train_set,
@@ -1091,6 +1233,9 @@ def main() -> None:
 
     train_latent_cache: Optional[Dict[str, object]] = None
     val_latent_cache: Optional[Dict[str, object]] = None
+    sp_next_cache: Optional[Dict[Tuple[int, int], int]] = (
+        {} if str(cfg.scheduled_sampling_expert) == "shortest_path" else None
+    )
 
     best_val = float("inf")
     best_epoch = 0
@@ -1173,9 +1318,28 @@ def main() -> None:
                     drop_past_context_p=float(cfg.drop_past_context_p),
                     z_override=z_override,
                     way_len_m=_way_len_m,
+                    sp_next_cache=sp_next_cache,
+                    sp_max_visits=int(cfg.scheduled_sampling_sp_max_visits),
+                    sp_cache_size=int(cfg.scheduled_sampling_sp_cache_size),
+                    sp_pool=sp_pool,
+                    sp_pool_chunksize=int(cfg.scheduled_sampling_sp_pool_chunksize),
+                    sp_min_parallel=int(cfg.scheduled_sampling_sp_min_parallel),
                 )
                 losses.append(float(st["loss"]))
                 ss_stats.append(st)
+                if int(cfg.log_every_batches) > 0 and ((bi + 1) % int(cfg.log_every_batches) == 0):
+                    dt = max(1e-6, float(time.perf_counter() - t_epoch))
+                    steps = int(bi + 1)
+                    it_s = float(steps / dt)
+                    eta_s = float((max(0, int(n_cap) - steps)) / max(1e-6, it_s))
+                    log.info(
+                        f"epoch={epoch} batch={steps}/{int(n_cap)} "
+                        f"train_loss={float(np.mean(losses)) if losses else float('nan'):.4f} "
+                        f"ss(p={float(st.get('p_ss', 0.0)):.3f}, acc={float(st.get('acc', float('nan'))):.3f}, "
+                        f"off_gt={float(st.get('off_gt_frac', 0.0)):.3f}, skip={float(st.get('skipped_frac', 0.0)):.3f}, "
+                        f"sp_hit={float(st.get('sp_cache_hit_frac', 0.0)):.3f}) "
+                        f"it/s={it_s:.2f} eta={eta_s/60.0:.1f}m"
+                    )
                 continue
 
             # Teacher forcing (default)
@@ -1241,7 +1405,7 @@ def main() -> None:
         tr_loss = float(np.mean(losses)) if losses else float("nan")
         train_ss: Dict[str, float] = {}
         if ss_stats:
-            keys = ["p_ss", "acc", "use_pred_frac", "off_gt_frac", "skipped_frac", "n_steps"]
+            keys = ["p_ss", "acc", "use_pred_frac", "off_gt_frac", "skipped_frac", "n_steps", "sp_queries", "sp_cache_hit_frac"]
             train_ss = {k: float(np.mean([float(s.get(k, float("nan"))) for s in ss_stats])) for k in keys}
         va = _eval_epoch(
             ae=ae,
@@ -1259,7 +1423,8 @@ def main() -> None:
                 f"epoch={epoch} train_loss={tr_loss:.6f} val_loss={va_loss:.6f} best={best_val:.6f}@{best_epoch} "
                 f"ss(p={train_ss.get('p_ss', 0.0):.3f}, acc={train_ss.get('acc', float('nan')):.3f}, "
                 f"use_pred={train_ss.get('use_pred_frac', 0.0):.3f}, off_gt={train_ss.get('off_gt_frac', 0.0):.3f}, "
-                f"skip={train_ss.get('skipped_frac', 0.0):.3f}, steps={int(train_ss.get('n_steps', 0.0))})"
+                f"skip={train_ss.get('skipped_frac', 0.0):.3f}, steps={int(train_ss.get('n_steps', 0.0))}, "
+                f"sp_q={int(train_ss.get('sp_queries', 0.0))}, sp_hit={train_ss.get('sp_cache_hit_frac', 0.0):.3f})"
             )
         else:
             log.info(f"epoch={epoch} train_loss={tr_loss:.6f} val_loss={va_loss:.6f} best={best_val:.6f}@{best_epoch}")
@@ -1290,6 +1455,10 @@ def main() -> None:
         if int(cfg.early_stop_patience) > 0 and bad_epochs >= int(cfg.early_stop_patience):
             log.info(f"early stop: bad_epochs={bad_epochs} >= patience={int(cfg.early_stop_patience)}")
             break
+
+    if sp_pool is not None:
+        sp_pool.close()
+        sp_pool.join()
 
     report = {
         "ok": True,

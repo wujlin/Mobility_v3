@@ -1337,7 +1337,7 @@ def main() -> None:
                         f"train_loss={float(np.mean(losses)) if losses else float('nan'):.4f} "
                         f"ss(p={float(st.get('p_ss', 0.0)):.3f}, acc={float(st.get('acc', float('nan'))):.3f}, "
                         f"off_gt={float(st.get('off_gt_frac', 0.0)):.3f}, skip={float(st.get('skipped_frac', 0.0)):.3f}, "
-                        f"sp_hit={float(st.get('sp_cache_hit_frac', 0.0)):.3f}) "
+                        f"sp_q={int(st.get('sp_queries', 0.0))}, sp_hit={float(st.get('sp_cache_hit_frac', 0.0)):.3f}) "
                         f"it/s={it_s:.2f} eta={eta_s/60.0:.1f}m"
                     )
                 continue

@@ -30,6 +30,7 @@ import torch.nn.functional as F
 from torch.utils.data import DataLoader, Subset
 
 from src.data.way_graph.way_sequence_dataset import WayRouteDataset, load_way_routes_npz, make_way_casd_collate_fn
+from src.evaluation.shortest_path_baseline import dijkstra_way_path
 from src.models.way_casd.latent_flow import LatentFlowCfg, LatentFlowMatching
 from src.models.way_casd.way_casd import WayCASDAECfg, WayCASDAutoEncoder
 from src.models.way_casd.way_encoder import load_way_features_from_npz
@@ -553,14 +554,16 @@ def _train_batch_scheduled_sampling(
     drop_dest_dist_p: float = 0.0,
     drop_past_context_p: float = 0.0,
     z_override: Optional[torch.Tensor] = None,
+    way_len_m: Optional[np.ndarray] = None,
 ) -> Dict[str, float]:
     """
-    Scheduled sampling / self-play for decoder fine-tuning on Flow latents.
+    Scheduled sampling / DAgger for decoder fine-tuning on Flow latents.
 
     We roll out step-by-step and, with prob p_ss, feed the model's argmax back as next input.
-    When the GT next way is NOT a successor under the self-play state, we use a simple
+    When the GT next way is NOT a successor under the self-play state, we use an
     expert fallback to keep training on valid graph transitions:
-      - expert_policy="destdist": choose successor with min dest distance.
+      - expert_policy="destdist": choose successor with min dest distance (geometric heuristic).
+      - expert_policy="shortest_path": Dijkstra shortest path oracle from current node to dest.
       - expert_policy="skip": skip this step (no gradient).
     """
     way_seq_pad = batch["way_seq_pad"]  # (B,K) long
@@ -655,6 +658,36 @@ def _train_batch_scheduled_sampling(
                 dist = dist.masked_fill(~cand_mask, float("inf"))
                 best = torch.argmin(dist, dim=-1)
                 expert_idx[off] = best[off]
+            elif str(expert_policy) == "shortest_path":
+                # DAgger oracle: Dijkstra shortest path from current node to dest.
+                if way_len_m is None:
+                    raise ValueError("shortest_path expert requires way_len_m (load from way_features_npz)")
+                off_indices = torch.nonzero(off, as_tuple=False).reshape(-1).cpu().tolist()
+                dw_cpu = dest_way[route_idx].cpu().tolist() if dest_way is not None else [0] * T
+                for ii in off_indices:
+                    cur_node = int(cur_t[ii])
+                    dest_node = int(dw_cpu[ii])
+                    sp = dijkstra_way_path(
+                        ptr=ptr, idx=idx, way_len_m=way_len_m,
+                        start=cur_node, dest=dest_node, max_visits=5000,
+                    )
+                    if len(sp) >= 2:
+                        sp_next = int(sp[1])
+                        # Find sp_next in candidate set
+                        cand_row_i = cand_rows[ii]
+                        found = -1
+                        for ci in range(Cmax):
+                            if int(cand_row_i[ci]) == sp_next:
+                                found = ci
+                                break
+                        if found >= 0:
+                            expert_idx[ii] = found
+                        else:
+                            # sp_next not in candidate set (truncated), fall back to destdist
+                            n_skipped += 1
+                    else:
+                        # No path found, skip
+                        n_skipped += 1
             else:
                 raise ValueError(f"unsupported scheduled_sampling_expert: {expert_policy!r}")
 
@@ -835,8 +868,9 @@ def main() -> None:
         "--scheduled_sampling_expert",
         type=str,
         default="destdist",
-        choices=["destdist", "skip"],
-        help="Expert fallback when GT next is not a successor under self-play state.",
+        choices=["destdist", "skip", "shortest_path"],
+        help="Expert fallback when GT next is not a successor under self-play state. "
+             "shortest_path uses Dijkstra oracle on the way graph (DAgger).",
     )
     p.add_argument(
         "--focus_train_route_ids_json",
@@ -985,6 +1019,14 @@ def main() -> None:
     wg = np.load(str(args.way_graph_npz), allow_pickle=True)
     ptr = np.asarray(wg["way_adj_ptr"], dtype=np.int64)
     adj = np.asarray(wg["way_adj_idx"], dtype=np.int64)
+
+    # Load way_len_m for Dijkstra oracle (DAgger shortest_path expert)
+    _way_len_m: Optional[np.ndarray] = None
+    if str(cfg.scheduled_sampling_expert) == "shortest_path":
+        wf = np.load(str(args.way_features_npz), allow_pickle=True)
+        _way_len_m = np.asarray(wf["way_len_m"], dtype=np.float64).reshape(-1)
+        log.info(f"Loaded way_len_m ({_way_len_m.shape[0]} ways) for shortest_path expert (DAgger)")
+
     collate_fn = make_way_casd_collate_fn(
         way_adj_ptr=wg["way_adj_ptr"],
         way_adj_idx=wg["way_adj_idx"],
@@ -1130,6 +1172,7 @@ def main() -> None:
                     drop_dest_dist_p=float(cfg.drop_dest_dist_p),
                     drop_past_context_p=float(cfg.drop_past_context_p),
                     z_override=z_override,
+                    way_len_m=_way_len_m,
                 )
                 losses.append(float(st["loss"]))
                 ss_stats.append(st)

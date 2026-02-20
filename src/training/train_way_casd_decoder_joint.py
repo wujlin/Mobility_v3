@@ -115,6 +115,9 @@ class TrainCfg:
     scheduled_sampling_sp_pool_chunksize: int = 64
     scheduled_sampling_sp_min_parallel: int = 32
     scheduled_sampling_sp_start_method: str = "auto"
+    scheduled_sampling_sp_next_hop_npy: Optional[str] = None
+    scheduled_sampling_sp_next_hop_dest_ids_npy: Optional[str] = None
+    scheduled_sampling_sp_next_hop_sentinel: int = 65535
 
 
 def _set_seed(seed: int) -> None:
@@ -600,6 +603,9 @@ def _train_batch_scheduled_sampling(
     sp_pool: Optional[object] = None,
     sp_pool_chunksize: int = 64,
     sp_min_parallel: int = 32,
+    sp_next_hop_table: Optional[np.ndarray] = None,
+    sp_dest_to_col: Optional[Dict[int, int]] = None,
+    sp_next_hop_sentinel: int = 65535,
 ) -> Dict[str, float]:
     """
     Scheduled sampling / DAgger for decoder fine-tuning on Flow latents.
@@ -646,6 +652,7 @@ def _train_batch_scheduled_sampling(
     n_skipped = 0
     n_sp_queries = 0
     n_sp_cache_hit = 0
+    n_sp_table_hit = 0
 
     Cmax = int(ae.cfg.max_candidates)
     Kpast = int(ae.cfg.decoder_past_k)
@@ -712,19 +719,43 @@ def _train_batch_scheduled_sampling(
                 off_indices = torch.nonzero(off, as_tuple=False).reshape(-1).cpu().tolist()
                 dw_cpu = dest_way[route_idx].cpu().tolist() if dest_way is not None else [0] * T
 
-                # Build unique miss keys per step to avoid repeated Dijkstra calls.
+                # First try precomputed table / cache, then solve misses online.
                 miss_keys: List[Tuple[int, int]] = []
                 miss_map: Dict[Tuple[int, int], List[int]] = {}
                 key_for_ii: Dict[int, Tuple[int, int]] = {}
+                resolved_next: Dict[int, int] = {}
                 for ii in off_indices:
                     n_sp_queries += 1
                     cur_node = int(cur_t[ii])
                     dest_node = int(dw_cpu[ii])
                     cache_key = (cur_node, dest_node)
                     key_for_ii[int(ii)] = cache_key
+
+                    # 1) O(1) precomputed next-hop lookup (if provided)
+                    sp_next = -1
+                    if sp_next_hop_table is not None:
+                        col = -1
+                        if sp_dest_to_col is None:
+                            if 0 <= dest_node < int(sp_next_hop_table.shape[1]):
+                                col = int(dest_node)
+                        else:
+                            col = int(sp_dest_to_col.get(int(dest_node), -1))
+                        if col >= 0 and 0 <= cur_node < int(sp_next_hop_table.shape[0]):
+                            v = int(sp_next_hop_table[int(cur_node), int(col)])
+                            if v != int(sp_next_hop_sentinel):
+                                sp_next = int(v)
+                                n_sp_table_hit += 1
+                    if sp_next >= 0:
+                        resolved_next[int(ii)] = int(sp_next)
+                        continue
+
+                    # 2) In-memory cache
                     if sp_next_cache is not None and cache_key in sp_next_cache:
                         n_sp_cache_hit += 1
+                        resolved_next[int(ii)] = int(sp_next_cache[cache_key])
                         continue
+
+                    # 3) Online Dijkstra miss
                     if cache_key not in miss_map:
                         miss_map[cache_key] = [int(ii)]
                         miss_keys.append(cache_key)
@@ -772,8 +803,11 @@ def _train_batch_scheduled_sampling(
                                 sp_next_cache[cache_key] = int(sp_next)
 
                 for ii in off_indices:
-                    cache_key = key_for_ii[int(ii)]
-                    sp_next = int(sp_next_cache.get(cache_key, -1)) if sp_next_cache is not None else -1
+                    if int(ii) in resolved_next:
+                        sp_next = int(resolved_next[int(ii)])
+                    else:
+                        cache_key = key_for_ii[int(ii)]
+                        sp_next = int(sp_next_cache.get(cache_key, -1)) if sp_next_cache is not None else -1
                     if sp_next >= 0:
                         cand_row_i = cand_rows[ii]
                         found = -1
@@ -884,6 +918,7 @@ def _train_batch_scheduled_sampling(
         "skipped_frac": float(n_skipped / float(max(1, total_steps + n_skipped))),
         "sp_queries": float(int(n_sp_queries)),
         "sp_cache_hit_frac": float(n_sp_cache_hit / float(max(1, n_sp_queries))),
+        "sp_table_hit_frac": float(n_sp_table_hit / float(max(1, n_sp_queries))),
     }
 
 
@@ -973,6 +1008,25 @@ def main() -> None:
         choices=["auto", "fork", "spawn", "forkserver"],
         help="Multiprocessing start method for shortest_path expert pool.",
     )
+    p.add_argument(
+        "--scheduled_sampling_sp_next_hop_npy",
+        type=Path,
+        default=None,
+        help="Optional precomputed next-hop table (shape [N, M], uint16/uint32). "
+             "If provided, shortest_path expert first does O(1) table lookup, then falls back to Dijkstra.",
+    )
+    p.add_argument(
+        "--scheduled_sampling_sp_next_hop_dest_ids_npy",
+        type=Path,
+        default=None,
+        help="Optional dest_ids for next-hop table columns when M!=N (shape [M], int).",
+    )
+    p.add_argument(
+        "--scheduled_sampling_sp_next_hop_sentinel",
+        type=int,
+        default=65535,
+        help="Unreachable sentinel in precomputed next-hop table.",
+    )
     p.add_argument("--force_decoder_use_step_emb", action="store_true", help="Force-enable decoder step embedding even if AE ckpt did not use it.")
     p.add_argument("--force_decoder_past_k", type=int, default=0, help="Override decoder past_k (0=use ckpt inferred).")
     p.add_argument("--scheduled_sampling_max_p", type=float, default=0.0, help="Scheduled sampling max p (0=disable).")
@@ -1053,6 +1107,11 @@ def main() -> None:
         scheduled_sampling_sp_pool_chunksize=int(args.scheduled_sampling_sp_pool_chunksize),
         scheduled_sampling_sp_min_parallel=int(args.scheduled_sampling_sp_min_parallel),
         scheduled_sampling_sp_start_method=str(args.scheduled_sampling_sp_start_method),
+        scheduled_sampling_sp_next_hop_npy=(str(args.scheduled_sampling_sp_next_hop_npy) if args.scheduled_sampling_sp_next_hop_npy is not None else None),
+        scheduled_sampling_sp_next_hop_dest_ids_npy=(
+            str(args.scheduled_sampling_sp_next_hop_dest_ids_npy) if args.scheduled_sampling_sp_next_hop_dest_ids_npy is not None else None
+        ),
+        scheduled_sampling_sp_next_hop_sentinel=int(args.scheduled_sampling_sp_next_hop_sentinel),
     )
 
     _set_seed(cfg.seed)
@@ -1141,10 +1200,40 @@ def main() -> None:
 
     # Load way_len_m for Dijkstra oracle (DAgger shortest_path expert)
     _way_len_m: Optional[np.ndarray] = None
+    _sp_next_hop_table: Optional[np.ndarray] = None
+    _sp_dest_to_col: Optional[Dict[int, int]] = None
     if str(cfg.scheduled_sampling_expert) == "shortest_path":
         wf = np.load(str(args.way_features_npz), allow_pickle=True)
         _way_len_m = np.asarray(wf["way_len_m"], dtype=np.float64).reshape(-1)
         log.info(f"Loaded way_len_m ({_way_len_m.shape[0]} ways) for shortest_path expert (DAgger)")
+        if cfg.scheduled_sampling_sp_next_hop_npy is not None:
+            nh_path = Path(str(cfg.scheduled_sampling_sp_next_hop_npy))
+            _sp_next_hop_table = np.load(str(nh_path), mmap_mode="r")
+            if _sp_next_hop_table.ndim != 2:
+                raise SystemExit(f"[FATAL] next-hop table must be 2D, got shape={_sp_next_hop_table.shape}")
+            n_rows = int(_sp_next_hop_table.shape[0])
+            n_cols = int(_sp_next_hop_table.shape[1])
+            if n_rows != int(_way_len_m.shape[0]):
+                raise SystemExit(
+                    f"[FATAL] next-hop table row mismatch: rows={n_rows} vs n_ways={int(_way_len_m.shape[0])}"
+                )
+            if cfg.scheduled_sampling_sp_next_hop_dest_ids_npy is not None:
+                did_path = Path(str(cfg.scheduled_sampling_sp_next_hop_dest_ids_npy))
+                dest_ids = np.load(str(did_path), allow_pickle=False).reshape(-1).astype(np.int64, copy=False)
+                if int(dest_ids.size) != int(n_cols):
+                    raise SystemExit(
+                        f"[FATAL] dest_ids size mismatch: len={int(dest_ids.size)} vs table cols={n_cols}"
+                    )
+                _sp_dest_to_col = {int(d): int(i) for i, d in enumerate(dest_ids.tolist())}
+            else:
+                if int(n_cols) != int(_way_len_m.shape[0]):
+                    raise SystemExit(
+                        "[FATAL] next-hop table has M!=N columns but --scheduled_sampling_sp_next_hop_dest_ids_npy is missing."
+                    )
+            log.info(
+                f"Loaded precomputed next-hop table: path={nh_path} shape={tuple(_sp_next_hop_table.shape)} "
+                f"dtype={_sp_next_hop_table.dtype} sentinel={int(cfg.scheduled_sampling_sp_next_hop_sentinel)}"
+            )
 
     collate_fn = make_way_casd_collate_fn(
         way_adj_ptr=wg["way_adj_ptr"],
@@ -1324,6 +1413,9 @@ def main() -> None:
                     sp_pool=sp_pool,
                     sp_pool_chunksize=int(cfg.scheduled_sampling_sp_pool_chunksize),
                     sp_min_parallel=int(cfg.scheduled_sampling_sp_min_parallel),
+                    sp_next_hop_table=_sp_next_hop_table,
+                    sp_dest_to_col=_sp_dest_to_col,
+                    sp_next_hop_sentinel=int(cfg.scheduled_sampling_sp_next_hop_sentinel),
                 )
                 losses.append(float(st["loss"]))
                 ss_stats.append(st)
@@ -1337,7 +1429,8 @@ def main() -> None:
                         f"train_loss={float(np.mean(losses)) if losses else float('nan'):.4f} "
                         f"ss(p={float(st.get('p_ss', 0.0)):.3f}, acc={float(st.get('acc', float('nan'))):.3f}, "
                         f"off_gt={float(st.get('off_gt_frac', 0.0)):.3f}, skip={float(st.get('skipped_frac', 0.0)):.3f}, "
-                        f"sp_q={int(st.get('sp_queries', 0.0))}, sp_hit={float(st.get('sp_cache_hit_frac', 0.0)):.3f}) "
+                        f"sp_q={int(st.get('sp_queries', 0.0))}, sp_tbl={float(st.get('sp_table_hit_frac', 0.0)):.3f}, "
+                        f"sp_hit={float(st.get('sp_cache_hit_frac', 0.0)):.3f}) "
                         f"it/s={it_s:.2f} eta={eta_s/60.0:.1f}m"
                     )
                 continue
@@ -1405,7 +1498,7 @@ def main() -> None:
         tr_loss = float(np.mean(losses)) if losses else float("nan")
         train_ss: Dict[str, float] = {}
         if ss_stats:
-            keys = ["p_ss", "acc", "use_pred_frac", "off_gt_frac", "skipped_frac", "n_steps", "sp_queries", "sp_cache_hit_frac"]
+            keys = ["p_ss", "acc", "use_pred_frac", "off_gt_frac", "skipped_frac", "n_steps", "sp_queries", "sp_table_hit_frac", "sp_cache_hit_frac"]
             train_ss = {k: float(np.mean([float(s.get(k, float("nan"))) for s in ss_stats])) for k in keys}
         va = _eval_epoch(
             ae=ae,
@@ -1424,7 +1517,8 @@ def main() -> None:
                 f"ss(p={train_ss.get('p_ss', 0.0):.3f}, acc={train_ss.get('acc', float('nan')):.3f}, "
                 f"use_pred={train_ss.get('use_pred_frac', 0.0):.3f}, off_gt={train_ss.get('off_gt_frac', 0.0):.3f}, "
                 f"skip={train_ss.get('skipped_frac', 0.0):.3f}, steps={int(train_ss.get('n_steps', 0.0))}, "
-                f"sp_q={int(train_ss.get('sp_queries', 0.0))}, sp_hit={train_ss.get('sp_cache_hit_frac', 0.0):.3f})"
+                f"sp_q={int(train_ss.get('sp_queries', 0.0))}, sp_tbl={train_ss.get('sp_table_hit_frac', 0.0):.3f}, "
+                f"sp_hit={train_ss.get('sp_cache_hit_frac', 0.0):.3f})"
             )
         else:
             log.info(f"epoch={epoch} train_loss={tr_loss:.6f} val_loss={va_loss:.6f} best={best_val:.6f}@{best_epoch}")

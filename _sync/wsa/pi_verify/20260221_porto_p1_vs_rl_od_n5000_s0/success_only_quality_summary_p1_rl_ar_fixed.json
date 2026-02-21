@@ -1,0 +1,110 @@
+{
+  "P1_K16_dest_efficient": {
+    "n_routes": 5000,
+    "n_success": 3241,
+    "success_rate": 0.6482,
+    "success_only_loop_rate": 0.5538414069731564,
+    "success_only_len_ratio": {
+      "mean": 2.8552840936793977,
+      "p50": 1.9336509444687524,
+      "p95": 8.038506550928528
+    },
+    "success_only_jaccard": {
+      "mean": 0.1824747797275311,
+      "p50": 0.1282051282051282,
+      "p95": 0.5121951219512195
+    },
+    "success_only_dtw_m": null,
+    "success_only_frechet_m": null,
+    "success_only_final_error_m": {
+      "mean": 76.71577032731271,
+      "p50": 38.85780559628942,
+      "p95": 196.09141070695324
+    }
+  },
+  "RL_K16_dest_efficient": {
+    "n_routes": 5000,
+    "n_success": 3393,
+    "success_rate": 0.6786,
+    "success_only_loop_rate": 0.5151783082817566,
+    "success_only_len_ratio": {
+      "mean": 2.7633834972454774,
+      "p50": 1.819367775453201,
+      "p95": 7.616845330939905
+    },
+    "success_only_jaccard": {
+      "mean": 0.1858653225158634,
+      "p50": 0.1320754716981132,
+      "p95": 0.5130977130977128
+    },
+    "success_only_dtw_m": null,
+    "success_only_frechet_m": null,
+    "success_only_final_error_m": {
+      "mean": 76.98197234517338,
+      "p50": 38.682532106014,
+      "p95": 194.61899074889286
+    }
+  },
+  "RNN_b10": {
+    "n_routes": 5000,
+    "n_success": 964,
+    "success_rate": 0.1928,
+    "success_only_loop_rate": 0.2354771784232365,
+    "success_only_len_ratio": {
+      "mean": 2.7456350469258664,
+      "p50": 1.3720283165544847,
+      "p95": 8.135992877855843
+    },
+    "success_only_jaccard": {
+      "mean": 0.20471136385927338,
+      "p50": 0.1276595744680851,
+      "p95": 0.6
+    },
+    "success_only_dtw_m": {
+      "mean": 68225.42262597103,
+      "p50": 39881.38712844611,
+      "p95": 251714.4057594229
+    },
+    "success_only_frechet_m": {
+      "mean": 2114.284886567037,
+      "p50": 1802.7046763027836,
+      "p95": 5684.760609673159
+    },
+    "success_only_final_error_m": {
+      "mean": 64.99198768320448,
+      "p50": 44.236045151572434,
+      "p95": 185.311074172463
+    }
+  },
+  "Transformer_b10": {
+    "n_routes": 5000,
+    "n_success": 1161,
+    "success_rate": 0.2322,
+    "success_only_loop_rate": 0.3987941429801895,
+    "success_only_len_ratio": {
+      "mean": 2.625035807748826,
+      "p50": 1.4927528250010182,
+      "p95": 7.898579604111727
+    },
+    "success_only_jaccard": {
+      "mean": 0.19734393293188007,
+      "p50": 0.13385826771653545,
+      "p95": 0.6
+    },
+    "success_only_dtw_m": {
+      "mean": 60786.448846627085,
+      "p50": 33944.71110138583,
+      "p95": 224424.37235435797
+    },
+    "success_only_frechet_m": {
+      "mean": 2039.5701782924984,
+      "p50": 1475.5257751901286,
+      "p95": 5328.267592791813
+    },
+    "success_only_final_error_m": {
+      "mean": 64.3854042978318,
+      "p50": 41.283638481852115,
+      "p95": 172.91060687558837
+    }
+  }
+}

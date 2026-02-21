@@ -1,0 +1,57 @@
+{
+  "ok": true,
+  "task": "waycasd_analyze_fallback_rate",
+  "created_at": "2026-02-21T11:20:31.086811+08:00",
+  "inputs": {
+    "per_route_json": "_sync/wsa/pi_verify/20260221_porto_diag_k4_antiloop_s0/per_route_k4_dest_efficient_antiloop_n5000.json",
+    "mode": "greedy"
+  },
+  "overall": {
+    "n": 5000,
+    "eligible": 5000,
+    "fallback": 3260,
+    "fallback_rate": 0.652
+  },
+  "per_bin": {
+    "[5,10)": {
+      "n": 289,
+      "eligible": 289,
+      "fallback": 170,
+      "fallback_rate": 0.5882352941176471
+    },
+    "[10,20)": {
+      "n": 1573,
+      "eligible": 1573,
+      "fallback": 980,
+      "fallback_rate": 0.6230133502860775
+    },
+    "[20,30)": {
+      "n": 1351,
+      "eligible": 1351,
+      "fallback": 927,
+      "fallback_rate": 0.6861584011843079
+    },
+    "[30,40)": {
+      "n": 969,
+      "eligible": 969,
+      "fallback": 696,
+      "fallback_rate": 0.718266253869969
+    },
+    "[40,60)": {
+      "n": 673,
+      "eligible": 673,
+      "fallback": 402,
+      "fallback_rate": 0.5973254086181278
+    },
+    "[60,+)": {
+      "n": 145,
+      "eligible": 145,
+      "fallback": 85,
+      "fallback_rate": 0.5862068965517241
+    }
+  },
+  "notes": {
+    "eligible": "records with n_samples>1 (or inferred from sample_success_rate).",
+    "fallback": "selector fallback because no successful sample exists in K candidates."
+  }
+}

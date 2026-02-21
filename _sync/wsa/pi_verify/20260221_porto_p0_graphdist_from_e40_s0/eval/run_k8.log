@@ -1,0 +1,47 @@
+/home/jinlin/miniconda3/envs/dpl/lib/python3.11/site-packages/torch/nn/modules/transformer.py:392: UserWarning: enable_nested_tensor is True, but self.use_nested_tensor is False because encoder_layer.norm_first was True
+  warnings.warn(
+[graph_dist] loaded path=/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD0_waydata_porto_seed0/W2_way_graph/graph_dist_bfs.npz shape=(35471, 35471) dtype=int16 size=2.344GB device=cuda divisor=200 unreachable=201.0
+[city0] start n_routes=5000 latent_source=flow region_constraint=none compare_beam=False
+[city0] batch 0:128/5000
+[city0] batch 128:256/5000
+[city0] batch 256:384/5000
+[city0] batch 384:512/5000
+[city0] batch 512:640/5000
+[city0] batch 640:768/5000
+[city0] batch 768:896/5000
+[city0] batch 896:1024/5000
+[city0] batch 1024:1152/5000
+[city0] batch 1152:1280/5000
+[city0] batch 1280:1408/5000
+[city0] batch 1408:1536/5000
+[city0] batch 1536:1664/5000
+[city0] batch 1664:1792/5000
+[city0] batch 1792:1920/5000
+[city0] batch 1920:2048/5000
+[city0] batch 2048:2176/5000
+[city0] batch 2176:2304/5000
+[city0] batch 2304:2432/5000
+[city0] batch 2432:2560/5000
+[city0] batch 2560:2688/5000
+[city0] batch 2688:2816/5000
+[city0] batch 2816:2944/5000
+[city0] batch 2944:3072/5000
+[city0] batch 3072:3200/5000
+[city0] batch 3200:3328/5000
+[city0] batch 3328:3456/5000
+[city0] batch 3456:3584/5000
+[city0] batch 3584:3712/5000
+[city0] batch 3712:3840/5000
+[city0] batch 3840:3968/5000
+[city0] batch 3968:4096/5000
+[city0] batch 4096:4224/5000
+[city0] batch 4224:4352/5000
+[city0] batch 4352:4480/5000
+[city0] batch 4480:4608/5000
+[city0] batch 4608:4736/5000
+[city0] batch 4736:4864/5000
+[city0] batch 4864:4992/5000
+[city0] batch 4992:5000/5000
+[city0] done=5000 routes
+[OK] saved: _sync/wsa/pi_verify/20260221_porto_p0_graphdist_from_e40_s0/eval/binned_p0_graphdist_k8_dest_efficient_n5000.json
+[OK] saved: _sync/wsa/pi_verify/20260221_porto_p0_graphdist_from_e40_s0/eval/per_route_p0_graphdist_k8_dest_efficient_n5000.json

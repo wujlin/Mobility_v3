@@ -1,0 +1,7 @@
+[city0][rnn_batched] 2048/5000 decoded
+[city0][rnn_batched] 4096/5000 decoded
+[city0][rnn_batched] 5000/5000 decoded
+[city0] done=5000 routes
+[OK] saved: _sync/wsa/pi_verify/20260221_porto_baseline_quality_n5000_s0/binned_rnn_beam10_n5000_fullmetrics.json
+[OK] saved: _sync/wsa/pi_verify/20260221_porto_baseline_quality_n5000_s0/per_route_rnn_beam10_n5000_fullmetrics.json
+

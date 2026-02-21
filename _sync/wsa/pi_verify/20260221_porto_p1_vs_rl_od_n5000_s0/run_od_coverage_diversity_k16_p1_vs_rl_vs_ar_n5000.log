@@ -1,0 +1,7 @@
+[OK] saved: _sync/wsa/pi_verify/20260221_porto_p1_vs_rl_od_n5000_s0/od_coverage_diversity_k16_p1_vs_rl_vs_ar_n5000.json
+Method | Decode | Arrival | GT Coverage@K | Self-Diversity@K | n_OD
+------ | ------ | ------- | ------------- | ---------------- | ----
+Way-CASD_P1_E100_K16 | greedy | 0.6482 | 0.0914 | 0.5384 | 154
+Way-CASD_RL_Dense_K16 | greedy | 0.6786 | 0.0918 | 0.5103 | 154
+RNN_AR_b10 | beam | 0.1928 | 0.0227 | 0.1857 | 154
+Transformer_AR_b10 | beam | 0.2322 | 0.0200 | 0.2616 | 154

@@ -1,0 +1,30 @@
+{
+  "P1_K16_dest_efficient": {
+    "success_rate": 0.0,
+    "succ_only_len_ratio_p50_weighted": 0.0,
+    "succ_only_loop_rate_weighted": 0.0,
+    "n_routes": 5000,
+    "n_success": 0
+  },
+  "RL_K16_dest_efficient": {
+    "success_rate": 0.0,
+    "succ_only_len_ratio_p50_weighted": 0.0,
+    "succ_only_loop_rate_weighted": 0.0,
+    "n_routes": 5000,
+    "n_success": 0
+  },
+  "RNN_b10": {
+    "success_rate": 0.0,
+    "succ_only_len_ratio_p50_weighted": null,
+    "succ_only_loop_rate_weighted": null,
+    "n_routes": 5000,
+    "n_success": 0
+  },
+  "Transformer_b10": {
+    "success_rate": 0.0,
+    "succ_only_len_ratio_p50_weighted": null,
+    "succ_only_loop_rate_weighted": null,
+    "n_routes": 5000,
+    "n_success": 0
+  }
+}

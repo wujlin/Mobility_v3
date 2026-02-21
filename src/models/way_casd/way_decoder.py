@@ -4,6 +4,7 @@ from dataclasses import dataclass
 import math
 from typing import Dict, List, Optional, Tuple
 
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -155,6 +156,12 @@ class WayDecoder(nn.Module):
 
         self.register_buffer("way_adj_ptr", torch.as_tensor(way_adj_ptr, dtype=torch.long), persistent=False)
         self.register_buffer("way_adj_idx", torch.as_tensor(way_adj_idx, dtype=torch.long), persistent=False)
+        # Optional graph-distance guidance table (dist_matrix[src, dest]).
+        # Set by trainer/evaluator via set_graph_dist_lookup(); default None keeps old behavior.
+        self.graph_dist_table: Optional[torch.Tensor] = None
+        self.graph_dist_divisor: float = 1.0
+        self.graph_dist_unreachable: Optional[float] = None
+        self.graph_dist_on_cpu: bool = False
         # Decode-time fast path: store padded successors for batched candidate lookup.
         # This avoids per-route CSR slicing (and frequent `.item()` sync) inside the decode loop.
         succ_pad, succ_mask, succ_len = self._build_padded_successors(self.way_adj_ptr, self.way_adj_idx)
@@ -247,6 +254,48 @@ class WayDecoder(nn.Module):
 
     def get_succ_candidates(self, way_id: int) -> torch.Tensor:
         return self._slice_csr(self.way_adj_ptr, self.way_adj_idx, int(way_id))
+
+    def set_graph_dist_lookup(
+        self,
+        *,
+        dist_matrix: np.ndarray | torch.Tensor,
+        divisor: float = 1.0,
+        unreachable_value: Optional[float] = None,
+        device: Optional[torch.device] = None,
+    ) -> None:
+        """
+        Attach graph-distance table used in score_candidates().
+
+        Args:
+          dist_matrix: (N,N), dist[src,dest]
+          divisor: output distance will be dist/divisor
+          unreachable_value: raw value considered unreachable (e.g., max_hops+1)
+          device: target storage device; None => keep current decoder device
+        """
+        if isinstance(dist_matrix, np.ndarray):
+            if np.issubdtype(dist_matrix.dtype, np.integer):
+                t = torch.as_tensor(dist_matrix)
+            else:
+                t = torch.as_tensor(dist_matrix, dtype=torch.float32)
+        else:
+            if not torch.is_floating_point(dist_matrix):
+                t = dist_matrix
+            else:
+                t = dist_matrix.to(dtype=torch.float32)
+        if t.ndim != 2:
+            raise ValueError(f"graph dist matrix must be 2D, got shape={tuple(t.shape)}")
+        tgt = (device if device is not None else self.way_adj_ptr.device)
+        t = t.to(device=tgt)
+        self.graph_dist_table = t
+        self.graph_dist_divisor = float(max(1e-6, float(divisor)))
+        self.graph_dist_unreachable = (float(unreachable_value) if unreachable_value is not None else None)
+        self.graph_dist_on_cpu = bool(t.device.type == "cpu")
+
+    def clear_graph_dist_lookup(self) -> None:
+        self.graph_dist_table = None
+        self.graph_dist_divisor = 1.0
+        self.graph_dist_unreachable = None
+        self.graph_dist_on_cpu = False
 
     @staticmethod
     def _build_padded_successors(ptr: torch.Tensor, idx: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
@@ -702,17 +751,50 @@ class WayDecoder(nn.Module):
             diff_from_mean = (cand_h - mean_cand[:, None, :]) * mask_f  # (T,C,hidden)
         
         if bool(self.cfg.use_dest_dist):
-            # Candidate-to-destination distance
-            coord_scale = float(getattr(way_embedder, "coord_scale", self.coord_scale))
-            dest = route_cond["dest_pos"][route_idx].to(dtype=torch.float32)
-            if coord_scale > 0:
-                dest = dest / coord_scale
-            try:
-                cand_geom, _tier, _hw = way_embedder._lookup(cand_way)
-                cand_center = cand_geom[..., :2].to(dtype=torch.float32)
-            except Exception:
-                cand_center = torch.zeros((T, C, 2), dtype=torch.float32, device=dest.device)
-            dist = torch.norm(dest[:, None, :] - cand_center, dim=-1, keepdim=True)
+            # Candidate-to-destination guidance distance:
+            #   - graph dist (if lookup table + dest_way are available)
+            #   - fallback to Euclidean center distance (legacy behavior)
+            dist: Optional[torch.Tensor] = None
+            dway = route_cond.get("dest_way", None)
+            if (
+                self.graph_dist_table is not None
+                and isinstance(dway, torch.Tensor)
+                and int(self.graph_dist_table.shape[0]) > 0
+            ):
+                with torch.no_grad():
+                    dist_tbl = self.graph_dist_table
+                    dest_way_t = dway[route_idx].to(dtype=torch.long)
+                    valid_c = (cand_way >= 0)
+                    cand_ids = torch.clamp(cand_way, min=0)
+                    if bool(self.graph_dist_on_cpu):
+                        cand_cpu = cand_ids.detach().to(device="cpu", dtype=torch.long)
+                        dest_cpu = dest_way_t.detach().to(device="cpu", dtype=torch.long)
+                        flat_c = cand_cpu.reshape(-1)
+                        flat_d = dest_cpu[:, None].expand(T, C).reshape(-1)
+                        raw = dist_tbl[flat_c, flat_d].reshape(T, C).to(device=cand_way.device, dtype=torch.float32)
+                    else:
+                        dest_same = dest_way_t.to(device=cand_ids.device, dtype=torch.long)
+                        flat_c = cand_ids.reshape(-1)
+                        flat_d = dest_same[:, None].expand(T, C).reshape(-1)
+                        raw = dist_tbl[flat_c, flat_d].reshape(T, C).to(dtype=torch.float32)
+                    raw = raw / float(self.graph_dist_divisor)
+                    if self.graph_dist_unreachable is not None:
+                        # Keep unreachable as large penalty instead of inf to avoid NaN in downstream arithmetic.
+                        ur = float(self.graph_dist_unreachable) / float(self.graph_dist_divisor)
+                        raw = torch.where(raw >= ur, torch.full_like(raw, ur), raw)
+                    dist = raw[:, :, None]
+                    dist = torch.where(valid_c[:, :, None], dist, torch.zeros_like(dist))
+            if dist is None:
+                coord_scale = float(getattr(way_embedder, "coord_scale", self.coord_scale))
+                dest = route_cond["dest_pos"][route_idx].to(dtype=torch.float32)
+                if coord_scale > 0:
+                    dest = dest / coord_scale
+                try:
+                    cand_geom, _tier, _hw = way_embedder._lookup(cand_way)
+                    cand_center = cand_geom[..., :2].to(dtype=torch.float32)
+                except Exception:
+                    cand_center = torch.zeros((T, C, 2), dtype=torch.float32, device=dest.device)
+                dist = torch.norm(dest[:, None, :] - cand_center, dim=-1, keepdim=True)
             # SIB: zero out dest_dist bypass to force latent-dependent navigation
             if drop_dest_dist:
                 dist = torch.zeros_like(dist)

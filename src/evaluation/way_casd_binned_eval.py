@@ -302,6 +302,9 @@ class Cfg:
     flow_solver_steps: Optional[int]  # None=use ckpt/default
     flow_cfg_scale: float  # only used when latent_source=flow (1.0=disable)
     flow_latent_scale: float  # only used when latent_source=flow (1.0=disable)
+    graph_dist_npz: Optional[str]
+    graph_dist_device: str
+    graph_dist_divisor: float
 
     eval_batch_size: int  # per forward batch (before K replication)
 
@@ -514,6 +517,72 @@ def _require_city_meta(city_meta: Dict[int, dict], cities: Iterable[int]) -> Non
         raise SystemExit(f"[FATAL] missing --city_grid_meta for cities={missing} (PI: meters is mandatory).")
 
 
+def _resolve_graph_dist_device(*, pref: str, runtime_device: torch.device) -> torch.device:
+    p = str(pref or "auto").strip().lower()
+    if p == "cpu":
+        return torch.device("cpu")
+    if p == "cuda":
+        if not torch.cuda.is_available():
+            raise SystemExit("[FATAL] --graph_dist_device=cuda but CUDA is unavailable.")
+        return torch.device("cuda")
+    # auto
+    if runtime_device.type == "cuda" and torch.cuda.is_available():
+        return torch.device("cuda")
+    return torch.device("cpu")
+
+
+def _attach_graph_dist_lookup(
+    *,
+    ae: WayCASDAutoEncoder,
+    graph_dist_npz: Optional[Path],
+    graph_dist_device: str,
+    graph_dist_divisor: float,
+    runtime_device: torch.device,
+) -> None:
+    if graph_dist_npz is None:
+        return
+    path = Path(graph_dist_npz)
+    if not path.exists():
+        raise SystemExit(f"[FATAL] file not found: {path}")
+    obj = np.load(str(path), allow_pickle=True, mmap_mode="r")
+    if "dist_matrix" not in obj.files:
+        raise SystemExit("[FATAL] graph_dist_npz missing key: dist_matrix")
+    mat = np.asarray(obj["dist_matrix"])
+    if mat.ndim != 2:
+        raise SystemExit(f"[FATAL] dist_matrix must be 2D, got shape={tuple(mat.shape)}")
+    n_ways = int(getattr(ae.way_enc, "way_len_m").numel())
+    if int(mat.shape[0]) != int(n_ways) or int(mat.shape[1]) != int(n_ways):
+        raise SystemExit(
+            f"[FATAL] dist_matrix shape mismatch: got={tuple(mat.shape)} expected=({n_ways},{n_ways})"
+        )
+    max_hops = None
+    if "max_hops" in obj.files:
+        try:
+            max_hops = int(np.asarray(obj["max_hops"]).reshape(-1)[0])
+        except Exception:
+            max_hops = None
+    unreachable = (float(max_hops + 1) if max_hops is not None and max_hops >= 0 else None)
+    if float(graph_dist_divisor) > 0:
+        divisor = float(graph_dist_divisor)
+    elif max_hops is not None and max_hops > 0:
+        divisor = float(max_hops)
+    else:
+        divisor = 1.0
+    tgt = _resolve_graph_dist_device(pref=str(graph_dist_device), runtime_device=runtime_device)
+    ae.decoder.set_graph_dist_lookup(
+        dist_matrix=mat,
+        divisor=float(divisor),
+        unreachable_value=unreachable,
+        device=tgt,
+    )
+    size_gb = float(mat.nbytes) / (1024.0 * 1024.0 * 1024.0)
+    print(
+        f"[graph_dist] loaded path={path} shape={tuple(mat.shape)} dtype={str(mat.dtype)} "
+        f"size={size_gb:.3f}GB device={str(tgt)} divisor={float(divisor):.6g} unreachable={unreachable}",
+        flush=True,
+    )
+
+
 def _nanmean(x: Sequence[float]) -> float:
     a = np.asarray(list(x), dtype=np.float64).reshape(-1)
     a = a[np.isfinite(a)]
@@ -623,6 +692,9 @@ def main() -> None:
         default=1.0,
         help="Optional: multiply sampled z_flow by this scalar before decoding (1.0=disable).",
     )
+    p.add_argument("--graph_dist_npz", type=Path, default=None, help="Optional graph distance table npz (key=dist_matrix). Enables graph-distance guidance in decoder.")
+    p.add_argument("--graph_dist_device", type=str, default="auto", choices=["auto", "cpu", "cuda"], help="Where to place graph dist table for decoder lookup.")
+    p.add_argument("--graph_dist_divisor", type=float, default=0.0, help="Distance normalization divisor (0=auto: max_hops from npz, else 1).")
 
     p.add_argument("--eval_batch_size", type=int, default=64, help="Eval batch size (routes per forward, before K replication).")
     p.add_argument(
@@ -712,6 +784,9 @@ def main() -> None:
         flow_solver_steps=(int(args.flow_solver_steps) if int(args.flow_solver_steps) > 0 else None),
         flow_cfg_scale=float(args.flow_cfg_scale),
         flow_latent_scale=float(args.flow_latent_scale),
+        graph_dist_npz=(str(args.graph_dist_npz) if args.graph_dist_npz is not None else None),
+        graph_dist_device=str(args.graph_dist_device),
+        graph_dist_divisor=float(args.graph_dist_divisor),
         eval_batch_size=max(1, int(args.eval_batch_size)),
         n_routes=int(args.n_routes),
         min_hops=int(args.min_hops),
@@ -904,6 +979,13 @@ def main() -> None:
         strict_ok = False
         ae.load_state_dict(state, strict=False)
     ae.eval()
+    _attach_graph_dist_lookup(
+        ae=ae,
+        graph_dist_npz=(Path(args.graph_dist_npz) if args.graph_dist_npz is not None else None),
+        graph_dist_device=str(cfg.graph_dist_device),
+        graph_dist_divisor=float(cfg.graph_dist_divisor),
+        runtime_device=device,
+    )
 
     way_embedder: nn.Module = ae.way_enc
     if bool(args.cache_way_emb):
@@ -1073,6 +1155,7 @@ def main() -> None:
                 "hour": torch.as_tensor(hour_b, dtype=torch.long, device=device),
                 "dow": torch.as_tensor(dow_b, dtype=torch.long, device=device),
                 "route_city": torch.as_tensor(np.full((int(i1 - i0),), int(city), dtype=np.int64), dtype=torch.long, device=device),
+                "dest_way": torch.as_tensor(dw_b, dtype=torch.long, device=device),
             }
             sw_t = torch.as_tensor(sw_b, dtype=torch.long, device=device)
             dw_t = torch.as_tensor(dw_b, dtype=torch.long, device=device)

@@ -109,6 +109,9 @@ class TrainCfg:
     cache_batch_size: int = 0
     cache_log_every_batches: int = 50
     cache_resample_every_epochs: int = 0
+    graph_dist_npz: Optional[str] = None
+    graph_dist_device: str = "auto"
+    graph_dist_divisor: float = 0.0
     scheduled_sampling_sp_max_visits: int = 5000
     scheduled_sampling_sp_cache_size: int = 2000000
     scheduled_sampling_sp_workers: int = 0
@@ -172,6 +175,7 @@ def _build_flow_route_cond(
         "hour": route_cond["hour"],
         "dow": route_cond["dow"],
         "route_city": route_cond["route_city"],
+        "dest_way": route_cond["dest_way"],
     }
     if bool(flow.cfg.use_region_seq):
         if way_region is None:
@@ -525,6 +529,73 @@ def _load_flow(*, flow_ckpt: Path, ae: WayCASDAutoEncoder, device: torch.device)
     flow = LatentFlowMatching(cfg=cfg, cond_cfg=ae.decoder.cond_enc.cfg).to(device)
     flow.load_state_dict(state, strict=False)
     return flow
+
+
+def _resolve_graph_dist_device(*, pref: str, runtime_device: torch.device) -> torch.device:
+    p = str(pref or "auto").strip().lower()
+    if p == "cpu":
+        return torch.device("cpu")
+    if p == "cuda":
+        if not torch.cuda.is_available():
+            raise SystemExit("[FATAL] --graph_dist_device=cuda but CUDA is unavailable.")
+        return torch.device("cuda")
+    # auto
+    if runtime_device.type == "cuda" and torch.cuda.is_available():
+        return torch.device("cuda")
+    return torch.device("cpu")
+
+
+def _attach_graph_dist_lookup(
+    *,
+    ae: WayCASDAutoEncoder,
+    graph_dist_npz: Optional[Path],
+    graph_dist_device: str,
+    graph_dist_divisor: float,
+    runtime_device: torch.device,
+) -> None:
+    if graph_dist_npz is None:
+        return
+    path = Path(graph_dist_npz)
+    if not path.exists():
+        raise SystemExit(f"[FATAL] file not found: {path}")
+    obj = np.load(str(path), allow_pickle=True, mmap_mode="r")
+    if "dist_matrix" not in obj.files:
+        raise SystemExit("[FATAL] graph_dist_npz missing key: dist_matrix")
+    mat = np.asarray(obj["dist_matrix"])
+    if mat.ndim != 2:
+        raise SystemExit(f"[FATAL] dist_matrix must be 2D, got shape={tuple(mat.shape)}")
+    n_ways = int(getattr(ae.way_enc, "way_len_m").numel())
+    if int(mat.shape[0]) != int(n_ways) or int(mat.shape[1]) != int(n_ways):
+        raise SystemExit(
+            f"[FATAL] dist_matrix shape mismatch: got={tuple(mat.shape)} expected=({n_ways},{n_ways})"
+        )
+
+    max_hops = None
+    if "max_hops" in obj.files:
+        try:
+            max_hops = int(np.asarray(obj["max_hops"]).reshape(-1)[0])
+        except Exception:
+            max_hops = None
+    unreachable = (float(max_hops + 1) if max_hops is not None and max_hops >= 0 else None)
+    if float(graph_dist_divisor) > 0:
+        divisor = float(graph_dist_divisor)
+    elif max_hops is not None and max_hops > 0:
+        divisor = float(max_hops)
+    else:
+        divisor = 1.0
+
+    tgt = _resolve_graph_dist_device(pref=str(graph_dist_device), runtime_device=runtime_device)
+    ae.decoder.set_graph_dist_lookup(
+        dist_matrix=mat,
+        divisor=float(divisor),
+        unreachable_value=unreachable,
+        device=tgt,
+    )
+    size_gb = float(mat.nbytes) / (1024.0 * 1024.0 * 1024.0)
+    log.info(
+        f"Loaded graph dist lookup: path={path} shape={tuple(mat.shape)} dtype={str(mat.dtype)} "
+        f"size={size_gb:.3f}GB device={str(tgt)} divisor={float(divisor):.6g} unreachable={unreachable}"
+    )
 
 
 def _succ_slice(ptr: np.ndarray, idx: np.ndarray, way: int) -> np.ndarray:
@@ -1005,6 +1076,9 @@ def main() -> None:
     p.add_argument("--cache_batch_size", type=int, default=0, help="Batch size for cache precompute (0=use train batch_size).")
     p.add_argument("--cache_log_every_batches", type=int, default=50, help="Log cache precompute progress every N batches.")
     p.add_argument("--cache_resample_every_epochs", type=int, default=0, help="If >0, rebuild cache every N epochs (0=build once).")
+    p.add_argument("--graph_dist_npz", type=Path, default=None, help="Optional graph distance table npz (key=dist_matrix). Enables graph-distance guidance in decoder.")
+    p.add_argument("--graph_dist_device", type=str, default="auto", choices=["auto", "cpu", "cuda"], help="Where to place graph dist table for decoder lookup.")
+    p.add_argument("--graph_dist_divisor", type=float, default=0.0, help="Distance normalization divisor (0=auto: max_hops from npz, else 1).")
     p.add_argument("--scheduled_sampling_sp_max_visits", type=int, default=5000, help="Dijkstra max_visits for shortest_path expert.")
     p.add_argument("--scheduled_sampling_sp_cache_size", type=int, default=2000000, help="Max cached (cur,dest)->next entries for shortest_path expert (0=unlimited).")
     p.add_argument("--scheduled_sampling_sp_workers", type=int, default=0, help="Process workers for shortest_path expert (0=disable multiprocessing).")
@@ -1110,6 +1184,9 @@ def main() -> None:
         cache_batch_size=int(args.cache_batch_size),
         cache_log_every_batches=int(args.cache_log_every_batches),
         cache_resample_every_epochs=int(args.cache_resample_every_epochs),
+        graph_dist_npz=(str(args.graph_dist_npz) if args.graph_dist_npz is not None else None),
+        graph_dist_device=str(args.graph_dist_device),
+        graph_dist_divisor=float(args.graph_dist_divisor),
         scheduled_sampling_sp_max_visits=int(args.scheduled_sampling_sp_max_visits),
         scheduled_sampling_sp_cache_size=int(args.scheduled_sampling_sp_cache_size),
         scheduled_sampling_sp_workers=int(args.scheduled_sampling_sp_workers),
@@ -1177,6 +1254,13 @@ def main() -> None:
         device=device,
         force_decoder_use_step_emb=(True if bool(args.force_decoder_use_step_emb) else None),
         force_decoder_past_k=(int(args.force_decoder_past_k) if int(args.force_decoder_past_k) > 0 else None),
+    )
+    _attach_graph_dist_lookup(
+        ae=ae,
+        graph_dist_npz=(Path(args.graph_dist_npz) if args.graph_dist_npz is not None else None),
+        graph_dist_device=str(cfg.graph_dist_device),
+        graph_dist_divisor=float(cfg.graph_dist_divisor),
+        runtime_device=device,
     )
     flow = _load_flow(flow_ckpt=Path(args.flow_ckpt), ae=ae, device=device)
 
@@ -1593,6 +1677,7 @@ def main() -> None:
             "ae_ckpt": str(args.ae_ckpt),
             "flow_ckpt": str(args.flow_ckpt),
             "way_regions_npz": (str(args.way_regions_npz) if args.way_regions_npz is not None else None),
+            "graph_dist_npz": (str(args.graph_dist_npz) if args.graph_dist_npz is not None else None),
             "split_json": (str(args.split_json) if args.split_json is not None else None),
         },
         "out_dir": str(out_dir),

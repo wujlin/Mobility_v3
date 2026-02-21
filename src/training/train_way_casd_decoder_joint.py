@@ -653,6 +653,9 @@ def _train_batch_scheduled_sampling(
     n_sp_queries = 0
     n_sp_cache_hit = 0
     n_sp_table_hit = 0
+    n_sp_label_applied = 0
+    n_sp_unreachable = 0
+    n_sp_not_in_cand = 0
 
     Cmax = int(ae.cfg.max_candidates)
     Kpast = int(ae.cfg.decoder_past_k)
@@ -817,9 +820,12 @@ def _train_batch_scheduled_sampling(
                                 break
                         if found >= 0:
                             expert_idx[ii] = found
+                            n_sp_label_applied += 1
                         else:
+                            n_sp_not_in_cand += 1
                             n_skipped += 1
                     else:
+                        n_sp_unreachable += 1
                         n_skipped += 1
             else:
                 raise ValueError(f"unsupported scheduled_sampling_expert: {expert_policy!r}")
@@ -919,6 +925,9 @@ def _train_batch_scheduled_sampling(
         "sp_queries": float(int(n_sp_queries)),
         "sp_cache_hit_frac": float(n_sp_cache_hit / float(max(1, n_sp_queries))),
         "sp_table_hit_frac": float(n_sp_table_hit / float(max(1, n_sp_queries))),
+        "sp_label_applied_frac": float(n_sp_label_applied / float(max(1, n_sp_queries))),
+        "sp_unreachable_frac": float(n_sp_unreachable / float(max(1, n_sp_queries))),
+        "sp_not_in_cand_frac": float(n_sp_not_in_cand / float(max(1, n_sp_queries))),
     }
 
 
@@ -1430,7 +1439,10 @@ def main() -> None:
                         f"ss(p={float(st.get('p_ss', 0.0)):.3f}, acc={float(st.get('acc', float('nan'))):.3f}, "
                         f"off_gt={float(st.get('off_gt_frac', 0.0)):.3f}, skip={float(st.get('skipped_frac', 0.0)):.3f}, "
                         f"sp_q={int(st.get('sp_queries', 0.0))}, sp_tbl={float(st.get('sp_table_hit_frac', 0.0)):.3f}, "
-                        f"sp_hit={float(st.get('sp_cache_hit_frac', 0.0)):.3f}) "
+                        f"sp_cache={float(st.get('sp_cache_hit_frac', 0.0)):.3f}, "
+                        f"sp_apply={float(st.get('sp_label_applied_frac', 0.0)):.3f}, "
+                        f"sp_unreach={float(st.get('sp_unreachable_frac', 0.0)):.3f}, "
+                        f"sp_ooc={float(st.get('sp_not_in_cand_frac', 0.0)):.3f}) "
                         f"it/s={it_s:.2f} eta={eta_s/60.0:.1f}m"
                     )
                 continue
@@ -1498,7 +1510,20 @@ def main() -> None:
         tr_loss = float(np.mean(losses)) if losses else float("nan")
         train_ss: Dict[str, float] = {}
         if ss_stats:
-            keys = ["p_ss", "acc", "use_pred_frac", "off_gt_frac", "skipped_frac", "n_steps", "sp_queries", "sp_table_hit_frac", "sp_cache_hit_frac"]
+            keys = [
+                "p_ss",
+                "acc",
+                "use_pred_frac",
+                "off_gt_frac",
+                "skipped_frac",
+                "n_steps",
+                "sp_queries",
+                "sp_table_hit_frac",
+                "sp_cache_hit_frac",
+                "sp_label_applied_frac",
+                "sp_unreachable_frac",
+                "sp_not_in_cand_frac",
+            ]
             train_ss = {k: float(np.mean([float(s.get(k, float("nan"))) for s in ss_stats])) for k in keys}
         va = _eval_epoch(
             ae=ae,
@@ -1518,7 +1543,10 @@ def main() -> None:
                 f"use_pred={train_ss.get('use_pred_frac', 0.0):.3f}, off_gt={train_ss.get('off_gt_frac', 0.0):.3f}, "
                 f"skip={train_ss.get('skipped_frac', 0.0):.3f}, steps={int(train_ss.get('n_steps', 0.0))}, "
                 f"sp_q={int(train_ss.get('sp_queries', 0.0))}, sp_tbl={train_ss.get('sp_table_hit_frac', 0.0):.3f}, "
-                f"sp_hit={train_ss.get('sp_cache_hit_frac', 0.0):.3f})"
+                f"sp_cache={train_ss.get('sp_cache_hit_frac', 0.0):.3f}, "
+                f"sp_apply={train_ss.get('sp_label_applied_frac', 0.0):.3f}, "
+                f"sp_unreach={train_ss.get('sp_unreachable_frac', 0.0):.3f}, "
+                f"sp_ooc={train_ss.get('sp_not_in_cand_frac', 0.0):.3f})"
             )
         else:
             log.info(f"epoch={epoch} train_loss={tr_loss:.6f} val_loss={va_loss:.6f} best={best_val:.6f}@{best_epoch}")

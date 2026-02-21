@@ -239,6 +239,24 @@ def _has_loop(seq: Sequence[int]) -> bool:
     return False
 
 
+def _first_loop_span(seq: Sequence[int]) -> Optional[Tuple[int, int, int]]:
+    """
+    返回首个检测到的环段:
+      (start_idx, end_idx, loop_len)
+    其中 start_idx 是首次出现位置，end_idx 是再次命中位置（含端点），
+    loop_len=end_idx-start_idx。
+    """
+    first_pos: Dict[int, int] = {}
+    for i, x in enumerate(seq):
+        xx = int(x)
+        if xx in first_pos:
+            s = int(first_pos[xx])
+            e = int(i)
+            return (s, e, max(0, e - s))
+        first_pos[xx] = int(i)
+    return None
+
+
 def _sum_way_len_m(way_len_m: np.ndarray, seq: Sequence[int]) -> float:
     if not seq:
         return float("nan")
@@ -1212,6 +1230,9 @@ def main() -> None:
                             "hit_wall": True,
                             "dead_end": False,
                             "has_loop": False,
+                            "loop_first_len": float("nan"),
+                            "loop_first_start_hops": float("nan"),
+                            "loop_first_start_frac": float("nan"),
                             "hops": 0,
                             "jaccard": float("nan"),
                             "len_m": float("nan"),
@@ -1243,11 +1264,25 @@ def main() -> None:
                             last_xy = np.zeros((2,), dtype=np.float64)
                     # final error to destination position (meters, in same local frame)
                     err_m = float(np.linalg.norm(last_xy - dpos_xy_m[bi].astype(np.float64, copy=False)))
+                    loop_span = _first_loop_span(pred)
+                    if loop_span is None:
+                        loop_first_len = float("nan")
+                        loop_first_start_hops = float("nan")
+                        loop_first_start_frac = float("nan")
+                    else:
+                        s0, _e0, ll = loop_span
+                        loop_first_len = float(ll)
+                        loop_first_start_hops = float(s0)
+                        denom_h = max(1, int(max(0, len(pred) - 1)))
+                        loop_first_start_frac = float(float(s0) / float(denom_h))
                     return {
                         "success": bool(success),
                         "hit_wall": bool(hit_wall),
                         "dead_end": bool(dead_end),
                         "has_loop": bool(_has_loop(pred)),
+                        "loop_first_len": float(loop_first_len),
+                        "loop_first_start_hops": float(loop_first_start_hops),
+                        "loop_first_start_frac": float(loop_first_start_frac),
                         "hops": int(max(0, len(pred) - 1)),
                         "jaccard": float(_jaccard(gt, pred)),
                         "len_m": float(pred_len_m),
@@ -1264,11 +1299,14 @@ def main() -> None:
                     mg = dict(mg_list[int(k_sel)])
                     if shape_scope == "selected":
                         mg.update(_eval_pred(g_samples[int(k_sel)], compute_shape=True))
+                    route_any_success_g = bool(any(bool(m.get("success", False)) for m in mg_list))
+                    used_fallback_g = bool((str(cfg.sample_select) != "first") and (not route_any_success_g))
                     mg.update(
                         {
                             "n_samples": int(K),
                             "selected_k": int(k_sel),
-                            "route_any_success": bool(any(bool(m.get("success", False)) for m in mg_list)),
+                            "route_any_success": bool(route_any_success_g),
+                            "sample_select_fallback": bool(used_fallback_g),
                             "sample_success_rate": float(np.mean([1.0 if bool(m.get("success", False)) else 0.0 for m in mg_list])),
                             "sample_hit_wall_rate": float(np.mean([1.0 if bool(m.get("hit_wall", False)) else 0.0 for m in mg_list])),
                             "sample_dead_end_rate": float(np.mean([1.0 if bool(m.get("dead_end", False)) else 0.0 for m in mg_list])),
@@ -1297,11 +1335,14 @@ def main() -> None:
                         mb = dict(mb_list[int(k_sel)])
                         if shape_scope == "selected":
                             mb.update(_eval_pred(b_samples[int(k_sel)], compute_shape=True))
+                        route_any_success_b = bool(any(bool(m.get("success", False)) for m in mb_list))
+                        used_fallback_b = bool((str(cfg.sample_select) != "first") and (not route_any_success_b))
                         mb.update(
                             {
                                 "n_samples": int(K),
                                 "selected_k": int(k_sel),
-                                "route_any_success": bool(any(bool(m.get("success", False)) for m in mb_list)),
+                                "route_any_success": bool(route_any_success_b),
+                                "sample_select_fallback": bool(used_fallback_b),
                                 "sample_success_rate": float(np.mean([1.0 if bool(m.get("success", False)) else 0.0 for m in mb_list])),
                                 "sample_hit_wall_rate": float(np.mean([1.0 if bool(m.get("hit_wall", False)) else 0.0 for m in mb_list])),
                                 "sample_dead_end_rate": float(np.mean([1.0 if bool(m.get("dead_end", False)) else 0.0 for m in mb_list])),
@@ -1358,7 +1399,12 @@ def main() -> None:
                 "hit_wall": [],
                 "dead_end": [],
                 "has_loop": [],
+                "loop_first_len": [],
+                "loop_first_start_hops": [],
+                "loop_first_start_frac": [],
+                "sample_select_fallback": [],
                 "n_success": 0,
+                "success_only_has_loop": [],
                 "success_only_jaccard": [],
                 "success_only_dtw_m": [],
                 "success_only_frechet_m": [],
@@ -1381,9 +1427,17 @@ def main() -> None:
             cell["final_error_m"].append(float(m.get("final_error_m", float("nan"))))
             cell["hit_wall"].append(1.0 if bool(m.get("hit_wall", False)) else 0.0)
             cell["dead_end"].append(1.0 if bool(m.get("dead_end", False)) else 0.0)
-            cell["has_loop"].append(1.0 if bool(m.get("has_loop", False)) else 0.0)
+            has_loop = bool(m.get("has_loop", False))
+            cell["has_loop"].append(1.0 if has_loop else 0.0)
+            if has_loop:
+                cell["loop_first_len"].append(float(m.get("loop_first_len", float("nan"))))
+                cell["loop_first_start_hops"].append(float(m.get("loop_first_start_hops", float("nan"))))
+                cell["loop_first_start_frac"].append(float(m.get("loop_first_start_frac", float("nan"))))
+            if "sample_select_fallback" in m:
+                cell["sample_select_fallback"].append(1.0 if bool(m.get("sample_select_fallback", False)) else 0.0)
             if succ:
                 cell["n_success"] += 1
+                cell["success_only_has_loop"].append(1.0 if has_loop else 0.0)
                 cell["success_only_jaccard"].append(jacc)
                 cell["success_only_dtw_m"].append(float(m.get("dtw_m", float("nan"))))
                 cell["success_only_frechet_m"].append(float(m.get("frechet_m", float("nan"))))
@@ -1405,8 +1459,21 @@ def main() -> None:
                 "hit_wall_rate": float(np.mean(np.asarray(cell["hit_wall"], dtype=np.float64))) if n else float("nan"),
                 "dead_end_rate": float(np.mean(np.asarray(cell["dead_end"], dtype=np.float64))) if n else float("nan"),
                 "loop_rate": float(np.mean(np.asarray(cell["has_loop"], dtype=np.float64))) if n else float("nan"),
+                "loop_first_len": summarize(cell["loop_first_len"]),
+                "loop_first_start_hops": summarize(cell["loop_first_start_hops"]),
+                "loop_first_start_frac": summarize(cell["loop_first_start_frac"]),
+                "sample_select_fallback_rate": (
+                    float(np.mean(np.asarray(cell["sample_select_fallback"], dtype=np.float64)))
+                    if int(len(cell["sample_select_fallback"])) > 0
+                    else float("nan")
+                ),
                 "success_only_n": int(cell["n_success"]),
                 "success_only_rate": (float(cell["n_success"]) / float(n)) if n else float("nan"),
+                "success_only_loop_rate": (
+                    float(np.mean(np.asarray(cell["success_only_has_loop"], dtype=np.float64)))
+                    if int(len(cell["success_only_has_loop"])) > 0
+                    else float("nan")
+                ),
                 "success_only_jaccard": summarize(cell["success_only_jaccard"]),
                 "success_only_dtw_m": summarize(cell["success_only_dtw_m"]),
                 "success_only_frechet_m": summarize(cell["success_only_frechet_m"]),
@@ -1493,8 +1560,11 @@ def main() -> None:
             "bins": [b[2] for b in _hops_bins()],
             "latent_source": "gt=oracle (GT->AE.encode->Decoder); flow=Flow.sample->Decoder (generation).",
             "sample_select": "When n_samples_per_route>1: first=use sample0; best=prefer success then min(DTW, Fréchet) [oracle, uses GT]; dest=prefer success then min(final_error_m) [deployable, GT-free]; dest_efficient=prefer success then min(len_ratio).",
+            "sample_select_fallback_rate": "For K>1 and sample_select!=first: fraction of routes with no successful sample, so selector falls back to non-success ranking.",
             "shape_scope": "Controls DTW/Fréchet compute: all=all samples; selected=only selected sample per route; none=skip DTW/Fréchet (faster).",
             "region_constraint": "If enabled: use Region seq to filter way candidates by target region (modes: strict/relaxed; fallback: unconstrained/dest_region/stop).",
+            "success_only_loop_rate": "Loop ratio conditioned on success=true.",
+            "loop_first_len/start": "Distribution of first detected loop span length and start position (absolute hops and normalized fraction) among looped routes.",
         },
     }
 

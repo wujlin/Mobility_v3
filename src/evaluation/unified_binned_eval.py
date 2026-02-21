@@ -521,7 +521,7 @@ def main() -> None:
     p.add_argument("--decode_max_candidates", type=int, default=-1, help="-1=use ckpt cfg; 0=all successors; >0=override.")
     p.add_argument("--beam_size", type=int, default=10)
     p.add_argument("--no_compare_beam", action="store_true")
-    p.add_argument("--eval_batch_size", type=int, default=256, help="Batch size for baseline batched decode paths (currently rnn_ar).")
+    p.add_argument("--eval_batch_size", type=int, default=256, help="Batch size for baseline batched decode paths (rnn_ar/transformer_ar).")
     p.add_argument("--fast_metrics", action="store_true", help="Skip DTW/Frechet/len_ratio/final_error_m for faster eval.")
 
     # Multi-sample (for diffusion-like methods; also useful to keep schema aligned).
@@ -725,6 +725,8 @@ def main() -> None:
         xy_way = way_xy_m[int(city)]
         rnn_pred_g: Dict[int, List[int]] = {}
         rnn_pred_b: Dict[int, List[int]] = {}
+        tr_pred_g: Dict[int, List[int]] = {}
+        tr_pred_b: Dict[int, List[int]] = {}
         if method == "rnn_ar":
             m = model_obj
             assert isinstance(m, WayRNNAR)
@@ -785,6 +787,56 @@ def main() -> None:
                     if pred_b_list is not None:
                         rnn_pred_b[rj] = [int(x) for x in pred_b_list[j]]
                 print(f"[city{int(city)}][rnn_batched] {int(ed_i)}/{int(total)} decoded")
+        elif method == "transformer_ar":
+            m = model_obj
+            assert isinstance(m, WayTransformerAR)
+            max_candidates = None if int(cfg.decode_max_candidates) < 0 else int(cfg.decode_max_candidates)
+            mc_use = max_candidates
+            bs = max(1, int(cfg.eval_batch_size))
+            total = int(pick.size)
+            for st_i in range(0, total, bs):
+                ed_i = min(total, st_i + bs)
+                rid_chunk = pick[st_i:ed_i].astype(np.int64, copy=False)
+                sw_chunk = routes.start_way[rid_chunk].astype(np.int64, copy=False)
+                dw_chunk = routes.dest_way[rid_chunk].astype(np.int64, copy=False)
+                st_chunk = routes.start_t[rid_chunk].astype(np.int64, copy=False)
+                hr_chunk = hour_from_unix(st_chunk, tz_offset_hours=float(cfg.tz_offset_hours)).astype(np.int64, copy=False)
+                dow_chunk = dow_from_unix(st_chunk, tz_offset_hours=float(cfg.tz_offset_hours)).astype(np.int64, copy=False)
+                route_cond_chunk = {
+                    "start_pos": torch.as_tensor(routes.start_pos[rid_chunk].astype(np.float32, copy=False), dtype=torch.float32, device=device),
+                    "dest_pos": torch.as_tensor(routes.dest_pos[rid_chunk].astype(np.float32, copy=False), dtype=torch.float32, device=device),
+                    "hour": torch.as_tensor(hr_chunk, dtype=torch.long, device=device),
+                    "dow": torch.as_tensor(dow_chunk, dtype=torch.long, device=device),
+                    "route_city": torch.as_tensor(routes.route_city[rid_chunk].astype(np.int64, copy=False), dtype=torch.long, device=device),
+                }
+                pred_g_list = m.greedy_decode_batch(
+                    way_adj_ptr=ptr,
+                    way_adj_idx=idx,
+                    start_way=sw_chunk,
+                    dest_way=dw_chunk,
+                    route_cond=route_cond_chunk,
+                    max_len=int(cfg.max_decode_len),
+                    max_candidates=mc_use,
+                )
+                pred_b_list: Optional[List[List[int]]] = None
+                if bool(cfg.compare_beam):
+                    pred_b_list = m.beam_search_batch(
+                        way_adj_ptr=ptr,
+                        way_adj_idx=idx,
+                        start_way=sw_chunk,
+                        dest_way=dw_chunk,
+                        route_cond=route_cond_chunk,
+                        beam_size=int(cfg.beam_size),
+                        max_len=int(cfg.max_decode_len),
+                        max_candidates=mc_use,
+                        state_batch_size=max(512, int(bs) * int(cfg.beam_size)),
+                    )
+                for j, rid_j in enumerate(rid_chunk.tolist()):
+                    rj = int(rid_j)
+                    tr_pred_g[rj] = [int(x) for x in pred_g_list[j]]
+                    if pred_b_list is not None:
+                        tr_pred_b[rj] = [int(x) for x in pred_b_list[j]]
+                print(f"[city{int(city)}][transformer_batched] {int(ed_i)}/{int(total)} decoded")
 
         for rid in pick.tolist():
             rid_i = int(rid)
@@ -901,20 +953,9 @@ def main() -> None:
                 if bool(cfg.compare_beam):
                     pred_b = rnn_pred_b.get(int(rid_i), list(pred_g))
             elif method == "transformer_ar":
-                m = model_obj
-                assert isinstance(m, WayTransformerAR)
-                pred_g = m.greedy_decode(way_adj_ptr=ptr, way_adj_idx=idx, start_way=sw, dest_way=dw, route_cond=route_cond_1, max_len=int(cfg.max_decode_len), max_candidates=mc_use)
+                pred_g = tr_pred_g.get(int(rid_i), [int(sw)])
                 if bool(cfg.compare_beam):
-                    pred_b = m.beam_search(
-                        way_adj_ptr=ptr,
-                        way_adj_idx=idx,
-                        start_way=sw,
-                        dest_way=dw,
-                        route_cond=route_cond_1,
-                        beam_size=int(cfg.beam_size),
-                        max_len=int(cfg.max_decode_len),
-                        max_candidates=mc_use,
-                    )
+                    pred_b = tr_pred_b.get(int(rid_i), list(pred_g))
             elif method == "gtg":
                 m = model_obj
                 assert isinstance(m, GTGCostNet)

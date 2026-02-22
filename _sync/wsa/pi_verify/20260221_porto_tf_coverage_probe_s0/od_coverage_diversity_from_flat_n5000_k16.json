@@ -1,0 +1,56 @@
+{
+  "ok": true,
+  "task": "od_coverage_diversity_eval",
+  "created_at": "2026-02-22T07:55:09.517543+08:00",
+  "cfg": {
+    "k": 16,
+    "min_routes_per_od": 3,
+    "jaccard_threshold": 0.5,
+    "save_per_od": false,
+    "compat_way_routes_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD0_waydata_porto_seed0/W5_way_routes_strict_gate/way_routes_strict_gate.npz",
+    "compat_split_json": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD0_waydata_porto_seed0/W5_way_routes_strict_gate/od_split_min3_max160_seed0_dev10p.json",
+    "compat_split_part": "test",
+    "methods": [
+      {
+        "label": "TF_Recon",
+        "decode": "greedy",
+        "path": "_sync/wsa/pi_verify/20260221_porto_tf_coverage_probe_s0/tf_coverage_per_route_flat_n5000_k16.json"
+      }
+    ]
+  },
+  "summary_table": [
+    {
+      "method": "TF_Recon",
+      "decode": "greedy",
+      "arrival_rate": 0.4348,
+      "gt_coverage_at_k_mean": 0.08465263400046008,
+      "self_diversity_at_k_mean": 0.0,
+      "n_od_groups_kept": 4140
+    }
+  ],
+  "methods": {
+    "TF_Recon": {
+      "decode": "greedy",
+      "source_json": "_sync/wsa/pi_verify/20260221_porto_tf_coverage_probe_s0/tf_coverage_per_route_flat_n5000_k16.json",
+      "n_routes": 80000,
+      "arrival_rate": 0.4348,
+      "n_od_groups_all": 4140,
+      "n_od_groups_kept": 4140,
+      "n_od_groups_no_success": 2389,
+      "gt_coverage_at_k": {
+        "mean": 0.08465263400046008,
+        "p25": 0.0,
+        "p50": 0.0,
+        "p75": 0.0,
+        "n": 4140
+      },
+      "self_diversity_at_k": {
+        "mean": 0.0,
+        "p25": 0.0,
+        "p50": 0.0,
+        "p75": 0.0,
+        "n": 1751
+      }
+    }
+  }
+}

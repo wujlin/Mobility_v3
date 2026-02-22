@@ -1,0 +1,56 @@
+/home/jinlin/miniconda3/envs/dpl/lib/python3.11/site-packages/torch/nn/modules/transformer.py:392: UserWarning: enable_nested_tensor is True, but self.use_nested_tensor is False because encoder_layer.norm_first was True
+  warnings.warn(
+[city0] start n_routes=5000 K=16
+[city0] done=100/5000 sample_sr=0.3862
+[city0] done=200/5000 sample_sr=0.3941
+[city0] done=300/5000 sample_sr=0.3727
+[city0] done=400/5000 sample_sr=0.3703
+[city0] done=500/5000 sample_sr=0.3729
+[city0] done=600/5000 sample_sr=0.3743
+[city0] done=700/5000 sample_sr=0.3726
+[city0] done=800/5000 sample_sr=0.3683
+[city0] done=900/5000 sample_sr=0.3669
+[city0] done=1000/5000 sample_sr=0.3600
+[city0] done=1100/5000 sample_sr=0.3615
+[city0] done=1200/5000 sample_sr=0.3622
+[city0] done=1300/5000 sample_sr=0.3577
+[city0] done=1400/5000 sample_sr=0.3561
+[city0] done=1500/5000 sample_sr=0.3540
+[city0] done=1600/5000 sample_sr=0.3561
+[city0] done=1700/5000 sample_sr=0.3563
+[city0] done=1800/5000 sample_sr=0.3552
+[city0] done=1900/5000 sample_sr=0.3542
+[city0] done=2000/5000 sample_sr=0.3550
+[city0] done=2100/5000 sample_sr=0.3549
+[city0] done=2200/5000 sample_sr=0.3545
+[city0] done=2300/5000 sample_sr=0.3551
+[city0] done=2400/5000 sample_sr=0.3560
+[city0] done=2500/5000 sample_sr=0.3548
+[city0] done=2600/5000 sample_sr=0.3559
+[city0] done=2700/5000 sample_sr=0.3557
+[city0] done=2800/5000 sample_sr=0.3568
+[city0] done=2900/5000 sample_sr=0.3574
+[city0] done=3000/5000 sample_sr=0.3599
+[city0] done=3100/5000 sample_sr=0.3615
+[city0] done=3200/5000 sample_sr=0.3615
+[city0] done=3300/5000 sample_sr=0.3607
+[city0] done=3400/5000 sample_sr=0.3595
+[city0] done=3500/5000 sample_sr=0.3599
+[city0] done=3600/5000 sample_sr=0.3594
+[city0] done=3700/5000 sample_sr=0.3612
+[city0] done=3800/5000 sample_sr=0.3602
+[city0] done=3900/5000 sample_sr=0.3589
+[city0] done=4000/5000 sample_sr=0.3589
+[city0] done=4100/5000 sample_sr=0.3602
+[city0] done=4200/5000 sample_sr=0.3617
+[city0] done=4300/5000 sample_sr=0.3611
+[city0] done=4400/5000 sample_sr=0.3614
+[city0] done=4500/5000 sample_sr=0.3608
+[city0] done=4600/5000 sample_sr=0.3604
+[city0] done=4700/5000 sample_sr=0.3595
+[city0] done=4800/5000 sample_sr=0.3589
+[city0] done=4900/5000 sample_sr=0.3588
+[city0] done=5000/5000 sample_sr=0.3578
+[OK] saved flat per_route: _sync/wsa/pi_verify/20260222_porto_tf_cov_stochT1_k16_s0/tf_cov_stochT1_k16_cand32_n5000_flat.json
+[OK] saved: _sync/wsa/pi_verify/20260222_porto_tf_cov_stochT1_k16_s0/tf_cov_stochT1_k16_cand32_n5000.json
+Teacher-Forcing Probe | sample_arrival=0.3578 | route_any_success=0.7228 | coverage_mean=0.1452 | div_mean=0.5989 | n_od=154

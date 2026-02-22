@@ -1,0 +1,6 @@
+/home/jinlin/miniconda3/envs/dpl/lib/python3.11/site-packages/torch/nn/modules/transformer.py:392: UserWarning: enable_nested_tensor is True, but self.use_nested_tensor is False because encoder_layer.norm_first was True
+  warnings.warn(
+[encode] selected routes=5000
+[encode] batch 10/10 routes 5000/5000
+[OK] saved: _sync/wsa/pi_verify/20260222_porto_ae_corridor_zsim_s0/ae_corridor_zsim_n5000.json
+Corridor z-sim | within_mean=0.8318 (p50=0.8297, n=3568) | cross_mean=0.6602 (p50=0.6666, n=3568) | delta=0.1716

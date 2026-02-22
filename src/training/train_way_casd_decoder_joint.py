@@ -94,6 +94,9 @@ class TrainCfg:
     scheduled_sampling_max_p: float
     scheduled_sampling_warmup_epochs: int
     scheduled_sampling_expert: str
+    z_mixup_p_start: float = 0.0
+    z_mixup_p_end: float = 0.0
+    z_mixup_warmup_epochs: int = 0
     drop_dest_dist_p: float = 0.0
     drop_past_context_p: float = 0.0
     train_decoder_scope: str = "all"
@@ -359,6 +362,24 @@ def _ss_p(epoch: int, *, max_p: float, warmup_epochs: int) -> float:
         return float(mp)
     t = float(max(0, min(int(epoch), int(w)))) / float(w)
     return float(mp) * t
+
+
+def _z_mixup_p(epoch: int, *, p_start: float, p_end: float, warmup_epochs: int) -> float:
+    """
+    Linear schedule for GT-z mixup probability.
+    - epoch=1 uses p_start
+    - epoch=warmup_epochs uses p_end
+    - after warmup_epochs stays at p_end
+    """
+    ps = float(p_start)
+    pe = float(p_end)
+    if not (ps > 0.0 or pe > 0.0):
+        return 0.0
+    if int(warmup_epochs) <= 1:
+        return float(pe)
+    w = int(warmup_epochs)
+    t = float(max(0, min(int(epoch) - 1, int(w) - 1))) / float(max(1, int(w) - 1))
+    return float(ps + t * (pe - ps))
 
 
 def _infer_decoder_use_dest_dist_from_state(state: Dict[str, torch.Tensor]) -> bool:
@@ -1130,6 +1151,9 @@ def main() -> None:
     )
     p.add_argument("--drop_dest_dist_p", type=float, default=0.0, help="SIB-style bypass dropout prob for dest_dist during E2 training (0=disable).")
     p.add_argument("--drop_past_context_p", type=float, default=0.0, help="SIB-style bypass dropout prob for past_context during E2 training (0=disable).")
+    p.add_argument("--z_mixup_p_start", type=float, default=0.0, help="Per-batch probability of using GT z_enc at epoch start (0=disable).")
+    p.add_argument("--z_mixup_p_end", type=float, default=0.0, help="Per-batch probability of using GT z_enc after warmup.")
+    p.add_argument("--z_mixup_warmup_epochs", type=int, default=0, help="Linear warmup epochs for z_mixup p_start->p_end (0=disable).")
     p.add_argument(
         "--train_decoder_scope",
         type=str,
@@ -1148,6 +1172,12 @@ def main() -> None:
         raise SystemExit("[FATAL] --drop_dest_dist_p must be in [0, 1].")
     if not (0.0 <= float(args.drop_past_context_p) <= 1.0):
         raise SystemExit("[FATAL] --drop_past_context_p must be in [0, 1].")
+    if not (0.0 <= float(args.z_mixup_p_start) <= 1.0):
+        raise SystemExit("[FATAL] --z_mixup_p_start must be in [0, 1].")
+    if not (0.0 <= float(args.z_mixup_p_end) <= 1.0):
+        raise SystemExit("[FATAL] --z_mixup_p_end must be in [0, 1].")
+    if int(args.z_mixup_warmup_epochs) < 0:
+        raise SystemExit("[FATAL] --z_mixup_warmup_epochs must be >= 0.")
 
     cfg = TrainCfg(
         batch_size=int(args.batch_size),
@@ -1169,6 +1199,9 @@ def main() -> None:
         scheduled_sampling_max_p=float(args.scheduled_sampling_max_p),
         scheduled_sampling_warmup_epochs=int(args.scheduled_sampling_warmup_epochs),
         scheduled_sampling_expert=str(args.scheduled_sampling_expert),
+        z_mixup_p_start=float(args.z_mixup_p_start),
+        z_mixup_p_end=float(args.z_mixup_p_end),
+        z_mixup_warmup_epochs=int(args.z_mixup_warmup_epochs),
         drop_dest_dist_p=float(args.drop_dest_dist_p),
         drop_past_context_p=float(args.drop_past_context_p),
         train_decoder_scope=str(args.train_decoder_scope),
@@ -1437,6 +1470,7 @@ def main() -> None:
         ae.train()
         losses: list[float] = []
         ss_stats: list[Dict[str, float]] = []
+        z_mixup_stats: list[Dict[str, float]] = []
         t_epoch = time.perf_counter()
         if bool(cfg.cache_flow_latents):
             need_rebuild = (
@@ -1472,15 +1506,33 @@ def main() -> None:
         n_total = len(train_loader)
         n_cap = int(cfg.max_train_batches) if int(cfg.max_train_batches) > 0 else int(n_total)
         n_cap = min(int(n_cap), int(n_total))
+        p_zmix = _z_mixup_p(
+            epoch,
+            p_start=float(cfg.z_mixup_p_start),
+            p_end=float(cfg.z_mixup_p_end),
+            warmup_epochs=int(cfg.z_mixup_warmup_epochs),
+        )
         for bi, batch in enumerate(train_loader):
             if int(cfg.max_train_batches) > 0 and (bi + 1) > int(cfg.max_train_batches):
                 break
             b = _to_device(batch, device)
+            use_gt_z = bool(float(p_zmix) > 0.0 and (torch.rand(1).item() < float(p_zmix)))
+            z_gt_override: Optional[torch.Tensor] = None
+            if use_gt_z:
+                # Keep encoder frozen; decode-side gradients are sufficient for z-mixup.
+                with torch.no_grad():
+                    z_gt_override, _ = ae.encode(b["way_seq_pad"])
+            z_mixup_stats.append(
+                {
+                    "p_zmix": float(p_zmix),
+                    "use_gt_z": 1.0 if use_gt_z else 0.0,
+                }
+            )
 
             p_ss = _ss_p(epoch, max_p=float(cfg.scheduled_sampling_max_p), warmup_epochs=int(cfg.scheduled_sampling_warmup_epochs))
             if float(p_ss) > 0.0:
-                z_override = None
-                if train_latent_cache is not None:
+                z_override = z_gt_override
+                if z_override is None and train_latent_cache is not None:
                     z_override = _gather_cached_latents(route_id=b["route_id"], cache=train_latent_cache, device=device)
                 st = _train_batch_scheduled_sampling(
                     ae=ae,
@@ -1521,6 +1573,7 @@ def main() -> None:
                         f"epoch={epoch} batch={steps}/{int(n_cap)} "
                         f"train_loss={float(np.mean(losses)) if losses else float('nan'):.4f} "
                         f"ss(p={float(st.get('p_ss', 0.0)):.3f}, acc={float(st.get('acc', float('nan'))):.3f}, "
+                        f"zmix(p={float(p_zmix):.3f}, gt={1 if use_gt_z else 0}), "
                         f"off_gt={float(st.get('off_gt_frac', 0.0)):.3f}, skip={float(st.get('skipped_frac', 0.0)):.3f}, "
                         f"sp_q={int(st.get('sp_queries', 0.0))}, sp_tbl={float(st.get('sp_table_hit_frac', 0.0)):.3f}, "
                         f"sp_cache={float(st.get('sp_cache_hit_frac', 0.0)):.3f}, "
@@ -1533,11 +1586,14 @@ def main() -> None:
 
             # Teacher forcing (default)
             route_cond_use = _build_flow_route_cond(batch=b, flow=flow, way_region=way_region, device=device)
-            if train_latent_cache is None:
-                with torch.no_grad():
-                    z = flow.sample(route_cond=route_cond_use, solver_steps=cfg.flow_solver_steps)
+            if z_gt_override is not None:
+                z = z_gt_override
             else:
-                z = _gather_cached_latents(route_id=b["route_id"], cache=train_latent_cache, device=device)
+                if train_latent_cache is None:
+                    with torch.no_grad():
+                        z = flow.sample(route_cond=route_cond_use, solver_steps=cfg.flow_solver_steps)
+                else:
+                    z = _gather_cached_latents(route_id=b["route_id"], cache=train_latent_cache, device=device)
 
             # SIB-style bypass dropout (sample once per training batch)
             drop_dd = bool(float(cfg.drop_dest_dist_p) > 0.0 and torch.rand(1).item() < float(cfg.drop_dest_dist_p))
@@ -1588,10 +1644,17 @@ def main() -> None:
                 log.info(
                     f"epoch={epoch} batch={steps}/{int(n_cap)} "
                     f"train_loss={float(np.mean(losses)) if losses else float('nan'):.4f} "
+                    f"zmix(p={float(p_zmix):.3f}, gt={1 if use_gt_z else 0}) "
                     f"it/s={it_s:.2f} eta={eta_s/60.0:.1f}m"
                 )
 
         tr_loss = float(np.mean(losses)) if losses else float("nan")
+        train_zmix: Dict[str, float] = {}
+        if z_mixup_stats:
+            train_zmix = {
+                "p_zmix": float(np.mean([float(s.get("p_zmix", 0.0)) for s in z_mixup_stats])),
+                "use_gt_z_frac": float(np.mean([float(s.get("use_gt_z", 0.0)) for s in z_mixup_stats])),
+            }
         train_ss: Dict[str, float] = {}
         if ss_stats:
             keys = [
@@ -1630,10 +1693,14 @@ def main() -> None:
                 f"sp_cache={train_ss.get('sp_cache_hit_frac', 0.0):.3f}, "
                 f"sp_apply={train_ss.get('sp_label_applied_frac', 0.0):.3f}, "
                 f"sp_unreach={train_ss.get('sp_unreachable_frac', 0.0):.3f}, "
-                f"sp_ooc={train_ss.get('sp_not_in_cand_frac', 0.0):.3f})"
+                f"sp_ooc={train_ss.get('sp_not_in_cand_frac', 0.0):.3f}) "
+                f"zmix(p={train_zmix.get('p_zmix', 0.0):.3f}, use_gt={train_zmix.get('use_gt_z_frac', 0.0):.3f})"
             )
         else:
-            log.info(f"epoch={epoch} train_loss={tr_loss:.6f} val_loss={va_loss:.6f} best={best_val:.6f}@{best_epoch}")
+            log.info(
+                f"epoch={epoch} train_loss={tr_loss:.6f} val_loss={va_loss:.6f} best={best_val:.6f}@{best_epoch} "
+                f"zmix(p={train_zmix.get('p_zmix', 0.0):.3f}, use_gt={train_zmix.get('use_gt_z_frac', 0.0):.3f})"
+            )
 
         # Save progress snapshot (single-file, easy to sync).
         progress = {
@@ -1643,6 +1710,7 @@ def main() -> None:
             "epoch": int(epoch),
             "train": {"loss": float(tr_loss)},
             "train_ss": train_ss,
+            "train_zmix": train_zmix,
             "val": {"loss": float(va_loss)},
             "best_val_loss": float(best_val),
             "best_epoch": int(best_epoch),

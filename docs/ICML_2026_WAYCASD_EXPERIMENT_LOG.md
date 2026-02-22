@@ -396,3 +396,246 @@ On-road prior 的“数据侧核验”（用于解释跨城差异）：
   - Way-CASD vs RNN-AR：-3.0pp，p=0.2888（不显著，统计上打平）  
     产物：`_sync/wsa/pi_verify/20260206_od_disjoint_s0/eval/paired_rnn_vs_waycasd_beam.md`
 - 失败模式强对比：RNN 主要 dead_end（≈34%），Way-CASD 主要 hit_wall/loop（hit_wall≈36%）——两者瓶颈不同，后续优化应对准 Way-CASD 的 hit_wall（而不是 dead_end）。
+
+---
+
+## 7. Porto 主线补录（2026-02-10 至 2026-02-22）
+
+> 说明：本节补录此前未写入正文但已在 `_sync/wsa/pi_verify/` 落盘的实验。  
+> 统一口径：除非特别声明，success/hit_wall/loop 为 `binned*.json` 按 `overall.greedy.cells` 的加权均值。
+
+### 7.1 Phase-1/2（早期主线，dev10p）
+
+- `20260210_porto_phase1_s0`
+  - Flow（xattn，K1，n=1000）：
+    - `succ=0.0230, hit_wall=0.9670, loop=0.9910`
+    - 文件：`_sync/wsa/pi_verify/20260210_porto_phase1_s0/E3_flow_xattn_dev10p_s0/eval/binned_flow_xattn_k1_beam10_n1000.json`
+  - E2（K1，n=1000）：
+    - `succ=0.0860, hit_wall=0.9030, loop=0.9260`
+    - 文件：`_sync/wsa/pi_verify/20260210_porto_phase1_s0/E2_joint_ft_dev10p_s0/eval/binned_e2_flow_k1_beam10_n1000.json`
+  - E2（K16-dest，n=1000）：
+    - `succ=0.3190, hit_wall=0.6780, loop=0.8670`
+    - 文件：`_sync/wsa/pi_verify/20260210_porto_phase1_s0/E2_joint_ft_dev10p_s0/eval/binned_e2_flow_k16_dest_greedy_n1000.json`
+
+- `20260211_porto_phase2_s0`
+  - E2-fulltrain（带 anti-loop，K1，实际 n=200）：
+    - `succ=0.0800, hit_wall=0.8850, loop=0.8900`
+    - 文件：`_sync/wsa/pi_verify/20260211_porto_phase2_s0/step2_e2_fulltrain_bs1024_s0/eval/binned_e2full_flow_k1_beam10_antiloop_n1000.json`
+  - E2-fulltrain（带 anti-loop，K16-dest，实际 n=200）：
+    - `succ=0.2850, hit_wall=0.7100, loop=0.7600`
+    - 文件：`_sync/wsa/pi_verify/20260211_porto_phase2_s0/step2_e2_fulltrain_bs1024_s0/eval/binned_e2full_flow_k16_dest_greedy_antiloop_n1000.json`
+  - 早期 Phase-C（n=1000，OD 组较少）：
+    - `Way-CASD_E2_K16: arrival=0.394, cov=0.1554, div=0.6522, n_od=8`
+    - 文件：`_sync/wsa/pi_verify/20260211_porto_phase2_s0/phaseBC_n1000_s0/phaseC/od_coverage_diversity_k16_n1000.json`
+
+### 7.2 n=5000 主线演进（StepEmb 链）
+
+- `20260212_porto_phaseBC_n5000_s0`（旧 E2）
+  - `Way-CASD_E2_K16: arrival=0.3834, cov=0.0092, div=0.7699`
+  - `Oracle_K1: arrival=0.7064, cov=0.4709, div=0.5754`
+  - `RNN_b10: arrival=0.1904, cov=0.0271, div=0.2181`
+  - `Transformer_b10: arrival=0.2322, cov=0.0200, div=0.2616`
+  - 文件：`_sync/wsa/pi_verify/20260212_porto_phaseBC_n5000_s0/phaseC/od_coverage_diversity_k16_n5000.json`
+
+- `20260213_porto_e2e60_p1_s0`（K4 快速口径）
+  - `Way-CASD_E2e60_K4: arrival=0.3390, cov=0.0350, div=0.6350`
+  - 文件：`_sync/wsa/pi_verify/20260213_porto_e2e60_p1_s0/P1_phaseC_k4_n5000/od_coverage_diversity_k4_n5000.json`
+
+- `20260213_porto_e2e80_k16_n5000_s0`
+  - `Way-CASD_E2e80_K16: arrival=0.4940, cov=0.0400, div=0.6478`
+  - 文件：`_sync/wsa/pi_verify/20260213_porto_e2e80_k16_n5000_s0/phaseC_k16_n5000/od_coverage_diversity_k16_n5000.json`
+
+- `20260214_porto_p1_stepemb_cont_e40_s0`
+  - 该文件同时记录了 E2e80 / StepEmbE20 / StepEmbE40 三条曲线：
+    - `StepEmbE20_K16: arrival=0.6156, cov=0.0850, div=0.6690`
+    - `StepEmbE40_K16: arrival=0.6122, cov=0.0738, div=0.6508`
+  - 文件：`_sync/wsa/pi_verify/20260214_porto_p1_stepemb_cont_e40_s0/phaseC_k16_n5000/od_coverage_diversity_k16_n5000_stepemb_e40.json`
+
+- `20260214_porto_p1_stepemb_cont_e100_s0`（当前 StepEmb 主线）
+  - `Way-CASD_E2e100_K16: arrival=0.6480, cov=0.0592, div=0.6608`
+  - 文件：`_sync/wsa/pi_verify/20260214_porto_p1_stepemb_cont_e100_s0/phaseC_k16_n5000/od_coverage_diversity_k16_n5000.json`
+
+### 7.3 Region 侧链补录
+
+- `20260212_porto_region_ar_res5_s0`
+  - Region AR 训练：`best val_acc=0.7866 (epoch=27), val_loss=0.6263`
+  - 文件：`_sync/wsa/pi_verify/20260212_porto_region_ar_res5_s0/report.json`
+  - Region AR rollout（n=1000）：
+    - `reach_dest_rate=1.0, exact_match_rate=0.533, has_backtrack_rate=0.035`
+    - 文件：`_sync/wsa/pi_verify/20260212_porto_region_ar_res5_s0/eval_region_ar_n1000.json`
+
+- `20260212_porto_flow_xattn_regionseq_dev10p_s0`
+  - Flow 训练：`best_val_loss=0.2031 (epoch=58)`
+  - 文件：`_sync/wsa/pi_verify/20260212_porto_flow_xattn_regionseq_dev10p_s0/report.json`
+  - 直解（No-E2）：
+    - K1：`succ=0.0140`
+    - K16-dest：`succ=0.1840`
+    - 文件：`_sync/wsa/pi_verify/20260212_porto_flow_xattn_regionseq_dev10p_s0/eval/binned_flow_regionseq_k1_beam10_n1000.json`、`_sync/wsa/pi_verify/20260212_porto_flow_xattn_regionseq_dev10p_s0/eval/binned_flow_regionseq_k16_dest_greedy_n1000.json`
+
+### 7.4 直接解码 Flow z（No-E2）补录
+
+- 早期 strict-flow（pure AE + strict flow ckpt，非 regionseq）：
+  - `20260208/09/10` 的 K16-dest 结果在 `0.237~0.274`（n=1000~2000）
+  - 文件：
+    - `_sync/wsa/pi_verify/20260208_porto_strict_s0/bestofk_dest/binned_flow_bestof16_dest_beam10_n2000.json`
+    - `_sync/wsa/pi_verify/20260209_porto_strict_diag_n1000_s0/d2_flow_k16_dest/binned_flow_bestof16_dest_beam10_n1000.json`
+    - `_sync/wsa/pi_verify/20260210_porto_strict_diag_n1000_s0/d3_flow_k16_dest_fast/binned_flow_bestof16_dest_greedy_n1000.json`
+
+- regionseq-flow（pure AE + regionseq flow）quick：
+  - `20260219_porto_noe2_antiloop_quick_s0`
+  - K1 noAL/AL：`0.0200 -> 0.0320`
+  - K8 noAL/AL：`0.0840 -> 0.1320`
+  - 文件：`_sync/wsa/pi_verify/20260219_porto_noe2_antiloop_quick_s0/binned_noe2_k*_n1000.json`
+
+### 7.5 RL Dense 两轮补录
+
+- 第一轮（`20260215_porto_rl_dense_from_e100_s0`）
+  - K1：`succ=0.2698, hit_wall=0.6862, loop=0.8684`
+  - K16-dest：`succ=0.6676, hit_wall=0.3166, loop=0.7990`
+  - 文件：`_sync/wsa/pi_verify/20260215_porto_rl_dense_from_e100_s0/eval/binned_rl_dense_k1_beam10_n5000.json`、`_sync/wsa/pi_verify/20260215_porto_rl_dense_from_e100_s0/eval/binned_rl_dense_k16_dest_n5000.json`
+
+- 第二轮（`20260216_porto_rl_dense_sched09to03_e20_freshE100_from_e100_s0`）
+  - K1：`succ=0.2976`
+  - K16-dest：`succ=0.6752`
+  - 文件：`_sync/wsa/pi_verify/20260216_porto_rl_dense_sched09to03_e20_freshE100_from_e100_s0/eval/binned_rl_dense_sched_k1_beam10_n5000.json`、`_sync/wsa/pi_verify/20260216_porto_rl_dense_sched09to03_e20_freshE100_from_e100_s0/eval/binned_rl_dense_sched_k16_dest_n5000.json`
+
+### 7.6 SIB / Bypass / C1 / n_latent / cached-z / force_past_k / graphdist / DAgger
+
+- `20260217_porto_sib_n2_e2_chain_s0`
+  - N2-AE oracle K1：`succ=0.8160`
+  - N2-E2 K1：`succ=0.2372`
+  - N2-E2 K16-dest：`succ=0.5746`
+  - 文件：`_sync/wsa/pi_verify/20260217_porto_sib_n2_e2_chain_s0/eval/binned_n2_*.json`
+
+- `20260218_porto_bypassdrop_only_reuseflow_s0`
+  - quick K1：`0.1220`
+  - quick K8-dest：`0.3040`
+  - 文件：`_sync/wsa/pi_verify/20260218_porto_bypassdrop_only_reuseflow_s0/B3_eval_quick_n2000/binned_bdrop_e2_*.json`
+
+- `20260218_porto_sib_optionA_clean_fast_s0` 与 `20260218_porto_sib_optionA_flowv2_s0`
+  - clean-fast：K8 `0.3045`
+  - flowv2：K8 `0.3300`
+  - 文件：`_sync/wsa/pi_verify/20260218_porto_sib_optionA_clean_fast_s0/A4_quick_n2000/binned_sib_e2_k8_dest_n2000.json`、`_sync/wsa/pi_verify/20260218_porto_sib_optionA_flowv2_s0/A4_quick_n2000/binned_sib_e2_k8_dest_n2000.json`
+
+- `20260218_porto_c1_scorer_only_s0`
+  - zenc T-S：`0.0734`
+  - 文件：`_sync/wsa/pi_verify/20260218_porto_c1_scorer_only_s0/eval/zenc_info_c1_n5000.json`
+
+- `20260219_porto_d1_nlatent8_s0`
+  - AE zenc T-S：`0.6212`
+  - E2 zenc T-S：`0.0864`
+  - E2 quick：K1 `0.1215`，K8 `0.3235`
+  - 文件：`_sync/wsa/pi_verify/20260219_porto_d1_nlatent8_s0/D1b_ae_zenc/zenc_info_ae_nL8_n5000.json`、`_sync/wsa/pi_verify/20260219_porto_d1_nlatent8_s0/D4a_e2_zenc/zenc_info_e2_nL8_n5000.json`、`_sync/wsa/pi_verify/20260219_porto_d1_nlatent8_s0/D4b_eval/binned_e2_nL8_*.json`
+
+- `20260219_porto_e2_cachedz_baseline64_s0`
+  - zenc：`true=0.1284, shuffle=0.0534, T-S=0.0750`
+  - K1：`0.1045`；K16-dest：`0.3466`
+  - 文件：`_sync/wsa/pi_verify/20260219_porto_e2_cachedz_baseline64_s0/eval/zenc_info_e2_cachedz_n5000.json`、`_sync/wsa/pi_verify/20260219_porto_e2_cachedz_baseline64_s0/eval/binned_e2_cachedz_*.json`
+
+- `20260219_porto_forcepk16_from_e40_e60_s0`
+  - K16-dest_efficient：`succ=0.6130`
+  - K16-best：`succ=0.6130`
+  - 文件：`_sync/wsa/pi_verify/20260219_porto_forcepk16_from_e40_e60_s0/eval/binned_e2_forcepk16_k16_*.json`
+
+- `20260220_porto_dagger_sp_p1p0_from_e40_s0`
+  - K8-dest_efficient：`succ=0.3668, hit_wall=0.6286, loop=0.9316`
+  - success-only：`len_ratio p50=2.433, loop_rate=0.815`
+  - 文件：`_sync/wsa/pi_verify/20260220_porto_dagger_sp_p1p0_from_e40_s0/e20_bs256_cachetbl/eval/binned_dagger_k8_dest_efficient_n5000.json`、`_sync/wsa/pi_verify/20260220_porto_dagger_sp_p1p0_from_e40_s0/e20_bs256_cachetbl/eval/per_route_dagger_k8_dest_efficient_n5000.json`
+
+- `20260221_porto_p0_graphdist_from_e40_s0`
+  - K1：`0.2125`
+  - K8-dest_efficient：`0.4994`
+  - success-only（K8）：`len_ratio p50=2.073`
+  - 文件：`_sync/wsa/pi_verify/20260221_porto_p0_graphdist_from_e40_s0/eval/binned_p0_graphdist_*.json`、`_sync/wsa/pi_verify/20260221_porto_p0_graphdist_from_e40_s0/eval/per_route_p0_graphdist_k8_dest_efficient_n5000.json`
+
+### 7.7 质量瓶颈与选择策略补录
+
+- `20260219_porto_quality_bottleneck_k16_n5000_s0`
+  - 三种 sample_select（K16）成功率相同：`0.6480`
+  - success-only len_ratio p50：
+    - `dest: 3.143`
+    - `dest_efficient: 1.887`
+    - `best: 1.938`
+  - success-only loop_rate：
+    - `dest: 0.704`
+    - `dest_efficient: 0.552`
+    - `best: 0.565`
+  - 文件：`_sync/wsa/pi_verify/20260219_porto_quality_bottleneck_k16_n5000_s0/per_route_e2e100_k16_*.json`
+
+### 7.8 Baseline 质量补录
+
+- `20260221_porto_baseline_quality_n5000_s0`
+  - 当前目录内文件包含两种候选口径（`decode_max_candidates=32` 与 `-1`），不要混算。
+  - 已落盘口径（`cand=32`）：
+    - RNN b10：`succ=0.0752`
+    - Transformer b10：`succ=0.0778`
+  - 文件：`_sync/wsa/pi_verify/20260221_porto_baseline_quality_n5000_s0/binned_rnn_beam10_n5000.json`、`_sync/wsa/pi_verify/20260221_porto_baseline_quality_n5000_s0/binned_transformer_beam10_n5000.json`
+
+### 7.9 P1 vs RL 对比补录（修复版）
+
+- `20260221_porto_p1_vs_rl_od_n5000_s0`
+  - OD 级覆盖/多样性：
+    - P1_K16：`arrival=0.6482, cov=0.0914, div=0.5384`
+    - RL_K16：`arrival=0.6786, cov=0.0918, div=0.5103`
+  - success-only 质量（修复版）：
+    - P1：`len_ratio p50=1.934`
+    - RL：`len_ratio p50=1.819`
+  - 文件：`_sync/wsa/pi_verify/20260221_porto_p1_vs_rl_od_n5000_s0/od_coverage_diversity_k16_p1_vs_rl_vs_ar_n5000.json`、`_sync/wsa/pi_verify/20260221_porto_p1_vs_rl_od_n5000_s0/success_only_quality_summary_p1_rl_ar_fixed.json`
+
+### 7.10 诊断链补录（coverage / fallback / corridor-zsim）
+
+- `20260221_porto_diag_k4_antiloop_s0`
+  - fallback 率：`3260/5000 = 0.6520`
+  - Leaflet 诊断页：`loop_cases_city0_k4_antiloop.html`
+  - 文件：`_sync/wsa/pi_verify/20260221_porto_diag_k4_antiloop_s0/fallback_k4_dest_efficient_antiloop_n5000.json`
+
+- `20260221_porto_tf_coverage_probe_s0`
+  - TF 覆盖探针（K16）：`arrival=0.4348, coverage_mean=0.2079, diversity_mean=0.2954`
+  - 文件：`_sync/wsa/pi_verify/20260221_porto_tf_coverage_probe_s0/tf_coverage_summary_n5000_k16.json`
+
+- `20260222_porto_ae_corridor_zsim_s0`
+  - 同 OD 与跨 OD 的 z 相似度：
+    - `within_od_cos mean=0.8318`
+    - `cross_od_cos mean=0.6602`
+    - `delta=+0.1716`
+  - 文件：`_sync/wsa/pi_verify/20260222_porto_ae_corridor_zsim_s0/ae_corridor_zsim_n5000.json`
+
+### 7.11 遗漏目录索引（已检出未展开）
+
+> 说明：以下目录已检出存在 `report.json` / `binned*.json` / `zenc_info*.json` 等产物，但尚未在主线章节展开。  
+> 本节给出“每目录 1 行摘要”，用于快速定位与后续补录。
+
+#### 7.11.1 早期诊断/消融（Detroit 或跨城）
+
+- `20260202_region_constraint_diagnose_s0`：`binned_regionAR_relaxed_destreg_n200pc.json`（succ=0.4425, hw=0.2900, loop=0.3925, len=2.6939）；路径：`_sync/wsa/pi_verify/20260202_region_constraint_diagnose_s0/`
+- `20260203_flow_e2e_relaxed_s0`：`binned_flow_regionAR_relaxed_destreg_n200pc_s0.json`（succ=0.1200, hw=0.4675, loop=0.5875, len=4.3063）；路径：`_sync/wsa/pi_verify/20260203_flow_e2e_relaxed_s0/`
+- `20260203_flow_experiments_s0`：`binned_flow_regionseq_add_relaxed_destreg_n200pc_s0.json`（succ=0.2200, hw=0.4175, loop=0.5400, len=3.9300）；路径：`_sync/wsa/pi_verify/20260203_flow_experiments_s0/`
+- `20260203_flow_micro_seqdump_s0`：`binned_flow_add_seqdump_s0.json`（succ=0.2250, hw=0.4175, loop=0.5450, len=4.3113）；路径：`_sync/wsa/pi_verify/20260203_flow_micro_seqdump_s0/`
+- `20260204_E2_stepemb_s0`：`binned_flow_xattn.json`（succ=0.1975, hw=0.2950, loop=0.5725, len=4.2600）；路径：`_sync/wsa/pi_verify/20260204_E2_stepemb_s0/`
+- `20260204_E3_regions_res2p0_s0`：`binned_oracle.json`（succ=0.4425, hw=0.3100, loop=0.3975, len=2.8068）；路径：`_sync/wsa/pi_verify/20260204_E3_regions_res2p0_s0/`
+- `20260204_E5_pastk16_s0`：`binned_E5_pastk16_oracle.json`（succ=0.7000, hw=0.1050, loop=0.2025, len=1.8629）；`flow_retrain_v2/report.json`（best_epoch=59, best=1.2833）；路径：`_sync/wsa/pi_verify/20260204_E5_pastk16_s0/`
+- `20260204_E6_antiloop_sweep_s0`：`binned_E6a_softP2p0_K8.json`（succ=0.2325, hw=0.2750, loop=0.4600, len=3.4878）；路径：`_sync/wsa/pi_verify/20260204_E6_antiloop_sweep_s0/`
+- `20260204_E7_decoder_rl_flow_s0`：`binned_E7_rl_flow_arconstraint.json`（succ=0.1825, hw=0.2525, loop=0.4525, len=3.8119）；`report.json`（best_epoch=5, best_score=0.0906）；路径：`_sync/wsa/pi_verify/20260204_E7_decoder_rl_flow_s0/`
+- `20260204_E8a_multiscale_ae_s0`：`binned_E8a_oracle.json`（succ=0.4475, hw=0.1275, loop=0.3525, len=2.2356）；`report.json`（best_epoch=59, best=0.1763）；路径：`_sync/wsa/pi_verify/20260204_E8a_multiscale_ae_s0/`
+- `20260204_checklist_exp_s0`：`binned_flow_maxcand0.json`（succ=0.1825, hw=0.3075, loop=0.4800, len=3.9489）；路径：`_sync/wsa/pi_verify/20260204_checklist_exp_s0/`
+- `20260204_flow_antiloop_ablation_s0`：`binned_E1_hardK4.json`（succ=0.2300, hw=0.2475, loop=0.4225, len=3.2238）；路径：`_sync/wsa/pi_verify/20260204_flow_antiloop_ablation_s0/`
+- `D4_hit_wall_spatial_s0`：`binned_eval_flow_n200pc.json`（succ=0.2125, hw=0.2975, loop=0.4875, len=4.0100）；路径：`_sync/wsa/pi_verify/D4_hit_wall_spatial_s0/`
+- `EXPBIAS_baseline_flow_s0`：`binned_eval_flow_n200pc.json`（succ=0.3675, hw=0.1900, loop=0.3375, len=3.0465）；路径：`_sync/wsa/pi_verify/EXPBIAS_baseline_flow_s0/`
+- `SS_p0p3_s0`：`report.json`（best_epoch=2, best_val_loss=0.1905）；路径：`_sync/wsa/pi_verify/SS_p0p3_s0/`
+- `SS_p0p5_s0`：`binned_eval_flow_n200pc.json`（succ=0.3450, hw=0.1875, loop=0.3400, len=3.1099）；`report.json`（best_epoch=1, best=0.1898）；路径：`_sync/wsa/pi_verify/SS_p0p5_s0/`
+- `VF_beta0p5_s0`：`binned_eval_flow_n200pc.json`（succ=0.3725, hw=0.1900, loop=0.3400, len=2.9256）；路径：`_sync/wsa/pi_verify/VF_beta0p5_s0/`
+- `VF_beta1p0_s0`：`binned_eval_flow_n200pc.json`（succ=0.3650, hw=0.1650, loop=0.3300, len=2.9363）；路径：`_sync/wsa/pi_verify/VF_beta1p0_s0/`
+- `VF_beta2p0_s0`：`binned_eval_flow_n200pc.json`（succ=0.3625, hw=0.1750, loop=0.3375, len=3.0234）；路径：`_sync/wsa/pi_verify/VF_beta2p0_s0/`
+- `VF_from_flow_beam_s0`：`report.json`（best_epoch=1, best=0.5249）；路径：`_sync/wsa/pi_verify/VF_from_flow_beam_s0/`
+
+#### 7.11.2 Porto 侧链（已落盘但未展开）
+
+- `20260208_porto_strict_baseline`：存在 `report.json`（无可用 best 指标字段）；路径：`_sync/wsa/pi_verify/20260208_porto_strict_baseline/`
+- `20260210_porto_phase0_s0`：`binned_flow_k1_rescale_p50_greedy_n1000.json`（succ=0.0130, hw=0.9780, loop=0.9910, len=9.0100）；路径：`_sync/wsa/pi_verify/20260210_porto_phase0_s0/`
+- `20260210_porto_strict_diag_n1000_s0_v2`：`binned_flow_bestof16_dest_beam10_n1000.json`（succ=0.2150, hw=0.7700, loop=0.9290, len=6.2127）；路径：`_sync/wsa/pi_verify/20260210_porto_strict_diag_n1000_s0_v2/`
+- `20260212_porto_e2_joint_regionseq_s0`：`binned_e2_flow_k16_dest_greedy_n1000.json`（succ=0.4420, hw=0.5310, loop=0.8180, len=6.6894）；`report.json`（best_epoch=20, best=1.0863）；路径：`_sync/wsa/pi_verify/20260212_porto_e2_joint_regionseq_s0/`
+- `20260212_porto_followup_p0p1p2_s0`：`binned_e2cont_k16_dest_greedy_n1000.json`（succ=0.4730, hw=0.5110, loop=0.8010, len=6.6818）；`P2_e2_cont_e40/report.json`（best_epoch=40, best=0.9980）；路径：`_sync/wsa/pi_verify/20260212_porto_followup_p0p1p2_s0/`
+- `20260214_porto_flow_gap_diag_k16_n5000_s0`：`binned_flow_k16_best_n5000.json`（succ=0.6122, hw=0.2890, loop=0.6930, len=4.2530）；路径：`_sync/wsa/pi_verify/20260214_porto_flow_gap_diag_k16_n5000_s0/`
+- `20260214_porto_flow_gap_diag_v2_k16_n5000_s0`：`binned_flow_k16_dest_n5000.json`（succ=0.6122, hw=0.3744, loop=0.7956, len=5.6391）；路径：`_sync/wsa/pi_verify/20260214_porto_flow_gap_diag_v2_k16_n5000_s0/`
+- `20260214_porto_rl_from_e100_lenratio_s0`：`binned_rl_k16_dest_n1000.json`（succ=0.3510, hw=0.1080, loop=0.4240, len=3.0406）；`report.json`（best_epoch=5, best_score=-0.5236）；路径：`_sync/wsa/pi_verify/20260214_porto_rl_from_e100_lenratio_s0/`
+- `20260217_porto_zenc_informativeness_batched_n5000_s0`：`zenc_info_baseline_ae_n5000.json`（T-S=0.6228）；路径：`_sync/wsa/pi_verify/20260217_porto_zenc_informativeness_batched_n5000_s0/`

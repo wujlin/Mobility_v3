@@ -112,6 +112,16 @@ def _pct(xs: List[float], q: float) -> float:
     return float(np.percentile(arr, q))
 
 
+def _stats_from_counts(correct: np.ndarray, total: np.ndarray) -> List[Dict[str, Any]]:
+    out: List[Dict[str, Any]] = []
+    L = int(min(correct.size, total.size))
+    for i in range(L):
+        n = int(total[i])
+        acc = float(correct[i] / n) if n > 0 else float("nan")
+        out.append({"step": int(i), "n": n, "accuracy": acc})
+    return out
+
+
 @dataclass(frozen=True)
 class Cfg:
     seed: int
@@ -266,9 +276,9 @@ def _teacher_forcing_reconstruct_k(
     decode_candidate_policy: str,
     decode_include_dest_if_successor: bool,
     device: torch.device,
-) -> List[List[int]]:
+) -> Tuple[List[List[int]], np.ndarray, np.ndarray]:
     if not gt_way_ids:
-        return [[] for _ in range(int(n_samples))]
+        return [[] for _ in range(int(n_samples))], np.zeros((0,), dtype=np.int64), np.zeros((0,), dtype=np.int64)
 
     L = int(len(gt_way_ids))
     K = int(max(1, n_samples))
@@ -301,11 +311,15 @@ def _teacher_forcing_reconstruct_k(
 
     paths: List[List[int]] = [[int(start_way)] for _ in range(K)]
     steps = min(int(max_decode_len), max(0, int(L) - 1))
+    step_correct = np.zeros((steps,), dtype=np.int64)
+    step_total = np.zeros((steps,), dtype=np.int64)
 
     for step_idx in range(steps):
         cur = int(gt_way_ids[step_idx])  # teacher forcing: current token comes from GT prefix
+        gt_next = int(gt_way_ids[step_idx + 1])
         cand_full = ae.decoder.get_succ_candidates(int(cur))
         if int(cand_full.numel()) <= 0:
+            step_total[step_idx] += int(K)
             break
         cand = ae.decoder._select_decode_candidates(  # pylint: disable=protected-access
             way_embedder=ae.way_enc,
@@ -318,6 +332,7 @@ def _teacher_forcing_reconstruct_k(
         )
         C = int(cand.numel())
         if C <= 0:
+            step_total[step_idx] += int(K)
             break
 
         cand_way = cand.view(1, C).repeat(K, 1)
@@ -356,9 +371,11 @@ def _teacher_forcing_reconstruct_k(
         else:
             pick = torch.argmax(logits, dim=-1)
         nxt = cand_way[torch.arange(K, device=device), pick].detach().cpu().numpy().astype(np.int64, copy=False).tolist()
+        step_total[step_idx] += int(K)
+        step_correct[step_idx] += int(sum(1 for x in nxt if int(x) == int(gt_next)))
         for i in range(K):
             paths[i].append(int(nxt[i]))
-    return paths
+    return paths, step_correct, step_total
 
 
 def _analyze_per_od(
@@ -516,6 +533,9 @@ def main() -> None:
     n_total_samples = 0
     n_success_samples = 0
     n_route_any_success = 0
+    max_eval_steps = int(max(0, min(int(cfg.max_decode_len), int(cfg.max_way_len) - 1)))
+    global_step_correct = np.zeros((max_eval_steps,), dtype=np.int64)
+    global_step_total = np.zeros((max_eval_steps,), dtype=np.int64)
 
     for city, pick in picks.items():
         n_city = int(pick.size)
@@ -546,7 +566,7 @@ def main() -> None:
                 "route_city": torch.as_tensor(np.asarray([int(city)], dtype=np.int64), dtype=torch.long, device=device),
             }
 
-            pred_samples = _teacher_forcing_reconstruct_k(
+            pred_samples, step_correct, step_total = _teacher_forcing_reconstruct_k(
                 ae=ae,
                 gt_way_ids=gt_ids,
                 route_cond_1=route_cond_1,
@@ -561,6 +581,10 @@ def main() -> None:
                 decode_include_dest_if_successor=bool(cfg.decode_include_dest_if_successor),
                 device=device,
             )
+            lstep = int(min(max_eval_steps, step_total.size))
+            if lstep > 0:
+                global_step_correct[:lstep] += step_correct[:lstep]
+                global_step_total[:lstep] += step_total[:lstep]
             sample_success = [bool(ps and int(ps[-1]) == int(dw)) for ps in pred_samples]
             succ_rate = float(np.mean(np.asarray(sample_success, dtype=np.float64))) if pred_samples else 0.0
             any_succ = bool(any(sample_success))
@@ -586,6 +610,11 @@ def main() -> None:
                     "n_samples": int(len(pred_samples)),
                     "sample_success_rate": float(succ_rate),
                     "route_any_success": bool(any_succ),
+                    "step_acc_mean": (
+                        float(step_correct[:lstep].sum() / max(1, int(step_total[:lstep].sum())))
+                        if lstep > 0 and int(step_total[:lstep].sum()) > 0
+                        else float("nan")
+                    ),
                 },
             }
             if bool(cfg.dump_samples):
@@ -648,6 +677,12 @@ def main() -> None:
             "n_samples_success": int(n_success_samples),
             "sample_arrival_rate": float(n_success_samples / max(1, n_total_samples)),
             "route_any_success_rate": float(n_route_any_success / max(1, len(per_route))),
+            "step_accuracy_overall_mean": (
+                float(global_step_correct.sum() / max(1, int(global_step_total.sum())))
+                if int(global_step_total.sum()) > 0
+                else float("nan")
+            ),
+            "step_accuracy_by_pos": _stats_from_counts(global_step_correct, global_step_total),
             **od_stats,
         },
     }

@@ -1,0 +1,28 @@
+Encoded 5000 routes
+Running true z_enc (batched)...
+[true] batch 1/10 routes 512/5000 elapsed=179.1s eta=1569.5s
+[true] batch 10/10 routes 5000/5000 elapsed=1777.5s eta=0.0s
+Running shuffle z_enc (batched)...
+[shuffle] batch 1/10 routes 512/5000 elapsed=307.6s eta=2696.5s
+[shuffle] batch 10/10 routes 5000/5000 elapsed=2905.5s eta=0.0s
+Running zero z_enc (batched)...
+[zero] batch 1/10 routes 512/5000 elapsed=302.3s eta=2650.2s
+[zero] batch 10/10 routes 5000/5000 elapsed=1611.2s eta=0.0s
+Saved to _sync/wsa/pi_verify/20260222_porto_e2_zmixup_from_pureAE_s0/probe/zenc_info_e5_n5000.json
+
+============================================================
+z_enc Informativeness Diagnostic Results
+============================================================
+  true    : success=45.84%, jaccard=0.3971
+  shuffle : success=1.66%, jaccard=0.0474
+  zero    : success=1.56%, jaccard=0.0607
+------------------------------------------------------------
+  [city0] true:45.84%/0.397 | shuffle:1.66%/0.047 | zero:1.56%/0.061
+  [city1] true:0.00%/0.000 | shuffle:0.00%/0.000 | zero:0.00%/0.000
+------------------------------------------------------------
+  → true > shuffle (+44.18%): z_enc 携带可用路径信息，问题在解码策略
+============================================================
+
+/home/jinlin/miniconda3/envs/dpl/lib/python3.11/site-packages/torch/nn/modules/transformer.py:392: UserWarning: enable_nested_tensor is True, but self.use_nested_tensor is False because encoder_layer.norm_first was True
+  warnings.warn(
+

@@ -12,6 +12,13 @@ import torch
 import torch.nn.functional as F
 from torch.utils.data import DataLoader, Subset
 
+# Make `src.*` imports work when running as a script:
+#   python tools/flow_z_alignment_probe.py
+import sys
+_REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
+
 from src.data.way_graph.way_sequence_dataset import WayRouteDataset, load_way_routes_npz, make_way_casd_collate_fn
 from src.models.way_casd.conditions import ConditionEncoderCfg
 from src.models.way_casd.latent_flow import LatentFlowCfg, LatentFlowMatching

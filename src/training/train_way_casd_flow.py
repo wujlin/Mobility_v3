@@ -10,6 +10,7 @@ from typing import Dict, Optional, Tuple
 
 import numpy as np
 import torch
+import torch.nn.functional as F
 from torch.utils.data import DataLoader, Subset
 
 from src.data.way_graph.way_sequence_dataset import (
@@ -59,6 +60,12 @@ class TrainCfg:
     region_max_len: int
     region_seq_npz: Optional[str]
     way_regions_npz: Optional[str]
+    recon_guided: bool
+    recon_lambda_target: float
+    recon_lambda_warmup_epochs: int
+    recon_drop_dest_dist_p: float
+    recon_drop_past_context_p: float
+    recon_t_max: float
     split_json: Optional[str] = None
 
 
@@ -233,14 +240,114 @@ class RegionSeqLookup:
         return torch.as_tensor(pad, dtype=torch.long)
 
 
-def _to_device(batch: Dict[str, object], device: torch.device, *, region_seq: Optional[RegionSeqLookup] = None) -> Dict[str, object]:
+def _to_device(
+    batch: Dict[str, object],
+    device: torch.device,
+    *,
+    region_seq: Optional[RegionSeqLookup] = None,
+    need_trans: bool = False,
+) -> Dict[str, object]:
     way_seq_pad = batch["way_seq_pad"].to(device)
     route_cond = {k: v.to(device) for k, v in batch["route_cond"].items()}
     if region_seq is not None:
         rpad = region_seq.padded(route_id=batch["route_id"])  # (B,S) long, -1 padded
         route_cond["region_seq_pad"] = rpad.to(device)
-    # Flow training only needs encoder latents + route_cond; moving transitions to GPU is wasted.
-    return {"way_seq_pad": way_seq_pad, "route_cond": route_cond}
+    if not need_trans:
+        # Flow-only training path: avoid moving transitions to GPU.
+        return {"way_seq_pad": way_seq_pad, "route_cond": route_cond}
+    trans = {k: v.to(device) for k, v in batch["trans"].items()}
+    return {"way_seq_pad": way_seq_pad, "route_cond": route_cond, "trans": trans}
+
+
+def _recon_lambda_for_epoch(*, cfg: TrainCfg, epoch: int) -> float:
+    if not bool(cfg.recon_guided):
+        return 0.0
+    target = float(max(0.0, cfg.recon_lambda_target))
+    warm = int(max(0, cfg.recon_lambda_warmup_epochs))
+    if warm <= 0:
+        return float(target)
+    if warm == 1:
+        return float(target)
+    frac = float(min(1.0, max(0.0, (float(epoch) - 1.0) / float(warm - 1))))
+    return float(target * frac)
+
+
+def _flow_loss_and_one_step_denoise(
+    *,
+    flow: LatentFlowMatching,
+    z1: torch.Tensor,
+    route_cond: Dict[str, torch.Tensor],
+) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    """
+    Replicate flow.compute_loss and additionally return one-step denoised z_hat1:
+      z_hat1 = zt + (1 - t) * v_pred
+    """
+    bsz = int(z1.shape[0])
+    device = z1.device
+    sigma = flow.rf_noise_sigma.to(device=device, dtype=z1.dtype)
+    z0 = torch.randn_like(z1) * sigma
+    t = torch.rand((bsz,), device=device, dtype=z1.dtype)
+    t_ = t[:, None, None]
+    zt = (1.0 - t_) * z0 + t_ * z1
+    v_target = z1 - z0
+
+    x = flow._apply_condition(zt=zt, t=t, route_cond=route_cond)  # noqa: SLF001
+    v_pred = flow.out_ln(flow.net(x))
+    flow_loss = ((v_pred - v_target) ** 2).mean()
+    z_hat1 = zt + (1.0 - t_) * v_pred
+    return flow_loss, z_hat1, t
+
+
+def _slice_trans_by_mask(trans: Dict[str, torch.Tensor], keep_mask: torch.Tensor) -> Dict[str, torch.Tensor]:
+    keep = keep_mask.to(dtype=torch.bool)
+    out: Dict[str, torch.Tensor] = {}
+    for k, v in trans.items():
+        if isinstance(v, torch.Tensor) and v.ndim >= 1 and int(v.shape[0]) == int(keep.shape[0]):
+            out[k] = v[keep]
+        else:
+            out[k] = v
+    return out
+
+
+def _decoder_recon_loss(
+    *,
+    ae: WayCASDAutoEncoder,
+    latent_tokens: torch.Tensor,
+    route_cond: Dict[str, torch.Tensor],
+    trans: Dict[str, torch.Tensor],
+    drop_dest_dist: bool,
+    drop_past_context: bool,
+    route_keep_mask: Optional[torch.Tensor] = None,
+) -> Tuple[torch.Tensor, Dict[str, float]]:
+    trans_use = trans
+    if route_keep_mask is not None:
+        rkeep = route_keep_mask.to(dtype=torch.bool)
+        tkeep = rkeep[trans["route_idx"].to(dtype=torch.long)]
+        trans_use = _slice_trans_by_mask(trans, tkeep)
+
+    target_idx = trans_use["target_idx"].to(dtype=torch.long)
+    if int(target_idx.numel()) == 0:
+        zero = latent_tokens.sum() * 0.0
+        return zero, {"recon_loss": 0.0, "recon_acc": 0.0, "n_recon_trans": 0.0}
+
+    logits = ae.decoder.score_candidates(
+        way_embedder=ae.way_enc,
+        latent_tokens=latent_tokens,
+        route_cond=route_cond,
+        trans=trans_use,
+        drop_dest_dist=bool(drop_dest_dist),
+        drop_past_context=bool(drop_past_context),
+    )
+    loss = F.cross_entropy(logits, target_idx, reduction="mean")
+    with torch.no_grad():
+        pred = torch.argmax(logits, dim=-1)
+        acc = (pred == target_idx).float().mean()
+        stats = {
+            "recon_loss": float(loss.item()),
+            "recon_acc": float(acc.item()),
+            "n_recon_trans": float(int(target_idx.numel())),
+        }
+    return loss, stats
 
 
 def train_epoch(
@@ -250,25 +357,71 @@ def train_epoch(
     loader: DataLoader,
     opt: torch.optim.Optimizer,
     device: torch.device,
+    cfg: TrainCfg,
+    epoch: int,
     region_seq: Optional[RegionSeqLookup] = None,
 ) -> Dict[str, float]:
     flow.train()
     total_loss = 0.0
+    total_flow_loss = 0.0
+    total_recon_loss = 0.0
+    total_recon_acc = 0.0
+    total_recon_trans = 0.0
+    lambda_cur = _recon_lambda_for_epoch(cfg=cfg, epoch=int(epoch))
     total_batches = 0
 
     for batch in loader:
-        b = _to_device(batch, device, region_seq=region_seq)
+        b = _to_device(batch, device, region_seq=region_seq, need_trans=bool(cfg.recon_guided))
         with torch.no_grad():
             z1, _ = encoder.encode(b["way_seq_pad"])
         opt.zero_grad(set_to_none=True)
-        loss, _stats = flow.compute_loss(z1=z1, route_cond=b["route_cond"])
+
+        if bool(cfg.recon_guided):
+            flow_loss, z_hat1, t = _flow_loss_and_one_step_denoise(flow=flow, z1=z1, route_cond=b["route_cond"])
+            drop_dd = bool(cfg.recon_drop_dest_dist_p > 0.0 and torch.rand(1, device=device).item() < float(cfg.recon_drop_dest_dist_p))
+            drop_pc = bool(cfg.recon_drop_past_context_p > 0.0 and torch.rand(1, device=device).item() < float(cfg.recon_drop_past_context_p))
+            route_keep: Optional[torch.Tensor] = None
+            if float(cfg.recon_t_max) < 1.0:
+                route_keep = (t.to(dtype=torch.float32) <= float(cfg.recon_t_max))
+            recon_loss, recon_stats = _decoder_recon_loss(
+                ae=encoder,
+                latent_tokens=z_hat1,
+                route_cond=b["route_cond"],
+                trans=b["trans"],
+                drop_dest_dist=drop_dd,
+                drop_past_context=drop_pc,
+                route_keep_mask=route_keep,
+            )
+            loss = flow_loss + float(lambda_cur) * recon_loss
+            total_flow_loss += float(flow_loss.item())
+            total_recon_loss += float(recon_loss.item())
+            total_recon_acc += float(recon_stats["recon_acc"])
+            total_recon_trans += float(recon_stats["n_recon_trans"])
+        else:
+            flow_loss, _stats = flow.compute_loss(z1=z1, route_cond=b["route_cond"])
+            loss = flow_loss
+            total_flow_loss += float(flow_loss.item())
+
         loss.backward()
         opt.step()
         total_loss += float(loss.item())
         total_batches += 1
 
     denom = max(1, int(total_batches))
-    return {"loss": float(total_loss / denom)}
+    out = {
+        "loss": float(total_loss / denom),
+        "flow_loss": float(total_flow_loss / denom),
+        "lambda_recon": float(lambda_cur),
+    }
+    if bool(cfg.recon_guided):
+        out.update(
+            {
+                "recon_loss": float(total_recon_loss / denom),
+                "recon_acc": float(total_recon_acc / denom),
+                "n_recon_trans": float(total_recon_trans / denom),
+            }
+        )
+    return out
 
 
 @torch.no_grad()
@@ -278,19 +431,61 @@ def eval_epoch(
     flow: LatentFlowMatching,
     loader: DataLoader,
     device: torch.device,
+    cfg: TrainCfg,
+    epoch: int,
     region_seq: Optional[RegionSeqLookup] = None,
 ) -> Dict[str, float]:
     flow.eval()
     total_loss = 0.0
+    total_flow_loss = 0.0
+    total_recon_loss = 0.0
+    total_recon_acc = 0.0
+    total_recon_trans = 0.0
+    lambda_cur = _recon_lambda_for_epoch(cfg=cfg, epoch=int(epoch))
     total_batches = 0
     for batch in loader:
-        b = _to_device(batch, device, region_seq=region_seq)
+        b = _to_device(batch, device, region_seq=region_seq, need_trans=bool(cfg.recon_guided))
         z1, _ = encoder.encode(b["way_seq_pad"])
-        loss, _stats = flow.compute_loss(z1=z1, route_cond=b["route_cond"])
+        if bool(cfg.recon_guided):
+            flow_loss, z_hat1, t = _flow_loss_and_one_step_denoise(flow=flow, z1=z1, route_cond=b["route_cond"])
+            route_keep: Optional[torch.Tensor] = None
+            if float(cfg.recon_t_max) < 1.0:
+                route_keep = (t.to(dtype=torch.float32) <= float(cfg.recon_t_max))
+            recon_loss, recon_stats = _decoder_recon_loss(
+                ae=encoder,
+                latent_tokens=z_hat1,
+                route_cond=b["route_cond"],
+                trans=b["trans"],
+                drop_dest_dist=False,
+                drop_past_context=False,
+                route_keep_mask=route_keep,
+            )
+            loss = flow_loss + float(lambda_cur) * recon_loss
+            total_flow_loss += float(flow_loss.item())
+            total_recon_loss += float(recon_loss.item())
+            total_recon_acc += float(recon_stats["recon_acc"])
+            total_recon_trans += float(recon_stats["n_recon_trans"])
+        else:
+            flow_loss, _stats = flow.compute_loss(z1=z1, route_cond=b["route_cond"])
+            loss = flow_loss
+            total_flow_loss += float(flow_loss.item())
         total_loss += float(loss.item())
         total_batches += 1
     denom = max(1, int(total_batches))
-    return {"loss": float(total_loss / denom)}
+    out = {
+        "loss": float(total_loss / denom),
+        "flow_loss": float(total_flow_loss / denom),
+        "lambda_recon": float(lambda_cur),
+    }
+    if bool(cfg.recon_guided):
+        out.update(
+            {
+                "recon_loss": float(total_recon_loss / denom),
+                "recon_acc": float(total_recon_acc / denom),
+                "n_recon_trans": float(total_recon_trans / denom),
+            }
+        )
+    return out
 
 
 def build_argparser() -> argparse.ArgumentParser:
@@ -350,6 +545,13 @@ def build_argparser() -> argparse.ArgumentParser:
     p.add_argument("--resume_epoch", type=int, default=None, help="Optional: override resume epoch (when ckpt has no epoch).")
     p.add_argument("--save_every", type=int, default=20, help="Save ckpt_last.pt every N epochs (best ckpt saved on improve).")
     p.add_argument("--early_stop_patience", type=int, default=0, help="Optional early stop (0=disable).")
+    # Reconstruction-guided Flow (optional): encourage Flow z to remain decoder-decodable.
+    p.add_argument("--recon_guided", action="store_true", help="If set, add decoder teacher-forcing CE on one-step denoised z_hat1.")
+    p.add_argument("--recon_lambda_target", type=float, default=0.0, help="Target lambda for recon-guided auxiliary loss.")
+    p.add_argument("--recon_lambda_warmup_epochs", type=int, default=0, help="Linear warmup epochs for recon lambda (0=constant).")
+    p.add_argument("--recon_drop_dest_dist_p", type=float, default=0.0, help="Batch-level prob to drop decoder dest_dist bypass in recon branch.")
+    p.add_argument("--recon_drop_past_context_p", type=float, default=0.0, help="Batch-level prob to drop decoder past_context bypass in recon branch.")
+    p.add_argument("--recon_t_max", type=float, default=1.0, help="Apply recon only on routes with sampled t<=recon_t_max (0,1].")
     return p
 
 
@@ -431,11 +633,21 @@ def main() -> None:
         region_max_len=int(region_max_len),
         region_seq_npz=(str(region_seq_npz) if region_seq_npz is not None else None),
         way_regions_npz=(str(way_regions_npz) if way_regions_npz is not None else None),
+        recon_guided=bool(args.recon_guided),
+        recon_lambda_target=float(args.recon_lambda_target),
+        recon_lambda_warmup_epochs=int(args.recon_lambda_warmup_epochs),
+        recon_drop_dest_dist_p=float(args.recon_drop_dest_dist_p),
+        recon_drop_past_context_p=float(args.recon_drop_past_context_p),
+        recon_t_max=float(args.recon_t_max),
         split_json=(str(args.split_json) if args.split_json is not None else None),
     )
 
     if args.split_part is not None:
         log.warning("--split_part=%s is ignored by train_way_casd_flow (train uses split train+val).", str(args.split_part))
+    if float(cfg.recon_t_max) <= 0.0 or float(cfg.recon_t_max) > 1.0:
+        raise SystemExit("[FATAL] --recon_t_max must be in (0, 1].")
+    if bool(cfg.recon_guided) and float(cfg.recon_lambda_target) <= 0.0:
+        log.warning("recon_guided is enabled but recon_lambda_target<=0; recon branch will have no effect.")
 
     _set_seed(cfg.seed)
     device = torch.device(cfg.device if (cfg.device != "cuda" or torch.cuda.is_available()) else "cpu")
@@ -670,7 +882,15 @@ def main() -> None:
         log.info(f"resume_ckpt={args.resume_ckpt} start_epoch={start_epoch} best_val_loss={best} best_epoch={best_epoch}")
 
     if not np.isfinite(best) or best == float("inf"):
-        va0 = eval_epoch(encoder=ae, flow=flow, loader=val_loader, device=device, region_seq=region_seq_lookup)
+        va0 = eval_epoch(
+            encoder=ae,
+            flow=flow,
+            loader=val_loader,
+            device=device,
+            cfg=cfg,
+            epoch=max(0, int(start_epoch - 1)),
+            region_seq=region_seq_lookup,
+        )
         best = float(va0["loss"])
         best_epoch = int(start_epoch - 1)
         log.info(f"init best_val_loss={best:.6f} from current weights (epoch={best_epoch})")
@@ -691,13 +911,65 @@ def main() -> None:
     early_stop_patience = max(0, int(args.early_stop_patience))
 
     for epoch in range(int(start_epoch), int(cfg.n_epochs) + 1):
-        tr = train_epoch(encoder=ae, flow=flow, loader=train_loader, opt=opt, device=device, region_seq=region_seq_lookup)
-        va = eval_epoch(encoder=ae, flow=flow, loader=val_loader, device=device, region_seq=region_seq_lookup)
+        tr = train_epoch(
+            encoder=ae,
+            flow=flow,
+            loader=train_loader,
+            opt=opt,
+            device=device,
+            cfg=cfg,
+            epoch=int(epoch),
+            region_seq=region_seq_lookup,
+        )
+        va = eval_epoch(
+            encoder=ae,
+            flow=flow,
+            loader=val_loader,
+            device=device,
+            cfg=cfg,
+            epoch=int(epoch),
+            region_seq=region_seq_lookup,
+        )
         history.append({"epoch": int(epoch), "train": tr, "val": va})
-        log.info(f"epoch={epoch} train_loss={tr['loss']:.4f} val_loss={va['loss']:.4f}")
+        if bool(cfg.recon_guided):
+            log.info(
+                "epoch=%d train_loss=%.4f(flow=%.4f recon=%.4f acc=%.4f λ=%.4f) "
+                "val_loss=%.4f(flow=%.4f recon=%.4f acc=%.4f)",
+                int(epoch),
+                float(tr["loss"]),
+                float(tr.get("flow_loss", tr["loss"])),
+                float(tr.get("recon_loss", 0.0)),
+                float(tr.get("recon_acc", 0.0)),
+                float(tr.get("lambda_recon", 0.0)),
+                float(va["loss"]),
+                float(va.get("flow_loss", va["loss"])),
+                float(va.get("recon_loss", 0.0)),
+                float(va.get("recon_acc", 0.0)),
+            )
+        else:
+            log.info(f"epoch={epoch} train_loss={tr['loss']:.4f} val_loss={va['loss']:.4f}")
 
         with hist_path.open("a", encoding="utf-8") as f:
-            f.write(json.dumps({"epoch": int(epoch), "train_loss": float(tr["loss"]), "val_loss": float(va["loss"])}) + "\n")
+            rec = {
+                "epoch": int(epoch),
+                "train_loss": float(tr["loss"]),
+                "val_loss": float(va["loss"]),
+                "train_flow_loss": float(tr.get("flow_loss", tr["loss"])),
+                "val_flow_loss": float(va.get("flow_loss", va["loss"])),
+                "lambda_recon": float(tr.get("lambda_recon", 0.0)),
+            }
+            if bool(cfg.recon_guided):
+                rec.update(
+                    {
+                        "train_recon_loss": float(tr.get("recon_loss", 0.0)),
+                        "train_recon_acc": float(tr.get("recon_acc", 0.0)),
+                        "val_recon_loss": float(va.get("recon_loss", 0.0)),
+                        "val_recon_acc": float(va.get("recon_acc", 0.0)),
+                        "train_n_recon_trans": float(tr.get("n_recon_trans", 0.0)),
+                        "val_n_recon_trans": float(va.get("n_recon_trans", 0.0)),
+                    }
+                )
+            f.write(json.dumps(rec) + "\n")
 
         if float(va["loss"]) < float(best):
             best = float(va["loss"])

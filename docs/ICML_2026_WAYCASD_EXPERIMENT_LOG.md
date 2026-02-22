@@ -10,6 +10,13 @@
 > ⚠️ 2026-02-05 补充（min_hops=5 的 end-to-end generation）：已完成 Flow→z_flow→Decoder 的端到端评测（含 per-route + 形状指标），并形成 D4 空间审计（hit_wall 热点）。产物主要在 `_sync/wsa/pi_verify/E2_joint_finetune_s0_cont_e60/` 与 `_sync/wsa/pi_verify/D4_hit_wall_spatial_e2cont_s0/`。
 >
 > ⚠️ 2026-02-06 补充（评测公平性）：已完成 OD-disjoint split（精确 OD：city,start_way,dest_way 不重叠）并重训 RNN-AR / Tr-AR / Way-CASD，输出 paired McNemar 与失败模式对比。产物在 `_sync/wsa/pi_verify/20260206_od_disjoint_s0/`。
+>
+> ⚠️ 2026-02-22 口径修正（关键）：已补齐 Porto 的 teacher-forcing 逐步准确率诊断，并确认“93%”与“47%”来自不同口径。  
+> - `0.9333` 仅对应 Rustbelt AE 训练验证口径（`_sync/wsa/icml2026_routegen/WAYCASD_PASTCTX_strict_sem5_rustbelt_seed0/W6_train_ae_pastctx_k8/report.json`，best-val-loss epoch 的 `val.acc`）。  
+> - Porto 同口径 TF-stepwise（`decode_max_candidates=32`, `K=1`, deterministic, n=5000）结果：  
+>   - E2 e100 ckpt：`step_accuracy_overall_mean=0.4692`（`_sync/wsa/pi_verify/20260222_porto_tf_stepwise_accuracy_s0/tf_stepwise_k1_cand32_n5000.json`）  
+>   - P1 e20 ckpt：`step_accuracy_overall_mean=0.4581`（`_sync/wsa/pi_verify/20260222_porto_tf_stepwise_e20_probe_s0/tf_stepwise_k1_cand32_n5000_e20.json`）  
+> - 结论：当前 Porto 主线讨论单步准确率时，必须使用 ~46-47% 口径，不得引用 Rustbelt 训练验证的 0.9333。
 
 ---
 
@@ -35,6 +42,24 @@
 - **可视化（min5 口径）**：  
   - Micro（每城 easy/recovered/hard，带 Err@dest 角标）：`_sync/wsa/paper_figures/waycasd_v1/min5_s0/micro/waycasd_city_micro_case_study.png`  
   - Macro（三列：beam10 failure density / greedy success rate / beam gain）：`_sync/wsa/paper_figures/waycasd_v1/min5_s0/macro/waycasd_city_macro_overview.png`
+
+#### 补充：Porto TF-stepwise 口径校准（2026-02-22）
+
+目的：修复“单步准确率=93%”的口径误用，给 Porto 主线提供可复现实测基线。
+
+- 评测脚本：`src/evaluation/way_casd_teacher_forcing_coverage.py`
+- 核心口径（两次完全一致）：`K=1`、`decode_max_candidates=32`、`decode_candidate_policy=first`、`latent_noise_std=0`、`decode_stochastic=false`、`n_routes=5000`、`split_part=test`
+- 结果：
+  - e100 ckpt（`_sync/wsa/pi_verify/20260214_porto_p1_stepemb_cont_e100_s0/ckpt_best.pt`）：
+    - `step_accuracy_overall_mean=0.4692`
+    - `sample_arrival_rate=0.4466`
+    - 产物：`_sync/wsa/pi_verify/20260222_porto_tf_stepwise_accuracy_s0/tf_stepwise_k1_cand32_n5000.json`
+  - e20 ckpt（`_sync/wsa/pi_verify/20260213_porto_p0p1_stepemb_s0/P1_stepemb_e20/ckpt_best.pt`）：
+    - `step_accuracy_overall_mean=0.4581`
+    - `sample_arrival_rate=0.4318`
+    - 产物：`_sync/wsa/pi_verify/20260222_porto_tf_stepwise_e20_probe_s0/tf_stepwise_k1_cand32_n5000_e20.json`
+
+结论（事实）：Porto 当前同口径单步准确率约 46-47%，而非 93%。
 
 #### 0.0.1 end-to-end generation（Flow→z_flow→Decoder；min5 口径，n=200/城）
 
@@ -188,9 +213,10 @@ way features（含 `way_semantic` 5 通道）：
 
 - best epoch（by val loss）：`epoch=53`
 - best val loss：`0.1871`
-- 对应 val acc：`0.9333`
+- 对应 val acc：`0.9333`（仅 Rustbelt 训练验证口径）
 
-> 注：val acc 之后可继续升到 ~0.95，但 val loss 上升（过拟合/过置信风险）；我们后续更关心序列级到达率。
+> 注：val acc 之后可继续升到 ~0.95，但 val loss 上升（过拟合/过置信风险）；我们后续更关心序列级到达率。  
+> 另见第 0 节“Porto TF-stepwise 口径校准”小节：Porto 同口径单步准确率约 46-47%，与本节 Rustbelt 训练验证指标不可混用。
 
 ### 3.2 z_enc 信息性（Encoder 是否“有用”）
 

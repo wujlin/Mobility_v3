@@ -276,9 +276,15 @@ def _teacher_forcing_reconstruct_k(
     decode_candidate_policy: str,
     decode_include_dest_if_successor: bool,
     device: torch.device,
-) -> Tuple[List[List[int]], np.ndarray, np.ndarray]:
+) -> Tuple[List[List[int]], np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     if not gt_way_ids:
-        return [[] for _ in range(int(n_samples))], np.zeros((0,), dtype=np.int64), np.zeros((0,), dtype=np.int64)
+        return (
+            [[] for _ in range(int(n_samples))],
+            np.zeros((0,), dtype=np.int64),
+            np.zeros((0,), dtype=np.int64),
+            np.zeros((0,), dtype=np.int64),
+            np.zeros((0,), dtype=np.int64),
+        )
 
     L = int(len(gt_way_ids))
     K = int(max(1, n_samples))
@@ -313,6 +319,8 @@ def _teacher_forcing_reconstruct_k(
     steps = min(int(max_decode_len), max(0, int(L) - 1))
     step_correct = np.zeros((steps,), dtype=np.int64)
     step_total = np.zeros((steps,), dtype=np.int64)
+    step_gt_in_cands = np.zeros((steps,), dtype=np.int64)
+    step_gt_in_total = np.zeros((steps,), dtype=np.int64)
 
     for step_idx in range(steps):
         cur = int(gt_way_ids[step_idx])  # teacher forcing: current token comes from GT prefix
@@ -333,7 +341,12 @@ def _teacher_forcing_reconstruct_k(
         C = int(cand.numel())
         if C <= 0:
             step_total[step_idx] += int(K)
+            step_gt_in_total[step_idx] += 1
             break
+
+        gt_in = bool(torch.any(cand == int(gt_next)).item())
+        step_gt_in_total[step_idx] += 1
+        step_gt_in_cands[step_idx] += int(gt_in)
 
         cand_way = cand.view(1, C).repeat(K, 1)
         cand_mask = torch.ones((K, C), dtype=torch.bool, device=device)
@@ -375,7 +388,7 @@ def _teacher_forcing_reconstruct_k(
         step_correct[step_idx] += int(sum(1 for x in nxt if int(x) == int(gt_next)))
         for i in range(K):
             paths[i].append(int(nxt[i]))
-    return paths, step_correct, step_total
+    return paths, step_correct, step_total, step_gt_in_cands, step_gt_in_total
 
 
 def _analyze_per_od(
@@ -536,6 +549,8 @@ def main() -> None:
     max_eval_steps = int(max(0, min(int(cfg.max_decode_len), int(cfg.max_way_len) - 1)))
     global_step_correct = np.zeros((max_eval_steps,), dtype=np.int64)
     global_step_total = np.zeros((max_eval_steps,), dtype=np.int64)
+    global_gt_in_cands = np.zeros((max_eval_steps,), dtype=np.int64)
+    global_gt_in_total = np.zeros((max_eval_steps,), dtype=np.int64)
 
     for city, pick in picks.items():
         n_city = int(pick.size)
@@ -566,7 +581,7 @@ def main() -> None:
                 "route_city": torch.as_tensor(np.asarray([int(city)], dtype=np.int64), dtype=torch.long, device=device),
             }
 
-            pred_samples, step_correct, step_total = _teacher_forcing_reconstruct_k(
+            pred_samples, step_correct, step_total, step_gt_in_cands, step_gt_in_total = _teacher_forcing_reconstruct_k(
                 ae=ae,
                 gt_way_ids=gt_ids,
                 route_cond_1=route_cond_1,
@@ -585,6 +600,8 @@ def main() -> None:
             if lstep > 0:
                 global_step_correct[:lstep] += step_correct[:lstep]
                 global_step_total[:lstep] += step_total[:lstep]
+                global_gt_in_cands[:lstep] += step_gt_in_cands[:lstep]
+                global_gt_in_total[:lstep] += step_gt_in_total[:lstep]
             sample_success = [bool(ps and int(ps[-1]) == int(dw)) for ps in pred_samples]
             succ_rate = float(np.mean(np.asarray(sample_success, dtype=np.float64))) if pred_samples else 0.0
             any_succ = bool(any(sample_success))
@@ -613,6 +630,11 @@ def main() -> None:
                     "step_acc_mean": (
                         float(step_correct[:lstep].sum() / max(1, int(step_total[:lstep].sum())))
                         if lstep > 0 and int(step_total[:lstep].sum()) > 0
+                        else float("nan")
+                    ),
+                    "gt_next_in_decode_cands_rate": (
+                        float(step_gt_in_cands[:lstep].sum() / max(1, int(step_gt_in_total[:lstep].sum())))
+                        if lstep > 0 and int(step_gt_in_total[:lstep].sum()) > 0
                         else float("nan")
                     ),
                 },
@@ -683,6 +705,17 @@ def main() -> None:
                 else float("nan")
             ),
             "step_accuracy_by_pos": _stats_from_counts(global_step_correct, global_step_total),
+            "gt_next_in_decode_cands_rate": (
+                float(global_gt_in_cands.sum() / max(1, int(global_gt_in_total.sum())))
+                if int(global_gt_in_total.sum()) > 0
+                else float("nan")
+            ),
+            "gt_next_not_in_decode_cands_rate": (
+                float(1.0 - (global_gt_in_cands.sum() / max(1, int(global_gt_in_total.sum()))))
+                if int(global_gt_in_total.sum()) > 0
+                else float("nan")
+            ),
+            "gt_next_in_decode_cands_by_pos": _stats_from_counts(global_gt_in_cands, global_gt_in_total),
             **od_stats,
         },
     }

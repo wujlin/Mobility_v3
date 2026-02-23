@@ -1,0 +1,96 @@
+{
+  "ok": true,
+  "task": "way_casd_corridor_centroid_oracle",
+  "created_at": "2026-02-23T11:09:17.336367+08:00",
+  "cfg": {
+    "seed": 0,
+    "device": "cuda",
+    "tz_offset_hours": -5.0,
+    "n_routes": 5000,
+    "min_hops": 5,
+    "max_way_len": 160,
+    "max_decode_len": 160,
+    "split_json": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD0_waydata_porto_seed0/W5_way_routes_strict_gate/od_split_min3_max160_seed0_dev10p.json",
+    "split_part": "test",
+    "decode_batch_size": 256,
+    "decode_max_candidates": 32,
+    "decode_candidate_policy": "first",
+    "decode_include_dest_if_successor": false,
+    "jaccard_dist_thr": 0.3,
+    "min_routes_per_od": 3,
+    "save_per_route": true
+  },
+  "inputs": {
+    "way_routes_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD0_waydata_porto_seed0/W5_way_routes_strict_gate/way_routes_strict_gate.npz",
+    "way_graph_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD0_waydata_porto_seed0/W2_way_graph/way_graph.npz",
+    "way_features_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD0_waydata_porto_seed0/W3_way_features/way_features.npz",
+    "ae_ckpt": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD0_waydata_porto_seed0/W6_train_ae_porto_strict_candq1_past16_s0/ckpt_best.pt"
+  },
+  "ckpt_strict_load_ok": true,
+  "corridor_stats": {
+    "n_routes_eval": 5000,
+    "n_od_groups_all": 4140,
+    "n_od_groups_kept": 154,
+    "n_corridors_total": 670,
+    "n_corridors_kept": 670,
+    "n_unassigned_routes": 4273
+  },
+  "summary": {
+    "true": {
+      "n": 5000,
+      "success_rate": 0.4354,
+      "jaccard_mean": 0.43343645320760454,
+      "len_ratio": {
+        "mean": 5.242622342820221,
+        "p50": 2.636845201064876,
+        "p90": 13.236365475036449,
+        "n": 5000
+      },
+      "success_only_len_ratio": {
+        "mean": 1.0037254968570122,
+        "p50": 0.9657966958898578,
+        "p90": 1.2883641742046654,
+        "n": 2177
+      }
+    },
+    "corridor_centroid": {
+      "n": 5000,
+      "success_rate": 0.4352,
+      "jaccard_mean": 0.4327439572291597,
+      "len_ratio": {
+        "mean": 5.242835250252423,
+        "p50": 2.6148186720682203,
+        "p90": 13.331996594844568,
+        "n": 5000
+      },
+      "success_only_len_ratio": {
+        "mean": 1.0030156750129193,
+        "p50": 0.9657592411927274,
+        "p90": 1.2869078412928352,
+        "n": 2176
+      }
+    },
+    "corridor_centroid_loo": {
+      "n": 5000,
+      "success_rate": 0.4358,
+      "jaccard_mean": 0.43248804449230666,
+      "len_ratio": {
+        "mean": 5.248686477062734,
+        "p50": 2.612396345494132,
+        "p90": 13.229630767750848,
+        "n": 5000
+      },
+      "success_only_len_ratio": {
+        "mean": 1.0028997864022882,
+        "p50": 0.9657778370288271,
+        "p90": 1.286765079425678,
+        "n": 2179
+      }
+    }
+  },
+  "delta": {
+    "centroid_minus_true_success_rate": -0.00020000000000003348,
+    "centroid_loo_minus_true_success_rate": 0.00040000000000001146,
+    "centroid_minus_true_succ_lenr_p50": -3.745469713045679e-05
+  }
+}

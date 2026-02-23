@@ -1,0 +1,26 @@
+[encode] 500/5000
+[encode] 1000/5000
+[encode] 1500/5000
+[encode] 2000/5000
+[encode] 2500/5000
+[encode] 3000/5000
+[encode] 3500/5000
+[encode] 4000/5000
+[encode] 4500/5000
+[encode] 5000/5000
+[probe] routes_total=5000 routes_eval=715 od_all=4140 od_kept=150
+[decode] 100/715 routes | sample_sr=0.4706
+[decode] 200/715 routes | sample_sr=0.4338
+[decode] 300/715 routes | sample_sr=0.4444
+[decode] 400/715 routes | sample_sr=0.4541
+[decode] 500/715 routes | sample_sr=0.4477
+[decode] 600/715 routes | sample_sr=0.4472
+[decode] 700/715 routes | sample_sr=0.4423
+[decode] 715/715 routes | sample_sr=0.4390
+[OK] saved: _sync/wsa/pi_verify/20260223_porto_corridor_diverse_oracle_ceiling_s0/corridor_diverse_oracle_k16_n5000.json
+[OK] saved flat per-route: _sync/wsa/pi_verify/20260223_porto_corridor_diverse_oracle_ceiling_s0/corridor_diverse_oracle_k16_n5000_flat.json
+Corridor-diverse oracle | sample_arrival=0.4390 | route_any_success=0.7594 | coverage_mean=0.3654 | div_mean=0.3240 | n_od=150
+
+/home/jinlin/miniconda3/envs/dpl/lib/python3.11/site-packages/torch/nn/modules/transformer.py:392: UserWarning: enable_nested_tensor is True, but self.use_nested_tensor is False because encoder_layer.norm_first was True
+  warnings.warn(
+

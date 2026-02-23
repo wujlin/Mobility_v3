@@ -260,8 +260,6 @@ if is_true "${RUN_P1}"; then
         --way_graph_npz "${WAY_GRAPH}" \
         --way_features_npz "${WAY_FEATURES}" \
         --ae_ckpt "${P1_AE_DIR}/ckpt_best.pt" \
-        --split_json "${SPLIT_JSON}" \
-        --split_part test \
         --n_routes "${N_ROUTES}" \
         --decode_max_candidates 32 \
         --decode_candidate_policy first \

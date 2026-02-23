@@ -209,7 +209,13 @@ def main() -> None:
     p.add_argument("--jaccard_dist_thr", type=float, default=0.3)
     p.add_argument("--min_routes_per_od", type=int, default=3)
     p.add_argument("--min_corridors_per_od", type=int, default=2)
-    p.add_argument("--min_routes_per_corridor", type=int, default=2)
+    p.add_argument(
+        "--min_routes_per_corridor",
+        type=int,
+        default=1,
+        help="Minimum routes per corridor cluster when building centroids. "
+        "Use 1 to match corridor_diverse_oracle filtering.",
+    )
 
     p.add_argument("--encode_batch_size", type=int, default=512)
     p.add_argument("--batch_size", type=int, default=64)

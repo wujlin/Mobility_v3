@@ -698,3 +698,44 @@ On-road prior 的“数据侧核验”（用于解释跨城差异）：
   - `[30,40)=0.1238`
   - `[40,60)=0.2972`
   - `[60,+)=0.2552`
+### 7.13 n_latent=8 降维实验（Porto，2026-02-19 ~ 2026-02-23）
+
+> **核心假说**：n_latent=64 → 16384 维 z 空间对 108K 训练样本而言过度参数化（6.6 samples/dim），
+> 导致 Flow Matching 无法学到有意义的 z 分布。n_latent=8 → 2048 维（53 samples/dim）应大幅改善 Flow z 质量。
+
+- 目录：`_sync/wsa/pi_verify/20260219_porto_d1_nlatent8_s0/`
+
+#### 7.13.1 已完成阶段
+
+| 阶段 | 目录 | 核心指标 | 对比 n_latent=64 |
+|---|---|---|---|
+| D1: AE | `D1_ae_nL8/` | val_acc=**0.870**, val_loss=0.360, best_epoch=100 | 0.884 → **-1.4pp**，z 表达能力几乎无损 |
+| D1b: AE zenc 探针 | `D1b_ae_zenc/` | true=**63.4%**, shuffle=1.2%, T-S=**+62.1pp** | +62.3pp → **持平**，z 信息完整保留 |
+| D2: Flow | `D2_flow_nL8/` | val_loss=**0.129**, best_epoch=53 | 0.203 → **-36.5%**，Flow 学到更好的分布 |
+| D3: E2 | `D3_e2_nL8/` | val_loss=0.938, best_epoch=30 (=max), lr=1e-5 | 0.925 → 无改善 |
+| D4a: E2 zenc 探针 | `D4a_e2_zenc/` | true=**14.7%**, shuffle=6.0%, T-S=**+8.6pp** | +10pp → **posterior collapse 依旧** |
+| D4b: E2 eval | `D4b_eval/` | K1-beam=19.1%, K8-dest=32.4%, K16=缺失 | K16=64.8% → 不可比（K 不同，无 step_emb） |
+
+**D3 E2 配置差异**（与 n_latent=64 E2 不同）：
+- `decoder_use_step_emb=false`（n_latent=64 E2 为 true）
+- 只训练 30 epochs（n_latent=64 E2 为 100 epochs）
+- `force_decoder_past_k=0`（不覆盖，沿用 AE 的 past_k=16）
+
+#### 7.13.2 关键发现
+
+1. **Flow 侧确认改善**：val_loss 0.203→0.129（-36%），低维 z 空间让 Flow Matching 学到更好的条件分布。
+2. **AE 侧无损**：val_acc 仅 -1.4pp，T-S=+62pp 与 n_latent=64 持平，decoder 完全保留 z 利用能力。
+3. **E2 posterior collapse 与维度无关**：n_latent=8 E2 的 T-S=+8.6pp（甚至比 n_latent=64 的 +10pp 更差），说明 posterior collapse 是 E2 joint finetune 的结构性问题，而非 z 维度问题。
+
+#### 7.13.3 缺失实验（D5 系列）
+
+> **关键遗漏**：现有 D4b 评估使用 E2 decoder（D3 ckpt）+ Flow z，但核心假说的验证点是 **跳过 E2，直接用 Pure AE decoder（D1 ckpt）+ Flow z**。
+> E2 collapse 不影响假说成立与否 — 需要的是 Flow z 质量本身是否足够好，让 T-S=+62pp 的 AE decoder 直接使用。
+
+| 实验 | 目的 | 预期 | 状态 |
+|---|---|---|---|
+| D5a: Flow alignment probe | cos(flow_z, gt_z) 在 n_latent=8 是否 >> 0.427 | cos > 0.6 | **待执行** |
+| D5b: Pure AE + Flow z eval | D1 AE decoder 直接用 D2 Flow z，K=8/16 | SR >> 8.4%（n_latent=64 的值） | **待执行** |
+| D5c: E2 K16 eval | 补全 D4b 缺失的 K16 | 与 n_latent=64 K16=64.8% 对比 | **待执行** |
+
+运行脚本：`run_nL8_pureAE_flowz_probe.sh`

@@ -1,0 +1,33 @@
+/home/jinlin/miniconda3/envs/dpl/lib/python3.11/site-packages/torch/nn/modules/transformer.py:392: UserWarning: enable_nested_tensor is True, but self.use_nested_tensor is False because encoder_layer.norm_first was True
+  warnings.warn(
+[city0] start n_routes=5000 latent_source=flow region_constraint=none compare_beam=False
+[city0] batch 0:192/5000
+[city0] batch 192:384/5000
+[city0] batch 384:576/5000
+[city0] batch 576:768/5000
+[city0] batch 768:960/5000
+[city0] batch 960:1152/5000
+[city0] batch 1152:1344/5000
+[city0] batch 1344:1536/5000
+[city0] batch 1536:1728/5000
+[city0] batch 1728:1920/5000
+[city0] batch 1920:2112/5000
+[city0] batch 2112:2304/5000
+[city0] batch 2304:2496/5000
+[city0] batch 2496:2688/5000
+[city0] batch 2688:2880/5000
+[city0] batch 2880:3072/5000
+[city0] batch 3072:3264/5000
+[city0] batch 3264:3456/5000
+[city0] batch 3456:3648/5000
+[city0] batch 3648:3840/5000
+[city0] batch 3840:4032/5000
+[city0] batch 4032:4224/5000
+[city0] batch 4224:4416/5000
+[city0] batch 4416:4608/5000
+[city0] batch 4608:4800/5000
+[city0] batch 4800:4992/5000
+[city0] batch 4992:5000/5000
+[city0] done=5000 routes
+[OK] saved: _sync/wsa/pi_verify/20260219_porto_d1_nlatent8_s0/D5_pureAE_flowz/binned_pureAE_nL8_k16_dest_efficient_n5000.json
+[OK] saved: _sync/wsa/pi_verify/20260219_porto_d1_nlatent8_s0/D5_pureAE_flowz/per_route_pureAE_nL8_k16_dest_efficient_n5000.json

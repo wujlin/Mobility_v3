@@ -1,0 +1,60 @@
+{
+  "ok": true,
+  "task": "flow_z_alignment_probe",
+  "created_at": "2026-02-23T17:10:25.596918+08:00",
+  "inputs": {
+    "way_routes_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD0_waydata_porto_seed0/W5_way_routes_strict_gate/way_routes_strict_gate.npz",
+    "way_graph_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD0_waydata_porto_seed0/W2_way_graph/way_graph.npz",
+    "way_features_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD0_waydata_porto_seed0/W3_way_features/way_features.npz",
+    "ae_ckpt": "_sync/wsa/pi_verify/20260219_porto_d1_nlatent8_s0/D1_ae_nL8/ckpt_best.pt",
+    "flow_ckpt": "_sync/wsa/pi_verify/20260219_porto_d1_nlatent8_s0/D2_flow_nL8/ckpt_best.pt",
+    "split_json": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD0_waydata_porto_seed0/W5_way_routes_strict_gate/od_split_min3_max160_seed0_dev10p.json",
+    "split_part": "test",
+    "region_seq_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD0_waydata_porto_seed0/region_seq_res5/region_seq_min3_max160.npz"
+  },
+  "cfg": {
+    "n_routes": 5000,
+    "batch_size": 512,
+    "solver_steps": null,
+    "cfg_scale": 1.0,
+    "flow_cfg": {
+      "d_model": 256,
+      "n_latent": 8,
+      "n_layers": 4,
+      "n_heads": 8,
+      "dropout": 0.1,
+      "noise_sigma": 0.2,
+      "solver_steps": 20,
+      "cond_dropout_p": 0.0,
+      "cond_inject": "xattn",
+      "use_region_seq": true,
+      "n_regions": 113,
+      "region_max_len": 16
+    }
+  },
+  "n_routes_eval": 5000,
+  "cosine": {
+    "mean": 0.3340703402072191,
+    "p25": 0.2781579717993736,
+    "p50": 0.33033648133277893,
+    "p75": 0.3860202878713608,
+    "p90": 0.439499843120575,
+    "n": 5000.0
+  },
+  "l2": {
+    "mean": 59.13532535476685,
+    "p25": 55.67969036102295,
+    "p50": 58.77379035949707,
+    "p75": 62.21618461608887,
+    "p90": 65.6997917175293,
+    "n": 5000.0
+  },
+  "l2_per_dim": {
+    "mean": 1.306718424832821,
+    "p25": 1.2303589284420013,
+    "p50": 1.2987295389175415,
+    "p75": 1.3747964799404144,
+    "p90": 1.4517741203308105,
+    "n": 5000.0
+  }
+}

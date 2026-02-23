@@ -965,6 +965,8 @@ def main() -> None:
             decoder_past_k=int(past_k),
             decoder_past_n_layers=int(past_n_layers),
             decoder_past_n_heads=int(past_n_heads),
+            vae_dim=int(ae_cfg.get("vae_dim", 0)),
+            vae_beta=float(ae_cfg.get("vae_beta", 0.0)),
         ),
         way_features=way_features,
         way_adj_ptr=ptr,
@@ -1004,12 +1006,14 @@ def main() -> None:
 
     flow: Optional[LatentFlowMatching] = None
     flow_cfg_dict: Dict[str, object] = {}
+    flow_target = "z"
     if str(cfg.latent_source) == "flow":
         if args.flow_ckpt is None:
             raise SystemExit("[FATAL] --flow_ckpt is required when --latent_source=flow")
         ckpt_f = torch.load(str(args.flow_ckpt), map_location=device)
         f_state = ckpt_f["model_state_dict"] if isinstance(ckpt_f, dict) and "model_state_dict" in ckpt_f else ckpt_f
         flow_cfg_dict = ckpt_f.get("config", {}) if isinstance(ckpt_f, dict) else {}
+        flow_target = str(flow_cfg_dict.get("flow_target", "z"))
         if not isinstance(f_state, dict):
             raise SystemExit("[FATAL] unexpected flow ckpt format (state_dict missing).")
 
@@ -1026,11 +1030,22 @@ def main() -> None:
             n_regions=int(flow_cfg_dict.get("n_regions", 154)),
             region_max_len=int(flow_cfg_dict.get("region_max_len", 16)),
         )
-        if int(flow_cfg.d_model) != int(ae.cfg.d_model) or int(flow_cfg.n_latent) != int(ae.cfg.n_latent):
-            raise SystemExit(
-                f"[FATAL] AE/Flow mismatch: AE(d_model={int(ae.cfg.d_model)}, n_latent={int(ae.cfg.n_latent)}) "
-                f"vs Flow(d_model={int(flow_cfg.d_model)}, n_latent={int(flow_cfg.n_latent)})."
-            )
+        if str(flow_target) == "z":
+            if int(flow_cfg.d_model) != int(ae.cfg.d_model) or int(flow_cfg.n_latent) != int(ae.cfg.n_latent):
+                raise SystemExit(
+                    f"[FATAL] AE/Flow mismatch: AE(d_model={int(ae.cfg.d_model)}, n_latent={int(ae.cfg.n_latent)}) "
+                    f"vs Flow(d_model={int(flow_cfg.d_model)}, n_latent={int(flow_cfg.n_latent)})."
+                )
+        elif str(flow_target) == "vae_mu":
+            if int(ae.cfg.vae_dim) <= 0:
+                raise SystemExit("[FATAL] flow_target=vae_mu requires AE checkpoint with vae_dim>0.")
+            if int(flow_cfg.d_model) != int(ae.cfg.vae_dim) or int(flow_cfg.n_latent) != 1:
+                raise SystemExit(
+                    f"[FATAL] flow_target=vae_mu shape mismatch: expected Flow(d_model={int(ae.cfg.vae_dim)}, n_latent=1), "
+                    f"got Flow(d_model={int(flow_cfg.d_model)}, n_latent={int(flow_cfg.n_latent)})."
+                )
+        else:
+            raise SystemExit(f"[FATAL] unsupported flow_target={flow_target!r} in flow ckpt config.")
         flow = LatentFlowMatching(cfg=flow_cfg, cond_cfg=ae.decoder.cond_enc.cfg).to(device)
         flow.load_state_dict(f_state, strict=False)
         flow.eval()
@@ -1232,6 +1247,8 @@ def main() -> None:
                 if flow is None:
                     raise SystemExit("[FATAL] latent_source=flow but Flow is not loaded (missing --flow_ckpt?)")
                 z_use = flow.sample(route_cond=route_cond_use, solver_steps=cfg.flow_solver_steps, cfg_scale=float(cfg.flow_cfg_scale))
+                if str(flow_target) == "vae_mu":
+                    z_use = ae.vae_latent_to_tokens(z_use)
                 if abs(float(cfg.flow_latent_scale) - 1.0) > 1e-12:
                     z_use = z_use * float(cfg.flow_latent_scale)
 

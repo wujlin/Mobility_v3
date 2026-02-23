@@ -48,6 +48,10 @@ class WayCASDAECfg:
     latent_noise_std: float = 0.0  # Gaussian noise σ injected into z_enc (0=disable)
     drop_dest_dist_p: float = 0.0  # Prob of zeroing dest_dist bypass per batch (0=disable)
     drop_past_context_p: float = 0.0  # Prob of dropping past_context bypass per batch (0=disable)
+    # Optional β-VAE bottleneck on latent tokens.
+    # When vae_dim>0, z_tokens -> (mu,logvar) in R^vae_dim -> reparameterize -> project back to tokens.
+    vae_dim: int = 0
+    vae_beta: float = 0.0
 
 
 class WayCASDAutoEncoder(nn.Module):
@@ -99,6 +103,18 @@ class WayCASDAutoEncoder(nn.Module):
         else:
             self.segment_pos_emb = None
             self.segment_ln = None
+
+        # Optional β-VAE bottleneck over latent tokens.
+        self.vae_dim = int(cfg.vae_dim)
+        if self.vae_dim > 0:
+            flat_dim = int(cfg.n_latent) * int(cfg.d_model)
+            self.vae_to_stats = nn.Linear(flat_dim, int(self.vae_dim) * 2)
+            self.vae_from_latent = nn.Linear(int(self.vae_dim), flat_dim)
+            self.vae_logvar_clip = 10.0
+        else:
+            self.vae_to_stats = None
+            self.vae_from_latent = None
+            self.vae_logvar_clip = 10.0
         self.decoder = WayDecoder(
             cfg=WayDecoderCfg(
                 d_model=int(cfg.d_model),
@@ -128,7 +144,35 @@ class WayCASDAutoEncoder(nn.Module):
             way_adj_idx=way_adj_idx,
         )
 
-    def encode(self, way_seq_pad: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+    def _apply_vae_bottleneck(self, z_tokens: torch.Tensor) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
+        """
+        Apply optional β-VAE bottleneck and return reconstructed latent tokens.
+        """
+        if int(self.vae_dim) <= 0 or self.vae_to_stats is None or self.vae_from_latent is None:
+            return z_tokens, {}
+        B, L, D = z_tokens.shape
+        flat = z_tokens.reshape(int(B), int(L) * int(D))
+        stats = self.vae_to_stats(flat)
+        mu, logvar = torch.chunk(stats, 2, dim=-1)
+        logvar = torch.clamp(logvar, min=-float(self.vae_logvar_clip), max=float(self.vae_logvar_clip))
+        if self.training:
+            std = torch.exp(0.5 * logvar)
+            eps = torch.randn_like(std)
+            z_vec = mu + eps * std
+        else:
+            z_vec = mu
+        flat_rec = self.vae_from_latent(z_vec)
+        z_rec = flat_rec.view(int(B), int(L), int(D))
+        kl = -0.5 * torch.sum(1.0 + logvar - mu.pow(2.0) - logvar.exp(), dim=-1).mean()
+        aux = {
+            "mu": mu,
+            "logvar": logvar,
+            "z_vec": z_vec,
+            "kl": kl,
+        }
+        return z_rec, aux
+
+    def encode_with_stats(self, way_seq_pad: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, Dict[str, torch.Tensor]]:
         tok, mask = self.way_enc(way_seq_pad)
         z = self.compress(tok, mask=mask)
 
@@ -153,15 +197,47 @@ class WayCASDAutoEncoder(nn.Module):
             seg = self.segment_ln(seg)
             # Keep length fixed: [global_latents, segment_latents]
             z = torch.cat([z[:, : L - S, :], seg], dim=1)
+        z, aux = self._apply_vae_bottleneck(z)
+        return z, mask, aux
+
+    def encode(self, way_seq_pad: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+        z, mask, _ = self.encode_with_stats(way_seq_pad)
         return z, mask
 
-    def compute_loss(self, batch: Dict[str, torch.Tensor], *, current_noise_std: float = 0.0) -> Tuple[torch.Tensor, Dict[str, float]]:
+    def vae_latent_to_tokens(self, z_vec: torch.Tensor) -> torch.Tensor:
+        """
+        Project VAE latent vector(s) back to token latent shape.
+        Accepts z_vec as (B,D) or (B,1,D); returns (B,n_latent,d_model).
+        """
+        if int(self.vae_dim) <= 0 or self.vae_from_latent is None:
+            raise RuntimeError("vae_latent_to_tokens called but cfg.vae_dim<=0.")
+        if z_vec.ndim == 3:
+            if int(z_vec.shape[1]) != 1:
+                raise RuntimeError(f"expected z_vec shape (B,1,D) for 3D input, got {tuple(z_vec.shape)}")
+            z_flat_in = z_vec[:, 0, :]
+        elif z_vec.ndim == 2:
+            z_flat_in = z_vec
+        else:
+            raise RuntimeError(f"expected z_vec ndim 2 or 3, got ndim={int(z_vec.ndim)}")
+        if int(z_flat_in.shape[-1]) != int(self.vae_dim):
+            raise RuntimeError(f"vae latent dim mismatch: got {int(z_flat_in.shape[-1])}, expected {int(self.vae_dim)}")
+        flat = self.vae_from_latent(z_flat_in)
+        B = int(z_flat_in.shape[0])
+        return flat.view(B, int(self.cfg.n_latent), int(self.cfg.d_model))
+
+    def compute_loss(
+        self,
+        batch: Dict[str, torch.Tensor],
+        *,
+        current_noise_std: float = 0.0,
+        current_vae_beta: float | None = None,
+    ) -> Tuple[torch.Tensor, Dict[str, float]]:
         way_seq_pad = batch["way_seq_pad"]
         route_cond = batch["route_cond"]
         trans = batch["trans"]
         target_idx = trans["target_idx"].to(dtype=torch.long)
 
-        z, _mask = self.encode(way_seq_pad)
+        z, _mask, aux = self.encode_with_stats(way_seq_pad)
 
         # SIB: inject Gaussian noise into latent during training
         noise_std = current_noise_std if current_noise_std > 0 else float(self.cfg.latent_noise_std)
@@ -181,10 +257,25 @@ class WayCASDAutoEncoder(nn.Module):
             way_embedder=self.way_enc, latent_tokens=z, route_cond=route_cond, trans=trans,
             drop_dest_dist=drop_dd, drop_past_context=drop_pc,
         )
-        loss = F.cross_entropy(logits, target_idx, reduction="mean")
+        ce_loss = F.cross_entropy(logits, target_idx, reduction="mean")
+        beta = float(self.cfg.vae_beta) if current_vae_beta is None else float(current_vae_beta)
+        beta = max(0.0, beta)
+        if "kl" in aux and beta > 0.0:
+            loss = ce_loss + beta * aux["kl"]
+            kl_loss_item = float(aux["kl"].item())
+        else:
+            loss = ce_loss
+            kl_loss_item = float(aux["kl"].item()) if "kl" in aux else 0.0
 
         with torch.no_grad():
             pred = torch.argmax(logits, dim=-1)
             acc = (pred == target_idx).float().mean() if target_idx.numel() else torch.tensor(0.0, device=loss.device)
-            stats = {"loss": float(loss.item()), "acc": float(acc.item()), "n_trans": float(int(target_idx.numel()))}
+            stats = {
+                "loss": float(loss.item()),
+                "ce_loss": float(ce_loss.item()),
+                "kl_loss": float(kl_loss_item),
+                "vae_beta": float(beta),
+                "acc": float(acc.item()),
+                "n_trans": float(int(target_idx.numel())),
+            }
         return loss, stats

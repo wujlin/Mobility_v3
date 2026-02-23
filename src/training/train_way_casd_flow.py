@@ -51,6 +51,7 @@ class TrainCfg:
     n_layers: int
     n_heads: int
     dropout: float
+    flow_target: str  # "z" | "vae_mu"
     noise_sigma: float
     solver_steps: int
     cond_dropout_p: float
@@ -259,6 +260,20 @@ def _to_device(
     return {"way_seq_pad": way_seq_pad, "route_cond": route_cond, "trans": trans}
 
 
+def _encode_flow_target(*, encoder: WayCASDAutoEncoder, way_seq_pad: torch.Tensor, flow_target: str) -> torch.Tensor:
+    tgt = str(flow_target)
+    if tgt == "z":
+        z1, _ = encoder.encode(way_seq_pad)
+        return z1
+    if tgt == "vae_mu":
+        _z, _mask, aux = encoder.encode_with_stats(way_seq_pad)
+        mu = aux.get("mu", None)
+        if not isinstance(mu, torch.Tensor):
+            raise RuntimeError("flow_target=vae_mu requires AE with cfg.vae_dim>0.")
+        return mu[:, None, :]  # (B,1,D_vae)
+    raise RuntimeError(f"unknown flow_target={tgt!r}")
+
+
 def _recon_lambda_for_epoch(*, cfg: TrainCfg, epoch: int) -> float:
     if not bool(cfg.recon_guided):
         return 0.0
@@ -373,7 +388,7 @@ def train_epoch(
     for batch in loader:
         b = _to_device(batch, device, region_seq=region_seq, need_trans=bool(cfg.recon_guided))
         with torch.no_grad():
-            z1, _ = encoder.encode(b["way_seq_pad"])
+            z1 = _encode_flow_target(encoder=encoder, way_seq_pad=b["way_seq_pad"], flow_target=str(cfg.flow_target))
         opt.zero_grad(set_to_none=True)
 
         if bool(cfg.recon_guided):
@@ -445,7 +460,7 @@ def eval_epoch(
     total_batches = 0
     for batch in loader:
         b = _to_device(batch, device, region_seq=region_seq, need_trans=bool(cfg.recon_guided))
-        z1, _ = encoder.encode(b["way_seq_pad"])
+        z1 = _encode_flow_target(encoder=encoder, way_seq_pad=b["way_seq_pad"], flow_target=str(cfg.flow_target))
         if bool(cfg.recon_guided):
             flow_loss, z_hat1, t = _flow_loss_and_one_step_denoise(flow=flow, z1=z1, route_cond=b["route_cond"])
             route_keep: Optional[torch.Tensor] = None
@@ -527,6 +542,7 @@ def build_argparser() -> argparse.ArgumentParser:
     p.add_argument("--n_layers", type=int, default=_DEFAULT_N_LAYERS)
     p.add_argument("--n_heads", type=int, default=8)
     p.add_argument("--dropout", type=float, default=0.1)
+    p.add_argument("--flow_target", type=str, default="z", choices=["z", "vae_mu"], help="Flow regression target: token latent z or VAE mu.")
     p.add_argument("--noise_sigma", type=float, default=1.0)
     p.add_argument("--solver_steps", type=int, default=20)
     p.add_argument("--cond_dropout_p", type=float, default=0.0, help="CFG training: probability to drop conditions (0=disable).")
@@ -624,6 +640,7 @@ def main() -> None:
         n_layers=int(args.n_layers),
         n_heads=int(args.n_heads),
         dropout=float(args.dropout),
+        flow_target=str(args.flow_target),
         noise_sigma=float(args.noise_sigma),
         solver_steps=int(args.solver_steps),
         cond_dropout_p=float(args.cond_dropout_p),
@@ -787,6 +804,8 @@ def main() -> None:
             decoder_past_k=int(past_k) if past_k is not None else 8,
             decoder_past_n_layers=int(past_n_layers) if past_n_layers is not None else 2,
             decoder_past_n_heads=int(past_n_heads) if past_n_heads is not None else 4,
+            vae_dim=int(ae_cfg_dict.get("vae_dim", 0)),
+            vae_beta=float(ae_cfg_dict.get("vae_beta", 0.0)),
         ),
         way_features=way_features,
         way_adj_ptr=wg["way_adj_ptr"],
@@ -814,10 +833,40 @@ def main() -> None:
     for p in ae.parameters():
         p.requires_grad_(False)
 
+    flow_target = str(cfg.flow_target)
+    if flow_target == "vae_mu" and bool(cfg.recon_guided):
+        raise SystemExit("[FATAL] --flow_target=vae_mu is incompatible with --recon_guided (decoder recon requires token latents).")
+    if flow_target == "vae_mu":
+        if int(ae.cfg.vae_dim) <= 0:
+            raise SystemExit("[FATAL] --flow_target=vae_mu requires AE checkpoint with vae_dim>0.")
+        flow_d_model = int(ae.cfg.vae_dim)
+        flow_n_latent = 1
+    else:
+        flow_d_model = int(cfg.d_model)
+        flow_n_latent = int(cfg.n_latent)
+
+    if flow_target == "z":
+        # Keep strict compatibility checks for the classic token-latent path.
+        if int(flow_d_model) != int(ae.cfg.d_model) or int(flow_n_latent) != int(ae.cfg.n_latent):
+            raise SystemExit(
+                f"[FATAL] flow_target=z requires Flow shape to match AE tokens: "
+                f"Flow(d_model={int(flow_d_model)}, n_latent={int(flow_n_latent)}) vs "
+                f"AE(d_model={int(ae.cfg.d_model)}, n_latent={int(ae.cfg.n_latent)})."
+            )
+    else:
+        if int(cfg.d_model) != int(flow_d_model) or int(cfg.n_latent) != int(flow_n_latent):
+            log.warning(
+                "flow_target=vae_mu overrides Flow shape: user(d_model=%d,n_latent=%d) -> effective(d_model=%d,n_latent=%d)",
+                int(cfg.d_model),
+                int(cfg.n_latent),
+                int(flow_d_model),
+                int(flow_n_latent),
+            )
+
     flow = LatentFlowMatching(
         cfg=LatentFlowCfg(
-            d_model=int(cfg.d_model),
-            n_latent=int(cfg.n_latent),
+            d_model=int(flow_d_model),
+            n_latent=int(flow_n_latent),
             n_layers=int(cfg.n_layers),
             n_heads=int(cfg.n_heads),
             dropout=float(cfg.dropout),
@@ -829,8 +878,13 @@ def main() -> None:
             n_regions=int(cfg.n_regions),
             region_max_len=int(cfg.region_max_len),
         ),
-        cond_cfg=ConditionEncoderCfg(d_model=int(cfg.d_model), coord_scale=1024.0),
+        cond_cfg=ConditionEncoderCfg(d_model=int(flow_d_model), coord_scale=1024.0),
     ).to(device)
+    cfg_save = asdict(cfg)
+    cfg_save["d_model"] = int(flow_d_model)
+    cfg_save["n_latent"] = int(flow_n_latent)
+    cfg_save["flow_target"] = str(flow_target)
+    cfg_save["ae_vae_dim"] = int(ae.cfg.vae_dim)
 
     opt = torch.optim.AdamW(flow.parameters(), lr=float(cfg.lr), weight_decay=float(cfg.weight_decay))
 
@@ -898,7 +952,7 @@ def main() -> None:
         torch.save(
             {
                 "model_state_dict": flow.state_dict(),
-                "config": asdict(cfg),
+                "config": cfg_save,
                 "created_at": datetime.now(tz=TZ_SHANGHAI).isoformat(),
                 "epoch": int(best_epoch),
                 "best_val_loss": float(best),
@@ -978,7 +1032,7 @@ def main() -> None:
             torch.save(
                 {
                     "model_state_dict": flow.state_dict(),
-                    "config": asdict(cfg),
+                    "config": cfg_save,
                     "created_at": datetime.now(tz=TZ_SHANGHAI).isoformat(),
                     "epoch": int(epoch),
                     "best_val_loss": float(best),
@@ -994,7 +1048,7 @@ def main() -> None:
                 {
                     "model_state_dict": flow.state_dict(),
                     "opt_state_dict": opt.state_dict(),
-                    "config": asdict(cfg),
+                    "config": cfg_save,
                     "created_at": datetime.now(tz=TZ_SHANGHAI).isoformat(),
                     "epoch": int(epoch),
                     "best_val_loss": float(best),
@@ -1025,7 +1079,7 @@ def main() -> None:
         {
             "model_state_dict": flow.state_dict(),
             "opt_state_dict": opt.state_dict(),
-            "config": asdict(cfg),
+            "config": cfg_save,
             "created_at": datetime.now(tz=TZ_SHANGHAI).isoformat(),
             "epoch": int(history[-1]["epoch"]) if history else int(start_epoch - 1),
             "best_val_loss": float(best),
@@ -1058,6 +1112,8 @@ def main() -> None:
         "start_epoch": int(start_epoch),
         "early_stop_patience": int(early_stop_patience),
         "save_every": int(save_every),
+        "flow_target": str(flow_target),
+        "flow_shape": {"d_model": int(flow_d_model), "n_latent": int(flow_n_latent)},
         "history": history,
     }
     (out_dir / "report.json").write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")

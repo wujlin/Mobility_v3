@@ -67,6 +67,10 @@ class TrainCfg:
     drop_dest_dist_p: float = 0.0
     drop_past_context_p: float = 0.0
     noise_warmup_epochs: int = 0  # Linear ramp noise_std from 0 to latent_noise_std over this many epochs
+    # β-VAE bottleneck
+    vae_dim: int = 0
+    vae_beta: float = 0.0
+    vae_beta_warmup_epochs: int = 0
     split_json: Optional[str] = None
 
 
@@ -106,43 +110,87 @@ def _subset_indices_from_route_ids(dataset: WayRouteDataset, route_ids: np.ndarr
     return np.nonzero(mask)[0].astype(np.int64, copy=False)
 
 
-def train_epoch(model: WayCASDAutoEncoder, loader: DataLoader, opt: torch.optim.Optimizer, device: torch.device, *, current_noise_std: float = 0.0) -> Dict[str, float]:
+def train_epoch(
+    model: WayCASDAutoEncoder,
+    loader: DataLoader,
+    opt: torch.optim.Optimizer,
+    device: torch.device,
+    *,
+    current_noise_std: float = 0.0,
+    current_vae_beta: Optional[float] = None,
+) -> Dict[str, float]:
     model.train()
     total_loss = 0.0
+    total_ce = 0.0
+    total_kl = 0.0
+    total_beta = 0.0
     total_acc = 0.0
     total_trans = 0
 
     for batch in loader:
         b = _to_device(batch, device)
         opt.zero_grad(set_to_none=True)
-        loss, stats = model.compute_loss(b, current_noise_std=current_noise_std)
+        loss, stats = model.compute_loss(
+            b,
+            current_noise_std=current_noise_std,
+            current_vae_beta=current_vae_beta,
+        )
         loss.backward()
         opt.step()
 
         n_trans = int(stats["n_trans"])
         total_loss += float(stats["loss"]) * n_trans
+        total_ce += float(stats.get("ce_loss", stats["loss"])) * n_trans
+        total_kl += float(stats.get("kl_loss", 0.0)) * n_trans
+        total_beta += float(stats.get("vae_beta", 0.0)) * n_trans
         total_acc += float(stats["acc"]) * n_trans
         total_trans += n_trans
 
     denom = max(1, int(total_trans))
-    return {"loss": float(total_loss / denom), "acc": float(total_acc / denom), "n_trans": float(total_trans)}
+    return {
+        "loss": float(total_loss / denom),
+        "ce_loss": float(total_ce / denom),
+        "kl_loss": float(total_kl / denom),
+        "vae_beta": float(total_beta / denom),
+        "acc": float(total_acc / denom),
+        "n_trans": float(total_trans),
+    }
 
 
 @torch.no_grad()
-def eval_epoch(model: WayCASDAutoEncoder, loader: DataLoader, device: torch.device) -> Dict[str, float]:
+def eval_epoch(
+    model: WayCASDAutoEncoder,
+    loader: DataLoader,
+    device: torch.device,
+    *,
+    current_vae_beta: Optional[float] = None,
+) -> Dict[str, float]:
     model.eval()
     total_loss = 0.0
+    total_ce = 0.0
+    total_kl = 0.0
+    total_beta = 0.0
     total_acc = 0.0
     total_trans = 0
     for batch in loader:
         b = _to_device(batch, device)
-        loss, stats = model.compute_loss(b)
+        loss, stats = model.compute_loss(b, current_vae_beta=current_vae_beta)
         n_trans = int(stats["n_trans"])
         total_loss += float(stats["loss"]) * n_trans
+        total_ce += float(stats.get("ce_loss", stats["loss"])) * n_trans
+        total_kl += float(stats.get("kl_loss", 0.0)) * n_trans
+        total_beta += float(stats.get("vae_beta", 0.0)) * n_trans
         total_acc += float(stats["acc"]) * n_trans
         total_trans += n_trans
     denom = max(1, int(total_trans))
-    return {"loss": float(total_loss / denom), "acc": float(total_acc / denom), "n_trans": float(total_trans)}
+    return {
+        "loss": float(total_loss / denom),
+        "ce_loss": float(total_ce / denom),
+        "kl_loss": float(total_kl / denom),
+        "vae_beta": float(total_beta / denom),
+        "acc": float(total_acc / denom),
+        "n_trans": float(total_trans),
+    }
 
 
 def build_argparser() -> argparse.ArgumentParser:
@@ -222,6 +270,9 @@ def build_argparser() -> argparse.ArgumentParser:
     p.add_argument("--drop_dest_dist_p", type=float, default=0.0, help="Probability of zeroing dest_dist bypass per batch (0=disable).")
     p.add_argument("--drop_past_context_p", type=float, default=0.0, help="Probability of dropping past_context bypass per batch (0=disable).")
     p.add_argument("--noise_warmup_epochs", type=int, default=0, help="Linear ramp noise_std from 0 to latent_noise_std over N epochs (0=no warmup).")
+    p.add_argument("--vae_dim", type=int, default=0, help="β-VAE bottleneck dim (0=disable).")
+    p.add_argument("--vae_beta", type=float, default=0.0, help="β coefficient for KL term (0=disable).")
+    p.add_argument("--vae_beta_warmup_epochs", type=int, default=0, help="Linear warmup epochs for β from 0 to vae_beta (0=no warmup).")
 
     # Long-run training ergonomics
     p.add_argument("--resume_ckpt", type=Path, default=None, help="Optional: resume from ckpt_last.pt/ckpt_best.pt.")
@@ -245,6 +296,12 @@ def main() -> None:
         raise SystemExit("[FATAL] --drop_past_context_p must be in [0, 1].")
     if int(args.noise_warmup_epochs) < 0:
         raise SystemExit("[FATAL] --noise_warmup_epochs must be >= 0.")
+    if int(args.vae_dim) < 0:
+        raise SystemExit("[FATAL] --vae_dim must be >= 0.")
+    if float(args.vae_beta) < 0.0:
+        raise SystemExit("[FATAL] --vae_beta must be >= 0.")
+    if int(args.vae_beta_warmup_epochs) < 0:
+        raise SystemExit("[FATAL] --vae_beta_warmup_epochs must be >= 0.")
 
     if bool(args.decoder_use_cand_contrast) and (not bool(args.decoder_use_cand_query)):
         log.warning(
@@ -289,6 +346,9 @@ def main() -> None:
         drop_dest_dist_p=float(args.drop_dest_dist_p),
         drop_past_context_p=float(args.drop_past_context_p),
         noise_warmup_epochs=int(args.noise_warmup_epochs),
+        vae_dim=int(args.vae_dim),
+        vae_beta=float(args.vae_beta),
+        vae_beta_warmup_epochs=int(args.vae_beta_warmup_epochs),
         split_json=(str(args.split_json) if args.split_json is not None else None),
     )
 
@@ -393,6 +453,8 @@ def main() -> None:
             latent_noise_std=float(cfg.latent_noise_std),
             drop_dest_dist_p=float(cfg.drop_dest_dist_p),
             drop_past_context_p=float(cfg.drop_past_context_p),
+            vae_dim=int(cfg.vae_dim),
+            vae_beta=float(cfg.vae_beta),
         ),
         way_features=way_features,
         way_adj_ptr=wg["way_adj_ptr"],
@@ -450,7 +512,7 @@ def main() -> None:
         log.info(f"resume_ckpt={args.resume_ckpt} start_epoch={start_epoch} best_val_loss={best} best_epoch={best_epoch}")
 
     if not np.isfinite(best) or best == float("inf"):
-        va0 = eval_epoch(model, val_loader, device)
+        va0 = eval_epoch(model, val_loader, device, current_vae_beta=float(cfg.vae_beta))
         best = float(va0["loss"])
         best_epoch = int(start_epoch - 1)
         log.info(f"init best_val_loss={best:.6f} from current weights (epoch={best_epoch})")
@@ -472,15 +534,63 @@ def main() -> None:
             current_noise_std = float(cfg.latent_noise_std) * ramp
         else:
             current_noise_std = float(cfg.latent_noise_std)
-        tr = train_epoch(model, train_loader, opt, device, current_noise_std=current_noise_std)
-        va = eval_epoch(model, val_loader, device)
+        if cfg.vae_beta > 0 and cfg.vae_beta_warmup_epochs > 0:
+            if int(cfg.vae_beta_warmup_epochs) <= 1:
+                beta_ramp = 1.0
+            else:
+                beta_ramp = min(
+                    1.0,
+                    max(0.0, float(int(epoch) - 1) / float(int(cfg.vae_beta_warmup_epochs) - 1)),
+                )
+            current_vae_beta = float(cfg.vae_beta) * beta_ramp
+        else:
+            current_vae_beta = float(cfg.vae_beta)
+
+        tr = train_epoch(
+            model,
+            train_loader,
+            opt,
+            device,
+            current_noise_std=current_noise_std,
+            current_vae_beta=current_vae_beta,
+        )
+        va = eval_epoch(model, val_loader, device, current_vae_beta=current_vae_beta)
         history.append({"epoch": int(epoch), "train": tr, "val": va})
-        log.info(f"epoch={epoch} train_loss={tr['loss']:.4f} train_acc={tr['acc']:.3f} val_loss={va['loss']:.4f} val_acc={va['acc']:.3f}")
+        if float(current_vae_beta) > 0 or int(cfg.vae_dim) > 0:
+            log.info(
+                "epoch=%d train_loss=%.4f(ce=%.4f kl=%.4f β=%.4f) train_acc=%.3f "
+                "val_loss=%.4f(ce=%.4f kl=%.4f β=%.4f) val_acc=%.3f",
+                int(epoch),
+                float(tr["loss"]),
+                float(tr.get("ce_loss", tr["loss"])),
+                float(tr.get("kl_loss", 0.0)),
+                float(tr.get("vae_beta", current_vae_beta)),
+                float(tr["acc"]),
+                float(va["loss"]),
+                float(va.get("ce_loss", va["loss"])),
+                float(va.get("kl_loss", 0.0)),
+                float(va.get("vae_beta", current_vae_beta)),
+                float(va["acc"]),
+            )
+        else:
+            log.info(f"epoch={epoch} train_loss={tr['loss']:.4f} train_acc={tr['acc']:.3f} val_loss={va['loss']:.4f} val_acc={va['acc']:.3f}")
 
         with hist_path.open("a", encoding="utf-8") as f:
             f.write(
                 json.dumps(
-                    {"epoch": int(epoch), "train_loss": float(tr["loss"]), "train_acc": float(tr["acc"]), "val_loss": float(va["loss"]), "val_acc": float(va["acc"])}
+                    {
+                        "epoch": int(epoch),
+                        "train_loss": float(tr["loss"]),
+                        "train_ce_loss": float(tr.get("ce_loss", tr["loss"])),
+                        "train_kl_loss": float(tr.get("kl_loss", 0.0)),
+                        "train_vae_beta": float(tr.get("vae_beta", current_vae_beta)),
+                        "train_acc": float(tr["acc"]),
+                        "val_loss": float(va["loss"]),
+                        "val_ce_loss": float(va.get("ce_loss", va["loss"])),
+                        "val_kl_loss": float(va.get("kl_loss", 0.0)),
+                        "val_vae_beta": float(va.get("vae_beta", current_vae_beta)),
+                        "val_acc": float(va["acc"]),
+                    }
                 )
                 + "\n"
             )
@@ -526,6 +636,11 @@ def main() -> None:
             "train_acc": float(tr["acc"]),
             "val_loss": float(va["loss"]),
             "val_acc": float(va["acc"]),
+            "train_ce_loss": float(tr.get("ce_loss", tr["loss"])),
+            "train_kl_loss": float(tr.get("kl_loss", 0.0)),
+            "val_ce_loss": float(va.get("ce_loss", va["loss"])),
+            "val_kl_loss": float(va.get("kl_loss", 0.0)),
+            "vae_beta": float(current_vae_beta),
             "best_val_loss": float(best),
             "best_epoch": int(best_epoch),
             "save_every": int(save_every),

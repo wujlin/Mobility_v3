@@ -200,6 +200,8 @@ def run(
             decoder_past_k=int(inferred.get("decoder_past_k", 8)),
             decoder_past_n_layers=int(ae_cfg_dict.get("decoder_past_n_layers", 2)),
             decoder_past_n_heads=int(ae_cfg_dict.get("decoder_past_n_heads", 4)),
+            vae_dim=int(ae_cfg_dict.get("vae_dim", 0)),
+            vae_beta=float(ae_cfg_dict.get("vae_beta", 0.0)),
         ),
         way_features=way_features,
         way_adj_ptr=ptr,

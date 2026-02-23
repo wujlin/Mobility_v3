@@ -502,6 +502,8 @@ def _load_ae(
             decoder_past_n_heads=int(cfg_dict.get("decoder_past_n_heads", 4)),
             segment_size=int(cfg_dict.get("segment_size", 10)),
             segment_n_latent=int(cfg_dict.get("segment_n_latent", 0)),
+            vae_dim=int(cfg_dict.get("vae_dim", 0)),
+            vae_beta=float(cfg_dict.get("vae_beta", 0.0)),
         ),
         way_features=way_features,
         way_adj_ptr=ptr,

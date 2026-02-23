@@ -721,21 +721,117 @@ On-road prior 的“数据侧核验”（用于解释跨城差异）：
 - 只训练 30 epochs（n_latent=64 E2 为 100 epochs）
 - `force_decoder_past_k=0`（不覆盖，沿用 AE 的 past_k=16）
 
-#### 7.13.2 关键发现
+#### 7.13.2 D5 补充实验结果（2026-02-23）
 
-1. **Flow 侧确认改善**：val_loss 0.203→0.129（-36%），低维 z 空间让 Flow Matching 学到更好的条件分布。
-2. **AE 侧无损**：val_acc 仅 -1.4pp，T-S=+62pp 与 n_latent=64 持平，decoder 完全保留 z 利用能力。
-3. **E2 posterior collapse 与维度无关**：n_latent=8 E2 的 T-S=+8.6pp（甚至比 n_latent=64 的 +10pp 更差），说明 posterior collapse 是 E2 joint finetune 的结构性问题，而非 z 维度问题。
+- 目录：`_sync/wsa/pi_verify/20260219_porto_d1_nlatent8_s0/D5_pureAE_flowz/`
+- 口径：n_routes=5000, test split, seed=0, sample_select=dest_efficient, decode_max_candidates=0
 
-#### 7.13.3 缺失实验（D5 系列）
+**D5a: Flow z 对齐诊断**
 
-> **关键遗漏**：现有 D4b 评估使用 E2 decoder（D3 ckpt）+ Flow z，但核心假说的验证点是 **跳过 E2，直接用 Pure AE decoder（D1 ckpt）+ Flow z**。
-> E2 collapse 不影响假说成立与否 — 需要的是 Flow z 质量本身是否足够好，让 T-S=+62pp 的 AE decoder 直接使用。
-
-| 实验 | 目的 | 预期 | 状态 |
+| 度量 | n_latent=64 (16384d) | n_latent=8 (2048d) | 变化 |
 |---|---|---|---|
-| D5a: Flow alignment probe | cos(flow_z, gt_z) 在 n_latent=8 是否 >> 0.427 | cos > 0.6 | **待执行** |
-| D5b: Pure AE + Flow z eval | D1 AE decoder 直接用 D2 Flow z，K=8/16 | SR >> 8.4%（n_latent=64 的值） | **待执行** |
-| D5c: E2 K16 eval | 补全 D4b 缺失的 K16 | 与 n_latent=64 K16=64.8% 对比 | **待执行** |
+| cos_mean | **0.427** | **0.334** | **-0.093 ↓** |
+| cos_p50 | 0.421 | 0.330 | -0.091 ↓ |
+| cos_p90 | — | 0.440 | — |
+| l2_mean | 357.3 | 59.1 | -83% ↓ |
+| l2_per_dim (RMSE) | **2.79** | **1.31** | **-53% ↓** |
 
-运行脚本：`run_nL8_pureAE_flowz_probe.sh`
+> **发现**：cosine 下降（0.427→0.334），但 l2_per_dim 下降 53%。这揭示了 cosine 作为跨维度对比指标的局限性——低维空间中 z 向量范数更小，相同绝对误差造成更大角度偏差。l2_per_dim 是更准确的跨维度对比：每个 latent 元素上 Flow z 距 GT z 的距离显著缩小。
+
+**D5b: Pure AE + Flow z 生成评估**
+
+| 配置 | K | SR | len_ratio p50 | loop_rate | hit_wall | fallback_rate |
+|---|---|---|---|---|---|---|
+| nL64 Pure AE + Flow z | 8 | **8.4%** | — | — | — | — |
+| **nL8 Pure AE + Flow z** | **8** | **19.6%** | **0.977** | 89.8% | 78.5% | 80.3% |
+| **nL8 Pure AE + Flow z** | **16** | **27.2%** | **0.957** | 86.7% | 71.1% | 74.6% |
+
+分 bin SR（K=16）：
+
+| Bin | n | SR | success_only loop | success_only len_ratio p50 | success_only jaccard |
+|---|---|---|---|---|---|
+| [5,10) | 289 | 37.7% | 32.1% | 0.887 | 0.350 |
+| [10,20) | 1573 | 28.9% | 51.8% | 0.943 | 0.276 |
+| [20,30) | 1351 | 21.0% | 67.6% | 1.025 | 0.229 |
+| [30,40) | 969 | 22.0% | 59.2% | 1.046 | 0.242 |
+| [40,60) | 673 | 36.3% | 39.3% | 0.947 | 0.264 |
+| [60,+) | 145 | 37.9% | 45.5% | 0.788 | 0.189 |
+
+**D5c: E2 + Flow z K=16（补全缺失）**
+
+| 配置 | K | SR | len_ratio p50 | loop_rate | hit_wall |
+|---|---|---|---|---|---|
+| nL8 E2 + Flow z | 16 | **37.9%** | **1.473** | 78.8% | 61.5% |
+| nL64 E2 + Flow z（主线） | 16 | **64.8%** | **1.887** | ~55% | — |
+
+分 bin SR（E2 K=16）：[5,10)=37.4%, [10,20)=38.9%, [20,30)=34.1%, [30,40)=35.3%, [40,60)=45.9%, [60,+)=43.5%
+
+#### 7.13.3 关键发现
+
+**发现一：cos 下降但 SR 上升 — 解码器鲁棒性才是关键杠杆**
+
+cos(flow_z, gt_z) 从 0.427 降至 0.334，但 Pure AE+Flow z SR 从 8.4% 升至 19.6%（**2.3倍**）。原因：低维 z 空间让解码器对 z 扰动更鲁棒。per-element L2 下降 53%（2.79→1.31），在更紧凑的空间中，给定绝对误差覆盖的"邻域"更大，更容易落入有效走廊的吸引域。
+
+**发现二：Pure AE 路径质量远优于 E2**
+
+nL8 Pure AE K16 的 success-only len_ratio p50 = **0.957**（接近完美），而 nL64 E2 K16 为 **1.887**（膨胀近 2 倍）。成功的路线几乎都是 GT 级别的高效路径。E2 靠 K=16 暴力搜索 + 忽略 z 来提升 SR，代价是路径质量严重退化。
+
+**发现三：E2 posterior collapse 与维度无关**
+
+nL8 E2 T-S=+8.6pp（vs nL64 +10pp）— collapse 在任何维度下都发生。这是 E2 joint finetune 的结构性问题。
+
+**发现四：长路线 SR 呈 U 型**
+
+nL8 Pure AE K16 按 bin：短程 [5,10)=37.7% → 中程 [20,30)=21.0% → 长程 [60,+)=37.9%。长路线受益于 past_context（k=16）的自纠正能力，中程路线（20-40 hops）最困难。
+
+#### 7.13.4 全景对比表
+
+| 配置 | K | SR | len_ratio p50 | T-S | 备注 |
+|---|---|---|---|---|---|
+| nL64 Pure AE + GT z | 1 | 63.7% | ~1.0 | +62pp | AE oracle 天花板 |
+| nL8 Pure AE + GT z | 1 | 63.4% | ~1.0 | +62pp | 降维几乎无损 |
+| nL64 Pure AE + Flow z | 8 | 8.4% | — | — | 灾难性 |
+| **nL8 Pure AE + Flow z** | **8** | **19.6%** | **0.977** | — | **2.3x 提升** |
+| **nL8 Pure AE + Flow z** | **16** | **27.2%** | **0.957** | — | **质量最优** |
+| nL8 E2 + Flow z | 16 | 37.9% | 1.473 | +8.6pp | E2 仍 collapse |
+| nL64 E2 + Flow z（主线） | 16 | 64.8% | 1.887 | +10pp | SR 最高但质量差 |
+| Corridor diverse oracle | 16 | 75.9% | — | — | 天花板 |
+
+#### 7.13.5 遗留缺口
+
+| 实验 | 目的 | 优先级 |
+|---|---|---|
+| nL8 Pure AE K16 OD 覆盖/多样性 | 确认 coverage 是否优于 nL64 E2 的 9.14% | **P0** |
+| nL8 latent noise augmentation AE | 在 AE 训练阶段注入噪声提升 decoder 鲁棒性 | **P1** |
+| n_latent=4 完整管线 | 验证降维趋势是否继续 | **P2** |
+
+#### 7.13.6 D5 复跑口径锁定（2026-02-23）
+
+为避免 D5 再次出现“参数默认值漂移/beam 分支混入”的口径问题，本轮使用统一脚本复跑并锁定配置：
+
+- 脚本：`run_nL8_pureAE_flowz_probe.sh`
+- 输出目录：`_sync/wsa/pi_verify/20260219_porto_d1_nlatent8_s0/D5_pureAE_flowz/`
+- 关键运行参数（来自输出 JSON `cfg` 与脚本）：
+  - `n_routes=5000`, `split_part=test`, `seed=0`
+  - `sample_select=dest_efficient`
+  - `decode_max_candidates=0`, `decode_candidate_policy=first`
+  - `compare_beam=false`（显式 `--no_compare_beam`）
+  - `eval_batch_size`: K8=256, K16=192
+  - alignment probe：`batch_size=512`, `num_workers=16`
+
+本轮复跑后，D5 关键文件均已齐备：
+- `flow_z_alignment_nL8_n5000.json`
+- `binned_pureAE_nL8_k8_dest_efficient_n5000.json`
+- `binned_pureAE_nL8_k16_dest_efficient_n5000.json`
+- `binned_e2_nL8_k16_dest_efficient_n5000.json`
+- 对应 `per_route_*.json` 与 `run_d5*.log`
+
+按 `per_route` 的 route-level 聚合统计（同口径）：
+
+| 配置 | SR | hit_wall | loop | fallback_rate | success-only len_ratio p50 | success-only len_ratio p95 | success-only jaccard mean |
+|---|---|---|---|---|---|---|---|
+| nL8 Pure AE + Flow z (K8) | 19.56% | 78.48% | 89.76% | 80.44% | 0.977 | 2.780 | 0.2665 |
+| nL8 Pure AE + Flow z (K16) | 27.18% | 71.10% | 86.72% | 72.82% | 0.957 | 2.692 | 0.2610 |
+| nL8 E2 + Flow z (K16) | 37.88% | 61.48% | 78.76% | 62.12% | 1.473 | 7.089 | 0.2142 |
+
+这版统计可作为后续 nL8 分支的“冻结口径基线”。

@@ -264,7 +264,7 @@ def main() -> None:
     rid_list = all_ids.tolist()
     seqs: List[List[int]] = []
     way_sets: List[set[int]] = []
-    od_keys: List[Tuple[int, int, int]] = []  # city, start_way, dest_way
+    od_keys: List[Tuple[int, int]] = []  # (start_way, dest_way) to align with corridor_diverse_oracle
     for rid in rid_list:
         rid_i = int(rid)
         l = int(routes.way_seq_len[rid_i])
@@ -273,12 +273,11 @@ def main() -> None:
         gt_ids = [int(x) for x in gt]
         if len(gt_ids) <= 1:
             continue
-        city = int(routes.route_city[rid_i])
         sw = int(routes.start_way[rid_i])
         dw = int(routes.dest_way[rid_i])
         seqs.append(gt_ids)
         way_sets.append(set(gt_ids))
-        od_keys.append((city, sw, dw))
+        od_keys.append((sw, dw))
 
     if len(seqs) <= 0:
         raise SystemExit("[FATAL] no valid routes after sequence extraction.")
@@ -314,16 +313,19 @@ def main() -> None:
             print(f"[encode] batch {bi+1}/{n_enc_batches} routes {i1}/{n_kept}", flush=True)
 
     # Build OD -> local indices
-    od_to_idx: Dict[Tuple[int, int, int], List[int]] = {}
+    od_to_idx: Dict[Tuple[int, int], List[int]] = {}
     for i, od in enumerate(od_keys):
         od_to_idx.setdefault(od, []).append(int(i))
 
     # Build corridor centroids per OD
-    od_centroids_np: Dict[Tuple[int, int, int], np.ndarray] = {}
+    od_centroids_np: Dict[Tuple[int, int], np.ndarray] = {}
     corridors_per_od: List[int] = []
+    n_od_ge_min_routes = 0
+    n_od_ge_min_corridors = 0
     for od, idxs in od_to_idx.items():
         if len(idxs) < int(cfg.min_routes_per_od):
             continue
+        n_od_ge_min_routes += 1
         local_sets = [way_sets[i] for i in idxs]
         labels = _cluster_by_jaccard_threshold(way_sets=local_sets, dist_thr=float(cfg.jaccard_dist_thr))
         cents: List[np.ndarray] = []
@@ -341,9 +343,13 @@ def main() -> None:
         if len(cents) >= int(cfg.min_corridors_per_od):
             od_centroids_np[od] = np.stack(cents, axis=0).astype(np.float32, copy=False)
             corridors_per_od.append(int(len(cents)))
+            n_od_ge_min_corridors += 1
 
     if len(od_centroids_np) <= 0:
-        raise SystemExit("[FATAL] no OD kept after corridor centroid filtering.")
+        raise SystemExit(
+            "[FATAL] no OD kept after corridor centroid filtering. "
+            f"od_all={len(od_to_idx)} od_ge_min_routes={n_od_ge_min_routes} od_ge_min_corridors={n_od_ge_min_corridors}"
+        )
 
     # Eval subset: only routes whose OD is kept
     eval_route_ids = np.asarray(
@@ -353,7 +359,8 @@ def main() -> None:
     eval_set = set(int(x) for x in eval_route_ids.tolist())
     print(
         f"[probe] routes_total={n_kept} routes_eval={int(eval_route_ids.size)} "
-        f"od_all={len(od_to_idx)} od_kept={len(od_centroids_np)}",
+        f"od_all={len(od_to_idx)} od_ge_min_routes={n_od_ge_min_routes} "
+        f"od_kept={len(od_centroids_np)}",
         flush=True,
     )
 
@@ -390,7 +397,7 @@ def main() -> None:
     K = int(cfg.n_samples_per_route)
     nearest_all: List[float] = []
     route_mean_all: List[float] = []
-    od_mean_map: Dict[Tuple[int, int, int], List[float]] = {}
+    od_mean_map: Dict[Tuple[int, int], List[float]] = {}
     per_route_rows: List[Dict[str, Any]] = []
     n_done = 0
     n_total = int(eval_route_ids.size)
@@ -418,7 +425,7 @@ def main() -> None:
             rid = int(route_ids_b[i])
             if rid not in eval_set:
                 continue
-            od = (int(city_b[i]), int(sw_b[i]), int(dw_b[i]))
+            od = (int(sw_b[i]), int(dw_b[i]))
             cents_np = od_centroids_np.get(od, None)
             if cents_np is None or cents_np.shape[0] <= 0:
                 continue
@@ -436,9 +443,9 @@ def main() -> None:
             per_route_rows.append(
                 {
                     "route_id": rid,
-                    "city": int(od[0]),
-                    "start_way": int(od[1]),
-                    "dest_way": int(od[2]),
+                    "city": int(city_b[i]),
+                    "start_way": int(od[0]),
+                    "dest_way": int(od[1]),
                     "n_corridors": int(cents_np.shape[0]),
                     "nearest_corridor_cos_mean": mean_i,
                     "nearest_corridor_cos_p50": p50_i,

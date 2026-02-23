@@ -1,0 +1,252 @@
+{
+  "ok": true,
+  "task": "train_way_casd_flow",
+  "created_at": "2026-02-23T00:19:00.811772+08:00",
+  "inputs": {
+    "way_routes_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD0_waydata_porto_seed0/W5_way_routes_strict_gate/way_routes_strict_gate.npz",
+    "way_graph_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD0_waydata_porto_seed0/W2_way_graph/way_graph.npz",
+    "way_features_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD0_waydata_porto_seed0/W3_way_features/way_features.npz",
+    "ae_ckpt": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD0_waydata_porto_seed0/W6_train_ae_porto_strict_candq1_past16_s0/ckpt_best.pt",
+    "region_seq_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD0_waydata_porto_seed0/region_seq_res5/region_seq_min3_max160.npz",
+    "way_regions_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD0_waydata_porto_seed0/region_sweep/way_regions_louvain_res5_seed0.npz",
+    "split_json": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD0_waydata_porto_seed0/W5_way_routes_strict_gate/od_split_min3_max160_seed0_dev10p.json"
+  },
+  "out_dir": "_sync/wsa/pi_verify/20260222_porto_flow_recon_guided_from_base_s0/train_recon_guided",
+  "best_val_loss": 0.20307949299995715,
+  "best_ckpt": "_sync/wsa/pi_verify/20260222_porto_flow_recon_guided_from_base_s0/train_recon_guided/ckpt_best.pt",
+  "last_ckpt": "_sync/wsa/pi_verify/20260222_porto_flow_recon_guided_from_base_s0/train_recon_guided/ckpt_last.pt",
+  "best_epoch": 58,
+  "start_epoch": 59,
+  "early_stop_patience": 12,
+  "save_every": 1,
+  "history": [
+    {
+      "epoch": 59,
+      "train": {
+        "loss": 0.38521405650997387,
+        "flow_loss": 0.30597478777807285,
+        "lambda_recon": 0.1,
+        "recon_loss": 0.7923926545435346,
+        "recon_acc": 0.7387455050565851,
+        "n_recon_trans": 6629.052256532066
+      },
+      "val": {
+        "loss": 0.30386139247931687,
+        "flow_loss": 0.22846683421555689,
+        "lambda_recon": 0.1,
+        "recon_loss": 0.753945573872211,
+        "recon_acc": 0.7487224866362179,
+        "n_recon_trans": 6612.568627450981
+      }
+    },
+    {
+      "epoch": 60,
+      "train": {
+        "loss": 0.32271746204471363,
+        "flow_loss": 0.24763569218104356,
+        "lambda_recon": 0.1,
+        "recon_loss": 0.7508176718075316,
+        "recon_acc": 0.7500144280050826,
+        "n_recon_trans": 6629.052256532066
+      },
+      "val": {
+        "loss": 0.28112069473547097,
+        "flow_loss": 0.2077256607658723,
+        "lambda_recon": 0.1,
+        "recon_loss": 0.7339503274244421,
+        "recon_acc": 0.754686198982538,
+        "n_recon_trans": 6612.568627450981
+      }
+    },
+    {
+      "epoch": 61,
+      "train": {
+        "loss": 0.3102034668387257,
+        "flow_loss": 0.23651239527234555,
+        "lambda_recon": 0.1,
+        "recon_loss": 0.7369106862154257,
+        "recon_acc": 0.7538716056850914,
+        "n_recon_trans": 6629.052256532066
+      },
+      "val": {
+        "loss": 0.2814853691002902,
+        "flow_loss": 0.20884916566166223,
+        "lambda_recon": 0.1,
+        "recon_loss": 0.726362011011909,
+        "recon_acc": 0.7572924494743347,
+        "n_recon_trans": 6612.568627450981
+      }
+    },
+    {
+      "epoch": 62,
+      "train": {
+        "loss": 0.30310413163518113,
+        "flow_loss": 0.23004080383483136,
+        "lambda_recon": 0.1,
+        "recon_loss": 0.7306332568374779,
+        "recon_acc": 0.755856550929099,
+        "n_recon_trans": 6629.052256532066
+      },
+      "val": {
+        "loss": 0.2756371880863227,
+        "flow_loss": 0.20382345511632807,
+        "lambda_recon": 0.1,
+        "recon_loss": 0.7181373004819832,
+        "recon_acc": 0.7597623338886336,
+        "n_recon_trans": 6612.568627450981
+      }
+    },
+    {
+      "epoch": 63,
+      "train": {
+        "loss": 0.29488383258323486,
+        "flow_loss": 0.222464124621235,
+        "lambda_recon": 0.1,
+        "recon_loss": 0.7241970544189852,
+        "recon_acc": 0.7577336644333502,
+        "n_recon_trans": 6629.052256532066
+      },
+      "val": {
+        "loss": 0.2682864221872068,
+        "flow_loss": 0.1968030988001356,
+        "lambda_recon": 0.1,
+        "recon_loss": 0.7148332046527489,
+        "recon_acc": 0.760469911145229,
+        "n_recon_trans": 6612.568627450981
+      }
+    },
+    {
+      "epoch": 64,
+      "train": {
+        "loss": 0.29279033683966005,
+        "flow_loss": 0.2205886904884687,
+        "lambda_recon": 0.1,
+        "recon_loss": 0.7220164452482573,
+        "recon_acc": 0.7581533001041186,
+        "n_recon_trans": 6629.052256532066
+      },
+      "val": {
+        "loss": 0.2660296275919559,
+        "flow_loss": 0.1943164482420566,
+        "lambda_recon": 0.1,
+        "recon_loss": 0.7171317619435927,
+        "recon_acc": 0.7601805843558966,
+        "n_recon_trans": 6612.568627450981
+      }
+    },
+    {
+      "epoch": 65,
+      "train": {
+        "loss": 0.28603446497769935,
+        "flow_loss": 0.21432425941820665,
+        "lambda_recon": 0.1,
+        "recon_loss": 0.7171020352075899,
+        "recon_acc": 0.7596331500667292,
+        "n_recon_trans": 6629.052256532066
+      },
+      "val": {
+        "loss": 0.26762043056534784,
+        "flow_loss": 0.19656976940585116,
+        "lambda_recon": 0.1,
+        "recon_loss": 0.7105065981547037,
+        "recon_acc": 0.7615070763756248,
+        "n_recon_trans": 6612.568627450981
+      }
+    },
+    {
+      "epoch": 66,
+      "train": {
+        "loss": 0.2786376597337655,
+        "flow_loss": 0.20721020547766017,
+        "lambda_recon": 0.1,
+        "recon_loss": 0.7142745137497818,
+        "recon_acc": 0.7604108326791867,
+        "n_recon_trans": 6629.052256532066
+      },
+      "val": {
+        "loss": 0.2504572836207409,
+        "flow_loss": 0.17992607445693484,
+        "lambda_recon": 0.1,
+        "recon_loss": 0.7053120720620248,
+        "recon_acc": 0.7635792014645595,
+        "n_recon_trans": 6612.568627450981
+      }
+    },
+    {
+      "epoch": 67,
+      "train": {
+        "loss": 0.27851800868318655,
+        "flow_loss": 0.20710506291967107,
+        "lambda_recon": 0.1,
+        "recon_loss": 0.7141294376017645,
+        "recon_acc": 0.7604561810538775,
+        "n_recon_trans": 6629.052256532066
+      },
+      "val": {
+        "loss": 0.2583368590065077,
+        "flow_loss": 0.18748889366785684,
+        "lambda_recon": 0.1,
+        "recon_loss": 0.7084796241685456,
+        "recon_acc": 0.7620950165916892,
+        "n_recon_trans": 6612.568627450981
+      }
+    },
+    {
+      "epoch": 68,
+      "train": {
+        "loss": 0.28027815508021314,
+        "flow_loss": 0.20906304605216708,
+        "lambda_recon": 0.1,
+        "recon_loss": 0.7121510645839211,
+        "recon_acc": 0.7613253061108805,
+        "n_recon_trans": 6629.052256532066
+      },
+      "val": {
+        "loss": 0.24899340756967955,
+        "flow_loss": 0.17869421781278125,
+        "lambda_recon": 0.1,
+        "recon_loss": 0.7029918876348757,
+        "recon_acc": 0.7640852624294805,
+        "n_recon_trans": 6612.568627450981
+      }
+    },
+    {
+      "epoch": 69,
+      "train": {
+        "loss": 0.27362445938332347,
+        "flow_loss": 0.2026827075560699,
+        "lambda_recon": 0.1,
+        "recon_loss": 0.7094175053888715,
+        "recon_acc": 0.7619571950543238,
+        "n_recon_trans": 6629.052256532066
+      },
+      "val": {
+        "loss": 0.24863058650026135,
+        "flow_loss": 0.17858831993505067,
+        "lambda_recon": 0.1,
+        "recon_loss": 0.7004226340967066,
+        "recon_acc": 0.7645938186084523,
+        "n_recon_trans": 6612.568627450981
+      }
+    },
+    {
+      "epoch": 70,
+      "train": {
+        "loss": 0.26754952797272424,
+        "flow_loss": 0.1970531873210309,
+        "lambda_recon": 0.1,
+        "recon_loss": 0.7049633903061693,
+        "recon_acc": 0.7631608433225092,
+        "n_recon_trans": 6629.052256532066
+      },
+      "val": {
+        "loss": 0.25062067047053693,
+        "flow_loss": 0.18017818325874851,
+        "lambda_recon": 0.1,
+        "recon_loss": 0.7044248604306987,
+        "recon_acc": 0.7629139224688212,
+        "n_recon_trans": 6612.568627450981
+      }
+    }
+  ]
+}

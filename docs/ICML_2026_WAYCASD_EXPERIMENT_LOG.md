@@ -639,3 +639,62 @@ On-road prior 的“数据侧核验”（用于解释跨城差异）：
 - `20260214_porto_flow_gap_diag_v2_k16_n5000_s0`：`binned_flow_k16_dest_n5000.json`（succ=0.6122, hw=0.3744, loop=0.7956, len=5.6391）；路径：`_sync/wsa/pi_verify/20260214_porto_flow_gap_diag_v2_k16_n5000_s0/`
 - `20260214_porto_rl_from_e100_lenratio_s0`：`binned_rl_k16_dest_n1000.json`（succ=0.3510, hw=0.1080, loop=0.4240, len=3.0406）；`report.json`（best_epoch=5, best_score=-0.5236）；路径：`_sync/wsa/pi_verify/20260214_porto_rl_from_e100_lenratio_s0/`
 - `20260217_porto_zenc_informativeness_batched_n5000_s0`：`zenc_info_baseline_ae_n5000.json`（T-S=0.6228）；路径：`_sync/wsa/pi_verify/20260217_porto_zenc_informativeness_batched_n5000_s0/`
+
+### 7.12 Reconstruction-Guided Flow（Porto，2026-02-22）
+
+- 目录：`_sync/wsa/pi_verify/20260222_porto_flow_recon_guided_from_base_s0/`
+- 代码路径：
+  - 训练实现：`src/training/train_way_casd_flow.py`（新增 `--recon_guided`、`recon_lambda_*`、one-step `z_hat1` 重建分支）
+  - 对齐诊断：`tools/flow_z_alignment_probe.py`
+
+#### 7.12.1 训练记录（resume from flow best）
+
+- 训练目录：`_sync/wsa/pi_verify/20260222_porto_flow_recon_guided_from_base_s0/train_recon_guided/`
+- 训练区间：`epoch 59 -> 70`（12 epochs，`lambda_recon=0.1`）
+- `report.json`：`best_val_loss=0.203079 @ epoch=58`（best 来自 resume 起点）
+- `history.jsonl` 与 `report.json` 中后段趋势：
+  - `train_flow_loss: 0.3060 -> 0.1971`
+  - `val_flow_loss: 0.2285 -> 0.1802`
+  - `train_recon_loss: 0.7924 -> 0.7050`
+  - `val_recon_loss: 0.7539 -> 0.7044`
+  - `train_recon_acc: 0.7387 -> 0.7632`
+  - `val_recon_acc: 0.7487 -> 0.7629`
+
+#### 7.12.2 Flow z 对齐诊断（训练前后）
+
+- 训练前：`flow_z_alignment_before_n5000.json`
+  - `cos_mean=0.4268, cos_p50=0.4210, l2_mean=357.30, l2_per_dim_mean=2.7914`
+- 训练后：`flow_z_alignment_after_n5000.json`
+  - `cos_mean=0.4176, cos_p50=0.4112, l2_mean=367.67, l2_per_dim_mean=2.8724`
+- 变化量（after - before）：
+  - `cos_mean=-0.0091`
+  - `cos_p50=-0.0098`
+  - `l2_mean=+10.37`
+  - `l2_per_dim_mean=+0.0810`
+
+#### 7.12.3 生成评估（K=8，dest_efficient，n=5000）
+
+- 评估文件：
+  - `eval/binned_reconflow_k8_dest_efficient_n5000.json`
+  - `eval/per_route_reconflow_k8_dest_efficient_n5000.json`
+- 口径（cfg）：
+  - `latent_source=flow`
+  - `n_samples_per_route=8`
+  - `sample_select=dest_efficient`
+  - `split_part=test`
+  - `decode_max_candidates=0, decode_candidate_policy=first`
+  - `anti_loop_penalty=2.0, anti_loop_penalty_k=4`
+- 全局结果（按 per_route 聚合）：
+  - `success_rate=0.1738`（869/5000）
+  - `hit_wall_rate=0.8096`
+  - `loop_rate=0.9152`
+  - `sample_select_fallback_rate=0.8262`
+  - `success_only_len_ratio: mean=1.3492, p50=1.0341, p75=1.5621, p95=3.3157`
+
+- 分 bin SR（来自 binned）：
+  - `[5,10)=0.2422`
+  - `[10,20)=0.1736`
+  - `[20,30)=0.1251`
+  - `[30,40)=0.1238`
+  - `[40,60)=0.2972`
+  - `[60,+)=0.2552`

@@ -1,0 +1,72 @@
+{
+  "ok": true,
+  "task": "way_casd_flow_corridor_residual_probe",
+  "created_at": "2026-02-23T15:52:59.498800+08:00",
+  "cfg": {
+    "seed": 0,
+    "device": "cuda",
+    "split_part": "test",
+    "n_routes": 5000,
+    "min_hops": 5,
+    "max_way_len": 160,
+    "jaccard_dist_thr": 0.3,
+    "min_routes_per_od": 3,
+    "min_corridors_per_od": 2,
+    "min_routes_per_corridor": 1,
+    "n_samples_per_route": 16,
+    "solver_steps": 10,
+    "cfg_scale": 1.0,
+    "route_level_threshold": 0.9
+  },
+  "inputs": {
+    "way_routes_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD0_waydata_porto_seed0/W5_way_routes_strict_gate/way_routes_strict_gate.npz",
+    "way_graph_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD0_waydata_porto_seed0/W2_way_graph/way_graph.npz",
+    "way_features_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD0_waydata_porto_seed0/W3_way_features/way_features.npz",
+    "ae_ckpt": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD0_waydata_porto_seed0/W6_train_ae_porto_strict_candq1_past16_s0/ckpt_best.pt",
+    "flow_ckpt": "_sync/wsa/pi_verify/20260212_porto_flow_xattn_regionseq_dev10p_s0/ckpt_best.pt",
+    "split_json": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD0_waydata_porto_seed0/W5_way_routes_strict_gate/od_split_min3_max160_seed0_dev10p.json",
+    "region_seq_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD0_waydata_porto_seed0/region_seq_res5/region_seq_min3_max160.npz"
+  },
+  "summary": {
+    "n_routes_total_selected": 5000,
+    "n_routes_eval": 715,
+    "n_od_all": 4140,
+    "n_od_kept": 150,
+    "corridors_per_od": {
+      "n": 150.0,
+      "mean": 4.44,
+      "p25": 3.0,
+      "p50": 3.0,
+      "p75": 4.0,
+      "p90": 6.099999999999994
+    },
+    "nearest_corridor_cos_all_samples": {
+      "n": 11440.0,
+      "mean": 0.470777581118933,
+      "p25": 0.43874021619558334,
+      "p50": 0.4685463011264801,
+      "p75": 0.4995618313550949,
+      "p90": 0.5337255477905274
+    },
+    "route_mean_nearest_corridor_cos": {
+      "n": 715.0,
+      "mean": 0.470777581118933,
+      "p25": 0.4430245216935873,
+      "p50": 0.4672351963818073,
+      "p75": 0.49343847017735243,
+      "p90": 0.5276956617832184
+    },
+    "od_mean_nearest_corridor_cos": {
+      "n": 150.0,
+      "mean": 0.467362938722554,
+      "p25": 0.43363175735188025,
+      "p50": 0.4639439024807265,
+      "p75": 0.4922009298267464,
+      "p90": 0.5241192340385169
+    },
+    "route_rate_mean_ge_threshold": 0.0,
+    "sample_rate_ge_0p90": 0.0,
+    "sample_rate_ge_0p85": 0.0
+  },
+  "ae_ckpt_strict_load_ok": true
+}

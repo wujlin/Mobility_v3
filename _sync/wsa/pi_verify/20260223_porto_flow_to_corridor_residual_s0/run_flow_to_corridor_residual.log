@@ -1,0 +1,16 @@
+[probe] selected routes=5000
+[encode] batch 5/10 routes 2560/5000
+[encode] batch 10/10 routes 5000/5000
+[probe] routes_total=5000 routes_eval=715 od_all=4140 od_ge_min_routes=154 od_kept=150
+[probe] batch 5/12 routes 320/715 route_nearest_cos_mean=0.4693 route_rate@0.90=0.0000
+[probe] batch 10/12 routes 640/715 route_nearest_cos_mean=0.4702 route_rate@0.90=0.0000
+[probe] batch 12/12 routes 715/715 route_nearest_cos_mean=0.4708 route_rate@0.90=0.0000
+[OK] saved: _sync/wsa/pi_verify/20260223_porto_flow_to_corridor_residual_s0/flow_to_nearest_corridor_residual_k16_n5000.json
+[OK] saved per-route: _sync/wsa/pi_verify/20260223_porto_flow_to_corridor_residual_s0/flow_to_nearest_corridor_residual_k16_n5000_per_route.json
+Flow->Nearest-Corridor residual | route_mean_cos=0.4708 (p50=0.4672, p90=0.5277) | sample>=0.90=0.0000
+
+/home/jinlin/miniconda3/envs/dpl/lib/python3.11/site-packages/torch/nn/modules/transformer.py:392: UserWarning: enable_nested_tensor is True, but self.use_nested_tensor is False because encoder_layer.norm_first was True
+  warnings.warn(
+/home/jinlin/miniconda3/envs/dpl/lib/python3.11/site-packages/torch/nn/modules/transformer.py:392: UserWarning: enable_nested_tensor is True, but self.use_nested_tensor is False because encoder_layer.norm_first was True
+  warnings.warn(
+

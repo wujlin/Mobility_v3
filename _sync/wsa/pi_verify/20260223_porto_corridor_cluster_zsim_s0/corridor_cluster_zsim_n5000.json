@@ -1,0 +1,65 @@
+{
+  "ok": true,
+  "task": "way_casd_corridor_cluster_z_similarity",
+  "created_at": "2026-02-23T10:44:07.061397+08:00",
+  "cfg": {
+    "seed": 0,
+    "device": "cuda",
+    "n_routes": 5000,
+    "min_hops": 5,
+    "max_way_len": 160,
+    "split_json": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD0_waydata_porto_seed0/W5_way_routes_strict_gate/od_split_min3_max160_seed0_dev10p.json",
+    "split_part": "test",
+    "min_routes_per_od": 3,
+    "min_routes_per_corridor": 2,
+    "jaccard_dist_thr": 0.3,
+    "encode_batch_size": 512,
+    "max_cross_pairs": 200000,
+    "save_per_od": false
+  },
+  "inputs": {
+    "way_routes_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD0_waydata_porto_seed0/W5_way_routes_strict_gate/way_routes_strict_gate.npz",
+    "way_graph_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD0_waydata_porto_seed0/W2_way_graph/way_graph.npz",
+    "way_features_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD0_waydata_porto_seed0/W3_way_features/way_features.npz",
+    "ae_ckpt": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD0_waydata_porto_seed0/W6_train_ae_porto_strict_candq1_past16_s0/ckpt_best.pt"
+  },
+  "ckpt_strict_load_ok": true,
+  "summary": {
+    "n_routes_eval": 5000,
+    "n_od_groups_all": 4140,
+    "n_od_groups_kept": 154,
+    "n_corridors_total": 670,
+    "n_corridors_kept": 35,
+    "within_od_cos": {
+      "mean": 0.831839237144977,
+      "p25": 0.7866489440202713,
+      "p50": 0.8297165930271149,
+      "p75": 0.8801751583814621,
+      "p90": 0.9199078738689422,
+      "n": 3568
+    },
+    "within_corridor_cos": {
+      "mean": 0.9416818430281093,
+      "p25": 0.930759847164154,
+      "p50": 0.9500855803489685,
+      "p75": 0.9688817858695984,
+      "p90": 0.9850278735160828,
+      "n": 117
+    },
+    "cross_od_cos": {
+      "mean": 0.6660966554768065,
+      "p25": 0.6343504786491394,
+      "p50": 0.675250232219696,
+      "p75": 0.7091736793518066,
+      "p90": 0.7354856491088867,
+      "n": 117
+    },
+    "within_corridor_minus_within_od_mean": 0.10984260588313233,
+    "within_corridor_minus_cross_mean": 0.2755851875513028,
+    "cross_sampling": {
+      "target_pairs": 117,
+      "obtained_pairs": 117,
+      "trials": 2048
+    }
+  }
+}

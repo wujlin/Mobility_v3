@@ -1,0 +1,8 @@
+[encode] selected routes=5000
+[encode] batch 10/10 routes 5000/5000
+[OK] saved: _sync/wsa/pi_verify/20260223_porto_corridor_cluster_zsim_s0/corridor_cluster_zsim_n5000.json
+Corridor-cluster z-sim | within_corr_mean=0.9417 (p50=0.9501, n=117) | within_od_mean=0.8318 (p50=0.8297, n=3568) | cross_mean=0.6661 (p50=0.6753, n=117)
+
+/home/jinlin/miniconda3/envs/dpl/lib/python3.11/site-packages/torch/nn/modules/transformer.py:392: UserWarning: enable_nested_tensor is True, but self.use_nested_tensor is False because encoder_layer.norm_first was True
+  warnings.warn(
+

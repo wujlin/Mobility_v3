@@ -1,0 +1,5 @@
+[OK] saved: _sync/wsa/pi_verify/20260219_porto_d1_nlatent8_s0/D6_od_coverage/od_coverage_nL8_vs_nL64_k16_from_n5000.json
+Method | Decode | Arrival | GT Coverage@K | Self-Diversity@K | n_OD
+------ | ------ | ------- | ------------- | ---------------- | ----
+nL8_PureAE_Flowz | greedy | 0.2718 | 0.0716 | 0.7175 | 154
+nL64_E2_Mainline | greedy | 0.6480 | 0.0592 | 0.6608 | 154

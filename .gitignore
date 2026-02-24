@@ -60,3 +60,4 @@ OUT_SKEL_SAMPLE1=*
 debug_*.py
 fix_*.py
 essay/
+!_sync/**/*.html

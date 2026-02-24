@@ -1,0 +1,56 @@
+{
+  "ok": true,
+  "task": "od_coverage_diversity_eval",
+  "created_at": "2026-02-24T16:21:10.384055+08:00",
+  "cfg": {
+    "k": 16,
+    "min_routes_per_od": 3,
+    "jaccard_threshold": 0.5,
+    "save_per_od": false,
+    "compat_way_routes_npz": null,
+    "compat_split_json": null,
+    "compat_split_part": null,
+    "methods": [
+      {
+        "label": "BetaVAE64_FlowMu_K16_AL",
+        "decode": "greedy",
+        "path": "_sync/wsa/pi_verify/20260223_porto_beta_vae_flowmu_s0/B2_eval_k16_antiloop/per_route_betaVAE_flowmu_k16_dest_efficient_antiloop_n5000.json"
+      }
+    ]
+  },
+  "summary_table": [
+    {
+      "method": "BetaVAE64_FlowMu_K16_AL",
+      "decode": "greedy",
+      "arrival_rate": 0.7834,
+      "gt_coverage_at_k_mean": 0.13656266172499937,
+      "self_diversity_at_k_mean": 0.5316290293772025,
+      "n_od_groups_kept": 154
+    }
+  ],
+  "methods": {
+    "BetaVAE64_FlowMu_K16_AL": {
+      "decode": "greedy",
+      "source_json": "_sync/wsa/pi_verify/20260223_porto_beta_vae_flowmu_s0/B2_eval_k16_antiloop/per_route_betaVAE_flowmu_k16_dest_efficient_antiloop_n5000.json",
+      "n_routes": 5000,
+      "arrival_rate": 0.7834,
+      "n_od_groups_all": 4140,
+      "n_od_groups_kept": 154,
+      "n_od_groups_no_success": 14,
+      "gt_coverage_at_k": {
+        "mean": 0.13656266172499937,
+        "p25": 0.0,
+        "p50": 0.0,
+        "p75": 0.12987012987012986,
+        "n": 154
+      },
+      "self_diversity_at_k": {
+        "mean": 0.5316290293772025,
+        "p25": 0.2994971352554651,
+        "p50": 0.590964590964591,
+        "p75": 0.7560994560994562,
+        "n": 131
+      }
+    }
+  }
+}

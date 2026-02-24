@@ -1,7 +1,7 @@
 {
   "ok": true,
   "task": "od_coverage_diversity_eval",
-  "created_at": "2026-02-24T20:27:44.774018+08:00",
+  "created_at": "2026-02-24T20:38:54.326943+08:00",
   "cfg": {
     "k": 16,
     "min_routes_per_od": 3,
@@ -19,12 +19,12 @@
       {
         "label": "RNN_AR_b10",
         "decode": "beam",
-        "path": "_sync/wsa/pi_verify/20260221_porto_baseline_quality_n5000_s0/per_route_rnn_beam10_n5000.json"
+        "path": "_sync/wsa/pi_verify/20260224_porto_baseline_eval_viz_bundle_s0/baseline_eval/per_route_rnn_beam10_n5000.json"
       },
       {
         "label": "Transformer_AR_b10",
         "decode": "beam",
-        "path": "_sync/wsa/pi_verify/20260221_porto_baseline_quality_n5000_s0/per_route_transformer_beam10_n5000.json"
+        "path": "_sync/wsa/pi_verify/20260224_porto_baseline_eval_viz_bundle_s0/baseline_eval/per_route_transformer_beam10_n5000.json"
       }
     ]
   },
@@ -1314,7 +1314,7 @@
     },
     "RNN_AR_b10": {
       "decode": "beam",
-      "source_json": "_sync/wsa/pi_verify/20260221_porto_baseline_quality_n5000_s0/per_route_rnn_beam10_n5000.json",
+      "source_json": "_sync/wsa/pi_verify/20260224_porto_baseline_eval_viz_bundle_s0/baseline_eval/per_route_rnn_beam10_n5000.json",
       "n_routes": 5000,
       "arrival_rate": 0.1928,
       "n_od_groups_all": 4140,
@@ -2571,7 +2571,7 @@
     },
     "Transformer_AR_b10": {
       "decode": "beam",
-      "source_json": "_sync/wsa/pi_verify/20260221_porto_baseline_quality_n5000_s0/per_route_transformer_beam10_n5000.json",
+      "source_json": "_sync/wsa/pi_verify/20260224_porto_baseline_eval_viz_bundle_s0/baseline_eval/per_route_transformer_beam10_n5000.json",
       "n_routes": 5000,
       "arrival_rate": 0.2322,
       "n_od_groups_all": 4140,

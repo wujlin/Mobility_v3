@@ -1,0 +1,71 @@
+{
+  "ok": true,
+  "task": "waycasd_plot_od_hero_figure",
+  "selected_od": {
+    "city": 0,
+    "start_way": 7529,
+    "dest_way": 12394,
+    "gt_hops_median": 18.0,
+    "phasec_row": {
+      "start_way": 7529,
+      "dest_way": 12394,
+      "n_gt_routes": 5,
+      "n_pred_success_used": 5,
+      "gt_coverage_at_k": 0.4,
+      "self_diversity_at_k": 0.8659417524749401
+    }
+  },
+  "methods": [
+    {
+      "label": "RNN_AR_b10",
+      "decode": "beam",
+      "path": "_sync/wsa/pi_verify/20260224_porto_baseline_eval_viz_bundle_s0/baseline_eval/per_route_rnn_beam10_n5000.json"
+    },
+    {
+      "label": "Transformer_AR_b10",
+      "decode": "beam",
+      "path": "_sync/wsa/pi_verify/20260224_porto_baseline_eval_viz_bundle_s0/baseline_eval/per_route_transformer_beam10_n5000.json"
+    },
+    {
+      "label": "BetaVAE64_FlowMu_K16_AL",
+      "decode": "greedy",
+      "path": "_sync/wsa/pi_verify/20260223_porto_beta_vae_flowmu_s0/B2_eval_k16_antiloop/per_route_betaVAE_flowmu_k16_dest_efficient_antiloop_n5000.json"
+    }
+  ],
+  "pretty_method_labels": {
+    "RNN_AR_b10": "RNN",
+    "Transformer_AR_b10": "Transformer",
+    "BetaVAE64_FlowMu_K16_AL": "BetaVAE64_FlowMu_K16_AL"
+  },
+  "method_meta": {
+    "RNN_AR_b10": {
+      "n_routes_od": 5,
+      "n_success_od": 0,
+      "n_unique_drawn": 0
+    },
+    "Transformer_AR_b10": {
+      "n_routes_od": 5,
+      "n_success_od": 0,
+      "n_unique_drawn": 0
+    },
+    "BetaVAE64_FlowMu_K16_AL": {
+      "n_routes_od": 5,
+      "n_success_od": 5,
+      "n_unique_drawn": 5
+    }
+  },
+  "inputs": {
+    "phasec_json": "_sync/wsa/pi_verify/20260224_porto_baseline_eval_viz_bundle_s0/phaseC/od_coverage_diversity_b2_rnn_tr_k16_n5000.json",
+    "way_features_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD0_waydata_porto_seed0/W3_way_features/way_features.npz",
+    "coord_mode": "latlon",
+    "use_basemap": true,
+    "basemap_active_final": false,
+    "city_grid_meta": {
+      "0": "/home/jinlin/data/geoexplicit_data/porto_taxi/semantic/osm_road_prob_meta.json"
+    }
+  },
+  "outputs": {
+    "png": "_sync/wsa/pi_verify/20260224_porto_baseline_eval_viz_bundle_s0/viz/figA_hero/hero_od_city0_7529_12394.png",
+    "pdf": "_sync/wsa/pi_verify/20260224_porto_baseline_eval_viz_bundle_s0/viz/figA_hero/hero_od_city0_7529_12394.pdf"
+  }
+}

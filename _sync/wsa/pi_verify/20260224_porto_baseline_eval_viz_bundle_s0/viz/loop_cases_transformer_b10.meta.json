@@ -1,0 +1,16 @@
+{
+  "ok": true,
+  "task": "waycasd_plot_loop_leaflet",
+  "created_at": "2026-02-24T20:39:03.579756+08:00",
+  "inputs": {
+    "per_route_json": "_sync/wsa/pi_verify/20260224_porto_baseline_eval_viz_bundle_s0/baseline_eval/per_route_transformer_beam10_n5000.json",
+    "way_features_npz": "/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD0_waydata_porto_seed0/W3_way_features/way_features.npz",
+    "mode": "beam",
+    "city": 0,
+    "only_failed": true,
+    "sort_by": "loop_len",
+    "max_cases": 10
+  },
+  "n_selected": 10,
+  "out_html": "_sync/wsa/pi_verify/20260224_porto_baseline_eval_viz_bundle_s0/viz/loop_cases_transformer_b10.html"
+}

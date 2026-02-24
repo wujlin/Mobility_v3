@@ -1,0 +1,61 @@
+>>> [EVAL_RNN_B10_N5000] SKIP (reuse existing: _sync/wsa/pi_verify/20260224_porto_baseline_eval_viz_bundle_s0/baseline_eval/per_route_rnn_beam10_n5000.json)
+>>> [EVAL_TRANSFORMER_B10_N5000] SKIP (reuse existing: _sync/wsa/pi_verify/20260224_porto_baseline_eval_viz_bundle_s0/baseline_eval/per_route_transformer_beam10_n5000.json)
+
+======================================================================
+>>> [PHASEC_B2_RNN_TR_K16] START
+======================================================================
+[OK] saved: _sync/wsa/pi_verify/20260224_porto_baseline_eval_viz_bundle_s0/phaseC/od_coverage_diversity_b2_rnn_tr_k16_n5000.json
+Method | Decode | Arrival | GT Coverage@K | Self-Diversity@K | n_OD
+------ | ------ | ------- | ------------- | ---------------- | ----
+BetaVAE64_FlowMu_K16_AL | greedy | 0.7834 | 0.3854 | 0.5316 | 154
+RNN_AR_b10 | beam | 0.1928 | 0.0774 | 0.1857 | 154
+Transformer_AR_b10 | beam | 0.2322 | 0.0807 | 0.2616 | 154
+
+>>> [PHASEC_B2_RNN_TR_K16] OK
+======================================================================
+
+======================================================================
+>>> [SUCCESS_ONLY_SUMMARY_B2_RNN_TR] START
+======================================================================
+>>> [SUCCESS_ONLY_SUMMARY_B2_RNN_TR] OK
+======================================================================
+
+======================================================================
+>>> [VIZ_HERO_OD_B2_RNN_TR] START
+======================================================================
+[WARN] basemap render failed, fallback to local road background: HTTPSConnectionPool(host='a.basemaps.cartocdn.com', port=443): Max retries exceeded with url: /light_all/13/3897/3065.png (Caused by SSLError(SSLCertVerificationError(1, "[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: Hostname mismatch, certificate is not valid for 'a.basemaps.cartocdn.com'. (_ssl.c:1016)")))
+[OK] saved: _sync/wsa/pi_verify/20260224_porto_baseline_eval_viz_bundle_s0/viz/figA_hero/hero_od_city0_7529_12394.png
+[OK] saved: _sync/wsa/pi_verify/20260224_porto_baseline_eval_viz_bundle_s0/viz/figA_hero/hero_od_city0_7529_12394.pdf
+[OK] saved: _sync/wsa/pi_verify/20260224_porto_baseline_eval_viz_bundle_s0/viz/figA_hero/hero_od_city0_7529_12394.meta.json
+
+>>> [VIZ_HERO_OD_B2_RNN_TR] OK
+======================================================================
+
+======================================================================
+>>> [VIZ_LOOP_LEAFLET_B2] START
+======================================================================
+[OK] saved: _sync/wsa/pi_verify/20260224_porto_baseline_eval_viz_bundle_s0/viz/loop_cases_b2_k16_antiloop.html
+[OK] saved: _sync/wsa/pi_verify/20260224_porto_baseline_eval_viz_bundle_s0/viz/loop_cases_b2_k16_antiloop.meta.json
+
+>>> [VIZ_LOOP_LEAFLET_B2] OK
+======================================================================
+
+======================================================================
+>>> [VIZ_LOOP_LEAFLET_TRANSFORMER] START
+======================================================================
+[OK] saved: _sync/wsa/pi_verify/20260224_porto_baseline_eval_viz_bundle_s0/viz/loop_cases_transformer_b10.html
+[OK] saved: _sync/wsa/pi_verify/20260224_porto_baseline_eval_viz_bundle_s0/viz/loop_cases_transformer_b10.meta.json
+
+>>> [VIZ_LOOP_LEAFLET_TRANSFORMER] OK
+======================================================================
+
+======================================================================
+>>> [VIZ_LEN_RATIO_HIST] START
+======================================================================
+>>> [VIZ_LEN_RATIO_HIST] OK
+======================================================================
+
+======================================================================
+DONE: Porto baseline eval + visualization 全部完成
+OUT_ROOT: _sync/wsa/pi_verify/20260224_porto_baseline_eval_viz_bundle_s0
+======================================================================

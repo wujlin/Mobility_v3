@@ -245,14 +245,36 @@ for name, p in targets.items():
         print(f"{name} | MISSING")
         continue
     d = json.loads(p.read_text())
-    g = d.get("global", {})
-    succ = float(g.get("success_rate", 0.0))
-    hw = float(g.get("hit_wall_rate", 0.0))
-    lp = float(g.get("loop_rate", 0.0))
-    lr = float(g.get("len_ratio_mean", 0.0))
-    slr = g.get("success_only_len_ratio_p50", None)
-    slr = float(slr) if slr is not None else None
-    print(f"{name} | {succ:.4f} | {hw:.4f} | {lp:.4f} | {lr:.4f} | {slr if slr is not None else 'NA'}")
+    # v2 输出结构：overall.greedy.cells[bin]；旧版可能是 global。
+    succ = hw = lp = lr = None
+    slr = None
+
+    overall = d.get("overall", {})
+    greedy = overall.get("greedy", {}) if isinstance(overall, dict) else {}
+    cells = greedy.get("cells", {}) if isinstance(greedy, dict) else {}
+    if isinstance(cells, dict) and cells:
+        n_total = sum(float(v.get("n", 0) or 0) for v in cells.values())
+        if n_total > 0:
+            succ = sum(float(v.get("n", 0) or 0) * float(v.get("success_rate", 0) or 0) for v in cells.values()) / n_total
+            hw = sum(float(v.get("n", 0) or 0) * float(v.get("hit_wall_rate", 0) or 0) for v in cells.values()) / n_total
+            lp = sum(float(v.get("n", 0) or 0) * float(v.get("loop_rate", 0) or 0) for v in cells.values()) / n_total
+            lr = sum(float(v.get("n", 0) or 0) * float(v.get("len_ratio", {}).get("mean", 0) or 0) for v in cells.values()) / n_total
+            # success-only p50 无法直接跨 bin 聚合；给出 NA，避免误导。
+            slr = None
+    else:
+        g = d.get("global", {})
+        if isinstance(g, dict):
+            succ = float(g.get("success_rate", 0.0))
+            hw = float(g.get("hit_wall_rate", 0.0))
+            lp = float(g.get("loop_rate", 0.0))
+            lr = float(g.get("len_ratio_mean", 0.0))
+            _slr = g.get("success_only_len_ratio_p50", None)
+            slr = float(_slr) if _slr is not None else None
+
+    if succ is None:
+        print(f"{name} | PARSE_FAIL")
+    else:
+        print(f"{name} | {succ:.4f} | {hw:.4f} | {lp:.4f} | {lr:.4f} | {slr if slr is not None else 'NA'}")
 PY
 
 echo ""
@@ -263,4 +285,3 @@ else
   echo "DONE: B1/B2/B3 全部完成"
 fi
 echo "======================================================================"
-

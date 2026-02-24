@@ -835,3 +835,174 @@ nL8 Pure AE K16 按 bin：短程 [5,10)=37.7% → 中程 [20,30)=21.0% → 长�
 | nL8 E2 + Flow z (K16) | 37.88% | 61.48% | 78.76% | 62.12% | 1.473 | 7.089 | 0.2142 |
 
 这版统计可作为后续 nL8 分支的“冻结口径基线”。
+
+#### 7.14 Beta-VAE + Flow(mu) 修复与 B1/B2/B3（2026-02-24，进行中）
+
+本节记录 2026-02-24 的代码修复与新一轮三实验流水线，目标是避免再次出现口径漂移与评估加载失败。
+
+##### 7.14.1 代码修复（已完成）
+
+本轮针对 `beta-vae + flow_target=vae_mu` 评估链路，修复了两个已复现故障：
+
+1. Flow 条件编码器维度错配（`64 vs 256`）
+- 现象：`way_casd_binned_eval.py` 在加载 `A2_flow_on_mu/ckpt_best.pt` 时，`cond_enc.*` 出现 size mismatch。
+- 修复：评估端构建 Flow 条件编码器时不再沿用 AE decoder 的 `d_model`，改为按 Flow ckpt 配置（含 `d_model/n_latent`）构建。
+
+2. 评估端缺少 `ConditionEncoderCfg` 导入
+- 现象：`NameError: ConditionEncoderCfg is not defined`
+- 修复：在 `src/evaluation/way_casd_binned_eval.py` 补齐导入并统一 `flow_target` 分支。
+
+相关代码路径：
+- `src/models/way_casd/way_casd.py`（β-VAE bottleneck：`vae_dim/vae_beta`）
+- `src/training/train_way_casd_autoencoder.py`（β warmup 与日志）
+- `src/training/train_way_casd_flow.py`（`--flow_target=vae_mu`）
+- `src/evaluation/way_casd_binned_eval.py`（Flow ckpt 形状适配 + `flow_target` 解码路径）
+- `src/evaluation/way_casd_zenc_informativeness.py`（AE 构造兼容 `vae_dim`）
+
+##### 7.14.2 A1/A2/A3（k8）基线结果（已完成）
+
+目录：`_sync/wsa/pi_verify/20260223_porto_beta_vae_flowmu_s0/`
+
+- A1 (`A1_beta_vae_ae/report.json`)
+  - best_epoch=99
+  - best_val_loss=0.7671
+  - 最终 val_acc≈0.748
+- A2 (`A2_flow_on_mu/report.json`)
+  - flow_target=`vae_mu`
+  - flow_shape=`d_model=64, n_latent=1`
+  - best_epoch=59, best_val_loss=0.4350
+- A3-k8 (`A3_eval_k8/binned_betaVAE_flowmu_k8_dest_efficient_n5000.json`)
+  - success_rate=0.6944
+  - loop_rate=0.5720
+  - success_only_len_ratio_mean=2.0295
+
+##### 7.14.3 B1/B2/B3 流水线（进行中）
+
+执行脚本：`run_beta_vae_b1_b2_b3.sh`
+
+执行顺序（固定口径，GPU重任务串行）：
+1. B1：现有 A1+A2，`K=16, sample_select=dest_efficient`（无 anti-loop）
+2. B2：现有 A1+A2，`K=16, dest_efficient + anti_loop(k=4, penalty=2.0)`
+3. B3：高容量 β-VAE
+   - AE：`vae_dim=128, vae_beta=0.005, beta_warmup=30, n_epochs=150`
+   - Flow：`flow_target=vae_mu`（μ∈R^128）
+   - Eval：`K=16, dest_efficient`
+
+统一评估口径（B1/B2/B3）：
+- `split_part=test`, `n_routes=5000`, `seed=0`
+- `decode_max_candidates=0`, `decode_candidate_policy=first`
+- `city_grid_meta` 必传（meters 口径）
+- `no_compare_beam`, `eval_batch_size=256`
+
+输出目录：
+- B1：`_sync/wsa/pi_verify/20260223_porto_beta_vae_flowmu_s0/B1_eval_k16/`
+- B2：`_sync/wsa/pi_verify/20260223_porto_beta_vae_flowmu_s0/B2_eval_k16_antiloop/`
+- B3：`_sync/wsa/pi_verify/20260224_porto_beta_vae128_flowmu_s0/`
+
+实时日志：
+- B1：`.../B1_eval_k16/run_eval_k16_dest_efficient.log`
+- B2：`.../B2_eval_k16_antiloop/run_eval_k16_dest_efficient_antiloop.log`
+- B3-AE：`.../A1_beta_vae128_ae/run_train_beta_vae128.log`
+- B3-Flow：`.../A2_flow_on_mu128/run_train_flow_mu128.log`
+- B3-Eval：`.../A3_eval_k16/run_eval_k16_dest_efficient.log`
+
+> 状态：已完成（2026-02-24），下述为最终结果。
+
+##### 7.14.4 B1/B2/B3 最终结果（已回填）
+
+结果文件：
+- B1：`_sync/wsa/pi_verify/20260223_porto_beta_vae_flowmu_s0/B1_eval_k16/binned_betaVAE_flowmu_k16_dest_efficient_n5000.json`
+- B2：`_sync/wsa/pi_verify/20260223_porto_beta_vae_flowmu_s0/B2_eval_k16_antiloop/binned_betaVAE_flowmu_k16_dest_efficient_antiloop_n5000.json`
+- B3：`_sync/wsa/pi_verify/20260224_porto_beta_vae128_flowmu_s0/A3_eval_k16/binned_betaVAE128_flowmu_k16_dest_efficient_n5000.json`
+
+> 说明：该批 `binned` 指标位于 `overall.greedy.cells`（按 bin 存储），全局值为按 `n` 加权。之前终端打印为 0 的原因是汇总脚本误读 `global` 字段。
+
+| 配置 | success_rate | hit_wall_rate | loop_rate | fallback_rate | len_ratio_mean |
+|---|---:|---:|---:|---:|---:|
+| A3-k8（vae64基线） | 0.6944 | 0.2972 | 0.5720 | 0.3056 | 3.6602 |
+| **B1: vae64, K16** | **0.7018** | **0.2928** | **0.6014** | **0.2982** | **3.2701** |
+| **B2: vae64, K16 + anti-loop** | **0.7834** | **0.2086** | **0.4126** | **0.2166** | **3.2143** |
+| **B3: vae128, K16** | **0.5350** | **0.4502** | **0.7350** | **0.4650** | **4.5517** |
+
+按目标对照：
+- B1 目标（预期 SR>80%）：**未达成**（70.18%）。
+- B2 目标（零训练 anti-loop 提升）：**达成**，SR 显著提升到 **78.34%**，loop 从 0.6014 降到 **0.4126**。
+- B3 目标（SR≥70%, len_ratio_p50≤1.2）：**未达成**。B3 SR=53.5%，len_ratio 全体中位数约 3.08（success-only 中位数约 1.25）。
+
+B3 训练端（供定位）：
+- AE128：`A1_beta_vae128_ae/report.json`，best_epoch=148, best_val_loss=0.7099, 最终 val_acc≈0.786
+- Flow(mu128)：`A2_flow_on_mu128/report.json`，best_epoch=77, best_val_loss=0.5726（显著差于 mu64 的 0.4350）
+
+结论（本轮）：
+- 当前最优是 **B2（vae64 + K16 + anti-loop）**。
+- 提升主要来自推理约束（anti-loop），不是增大 `vae_dim`。
+
+##### 7.14.5 统计口径补充（per_route success-only + 汇总脚本修正）
+
+为避免后续口径混淆，本节补充 `per_route` 聚合指标与脚本修正点。
+
+`per_route` 文件：
+- A3-k8：`_sync/wsa/pi_verify/20260223_porto_beta_vae_flowmu_s0/A3_eval_k8/per_route_betaVAE_flowmu_k8_dest_efficient_n5000.json`
+- B1-k16：`_sync/wsa/pi_verify/20260223_porto_beta_vae_flowmu_s0/B1_eval_k16/per_route_betaVAE_flowmu_k16_dest_efficient_n5000.json`
+- B2-k16+AL：`_sync/wsa/pi_verify/20260223_porto_beta_vae_flowmu_s0/B2_eval_k16_antiloop/per_route_betaVAE_flowmu_k16_dest_efficient_antiloop_n5000.json`
+- B3-k16(vae128)：`_sync/wsa/pi_verify/20260224_porto_beta_vae128_flowmu_s0/A3_eval_k16/per_route_betaVAE128_flowmu_k16_dest_efficient_n5000.json`
+
+`per_route` 计算逻辑：
+- 路由级样本来自 `per_route[*].greedy`
+- `success_only_*` 指标在 `success=true` 子集上统计
+- `p50/p95` 由 success 子集的 `len_ratio` 分位数计算
+
+| 配置 | n_success | success_only_len_ratio_p50 | success_only_len_ratio_p95 | success_only_loop_rate | success_only_jaccard_mean |
+|---|---:|---:|---:|---:|---:|
+| A3-k8 (vae64) | 3472 | 1.3314 | 5.6259 | 0.3888 | 0.2075 |
+| B1-k16 (vae64) | 3509 | 1.2380 | 4.4907 | 0.4349 | 0.2183 |
+| B2-k16+AL (vae64) | 3917 | 1.2304 | 5.2196 | 0.2548 | 0.2114 |
+| B3-k16 (vae128) | 2675 | 1.2538 | 5.8410 | 0.5110 | 0.2186 |
+
+汇总脚本修正：
+- 文件：`run_beta_vae_b1_b2_b3.sh`
+- 修正点：汇总阶段从误读 `global.*` 改为读取 `overall.greedy.cells` 并按 `n` 加权聚合；当结构异常时输出 `PARSE_FAIL` 而非 `0.0000`。
+
+##### 7.14.6 C1/C2/C3 推进（2026-02-24）
+
+本轮新增执行脚本：
+- `run_beta_vae_c2_c3.sh`
+
+###### C1（已完成）：B2 的 OD coverage/diversity
+
+输入：
+- `per_route`: `_sync/wsa/pi_verify/20260223_porto_beta_vae_flowmu_s0/B2_eval_k16_antiloop/per_route_betaVAE_flowmu_k16_dest_efficient_antiloop_n5000.json`
+
+输出：
+- `json`: `_sync/wsa/pi_verify/20260224_porto_beta_vae128_flowmu_s0/C1_od_coverage_b2/od_coverage_diversity_b2_k16_n5000.json`
+- `log`: `_sync/wsa/pi_verify/20260224_porto_beta_vae128_flowmu_s0/C1_od_coverage_b2/run_od_coverage_diversity_b2_k16_n5000.log`
+
+结果（`k=16, min_routes_per_od=3, jaccard_threshold=0.5`）：
+- Arrival: **0.7834**
+- GT Coverage@K: **0.1366**
+- Self-Diversity@K: **0.5316**
+- n_OD: **154**
+
+###### C2（待执行）：β-VAE GT μ oracle（K=1）
+
+目标：
+- 用 `latent_source=gt` 给出 β-VAE decoder 在 GT latent 下的上限口径（K=1）。
+
+脚本中对应步骤：
+- `C2_gt_mu_oracle_k1`（见 `run_beta_vae_c2_c3.sh`）
+
+输出目录（约定）：
+- `_sync/wsa/pi_verify/20260224_porto_beta_vae128_flowmu_s0/C2_gt_mu_oracle_k1/`
+
+###### C3（待执行）：修复 vae128 Flow（n_layers=6）+ K16 eval
+
+目标：
+- 在不重训 AE128 的前提下，重训 Flow on μ128（`n_layers=6`）并评估 K16。
+
+脚本中对应步骤：
+- `C3_train_flow_mu128_l6`
+- `C3_eval_k16_dest_efficient`
+
+输出目录（约定）：
+- Flow训练：`_sync/wsa/pi_verify/20260224_porto_beta_vae128_flowmu_s0/C3_flow_on_mu128_l6_fix/`
+- 评估：`_sync/wsa/pi_verify/20260224_porto_beta_vae128_flowmu_s0/C3_eval_k16_l6_fix/`

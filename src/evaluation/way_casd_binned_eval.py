@@ -15,6 +15,7 @@ import torch.nn as nn
 from src.data.way_graph.way_sequence_dataset import load_way_routes_npz
 from src.evaluation.shape_metrics import dtw_distance, frechet_distance, summarize
 from src.models.way_casd.latent_flow import LatentFlowCfg, LatentFlowMatching
+from src.models.way_casd.conditions import ConditionEncoderCfg
 from src.models.way_casd.way_casd import WayCASDAECfg, WayCASDAutoEncoder
 from src.models.way_casd.way_encoder import load_way_features_from_npz
 from src.models.way_casd.region_ar import RegionARCfg, RegionARModel

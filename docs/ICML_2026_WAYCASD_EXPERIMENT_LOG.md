@@ -1006,3 +1006,38 @@ B3 训练端（供定位）：
 输出目录（约定）：
 - Flow训练：`_sync/wsa/pi_verify/20260224_porto_beta_vae128_flowmu_s0/C3_flow_on_mu128_l6_fix/`
 - 评估：`_sync/wsa/pi_verify/20260224_porto_beta_vae128_flowmu_s0/C3_eval_k16_l6_fix/`
+
+##### 7.14.7 Baseline Eval + 可视化打包（2026-02-24）
+
+新增脚本：
+- `run_porto_baseline_eval_and_viz.sh`
+
+脚本定位：
+- 基线评估与可视化一体化流水线（Porto）。
+- 先复用已有 `RNN/Transformer` 的 `n=5000` 结果；缺失才补跑。
+- 输出 `Phase-C`、`success-only` 质量、`Hero OD`、`Loop Leaflet`、`len_ratio` 直方图。
+- 前台实时日志，不后台运行，不因单步失败直接退出（记录 `FAILED STEPS`）。
+
+本轮已完成并落盘的数据结果：
+
+1) Phase-C（B2 vs RNN vs Transformer，K=16）  
+输出：
+- `_sync/wsa/pi_verify/20260224_porto_baseline_eval_viz_bundle_s0/phaseC/od_coverage_diversity_b2_rnn_tr_k16_n5000.json`
+
+结果（`min_routes_per_od=3, jaccard_threshold=0.3`）：
+- `BetaVAE64_FlowMu_K16_AL`：Arrival **0.7834**, Coverage@K(mean) **0.3854**, Diversity@K(mean) **0.5316**, n_OD=154
+- `RNN_AR_b10`：Arrival **0.1928**, Coverage@K(mean) **0.0774**, Diversity@K(mean) **0.1857**, n_OD=154
+- `Transformer_AR_b10`：Arrival **0.2322**, Coverage@K(mean) **0.0807**, Diversity@K(mean) **0.2616**, n_OD=154
+
+2) success-only 质量汇总（从 per_route 直接聚合）  
+输出：
+- `_sync/wsa/pi_verify/20260224_porto_baseline_eval_viz_bundle_s0/success_only_quality_b2_vs_baselines_n5000.json`
+
+结果：
+- `BetaVAE64_FlowMu_K16_AL`：success=**0.7834**, success-only len_ratio p50=**1.230**, success-only loop_rate=**0.255**
+- `RNN_AR_b10`：success=**0.1928**, success-only len_ratio p50=**1.372**, success-only loop_rate=**0.235**
+- `Transformer_AR_b10`：success=**0.2322**, success-only len_ratio p50=**1.493**, success-only loop_rate=**0.399**
+
+说明：
+- 本节已完成的是“评估数值与汇总产物”。
+- `Hero/Leaflet/Histogram` 图像产物由 `run_porto_baseline_eval_and_viz.sh` 在 WSL `dpl` 环境执行生成（依赖 `matplotlib`/地图元数据路径）。

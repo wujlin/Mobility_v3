@@ -1,0 +1,66 @@
+{
+  "ok": true,
+  "task": "success_only_quality_summary",
+  "methods": {
+    "BetaVAE64_FlowMu_K16_AL": {
+      "n_routes": 5000,
+      "success_rate": 0.7834,
+      "hit_wall_rate": 0.2086,
+      "dead_end_rate": 0.008,
+      "success_only_n": 3917,
+      "success_only_loop_rate": 0.2547868266530508,
+      "success_only_len_ratio": {
+        "mean": 1.8517253019355246,
+        "p50": 1.2304307817774283,
+        "p95": 5.219635360961467,
+        "n": 3917
+      },
+      "success_only_jaccard": {
+        "mean": 0.2113598610246761,
+        "p50": 0.14814814814814814,
+        "p95": 0.5625,
+        "n": 3917
+      }
+    },
+    "RNN_AR_b10": {
+      "n_routes": 5000,
+      "success_rate": 0.1928,
+      "hit_wall_rate": 0.8072,
+      "dead_end_rate": 0.0,
+      "success_only_n": 964,
+      "success_only_loop_rate": 0.2354771784232365,
+      "success_only_len_ratio": {
+        "mean": 2.7456350469258664,
+        "p50": 1.3720283165544847,
+        "p95": 8.135992877855843,
+        "n": 964
+      },
+      "success_only_jaccard": {
+        "mean": 0.20471136385927338,
+        "p50": 0.1276595744680851,
+        "p95": 0.6,
+        "n": 964
+      }
+    },
+    "Transformer_AR_b10": {
+      "n_routes": 5000,
+      "success_rate": 0.2322,
+      "hit_wall_rate": 0.32,
+      "dead_end_rate": 0.4478,
+      "success_only_n": 1161,
+      "success_only_loop_rate": 0.3987941429801895,
+      "success_only_len_ratio": {
+        "mean": 2.625035807748826,
+        "p50": 1.4927528250010182,
+        "p95": 7.898579604111727,
+        "n": 1161
+      },
+      "success_only_jaccard": {
+        "mean": 0.19734393293188007,
+        "p50": 0.13385826771653545,
+        "p95": 0.6,
+        "n": 1161
+      }
+    }
+  }
+}

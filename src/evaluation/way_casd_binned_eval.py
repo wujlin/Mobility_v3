@@ -1046,7 +1046,16 @@ def main() -> None:
                 )
         else:
             raise SystemExit(f"[FATAL] unsupported flow_target={flow_target!r} in flow ckpt config.")
-        flow = LatentFlowMatching(cfg=flow_cfg, cond_cfg=ae.decoder.cond_enc.cfg).to(device)
+        n_route_cities_flow = int(ae.decoder.cond_enc.route_city_embed.num_embeddings)
+        rc_w = f_state.get("cond_enc.route_city_embed.weight", None)
+        if isinstance(rc_w, torch.Tensor) and rc_w.ndim == 2 and int(rc_w.shape[0]) > 0:
+            n_route_cities_flow = int(rc_w.shape[0])
+        flow_cond_cfg = ConditionEncoderCfg(
+            d_model=int(flow_cfg.d_model),
+            n_route_cities=int(n_route_cities_flow),
+            coord_scale=float(ae.decoder.cond_enc.cfg.coord_scale),
+        )
+        flow = LatentFlowMatching(cfg=flow_cfg, cond_cfg=flow_cond_cfg).to(device)
         flow.load_state_dict(f_state, strict=False)
         flow.eval()
         if bool(flow.cfg.use_region_seq) and way_region_np is None:

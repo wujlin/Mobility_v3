@@ -1,7 +1,7 @@
 # 工作站/本地环境使用说明（运行与数据落盘口径）
 
 > 目标：把“在哪跑、用哪个环境、数据落哪里、日志怎么留、常见故障怎么定位”写成一份可复现口径，避免跨机器/跨人协作时反复踩坑。  
-> 说明：**数据契约**以 `docs/DATA_CONTRACT.md` 为准；**数据目录结构**以 `docs/DATA_STRUCTURE.md` 为准；本文只记录运行环境与操作习惯的约定。
+> 说明：**数据契约**以 `docs/archive/legacy_20260225/DATA_CONTRACT.md` 为准；**数据目录结构**以 `docs/DATA_STRUCTURE.md` 为准；本文只记录运行环境与操作习惯的约定。
 
 ---
 
@@ -268,7 +268,7 @@ rsync -avP wsa:"$RAW_ROOT/experiments/<proj>/<EXP_DIR>/" \
 python tools/gen_routegen_sync_manifest.py \
   --root _sync/wsa/icml2026_routegen \
   --out_json docs/ICML_2026_ROUTEGEN_SYNC_MANIFEST.json \
-  --out_md docs/ICML_2026_ROUTEGEN_SYNC_MANIFEST.md
+  --out_md docs/archive/legacy_20260225/ICML_2026_ROUTEGEN_SYNC_MANIFEST.md
 ```
 
 ### 6.2 ICML 2026 RouteGen（Graph）最短复现命令（T3/T4）
@@ -398,7 +398,7 @@ python -m src.data.worldtrace.way_seq_stats_from_segments \
 **(0b) corridor-level 多模态 OD 扫描（推荐：用于数据筛选/PI sanity）**
 
 > 口径：按 OD-bin 聚合同一 OD 的多条 GT，使用 **way-id 序列**做 signature，并用 **LCS distance** 判定是否存在多个走廊 mode。  
-> 细节与术语区分（corridor vs corridor_type）见：`docs/WAY_CASD_METHOD.md`。
+> 细节与术语区分（corridor vs corridor_type）见：`docs/WAYCASD_METHOD_COMMITMENT.md`。
 
 ```bash
 export RAW_ROOT=/home/jinlin/data/geoexplicit_data
@@ -842,7 +842,7 @@ python -m src.data.wayback.download_wayback_tiles \
 find "$RAW_ROOT/wayback/_probe_z16_r4756" -name "*.jpg" | wc -l
 ```
 
-> Wayback 的下载/落盘约定详见 `docs/WAYBACK.md`。
+> Wayback 的下载/落盘约定详见 `docs/archive/legacy_20260225/WAYBACK.md`。
 
 ### 7.2 Census TIGER 403
 
@@ -876,7 +876,7 @@ find "$RAW_ROOT/wayback/_probe_z16_r4756" -name "*.jpg" | wc -l
 
 ## 9) 与现有文档的关系（避免口径打架）
 
-- 数据版本/坐标/时间：`docs/DATA_CONTRACT.md`
+- 数据版本/坐标/时间：`docs/archive/legacy_20260225/DATA_CONTRACT.md`
 - 数据目录与字段：`docs/DATA_STRUCTURE.md`
 - 当前主线路线图：`docs/PHASE_D_ROADMAP_OSM_TOPO_SEMANTICS.md`
-- Wayback 下载细节：`docs/WAYBACK.md`
+- Wayback 下载细节：`docs/archive/legacy_20260225/WAYBACK.md`

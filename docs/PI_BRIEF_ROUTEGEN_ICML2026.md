@@ -156,6 +156,6 @@
 
 ## 6) 你给新 PI 的“入口命令”（最短路径）
 
-1) 读这份文档（本文件） + `docs/TASK_DEFINITION.md`（协议） + `docs/DATA_CONTRACT.md`（坐标/口径）。
+1) 读这份文档（本文件） + `docs/TASK_DEFINITION.md`（协议） + `docs/archive/legacy_20260225/DATA_CONTRACT.md`（坐标/口径）。
 2) 看 routegen essay：`essay_icml_cascadetraj/main.tex`。
 3) 复现 T4 pipeline（waypoint AR + A*）：参考 `docs/WORKSTATION_GUIDE.md` 的 `wsA` 环境变量与 rsync 口径。

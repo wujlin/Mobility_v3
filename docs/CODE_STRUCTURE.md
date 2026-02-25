@@ -44,7 +44,7 @@
   - Flow（Step B）：`src/training/train_way_casd_flow.py`
 - 模型实现：`src/models/way_casd/*`
 - 采样与可视化：`src/evaluation/way_casd_sample_viz.py`
-- 方法口径（Way-CASD + corridor 定义）：`docs/WAY_CASD_METHOD.md`
+- 方法口径（Way-CASD + corridor 定义）：`docs/WAYCASD_METHOD_COMMITMENT.md`
 
 > 说明：旧路线 “GPS→node snap→bridging→(segment)” 在 1Hz 轨迹上会产生大量跳跃并被最短路填充，导致序列长度爆炸；这条线目前只用于诊断/legacy，可参考 `src/data/road_graph/audit_paths_graph_npz.py` 与 `src/data/road_graph/audit_segments_graph_routes_npz.py` 的审计输出。
 

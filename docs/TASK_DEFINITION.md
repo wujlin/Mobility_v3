@@ -24,10 +24,10 @@
 
 - **主目标**：学习“trip-level 决策 + 执行”的统一生成框架，但不把外部地图当真值。  
 - **任务定义**：KnownDestination（推理时 `d` 是合法输入，不属于泄漏）。
-- **坐标系**：WGS84 → 栅格坐标 `[y, x]`（Detroit core bbox + `1024×1024` grid；口径见 `docs/DATA_CONTRACT.md`）。
+- **坐标系**：WGS84 → 栅格坐标 `[y, x]`（Detroit core bbox + `1024×1024` grid；口径见 `docs/archive/legacy_20260225/DATA_CONTRACT.md`）。
 - **时间分辨率**：1Hz（WorldTrace 标准化后）；`dt=1s` 可以做真实时间尺度的统计（例如速度/加速度/停留）。
 - **地图使用方式**：OSM 只作为输入特征（`road_prob/topo/...`）与 soft prior（例如 `L_offroad`），不做训练期 hard cut/masked softmax。
-- **训练增强**：ATR + STM（UniTraj 的数据级策略，必须作为独立开关进入消融矩阵；见 `docs/WORDTRACE_UNITRAJ.md`）。
+- **训练增强**：ATR + STM（UniTraj 的数据级策略，必须作为独立开关进入消融矩阵；见 `docs/archive/legacy_20260225/WORDTRACE_UNITRAJ.md`）。
 
 ### Legacy（仅用于复现）：深圳 dt30（Phase C）
 
@@ -168,7 +168,7 @@ Legacy（深圳 HDF5）必须仅用 **train split** 估计：
 
 Phase D（WorldTrace×Detroit）不再把“深圳 HDF5 + nav_field”当作默认落盘形态；我们需要的合同要点是：
 
-- **可复现索引**：manifest（parquet/arrow）+ Detroit 子集切片规则（写入 `docs/DATA_CONTRACT.md`）
+- **可复现索引**：manifest（parquet/arrow）+ Detroit 子集切片规则（写入 `docs/archive/legacy_20260225/DATA_CONTRACT.md`）
 - **可复现特征**：OSM/SafeGraph/landuse 等外部特征必须带版本与参数（bbox/grid/sigma/buffer/dilation…）
 - **train-only 统计**：任何用于训练的归一化/密度/先验统计（若存在）必须标注 `split=train` 与输入指纹（sha/版本）
 

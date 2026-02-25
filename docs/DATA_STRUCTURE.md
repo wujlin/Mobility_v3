@@ -249,7 +249,7 @@ $RAW_ROOT/experiments/icml2026_routegen/WAYCASD1_waydata_rustbelt_seed0/
 **(H) Multimodal OD scan（GT corridor-level 多模态证据；用于筛选训练/评估数据）**
 
 > 口径：按 OD-bin 聚合同一 OD 的多条 GT，使用 `osm_way_id` 序列做 signature，并用 LCS distance 判定是否存在多个 corridor mode。  
-> 术语区分（corridor vs corridor_type）见：`docs/WAY_CASD_METHOD.md`。
+> 术语区分（corridor vs corridor_type）见：`docs/WAYCASD_METHOD_COMMITMENT.md`。
 
 ```text
 $RAW_ROOT/experiments/icml2026_routegen/A_mm_od_mioh_v2_*/          # 推荐：v2（way_id + LCS）

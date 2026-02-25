@@ -2,7 +2,7 @@
 
 > 口径声明：本文只记录**已跑过且在本地 `_sync/wsa/` 下可查到的结果**（主要在 `_sync/wsa/icml2026_routegen/`、`_sync/wsa/pi_verify/`、`_sync/wsa/baselines_sota_s0/`），并把关键实验的**设置/结果/结论**压缩成可审阅版本。  
 > 工作站真实落盘与环境约定见：`docs/WORKSTATION_GUIDE.md`。  
-> legacy（Map-free / raster / segment）E 系列实验索引见：`docs/ICML_2026_ROUTEGEN_SYNC_MANIFEST.md`。
+> legacy（Map-free / raster / segment）E 系列实验索引见：`docs/archive/legacy_20260225/ICML_2026_ROUTEGEN_SYNC_MANIFEST.md`。
 
 > ⚠️ 2026-02-01 更新（min_hops=5 的“论文口径”）：我们新增了一条“过滤短路线(min_hops=5)→重训AE→Oracle Decode(beam)→granularity(米)”的结果链路，产物在 `_sync/wsa/pi_verify/20260201_min5_candq1_past8_len160_s0/`（以及对应可视化 `_sync/wsa/paper_figures/waycasd_v1/min5_s0/`）。  
 > 这条链路 **不在** `_sync/wsa/icml2026_routegen/` 下，因此单独在第 0 节补充，避免 PI 误把旧口径（未过滤短路线 / 不同 ckpt）当作当前主结果。
@@ -332,7 +332,7 @@ On-road prior 的“数据侧核验”（用于解释跨城差异）：
 ## 5. 复现与查询入口（给新 PI）
 
 - 工作站跑法与目录口径：`docs/WORKSTATION_GUIDE.md`
-- legacy E 系列同步索引：`docs/ICML_2026_ROUTEGEN_SYNC_MANIFEST.md`
+- legacy E 系列同步索引：`docs/archive/legacy_20260225/ICML_2026_ROUTEGEN_SYNC_MANIFEST.md`
 - 本地结果索引：
   - 旧主线（strict_sem5）：`_sync/wsa/icml2026_routegen/`
   - PI/Partner 验证与论文口径（min5 / flow / region / fairness）：`_sync/wsa/pi_verify/`

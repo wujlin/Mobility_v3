@@ -203,6 +203,135 @@ def _analyze_method(rows: List[Dict[str, Any]], *, k: int, min_routes_per_od: in
     return out
 
 
+def _parse_tau_values(spec: str) -> List[float]:
+    s = str(spec or "").strip()
+    if not s:
+        return [round(0.1 * i, 1) for i in range(1, 10)]
+    vals: List[float] = []
+    for tok in s.split(","):
+        t = tok.strip()
+        if not t:
+            continue
+        try:
+            x = float(t)
+        except Exception:
+            raise SystemExit(f"[FATAL] invalid tau in --tau_values: {tok!r}") from None
+        if x < 0.0 or x > 1.0:
+            raise SystemExit(f"[FATAL] tau must be in [0,1], got {x}")
+        vals.append(float(x))
+    if not vals:
+        raise SystemExit("[FATAL] --tau_values parsed empty list.")
+    # unique + sorted
+    vals = sorted(set(vals))
+    return vals
+
+
+def _analyze_method_threshold_free(
+    rows: List[Dict[str, Any]], *, k: int, min_routes_per_od: int, tau_values: List[float]
+) -> Dict[str, Any]:
+    od_groups: Dict[Tuple[int, int], Dict[str, Any]] = {}
+    for r in rows:
+        key = (int(r["start_way"]), int(r["dest_way"]))
+        g = od_groups.setdefault(key, {"gt": [], "pred_success": []})
+        g["gt"].append(r["gt_way_ids"])
+        if bool(r["success"]):
+            g["pred_success"].append(r["pred_way_ids"])
+
+    kept = {k0: g for k0, g in od_groups.items() if len(g["gt"]) >= int(min_routes_per_od)}
+
+    # per-OD aggregates
+    per_od_mean_max_jacc: List[float] = []
+    per_od_cov_by_tau: Dict[float, List[float]] = {float(t): [] for t in tau_values}
+    per_od_rows: List[Dict[str, Any]] = []
+
+    # global (route-level) threshold-free aggregates
+    all_gt_max_jacc: List[float] = []
+
+    for (sw, dw), g in kept.items():
+        gt_list = g["gt"]
+        pred_succ = g["pred_success"][: int(k)]
+
+        max_jacc_per_gt: List[float] = []
+        for gt_seq in gt_list:
+            if len(pred_succ) == 0:
+                max_j = 0.0
+            else:
+                max_j = max(_seq_jaccard(gt_seq, pr) for pr in pred_succ)
+            max_jacc_per_gt.append(float(max_j))
+            all_gt_max_jacc.append(float(max_j))
+
+        mean_max_j = _mean(max_jacc_per_gt)
+        per_od_mean_max_jacc.append(float(mean_max_j))
+
+        cov_tau_row: Dict[str, float] = {}
+        for t in tau_values:
+            cov_t = float(np.mean(np.asarray([1.0 if x >= float(t) else 0.0 for x in max_jacc_per_gt], dtype=np.float64))) if max_jacc_per_gt else float("nan")
+            per_od_cov_by_tau[float(t)].append(float(cov_t))
+            cov_tau_row[f"{float(t):.3f}"] = float(cov_t)
+
+        # Only threshold-free + curve metadata, keep compact.
+        per_od_rows.append(
+            {
+                "start_way": int(sw),
+                "dest_way": int(dw),
+                "n_gt_routes": int(len(gt_list)),
+                "n_pred_success_used": int(len(pred_succ)),
+                "mean_max_jaccard_at_k": float(mean_max_j),
+                "coverage_vs_tau": cov_tau_row,
+            }
+        )
+
+    # coverage-τ mean curve and AUC
+    curve_rows: List[Dict[str, float]] = []
+    xs: List[float] = []
+    ys: List[float] = []
+    for t in tau_values:
+        covs = per_od_cov_by_tau[float(t)]
+        y = _mean(covs)
+        xs.append(float(t))
+        ys.append(float(y))
+        curve_rows.append(
+            {
+                "tau": float(t),
+                "mean": float(y),
+                "p25": _pct(covs, 25),
+                "p50": _pct(covs, 50),
+                "p75": _pct(covs, 75),
+                "n": int(len(covs)),
+            }
+        )
+
+    auc = float("nan")
+    if len(xs) >= 2:
+        x_arr = np.asarray(xs, dtype=np.float64)
+        y_arr = np.asarray(ys, dtype=np.float64)
+        span = float(np.max(x_arr) - np.min(x_arr))
+        if span > 0:
+            auc = float(np.trapezoid(y_arr, x_arr) / span)
+
+    return {
+        "mean_max_jaccard_at_k": {
+            "mean": _mean(all_gt_max_jacc),
+            "p25": _pct(all_gt_max_jacc, 25),
+            "p50": _pct(all_gt_max_jacc, 50),
+            "p75": _pct(all_gt_max_jacc, 75),
+            "p90": _pct(all_gt_max_jacc, 90),
+            "n": int(len(all_gt_max_jacc)),
+        },
+        "mean_max_jaccard_at_k_per_od": {
+            "mean": _mean(per_od_mean_max_jacc),
+            "p25": _pct(per_od_mean_max_jacc, 25),
+            "p50": _pct(per_od_mean_max_jacc, 50),
+            "p75": _pct(per_od_mean_max_jacc, 75),
+            "p90": _pct(per_od_mean_max_jacc, 90),
+            "n": int(len(per_od_mean_max_jacc)),
+        },
+        "coverage_vs_tau": curve_rows,
+        "coverage_vs_tau_auc": float(auc),
+        "per_od_threshold_free": per_od_rows,
+    }
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description="Phase C OD-level GT coverage and self-diversity analysis from per-route decode outputs.")
     ap.add_argument(
@@ -216,6 +345,12 @@ def main() -> None:
     ap.add_argument("--k", type=int, default=16, help="Use at most K successful predicted routes per OD group.")
     ap.add_argument("--min_routes_per_od", type=int, default=3, help="Keep OD groups with at least this many GT routes.")
     ap.add_argument("--jaccard_threshold", type=float, default=0.5, help="GT route is covered if max Jaccard >= threshold.")
+    ap.add_argument(
+        "--tau_values",
+        type=str,
+        default="0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9",
+        help="Comma-separated τ values for Coverage-τ curve and AUC.",
+    )
     ap.add_argument("--save_per_od", action="store_true", help="If set, keep per-OD detail rows in output JSON.")
     # Backward-compatible passthrough args: accepted but not used in this script.
     ap.add_argument("--way_routes_npz", type=Path, default=None, help="Unused in this script; accepted for compatibility.")
@@ -224,6 +359,7 @@ def main() -> None:
     args = ap.parse_args()
 
     specs = [_parse_method_spec(s) for s in list(args.method)]
+    tau_values = _parse_tau_values(str(args.tau_values))
     results: Dict[str, Any] = {}
     table: List[Dict[str, Any]] = []
 
@@ -240,8 +376,16 @@ def main() -> None:
             min_routes_per_od=int(args.min_routes_per_od),
             jacc_th=float(args.jaccard_threshold),
         )
+        tf = _analyze_method_threshold_free(
+            rows,
+            k=int(args.k),
+            min_routes_per_od=int(args.min_routes_per_od),
+            tau_values=tau_values,
+        )
+        res.update(tf)
         if not bool(args.save_per_od):
             res.pop("per_od", None)
+            res.pop("per_od_threshold_free", None)
         results[s.label] = {
             "decode": s.decode,
             "source_json": str(p),
@@ -254,6 +398,8 @@ def main() -> None:
                 "arrival_rate": float(res["arrival_rate"]),
                 "gt_coverage_at_k_mean": float(res["gt_coverage_at_k"]["mean"]),
                 "self_diversity_at_k_mean": float(res["self_diversity_at_k"]["mean"]),
+                "mean_max_jaccard_at_k_mean": float(res["mean_max_jaccard_at_k"]["mean"]),
+                "coverage_vs_tau_auc": float(res["coverage_vs_tau_auc"]),
                 "n_od_groups_kept": int(res["n_od_groups_kept"]),
             }
         )
@@ -266,6 +412,7 @@ def main() -> None:
             "k": int(args.k),
             "min_routes_per_od": int(args.min_routes_per_od),
             "jaccard_threshold": float(args.jaccard_threshold),
+            "tau_values": [float(x) for x in tau_values],
             "save_per_od": bool(args.save_per_od),
             "compat_way_routes_npz": (str(args.way_routes_npz) if args.way_routes_npz is not None else None),
             "compat_split_json": (str(args.split_json) if args.split_json is not None else None),
@@ -280,12 +427,13 @@ def main() -> None:
     out_json.parent.mkdir(parents=True, exist_ok=True)
     out_json.write_text(json.dumps(out, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     print(f"[OK] saved: {out_json}")
-    print("Method | Decode | Arrival | GT Coverage@K | Self-Diversity@K | n_OD")
-    print("------ | ------ | ------- | ------------- | ---------------- | ----")
+    print("Method | Decode | Arrival | GT Coverage@K | Self-Diversity@K | MeanMaxJ | CovTauAUC | n_OD")
+    print("------ | ------ | ------- | ------------- | ---------------- | -------- | --------- | ----")
     for row in table:
         print(
             f"{row['method']} | {row['decode']} | {row['arrival_rate']:.4f} | {row['gt_coverage_at_k_mean']:.4f} | "
-            f"{row['self_diversity_at_k_mean']:.4f} | {row['n_od_groups_kept']}"
+            f"{row['self_diversity_at_k_mean']:.4f} | {row['mean_max_jaccard_at_k_mean']:.4f} | "
+            f"{row['coverage_vs_tau_auc']:.4f} | {row['n_od_groups_kept']}"
         )
 
 

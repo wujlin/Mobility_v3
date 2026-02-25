@@ -1,0 +1,25 @@
+{
+  "ok": true,
+  "task": "coverage_tau_keypoints",
+  "source": "_sync/wsa/pi_verify/20260224_porto_baseline_eval_viz_bundle_s0/phaseC/od_coverage_diversity_b2_rnn_tr_k16_n5000_taucurve.json",
+  "methods": {
+    "BetaVAE64_FlowMu_K16_AL": {
+      "mean_max_jaccard_at_k_mean": 0.2820942557792353,
+      "coverage_vs_tau_auc": 0.2162404886329399,
+      "coverage_tau_0.3_mean": 0.3854129636597169,
+      "coverage_tau_0.5_mean": 0.13656266172499937
+    },
+    "RNN_AR_b10": {
+      "mean_max_jaccard_at_k_mean": 0.09406314637662008,
+      "coverage_vs_tau_auc": 0.04523924735978308,
+      "coverage_tau_0.3_mean": 0.07735003092145949,
+      "coverage_tau_0.5_mean": 0.022688620902906614
+    },
+    "Transformer_AR_b10": {
+      "mean_max_jaccard_at_k_mean": 0.09912759900346647,
+      "coverage_vs_tau_auc": 0.05165686248275535,
+      "coverage_tau_0.3_mean": 0.08066160030445745,
+      "coverage_tau_0.5_mean": 0.020015698587127158
+    }
+  }
+}

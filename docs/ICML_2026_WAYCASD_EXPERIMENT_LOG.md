@@ -1041,3 +1041,34 @@ B3 训练端（供定位）：
 说明：
 - 本节已完成的是“评估数值与汇总产物”。
 - `Hero/Leaflet/Histogram` 图像产物由 `run_porto_baseline_eval_and_viz.sh` 在 WSL `dpl` 环境执行生成（依赖 `matplotlib`/地图元数据路径）。
+
+###### 7.14.7-a Coverage-τ 与 threshold-free 指标补充（2026-02-25）
+
+代码更新：
+- `src/evaluation/od_coverage_diversity_eval.py`
+  - 新增 `--tau_values`（默认 `0.1..0.9`）
+  - 新增输出：
+    - `mean_max_jaccard_at_k`（threshold-free 主指标）
+    - `coverage_vs_tau`（Coverage-τ 曲线，含 mean/p25/p50/p75）
+    - `coverage_vs_tau_auc`（曲线 AUC，归一化到 `[0,1]`）
+
+结果文件：
+- `_sync/wsa/pi_verify/20260224_porto_baseline_eval_viz_bundle_s0/phaseC/od_coverage_diversity_b2_rnn_tr_k16_n5000_taucurve.json`
+- `_sync/wsa/pi_verify/20260224_porto_baseline_eval_viz_bundle_s0/phaseC/coverage_tau_keypoints_b2_rnn_tr_k16_n5000.json`
+
+关键数值（K=16）：
+- `BetaVAE64_FlowMu_K16_AL`
+  - Mean Max-Jaccard: **0.2821**
+  - Coverage-τ AUC: **0.2162**
+  - Coverage@τ=0.3: **0.3854**
+  - Coverage@τ=0.5: **0.1366**
+- `RNN_AR_b10`
+  - Mean Max-Jaccard: **0.0941**
+  - Coverage-τ AUC: **0.0452**
+  - Coverage@τ=0.3: **0.0774**
+  - Coverage@τ=0.5: **0.0227**
+- `Transformer_AR_b10`
+  - Mean Max-Jaccard: **0.0991**
+  - Coverage-τ AUC: **0.0517**
+  - Coverage@τ=0.3: **0.0807**
+  - Coverage@τ=0.5: **0.0200**

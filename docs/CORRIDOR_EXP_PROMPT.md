@@ -696,7 +696,7 @@ _sync/wsa/corridor_analysis/
 
 如有问题，先查阅：
 - `docs/corridor_analysis.md`：叙事逻辑
-- `docs/CORRIDOR_DIVERSITY_LITERATURE-2.md`：文献背景
+- `docs/CORRIDOR_DIVERSITY_LITERATURE_V2.md`：文献背景
 - `src/evaluation/way_casd_binned_eval.py`：现有评估代码参考
 
 实在不清楚再问PI。

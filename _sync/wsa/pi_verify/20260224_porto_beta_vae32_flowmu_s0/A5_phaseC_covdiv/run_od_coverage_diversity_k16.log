@@ -1,0 +1,5 @@
+[OK] saved: _sync/wsa/pi_verify/20260224_porto_beta_vae32_flowmu_s0/A5_phaseC_covdiv/od_coverage_diversity_betaVAE32_flowmu_k16_AL_n5000.json
+Method | Decode | Arrival | GT Coverage@K | Self-Diversity@K | n_OD
+------ | ------ | ------- | ------------- | ---------------- | ----
+BetaVAE32_FlowMu_K16_AL | greedy | 0.7304 | 0.3113 | 0.5023 | 154
+

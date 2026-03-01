@@ -15,13 +15,10 @@
 - `ARCHIVED`：已在 archive。
 
 ## 1) KEEP（当前主线）
-- `docs/ICML_2026_WAYCASD_EXPERIMENT_LOG.md`
+- `docs/WAYCASD_EXPERIMENT_LOG.md`
 - `docs/WAYCASD_METHOD_COMMITMENT.md`
 - `docs/WAYCASD_FINDINGS_COMMITMENT.md`
 - `docs/DATA_MIGRATION_PORTO.md`
-- `docs/WAY_CASD_ARCHITECTURE.md`
-- `docs/baseline_sota_exp.md`
-- `docs/corridor_analysis.md`
 - `docs/Literature_review/Literature_review_7.md`
 - `docs/Literature_review/Literature_review_exposureBias.md`
 - `docs/Literature_review/Literature_review_segment.md`
@@ -29,36 +26,36 @@
 ## 2) UPDATE（保留但需要整理）
 - `docs/CODE_STRUCTURE.md`（混有 RouteGen/Paper2/legacy 三套叙事）
 - `docs/DATA_STRUCTURE.md`（Detroit/WorldTrace 段落过多，Porto 口径应置顶）
-- `docs/PI_BRIEF_ROUTEGEN_ICML2026.md`（2026-01 版本，实验结论已滞后）
 - `docs/TASK_DEFINITION.md`（任务定义过宽，需拆主线与历史线）
 - `docs/WORKSTATION_GUIDE.md`（可运行但历史说明过长）
-- `docs/CORRIDOR_EXP_PROMPT.md`（建议移到 `docs/prompts/`）
-- `docs/WAY_CASD_FIGURE_PROMPT.md`（建议移到 `docs/prompts/`）
-- `docs/WAY_CASD_RESULTS_NARRATIVE.md`（与 Findings 有重叠，建议合并）
 - `docs/CORRIDOR_DIVERSITY_LITERATURE_V2.md`（文献可保留，建议统一命名）
 
-## 3) ARCHIVE（当前主线已过期/非主线）
-- `docs/CORRIDOR_DIVERSITY_LITERATURE.md`
-- `docs/DATA_CONTRACT.md`
-- `docs/DETROIT_UNDER_OVERUSE_FIELD_STATUS.md`
-- `docs/ESSAY_QUICK_GUIDE.md`
-- `docs/ICML_2026_EXPERIMENT_PLAN_ROUTEGEN.md`
-- `docs/ICML_2026_ROUTEGEN_SYNC_MANIFEST.md`
-- `docs/ICML_2026_ROUTEGEN_SYNC_MANIFEST.json`
-- `docs/Literature_review/Literature_review_avoidence.md`
-- `docs/New_story.md`
-- `docs/PHASE_D_ROADMAP_OSM_TOPO_SEMANTICS.md`
-- `docs/RESEARCH_LOG.md`
-- `docs/WAYBACK.md`
-- `docs/WAY_CASD_METHOD.md`
-- `docs/WORDTRACE_UNITRAJ.md`
-- `docs/WORLDTRACE_OWNER_AUDIT.md`
-- `docs/WORLDTRACE_SPATIAL_VIZ.md`
-- `docs/visual_style_guide.md`
-
-## 4) ARCHIVED（已归档）
+## 3) ARCHIVED（已归档，历史非主线）
 - `docs/archive/sota/SOTA_TRAJECTORY_GENERATION.md`
+- `docs/archive/legacy_20260225/CORRIDOR_DIVERSITY_LITERATURE.md`
+- `docs/archive/legacy_20260225/DATA_CONTRACT.md`
+- `docs/archive/legacy_20260225/DETROIT_UNDER_OVERUSE_FIELD_STATUS.md`
+- `docs/archive/legacy_20260225/ESSAY_QUICK_GUIDE.md`
+- `docs/archive/legacy_20260225/ICML_2026_EXPERIMENT_PLAN_ROUTEGEN.md`
+- `docs/archive/legacy_20260225/ICML_2026_ROUTEGEN_SYNC_MANIFEST.md`
+- `docs/archive/legacy_20260225/ICML_2026_ROUTEGEN_SYNC_MANIFEST.json`
+- `docs/archive/legacy_20260225/Literature_review/Literature_review_avoidence.md`
+- `docs/archive/legacy_20260225/New_story.md`
+- `docs/archive/legacy_20260225/PHASE_D_ROADMAP_OSM_TOPO_SEMANTICS.md`
+- `docs/archive/legacy_20260225/RESEARCH_LOG.md`
+- `docs/archive/legacy_20260225/WAYBACK.md`
+- `docs/archive/legacy_20260225/WAY_CASD_METHOD.md`
+- `docs/archive/legacy_20260225/WAY_CASD_ARCHITECTURE.md`
+- `docs/archive/legacy_20260225/WAY_CASD_RESULTS_NARRATIVE.md`
+- `docs/archive/legacy_20260225/WAY_CASD_FIGURE_PROMPT.md`
+- `docs/archive/legacy_20260225/CORRIDOR_EXP_PROMPT.md`
+- `docs/archive/legacy_20260225/PI_BRIEF_ROUTEGEN_ICML2026.md`
+- `docs/archive/legacy_20260225/baseline_sota_exp.md`
+- `docs/archive/legacy_20260225/corridor_analysis.md`
+- `docs/archive/legacy_20260225/WORDTRACE_UNITRAJ.md`
+- `docs/archive/legacy_20260225/WORLDTRACE_OWNER_AUDIT.md`
+- `docs/archive/legacy_20260225/WORLDTRACE_SPATIAL_VIZ.md`
+- `docs/archive/legacy_20260225/visual_style_guide.md`
 
 ## 5) 发现的结构异常
-- Git 状态显示：`docs/README.md` 被删除，仓库根目录出现未跟踪 `README.md`。
-- 该异常需先确认意图（是要把 docs 索引上移到仓库根，还是误操作）。
+- 当前无阻塞异常（主索引与归档路径已对齐）。

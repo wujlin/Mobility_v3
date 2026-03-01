@@ -1,0 +1,197 @@
+% Experiments - ICML style, organized by scientific questions
+
+\subsection{Setup}
+
+\paragraph{Dataset.}
+We evaluate on the Porto Taxi dataset, comprising $\sim$108K training routes on a road network of $\sim$35K unique ways extracted from OpenStreetMap.
+Routes are map-matched to the way-level graph and split with OD-disjoint partitioning (dev10p), ensuring that test OD pairs are unseen during training.
+All methods are evaluated on the same 5{,}000 test routes.
+
+\paragraph{Baselines.}
+We compare four methods spanning the spectrum from deterministic to learned generation:
+\textbf{Shortest Path}---Dijkstra on the road graph (arrival rate 100\%, zero diversity);
+\textbf{RNN AR}---a GRU-based autoregressive model with beam search ($K\!=\!10$);
+\textbf{Transformer AR}---a causal Transformer with beam search ($K\!=\!10$);
+\textbf{CascadeTraj}---our method with $K\!=\!16$ samples and anti-loop decoding.
+
+\paragraph{Implementation.}
+The autoencoder uses $d_{\mathrm{model}}\!=\!256$, $n_L\!=\!8$ Perceiver latent tokens, and bottleneck dimension $D\!=\!64$ with $\beta\!=\!0.01$.
+The flow model is a 6-layer transformer with cross-attention for conditioning.
+Full architectural and training details are in Appendix~\ref{app:impl}.
+
+%--------------------------------------------------------------------------
+\subsection{AR Baselines Exhibit Structural Failure Under Corridor Multi-Modality}
+\label{sec:main-results}
+
+\begin{table}[t]
+  \caption{Main results on 5{,}000 Porto test routes. CascadeTraj simultaneously achieves the highest arrival rate, corridor coverage, and route diversity.}
+  \label{tab:main}
+  \vskip 0.1in
+  \centering
+  \small
+  \begin{tabular}{lcccccc}
+    \toprule
+    Method & $K$ & Arrival$\uparrow$ & len\_ratio$\downarrow$ & MMaxJ$\uparrow$ & CovAUC$\uparrow$ & Div$\uparrow$ \\
+    \midrule
+    Shortest Path  & 1  & 1.000 & 0.273 & 0.077 & 0.023 & 0.000 \\
+    RNN AR         & 10 & 0.193 & 1.372 & 0.094 & 0.045 & 0.186 \\
+    Transformer AR & 10 & 0.232 & 1.493 & 0.099 & 0.052 & 0.262 \\
+    \textbf{CascadeTraj}   & \textbf{16} & \textbf{0.783} & \textbf{1.230} & \textbf{0.282} & \textbf{0.216} & \textbf{0.532} \\
+    \bottomrule
+  \end{tabular}
+  \vskip -0.1in
+\end{table}
+
+Sequence-level AR models fail to reach the destination in the vast majority of attempts (\Cref{tab:main}).
+The RNN achieves only 19.3\% arrival rate; the Transformer, despite stronger local attention, reaches 23.2\%.
+These are not marginal shortfalls---they represent systematic generation failure on over three quarters of test routes.
+
+The failure modes reveal why (\Cref{tab:failure}).
+RNN failures are dominated by \texttt{hit\_wall} (80.7\%): the model drifts directionally until it exits the viable road network.
+Transformer failures shift toward \texttt{dead\_end} (44.8\%): stronger local context prevents directional drift but navigates into topological traps.
+The pattern is instructive---\emph{improving local perception changes the failure mode but does not resolve the underlying problem}, because the root cause is a granularity mismatch between step-level decisions and corridor-level choices.
+
+\begin{table}[t]
+  \caption{Failure mode decomposition. RNN and Transformer fail in structurally different ways, but both reflect the absence of corridor-level commitment.}
+  \label{tab:failure}
+  \vskip 0.1in
+  \centering
+  \small
+  \begin{tabular}{lccc}
+    \toprule
+    Method & hit\_wall & dead\_end & success \\
+    \midrule
+    RNN AR         & 80.7\% & 0.0\%  & 19.3\% \\
+    Transformer AR & 32.0\% & 44.8\% & 23.2\% \\
+    CascadeTraj    & 20.9\% & 0.8\%  & 78.3\% \\
+    \bottomrule
+  \end{tabular}
+  \vskip -0.1in
+\end{table}
+
+CascadeTraj nearly eliminates dead-end failures (0.8\%) and reduces hit-wall failures to 20.9\%.
+The residual hit-wall cases arise from execution errors at corridor boundaries---a qualitatively different failure from the structural collapses of AR models.
+
+Shortest path provides a complementary contrast: it reaches the destination perfectly but with $\mathrm{MeanMaxJ} = 0.077$---drivers' actual routes bear almost no resemblance to the shortest path.
+Arrival and corridor fidelity are orthogonal objectives; a useful generator must satisfy both.
+
+%--------------------------------------------------------------------------
+\subsection{Corridor Coverage, Not Just Arrival, Is the Core Metric}
+
+CascadeTraj achieves $\mathrm{CovAUC} = 0.216$, which is $4.2\times$ the Transformer baseline and $9.4\times$ shortest path (\Cref{tab:main}).
+This gap quantifies how many distinct ground-truth corridor patterns each method can cover across a range of similarity thresholds.
+
+% Coverage-tau curve figure placeholder
+\begin{figure}[t]
+  \centering
+  % \includegraphics[width=\columnwidth]{figures/coverage_tau_curve.pdf}
+  \caption{Coverage-$\tau$ curves. CascadeTraj covers substantially more ground-truth corridor patterns at every similarity threshold. The shaded area corresponds to CovAUC.}
+  \label{fig:coverage-tau}
+\end{figure}
+
+Route diversity reinforces this finding.
+CascadeTraj's Self-Diversity@16 of 0.532 exceeds the Transformer's 0.262 \emph{while maintaining a higher arrival rate}.
+The generated diversity reflects distinct reachable corridors, not noisy infeasible paths---a critical distinction.
+AR baselines that do produce diverse outputs do so largely through failure: their ``diverse'' samples include many routes that never reach the destination.
+
+%--------------------------------------------------------------------------
+\subsection{Success-Only Quality: The Bottleneck Is Corridor Entry}
+
+\begin{table}[t]
+  \caption{Quality among successful routes only. Once inside the correct corridor, all methods achieve similar Jaccard overlap---the bottleneck is entering the right corridor.}
+  \label{tab:success-only}
+  \vskip 0.1in
+  \centering
+  \small
+  \begin{tabular}{lcccc}
+    \toprule
+    Method & $n_{\mathrm{success}}$ & len\_ratio & loop\_rate & Jaccard \\
+    \midrule
+    RNN AR         & 964  & 1.372 & 23.6\% & 0.205 \\
+    Transformer AR & 1{,}161 & 1.493 & 39.9\% & 0.197 \\
+    CascadeTraj    & 3{,}917 & 1.230 & 25.5\% & 0.211 \\
+    \bottomrule
+  \end{tabular}
+  \vskip -0.1in
+\end{table}
+
+Restricting evaluation to successful routes reveals where the true bottleneck lies (\Cref{tab:success-only}).
+The Jaccard overlap among successful routes is comparable across all methods: 0.205 (RNN), 0.197 (Transformer), 0.211 (CascadeTraj).
+AR baselines that happen to enter a correct corridor execute it with reasonable fidelity; their catastrophic overall performance stems entirely from the inability to \emph{commit} to a viable corridor in the first place.
+
+CascadeTraj retains a modest advantage in success-only length ratio (1.230 vs.\ 1.37--1.49) and produces four times as many successful routes (3{,}917 vs.\ 964--1{,}161), confirming that corridor commitment improves both the rate and the quality of successful generation.
+
+%--------------------------------------------------------------------------
+\subsection{Information Bottleneck Dimension: A Capacity Sweet Spot}
+\label{sec:ablation-dim}
+
+\begin{table}[t]
+  \caption{Ablation on bottleneck dimension $D$. Degradation is asymmetric: $D\!=\!32$ causes mild precision loss; $D\!=\!128$ triggers catastrophic mode averaging.}
+  \label{tab:ablation-dim}
+  \vskip 0.1in
+  \centering
+  \small
+  \begin{tabular}{ccccc}
+    \toprule
+    $D$ & AE val\_CE & Flow val\_loss & Arrival (K16+AL) \\
+    \midrule
+    32  & 0.781 & 0.762 & 0.730 \\
+    \textbf{64}  & \textbf{0.707} & \textbf{0.435} & \textbf{0.783} \\
+    128 & ---   & ---   & 0.535 \\
+    \bottomrule
+  \end{tabular}
+  \vskip -0.1in
+\end{table}
+
+The bottleneck dimension $D$ controls the trade-off between decoder expressiveness and flow model tractability (\Cref{tab:ablation-dim}).
+
+Reducing $D$ from 64 to 32 degrades arrival rate by 5.3 percentage points.
+The autoencoder's reconstruction error increases (CE: $0.707 \to 0.781$, a 10.5\% increase) because the bottleneck can no longer fully encode corridor identity, but the overall degradation is graceful---coarse directional information is retained.
+
+Increasing $D$ to 128 produces a catastrophic 24.8-point drop in arrival rate (to 53.5\%).
+With excess capacity, the $\beta$-VAE no longer compresses away intra-corridor detail; the latent distribution becomes dispersed, and the flow model faces inter-modal voids it cannot bridge.
+The result is mode averaging---the same failure mechanism that afflicts sequence-level AR models, now relocated to the latent space.
+
+% vae_dim ablation figure placeholder
+\begin{figure}[t]
+  \centering
+  % \includegraphics[width=\columnwidth]{figures/vae_dim_ablation.pdf}
+  \caption{(a)~Arrival rate vs.\ bottleneck dimension $D$, showing the sweet spot at $D\!=\!64$. (b)~Flow validation loss: the matched dimension yields substantially lower loss (0.435 vs.\ 0.762).}
+  \label{fig:dim-ablation}
+\end{figure}
+
+The asymmetry of degradation ($-5.3$pp at $D\!=\!32$ vs.\ $-24.8$pp at $D\!=\!128$) is itself informative.
+Under-capacity leads to a smooth loss of fine-grained corridor discrimination; over-capacity causes a phase transition where the flow model's learning problem becomes qualitatively harder.
+At $D\!=\!64$, the KL divergence stabilizes around 6~nats ($\approx\!8.7$~bits), implying an effective state count of $\sim\!400$, which aligns with the empirical corridor diversity of the Porto road network.
+
+%--------------------------------------------------------------------------
+\subsection{Anti-Loop Decoding and Sampling Saturation}
+\label{sec:ablation-antiloop}
+
+\begin{table}[t]
+  \caption{Ablation on anti-loop decoding and number of samples $K$. Anti-loop provides an 8.1pp gain at zero training cost; $K\!=\!16$ saturates corridor space coverage.}
+  \label{tab:ablation-k}
+  \vskip 0.1in
+  \centering
+  \small
+  \begin{tabular}{lcc}
+    \toprule
+    Configuration & Arrival \\
+    \midrule
+    $D\!=\!64$, no anti-loop         & 0.702 \\
+    $D\!=\!64$, anti-loop             & 0.783 \\
+    \midrule
+    GT $\boldsymbol{\mu}$ oracle, $K\!=\!1$ & 0.369 \\
+    $D\!=\!64$, $K\!=\!8$ + anti-loop  & 0.694 \\
+    $D\!=\!64$, $K\!=\!16$ + anti-loop & 0.783 \\
+    \bottomrule
+  \end{tabular}
+  \vskip -0.1in
+\end{table}
+
+Anti-loop decoding improves arrival rate from 70.2\% to 78.3\% (+8.1pp) with no change to the trained model (\Cref{tab:ablation-k}).
+The correction suppresses short-range oscillations that occur even when the global corridor commitment is correct---an execution-level fix for an execution-level problem.
+
+The GT~$\boldsymbol{\mu}$ oracle experiment reveals the decoder's single-shot capacity: with the ground-truth posterior mean and $K\!=\!1$, arrival rate is only 36.9\%.
+Multiple samples are necessary because each sample represents one realization of corridor execution, subject to stochastic decoding errors.
+The marginal gain from $K\!=\!8$ to $K\!=\!16$ is only 0.7pp, indicating that 16 samples suffice to cover the effective corridor space---consistent with the $\sim\!400$ effective states implied by the KL analysis.

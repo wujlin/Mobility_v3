@@ -1,0 +1,25 @@
+% Related Work - ICML style
+
+\paragraph{Trajectory prediction versus route generation.}
+Short-horizon trajectory prediction forecasts positions seconds to minutes ahead and evaluates point-wise displacement error \citep{gupta2018social,salzmann2020trajectronpp,alahi2016social,zhou2022hivt}.
+At these time scales, corridor commitment is rarely necessary---the vehicle remains within a single corridor throughout the prediction window.
+Route generation operates at the trip level (minutes to hours), where the central challenge shifts from ``where will the vehicle be in five seconds'' to ``which of several topologically distinct corridors will the driver choose.''
+This distinction is critical: metrics designed for short-horizon accuracy (ADE, FDE) do not capture corridor-level multi-modality.
+
+\paragraph{Sequence-level route generation.}
+Autoregressive models that predict the next node or GPS point are a natural formulation for route generation \citep{kong2023mobility_survey,hsu2024trajgpt}.
+Diffusion-based approaches generate trajectories in continuous coordinate space \citep{zhu2023difftraj,wei2024diffrntraj,zhu2024controltraj,yang2025geo}, sometimes incorporating road-network constraints through topology-aware denoising.
+These methods share a common limitation: corridor choice is represented only implicitly---either buried in the hidden state of an AR model or distributed across the full denoising trajectory.
+When corridor alternatives are far apart in output space, implicit representation leads to mode averaging or long-horizon drift.
+
+\paragraph{Latent variable models for trajectories.}
+VAE-based and flow-based generative models capture multi-modality through latent variables \citep{kingma2014auto}.
+Foundation models for mobility aim to learn reusable trajectory representations \citep{lin2024trajfm,unitraj2025,choudhury2024trajectorypowered,liu2025trajmamba}.
+However, none of these approaches address the capacity matching between the latent space and the target modality structure: if the latent dimension is too high relative to the number of meaningful modes, the generative model must still navigate empty inter-modal regions, recovering the original mode-averaging problem.
+CascadeTraj identifies this capacity matching as a necessary condition for tractable conditional generation.
+
+\paragraph{Coarse-to-fine and hierarchical generation.}
+Hierarchical strategies decompose generation into coarse structure and fine detail.
+Cardiff \citep{guo2025cardiff} uses cascaded hybrid diffusion at multiple spatial resolutions; DiffPath \citep{fan2024diffpath} applies latent diffusion for road-network paths; SEED \citep{rao2025seed} bridges sequence and diffusion models; GTG \citep{wang2025gtg} demonstrates cross-city trajectory generation.
+CascadeTraj shares the coarse-to-fine intuition but differs in a key respect: the coarse stage is an \emph{explicit corridor commitment} in a capacity-matched latent space, not a spatial downsampling or a latent code without controlled information content.
+The bottleneck dimensionality is chosen to retain corridor identity while discarding intra-corridor variation, making the flow model's conditional generation task tractable by design.

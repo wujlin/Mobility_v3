@@ -10,8 +10,8 @@
 
 set -u
 
-ROOT_DIR="$(cd "$(dirname "$0")" && pwd)"
-cd "$ROOT_DIR" || exit 1
+PROJ_ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
+cd "$PROJ_ROOT" || exit 1
 
 DATA_BASE="/home/jinlin/data/geoexplicit_data/experiments/icml2026_routegen/WAYCASD0_waydata_porto_seed0"
 WAY_ROUTES="${DATA_BASE}/W5_way_routes_strict_gate/way_routes_strict_gate.npz"

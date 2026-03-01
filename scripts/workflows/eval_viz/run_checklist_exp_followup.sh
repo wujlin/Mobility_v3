@@ -12,8 +12,8 @@
 set -u
 set -o pipefail
 
-ROOT_DIR="$(cd "$(dirname "$0")" && pwd)"
-cd "$ROOT_DIR" || true
+PROJ_ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
+cd "$PROJ_ROOT" || true
 
 # -----------------------------
 # Data paths (override via env)

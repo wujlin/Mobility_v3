@@ -1,0 +1,92 @@
+% Appendix - ICML style
+
+\section{Dataset Details}
+\label{app:data}
+
+\paragraph{Porto Taxi.}
+We use the Porto Taxi dataset \citep{porto_taxi_dataset}, comprising $\sim$108K training routes collected from taxi GPS traces in Porto, Portugal.
+The road network is extracted from OpenStreetMap using OSMnx, yielding $\sim$35K unique ways.
+Node coordinates are projected to a $1024 \times 1024$ grid system.
+
+\paragraph{Way-level tokenization.}
+Ground-truth GPS trajectories are map-matched to the road graph.
+Each matched node sequence is converted to a way sequence by identifying the OSM way containing each node, then performing consecutive deduplication (merging repeated adjacent ways into a single token).
+Routes with excessive map-matching failures are filtered.
+
+\paragraph{OD-disjoint split.}
+To evaluate generalization to unseen origin-destination pairs, we partition routes such that no OD pair appears in both training and test sets (dev10p split).
+All reported metrics use 5{,}000 test routes.
+
+\section{Implementation Details}
+\label{app:impl}
+
+\paragraph{Autoencoder.}
+The way encoder embeds each way as a 256-dimensional token using learned embeddings for way identity (vocabulary $\sim$35K), road tier (3 classes: major/minor/service), and positional features (grid coordinates, segment length).
+The Perceiver compressor uses 8 learnable query tokens with 4 cross-attention layers and 4 attention heads, producing $8 \times 256 = 2048$-dimensional latent representations.
+
+The $\beta$-VAE bottleneck projects 2048 dimensions to $D = 64$ via MLP, applies reparameterization, and projects back to 2048 via a decoder MLP.
+$\beta$ is warmed up linearly from 0 to 0.01 over the first 30 epochs.
+The decoder is a graph-constrained autoregressive model with cross-attention to the 8 latent tokens, candidate-aware query mechanism (max 32 candidates per step), and past-context encoding (last 16 steps).
+
+Training uses AdamW ($\mathrm{lr} = 5 \times 10^{-4}$, weight decay $10^{-4}$) with cross-entropy loss on the way prediction task, for 100 epochs with batch size 128.
+
+\paragraph{Flow model.}
+The conditional flow model is a 6-layer transformer with $d_{\mathrm{model}} = 256$ and 4 attention heads.
+Conditioning features (origin embedding, destination embedding, time features via sinusoidal encoding) are injected through cross-attention.
+The flow target is $\boldsymbol{\mu} \in \mathbb{R}^{64}$, the posterior mean from the trained $\beta$-VAE.
+Training uses the conditional flow matching objective \citep{lipman2023flow} with AdamW ($\mathrm{lr} = 10^{-4}$) for 200 epochs.
+
+\paragraph{Inference.}
+At inference, the flow model generates $K = 16$ samples $\{\boldsymbol{\mu}_k\}$ using 100 ODE integration steps.
+Each $\boldsymbol{\mu}_k$ is mapped to $8 \times 256$ latent tokens via the bottleneck decoder MLP, then decoded autoregressively with anti-loop penalty ($k = 4$, $\alpha = 2.0$).
+The maximum decoding length is 200 way tokens.
+
+\paragraph{AR baselines.}
+The RNN baseline is a 2-layer GRU with hidden size 256, trained to predict the next way given the current way and conditioning.
+The Transformer baseline is a 4-layer causal Transformer with $d_{\mathrm{model}} = 256$.
+Both use beam search with $K = 10$ at inference.
+Both are trained on the same way-level tokenized routes with cross-entropy loss.
+
+\section{Coverage-$\tau$ AUC Computation}
+\label{app:covauc}
+
+For each OD group with $N_{\mathrm{gt}} \geq 2$ ground-truth routes, we compute:
+\begin{equation}
+  \mathrm{Coverage}@K(\tau) = \frac{1}{N_{\mathrm{gt}}} \sum_{i=1}^{N_{\mathrm{gt}}} \mathbf{1}\!\left[\max_{k} J(\hat{\mathbf{w}}^{(k)}, \mathbf{w}_i) \geq \tau\right],
+\end{equation}
+where $J$ is the way-set Jaccard similarity.
+We sweep $\tau \in [0.05, 0.95]$ with step 0.01, and compute the area under the curve via trapezoidal integration.
+The final CovAUC is the mean across all OD groups with sufficient ground-truth multiplicity ($N_{\mathrm{gt}} \geq 3$).
+
+\section{Additional Ablation Details}
+\label{app:ablation}
+
+\paragraph{$D = 128$ failure analysis.}
+At $D = 128$, the $\beta$-VAE KL divergence increases beyond the flow model's capacity to learn sharp conditional distributions.
+The flow validation loss does not converge to a comparable level as $D = 64$ (0.435), and generated $\boldsymbol{\mu}$ samples tend to cluster near the unconditional mean rather than spread across corridor-specific regions.
+This manifests as repeated generation of a single ``average'' corridor per OD pair, explaining the 24.8pp arrival rate drop.
+
+\paragraph{Anti-loop sensitivity.}
+We tested penalty values $\alpha \in \{1.0, 1.5, 2.0, 3.0\}$ and lookback windows $k \in \{2, 4, 6, 8\}$.
+The combination $(\alpha = 2.0, k = 4)$ yields the best arrival rate.
+Larger penalties ($\alpha = 3.0$) can suppress valid revisitations of ways that appear in both the outbound and return portions of a route; smaller lookback windows ($k = 2$) miss longer-period oscillations.
+
+\section{Coverage-$\tau$ Detailed Results}
+\label{app:cov-detail}
+
+\begin{table}[h]
+  \caption{Coverage at selected $\tau$ thresholds.}
+  \label{tab:cov-detail}
+  \centering
+  \small
+  \begin{tabular}{lcccc}
+    \toprule
+    Method & Cov@$\tau$=0.3 & Cov@$\tau$=0.5 & AUC \\
+    \midrule
+    CascadeTraj    & 0.385 & 0.137 & 0.216 \\
+    Transformer AR & 0.081 & 0.020 & 0.052 \\
+    RNN AR         & 0.077 & 0.023 & 0.045 \\
+    Shortest Path  & 0.000 & 0.000 & 0.023 \\
+    \bottomrule
+  \end{tabular}
+\end{table}

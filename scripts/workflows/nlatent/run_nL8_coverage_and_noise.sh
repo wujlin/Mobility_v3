@@ -9,9 +9,9 @@
 # - 所有步骤实时日志；单步失败不会导致整脚本退出
 #
 # 用法：
-#   bash run_nL8_coverage_and_noise.sh
+#   bash scripts/workflows/nlatent/run_nL8_coverage_and_noise.sh
 # 可选覆盖：
-#   AE_BATCH_SIZE=256 AE_EPOCHS=100 EVAL_BATCH_SIZE=192 bash run_nL8_coverage_and_noise.sh
+#   AE_BATCH_SIZE=256 AE_EPOCHS=100 EVAL_BATCH_SIZE=192 bash scripts/workflows/nlatent/run_nL8_coverage_and_noise.sh
 # ============================================================================
 
 set -u

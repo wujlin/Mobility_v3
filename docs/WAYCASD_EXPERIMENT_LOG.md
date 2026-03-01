@@ -63,7 +63,7 @@
 
 #### 0.0.1 end-to-end generation（Flow→z_flow→Decoder；min5 口径，n=200/城）
 
-当前“可复现最佳链路”（对齐 `checklist_exp.md`）：
+当前“可复现最佳链路”（对齐 `docs/checklists/checklist_exp.md`）：
 - Flow：`W11_train_flow_past16_regionseq_xattn_s0/ckpt_best.pt`
 - Decoder：E2 joint fine-tune 续训 e60：`_sync/wsa/pi_verify/E2_joint_finetune_s0_cont_e60/ckpt_best.pt`
 - Decode：beam=10，`decode_max_candidates=0`（全后继），soft anti-loop `P=2.0,K=4`，Region constraint=AR relaxed + dest_region fallback
@@ -809,7 +809,7 @@ nL8 Pure AE K16 按 bin：短程 [5,10)=37.7% → 中程 [20,30)=21.0% → 长�
 
 为避免 D5 再次出现“参数默认值漂移/beam 分支混入”的口径问题，本轮使用统一脚本复跑并锁定配置：
 
-- 脚本：`run_nL8_pureAE_flowz_probe.sh`
+- 脚本：`scripts/workflows/nlatent/run_nL8_pureAE_flowz_probe.sh`
 - 输出目录：`_sync/wsa/pi_verify/20260219_porto_d1_nlatent8_s0/D5_pureAE_flowz/`
 - 关键运行参数（来自输出 JSON `cfg` 与脚本）：
   - `n_routes=5000`, `split_part=test`, `seed=0`
@@ -878,7 +878,7 @@ nL8 Pure AE K16 按 bin：短程 [5,10)=37.7% → 中程 [20,30)=21.0% → 长�
 
 ##### 7.14.3 B1/B2/B3 流水线（进行中）
 
-执行脚本：`run_beta_vae_b1_b2_b3.sh`
+执行脚本：`scripts/workflows/beta_vae/run_beta_vae_b1_b2_b3.sh`
 
 执行顺序（固定口径，GPU重任务串行）：
 1. B1：现有 A1+A2，`K=16, sample_select=dest_efficient`（无 anti-loop）
@@ -960,13 +960,13 @@ B3 训练端（供定位）：
 | B3-k16 (vae128) | 2675 | 1.2538 | 5.8410 | 0.5110 | 0.2186 |
 
 汇总脚本修正：
-- 文件：`run_beta_vae_b1_b2_b3.sh`
+- 文件：`scripts/workflows/beta_vae/run_beta_vae_b1_b2_b3.sh`
 - 修正点：汇总阶段从误读 `global.*` 改为读取 `overall.greedy.cells` 并按 `n` 加权聚合；当结构异常时输出 `PARSE_FAIL` 而非 `0.0000`。
 
 ##### 7.14.6 C1/C2/C3 推进（2026-02-24）
 
 本轮新增执行脚本：
-- `run_beta_vae_c2_c3.sh`
+- `scripts/workflows/beta_vae/run_beta_vae_c2_c3.sh`
 
 ###### C1（已完成）：B2 的 OD coverage/diversity
 
@@ -989,7 +989,7 @@ B3 训练端（供定位）：
 - 用 `latent_source=gt` 给出 β-VAE decoder 在 GT latent 下的上限口径（K=1）。
 
 脚本中对应步骤：
-- `C2_gt_mu_oracle_k1`（见 `run_beta_vae_c2_c3.sh`）
+- `C2_gt_mu_oracle_k1`（见 `scripts/workflows/beta_vae/run_beta_vae_c2_c3.sh`）
 
 输出目录（约定）：
 - `_sync/wsa/pi_verify/20260224_porto_beta_vae128_flowmu_s0/C2_gt_mu_oracle_k1/`
@@ -1010,7 +1010,7 @@ B3 训练端（供定位）：
 ##### 7.14.7 Baseline Eval + 可视化打包（2026-02-24）
 
 新增脚本：
-- `run_porto_baseline_eval_and_viz.sh`
+- `scripts/workflows/eval_viz/run_porto_baseline_eval_and_viz.sh`
 
 脚本定位：
 - 基线评估与可视化一体化流水线（Porto）。
@@ -1040,7 +1040,7 @@ B3 训练端（供定位）：
 
 说明：
 - 本节已完成的是“评估数值与汇总产物”。
-- `Hero/Leaflet/Histogram` 图像产物由 `run_porto_baseline_eval_and_viz.sh` 在 WSL `dpl` 环境执行生成（依赖 `matplotlib`/地图元数据路径）。
+- `Hero/Leaflet/Histogram` 图像产物由 `scripts/workflows/eval_viz/run_porto_baseline_eval_and_viz.sh` 在 WSL `dpl` 环境执行生成（依赖 `matplotlib`/地图元数据路径）。
 
 ###### 7.14.7-a Coverage-τ 与 threshold-free 指标补充（2026-02-25）
 

@@ -8,7 +8,8 @@
 set -u
 
 echo ">>> [Init] 进入仓库目录"
-cd ~/projects/Mobility_v3 || cd /home/jinlin/projects/Mobility_v3 || true
+PROJ_ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
+cd "$PROJ_ROOT" || true
 
 BASE64="_sync/wsa/pi_verify/20260223_porto_beta_vae_flowmu_s0"
 BASE128="_sync/wsa/pi_verify/20260224_porto_beta_vae128_flowmu_s0"
@@ -214,4 +215,3 @@ else
   echo "DONE: C1/C2/C3 全部完成"
 fi
 echo "======================================================================"
-

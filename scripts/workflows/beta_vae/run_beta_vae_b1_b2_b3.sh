@@ -9,7 +9,8 @@
 set -u
 
 echo ">>> [Init] 进入仓库根目录"
-cd ~/projects/Mobility_v3 || cd /home/jinlin/projects/Mobility_v3 || true
+PROJ_ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
+cd "$PROJ_ROOT" || true
 
 OUT_BASE="_sync/wsa/pi_verify/20260223_porto_beta_vae_flowmu_s0"
 OUT_B3="_sync/wsa/pi_verify/20260224_porto_beta_vae128_flowmu_s0"

@@ -14,8 +14,6 @@
 
 % ICML 2026 style (anonymous submission)
 \usepackage{icml2026}
-% For preprint: \usepackage[preprint]{icml2026}
-% For camera-ready: \usepackage[accepted]{icml2026}
 
 \usepackage{amsmath}
 \usepackage{amssymb}
@@ -40,12 +38,13 @@
 \newtheorem{remark}[theorem]{Remark}
 
 % Short running title
-\icmltitlerunning{CascadeTraj: Hierarchical Route Generation via Corridor Commitment}
+\icmltitlerunning{CascadeTraj: Corridor-Committed Route Generation via Information-Bottlenecked Latent Flows}
 
 \begin{document}
 
 \twocolumn[
-  \icmltitle{CascadeTraj: Hierarchical Route Generation \\ via Corridor Commitment}
+  \icmltitle{CascadeTraj: Corridor-Committed Route Generation \\
+  via Information-Bottlenecked Latent Flows}
 
   % Anonymous submission - author info hidden
   \icmlsetsymbol{equal}{*}
@@ -54,11 +53,7 @@
     \icmlauthor{Anonymous Author(s)}{}
   \end{icmlauthorlist}
 
-  % Affiliations (hidden in blind review)
-  % \icmlaffiliation{inst}{Institution, City, Country}
-  % \icmlcorrespondingauthor{Author Name}{email@domain.com}
-
-  \icmlkeywords{Route Generation, Trajectory Synthesis, Multi-modal Decision, Urban Computing}
+  \icmlkeywords{Route Generation, Corridor Multi-modality, Information Bottleneck, Flow Matching, Urban Computing}
 
   \vskip 0.3in
 ]
@@ -66,11 +61,12 @@
 \printAffiliationsAndNotice{}
 
 \begin{abstract}
-Route generation---sampling trip-level paths conditioned on origin, destination, and context---exhibits corridor-level multi-modality: distinct topological alternatives are far apart in coordinate space yet intent-equivalent.
-End-to-end coordinate generators struggle under this multi-modality, exhibiting destructive averaging or long-horizon drift.
-We propose \textbf{CascadeTraj}, a hierarchical decision--execution framework that makes corridor choice explicit on a road graph: a short-horizon autoregressive model samples sparse waypoint commitments conditioned on time and road hierarchy, then A* execution guarantees valid graph paths.
-Diagnostic gates on WorldTrace segments show that (i) heuristic $K$-shortest candidates can miss ground-truth corridors (median Jaccard $\approx 0.21$), and (ii) time+tier context carries measurable signal for corridor variability (AUC $\approx 0.80$).
-CascadeTraj achieves near-perfect route completion with improved corridor match over node-level autoregressive baselines.
+Urban route generation---sampling trip-level paths on a road network conditioned on origin, destination, and context---exhibits \emph{corridor-level multi-modality}: for a given origin-destination pair, drivers choose among topologically distinct corridors that are far apart on the road graph yet intent-equivalent.
+Sequence-level autoregressive models make only local next-step decisions and lack the capacity for such global corridor commitment; on a large-scale taxi dataset they reach destinations in fewer than 24\% of attempts.
+CascadeTraj factors route generation into corridor commitment and constrained local execution.
+An information-bottlenecked latent space compresses variable-length way-level route encodings into a 64-dimensional corridor identity, and a conditional flow model samples from this space given trip context.
+The bottleneck dimension exhibits a capacity sweet spot: too low and decoder precision degrades gracefully; too high and the flow model collapses to mode averaging---a 25-percentage-point drop in arrival rate.
+On 108K Porto taxi routes, CascadeTraj achieves 78.3\% arrival rate ($3.4\times$ the best autoregressive baseline) and $4.2\times$ higher corridor coverage, while simultaneously producing greater route diversity.
 \end{abstract}
 
 %==============================================================================
@@ -102,12 +98,6 @@ CascadeTraj achieves near-perfect route completion with improved corridor match 
 \input{sections/05_experiments}
 
 %==============================================================================
-\section{Results}
-\label{sec:results}
-%==============================================================================
-\input{sections/06_results}
-
-%==============================================================================
 \section{Conclusion}
 %==============================================================================
 \input{sections/08_conclusion}
@@ -119,7 +109,7 @@ CascadeTraj achieves near-perfect route completion with improved corridor match 
 
 This paper advances route generation for mobility simulation and urban computing.
 Potential applications include transportation planning, traffic simulation, and location-based services.
-We use publicly available trajectory data (WorldTrace) and open map data (OpenStreetMap).
+We use publicly available trajectory data and open map data (OpenStreetMap).
 There are many potential societal consequences of our work, none which we feel must be specifically highlighted here.
 
 %==============================================================================

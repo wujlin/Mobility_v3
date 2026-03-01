@@ -2,7 +2,7 @@
 Porto Taxi CSV → segments_with_wayid.parquet
 
 将 Porto Taxi train.csv 转换为与 WorldTrace 完全一致的 segments parquet 格式，
-使后续 pipeline (run_way_casd_prep.sh) 无需任何修改即可复用。
+使后续 pipeline (scripts/data_prep/run_way_casd_prep.sh) 无需任何修改即可复用。
 
 核心逻辑：
   1. 流式读取 train.csv，解析 POLYLINE JSON
@@ -377,7 +377,7 @@ def run(
     print(f"  成功: {n_ok}/{n_clean} ({n_ok / max(n_clean, 1):.1%})")
     print(f"  失败: {n_fail}")
     print(f"  耗时: {elapsed:.0f}s ({elapsed / 60:.1f}min)")
-    print(f"\n下一步: 用 run_way_casd_prep.sh 走标准 pipeline")
+    print(f"\n下一步: 用 scripts/data_prep/run_way_casd_prep.sh 走标准 pipeline")
     print(f"  export SEGMENTS_PARQUET={out_parquet}")
 
 

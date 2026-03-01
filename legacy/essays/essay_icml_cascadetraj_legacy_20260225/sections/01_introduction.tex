@@ -1,0 +1,43 @@
+% Introduction - ICML style, problem-driven narrative
+
+Route generation---sampling realistic trip-level paths on a road network given an origin, destination, and contextual conditions---is a foundational primitive for transportation simulation, urban planning, and mobility analytics \citep{gonzalez2008mobility,rong2025odsurvey}.
+Real-world route choice is inherently multi-modal: from the eastern suburbs to the city center, a driver may take the arterial highway cutting through downtown, loop around the northern ring road, or follow a riverside boulevard to the south---three corridors that are topologically distinct, far apart in coordinate space, yet entirely equivalent in trip intent.
+This \emph{corridor-level multi-modality} is not noise; it reflects the structural diversity of feasible alternatives in a road network.
+
+Sequence-level autoregressive (AR) models---RNNs and Transformers that predict the next road segment at each step---are the dominant paradigm for route generation \citep{kong2023mobility_survey,zhu2025survey}.
+Yet these models face a fundamental granularity mismatch: they make local, step-by-step decisions while the critical uncertainty lies in \emph{which corridor} to commit to, a global choice that must be resolved early and maintained over hundreds of steps.
+The consequence is systematic failure, not merely reduced accuracy.
+On a large-scale taxi dataset, an RNN generates routes that reach the destination in only 19.3\% of attempts, failing predominantly by drifting off viable corridors (``hit wall''); a Transformer does marginally better at 23.2\%, but its stronger local attention redirects failures toward dead ends rather than eliminating them.
+The failure modes differ---directional drift versus topological traps---but the root cause is shared: no amount of local next-step optimization can substitute for an explicit corridor-level commitment.
+Shortest-path routing occupies the opposite extreme: it reaches the destination reliably, but produces a single deterministic corridor with zero diversity and a Jaccard overlap of only 0.077 against real driver routes.
+
+The structure of the problem itself suggests the correct decomposition.
+Corridor selection is discrete, low-dimensional, and contextually conditioned (time of day, origin-destination geometry, road hierarchy); corridor execution is continuous, local, and graph-constrained.
+CascadeTraj makes this factorization explicit.
+Routes are first tokenized at the \emph{way} level---where a way is a semantically homogeneous road segment in OpenStreetMap, the natural atom of road network topology.
+This compresses route sequences from hundreds of nodes to tens of way tokens while preserving adjacency structure.
+A Perceiver encoder compresses variable-length way sequences into a fixed set of latent tokens, and a $\beta$-VAE information bottleneck projects these into a compact corridor identity space.
+A conditional flow model then samples corridor commitments from this space given trip context, and a graph-constrained autoregressive decoder executes each commitment into a feasible way-level route.
+
+The information bottleneck dimension is not a free hyperparameter---it must match the intrinsic dimensionality of the corridor space.
+At $D\!=\!64$, the bottleneck retains corridor identity while discarding intra-corridor detail, and the flow model learns a tractable conditional distribution (validation loss 0.435).
+Reducing $D$ to 32 degrades arrival rate by 5.3 percentage points---a graceful loss of corridor precision.
+Increasing $D$ to 128, however, causes a catastrophic 24.8-point drop: the excess capacity allows intra-corridor detail to leak through, the latent distribution loses its near-Gaussian structure, and the flow model reverts to mode averaging across corridors.
+This asymmetric degradation pattern is itself a finding: it reveals a capacity-matching principle between latent dimensionality and the intrinsic modality of the generation target.
+
+On 108K Porto taxi routes with an OD-disjoint test split, CascadeTraj achieves a 78.3\% arrival rate---$3.4\times$ the best AR baseline---and a Coverage-$\tau$ AUC of 0.216, which is $4.2\times$ higher than the Transformer baseline and $9.4\times$ higher than shortest path.
+Route diversity (Self-Diversity@16 = 0.532) exceeds all baselines while maintaining a higher arrival rate, demonstrating that the generated diversity reflects distinct reachable corridors rather than noisy infeasible paths.
+\Cref{fig:framework} illustrates the framework and a representative example.
+
+% Figure 1 placeholder
+\begin{figure*}[t]
+  \centering
+  % \includegraphics[width=\textwidth]{figures/framework_and_hero.pdf}
+  \caption{%
+    \textbf{CascadeTraj overview.}
+    (a)~Corridor multi-modality: a single OD pair yields topologically distinct ground-truth routes (colored paths).
+    (b)~Framework: way-level routes are encoded by a Perceiver into latent tokens, compressed through a $\beta$-VAE bottleneck, and sampled by a conditional flow model; a graph-constrained decoder executes each sample into a feasible route.
+    (c)~Representative OD pair (7529$\to$12394): CascadeTraj produces 5/5 successful routes with diversity 0.866; both RNN and Transformer baselines produce 0/5.
+  }
+  \label{fig:framework}
+\end{figure*}

@@ -6,7 +6,7 @@
 
 ## ⚡ 快速执行指南
 
-**核心思路：只新写一个 CSV→parquet 转换脚本，后续完全复用现有 `run_way_casd_prep.sh` pipeline。**
+**核心思路：只新写一个 CSV→parquet 转换脚本，后续完全复用现有 `scripts/data_prep/run_way_casd_prep.sh` pipeline。**
 
 ### ✅ 当前进度（Porto 已跑通，产物已落盘）
 
@@ -105,7 +105,7 @@ bash tools/porto/run_porto_prep.sh
 tools/porto/
   porto_bbox_meta.json              ← Porto bbox+grid 定义
   porto_csv_to_segments_parquet.py  ← 唯一新代码: CSV→parquet (Valhalla)
-  run_porto_prep.sh                 ← 入口: Phase 0 + 复用 run_way_casd_prep.sh
+  run_porto_prep.sh                 ← 入口: Phase 0 + 复用 scripts/data_prep/run_way_casd_prep.sh
   run_porto_diagnose.sh             ← 诊断：图/质量/最短路 baseline
   run_porto_strict_gate_and_split.sh← P0：strict gate + OD-disjoint split
   porto_od_diversity_scan.py        ← OD bin corridor 多样性扫描
@@ -121,7 +121,7 @@ Porto train.csv                     WorldTrace Trajectory.zip
      │                                    │
      └──────────── 完全相同的 pipeline ───────────┘
                         │
-                        ▼  run_way_casd_prep.sh
+                        ▼  scripts/data_prep/run_way_casd_prep.sh
                    W1: way_routes.npz
                    W2: way_graph.npz
                    W3: way_features.npz
@@ -246,7 +246,7 @@ rm -f "$RAW_ROOT/porto_taxi/raw/"*.zip
 
 ### 2.3 预处理 Pipeline
 
-**核心洞见：** 现有 `run_way_casd_prep.sh`（4 步）完全可复用。唯一新代码是 Phase 0：Porto CSV → `segments_with_wayid.parquet`。
+**核心洞见：** 现有 `scripts/data_prep/run_way_casd_prep.sh`（4 步）完全可复用。唯一新代码是 Phase 0：Porto CSV → `segments_with_wayid.parquet`。
 
 #### Phase 0: CSV → segments_with_wayid.parquet（唯一新代码）
 
@@ -275,7 +275,7 @@ osm_way_id: list<int64>
 
 #### Phase 1: 现有 pipeline（零代码改动）
 
-由 `run_way_casd_prep.sh` 执行，通过环境变量注入 Porto 路径：
+由 `scripts/data_prep/run_way_casd_prep.sh` 执行，通过环境变量注入 Porto 路径：
 
 ```
 W1: build_way_routes_from_segments_parquet.py → way_routes.npz

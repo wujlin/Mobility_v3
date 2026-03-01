@@ -1,0 +1,99 @@
+% Method - ICML style, why-driven narrative
+
+\subsection{Factoring Route Generation into Commitment and Execution}
+
+Route generation under corridor multi-modality requires resolving two fundamentally different types of uncertainty: \emph{which corridor} to take (a discrete, global choice) and \emph{how to traverse} the chosen corridor (a continuous, local process).
+CascadeTraj makes this factorization explicit:
+\begin{equation}
+  p_\theta(\mathbf{w} \mid c) = \int p_\theta(z \mid c) \cdot p_\phi(\mathbf{w} \mid z, c) \, dz,
+  \label{eq:factorization}
+\end{equation}
+where $z \in \mathbb{R}^D$ is a corridor-level latent commitment sampled in the \emph{decision stage} $p_\theta(z \mid c)$, and $\mathbf{w}$ is the way-level route produced in the \emph{execution stage} $p_\phi(\mathbf{w} \mid z, c)$.
+The decision stage operates in a low-dimensional space shaped to represent corridor identity; the execution stage operates on the road graph, constrained to produce topologically valid paths.
+
+\subsection{Way-Level Tokenization: The Right Abstraction}
+\label{sec:way-tokenization}
+
+The choice of route representation determines both the sequence length the model must handle and the structure of the output space.
+Node-level tokenization produces sequences of hundreds of steps, where exposure bias compounds over the full route and the output vocabulary spans tens of thousands of nodes.
+GPS-coordinate representations avoid the discrete vocabulary problem but sacrifice road-network structure, producing trajectories that may drift off-road.
+
+Way-level tokenization resolves both issues.
+An OSM way is a maximal road segment of uniform type and name---the semantic atom of road network topology.
+Tokenizing a route as a way sequence naturally compresses $L \sim$ hundreds of nodes to $M \sim$ tens of ways, because each way typically spans multiple consecutive nodes.
+Crucially, adjacency is preserved: two consecutive ways in a valid route share at least one intersection node, so the space of valid next tokens at each step is determined by the road graph rather than by the full vocabulary.
+
+\subsection{Decision Stage: Corridor Commitment via Latent Flow}
+
+\subsubsection{Learning the Corridor Space}
+
+The autoencoder maps variable-length way sequences to a fixed latent representation and back.
+
+\paragraph{Way encoder.}
+Each way $w_m$ is embedded as a $d_{\mathrm{model}}$-dimensional token using learned embeddings for way identity, road tier, and positional features (grid coordinates, length).
+A Perceiver encoder \citep{jaegle2021perceiver} compresses the variable-length way token sequence into $n_L = 8$ fixed latent tokens via cross-attention, where 8 learnable query tokens attend to all way tokens.
+The number 8 reflects a prior that a typical urban route contains roughly 8 major turning points or corridor transitions; the Perceiver's cross-attention adaptively extracts the most salient information from routes of any length.
+
+\paragraph{Information bottleneck.}
+The $n_L \times d_{\mathrm{model}} = 2048$-dimensional Perceiver output cannot be used directly as the flow model's target space.
+In corridor multi-modal settings, the latent representations of different corridors occupy isolated regions of high-dimensional space with topologically infeasible interpolations between them---unlike images, where interpolating two latent codes produces a plausible blend, interpolating two corridor codes yields a ``ghost route'' on no valid road.
+A flow model trained in this 2048-dimensional space tends toward mode averaging, converging to the conditional mean $\mathbb{E}[z \mid c]$ that falls in the void between corridors.
+
+A $\beta$-VAE bottleneck addresses this by projecting the Perceiver output into a $D$-dimensional space:
+\begin{equation}
+  z_{\text{flat}} \in \mathbb{R}^{2048}
+  \xrightarrow{\mathrm{MLP}}
+  (\boldsymbol{\mu}, \log \boldsymbol{\sigma}^2) \in \mathbb{R}^D \times \mathbb{R}^D
+  \xrightarrow{\text{reparam}}
+  z_{\text{vec}} \in \mathbb{R}^D
+  \xrightarrow{\mathrm{MLP}}
+  \hat{z}_{\text{flat}} \in \mathbb{R}^{2048}.
+  \label{eq:bottleneck}
+\end{equation}
+The training loss combines reconstruction and regularization:
+\begin{equation}
+  \mathcal{L}_{\mathrm{AE}} = \mathcal{L}_{\mathrm{CE}}(\hat{\mathbf{w}}, \mathbf{w}) + \beta \cdot D_{\mathrm{KL}}(q(z \mid \mathbf{w}) \| p(z)),
+  \label{eq:ae-loss}
+\end{equation}
+with $\beta$ warmed up from 0 to 0.01 over 30 epochs.
+The bottleneck serves two purposes: (i)~it forces the latent to retain corridor identity while discarding intra-corridor variation, because the reconstruction loss preserves what matters and the limited capacity discards what does not; (ii)~the KL regularization shapes the posterior mean $\boldsymbol{\mu}$ toward a near-Gaussian distribution, making it a tractable target for flow-based generation.
+
+\paragraph{Capacity matching.}
+The bottleneck dimension $D$ must match the intrinsic dimensionality of the corridor space.
+At $D\!=\!64$, the KL divergence stabilizes around 6~nats ($\approx$8.7~bits), implying an effective state count of $\sim\!400$---consistent with the diversity of corridor alternatives in a city-scale road network.
+Section~\ref{sec:ablation-dim} shows that deviations from this matched capacity produce asymmetric degradation: $D\!=\!32$ causes mild precision loss, while $D\!=\!128$ triggers catastrophic mode averaging.
+
+\subsubsection{Conditional Flow Matching on $\boldsymbol{\mu}$}
+\label{sec:flow}
+
+The flow model generates corridor commitments by learning a conditional velocity field that transforms a standard Gaussian into the distribution of posterior means $\boldsymbol{\mu} \in \mathbb{R}^{64}$.
+We use $\boldsymbol{\mu}$ rather than the sampled $z_{\text{vec}}$ because $\boldsymbol{\mu}$ is the deterministic summary of the posterior---free of sampling noise and more stable as a regression target \citep{lipman2023flow}.
+
+Trip context $c = (o, d, t)$ is injected through cross-attention layers in a 6-layer transformer.
+At inference, $K$ latent samples $\{\boldsymbol{\mu}_k\}_{k=1}^K$ are drawn by integrating the learned velocity field from Gaussian noise, then mapped back to $n_L \times d_{\mathrm{model}}$ latent tokens via the bottleneck decoder MLP.
+
+\subsection{Execution Stage: Constrained Autoregressive Decoding}
+\label{sec:decoder}
+
+Each latent sample $\boldsymbol{\mu}_k$ specifies a corridor commitment; the decoder's task is to realize it as a graph-feasible way sequence.
+
+\paragraph{Graph-constrained candidate scoring.}
+Rather than predicting among all $\sim$35K ways, the decoder scores only the graph neighbors of the current way position---at most 32 candidates at each step.
+This constraint guarantees graph feasibility by construction and compresses the effective output space by three orders of magnitude, substantially reducing exposure bias.
+
+\paragraph{Corridor guidance via cross-attention.}
+The decoder attends to the $n_L\!=\!8$ latent tokens through cross-attention at each decoding step, receiving corridor-level directional guidance that resolves ambiguity among local candidates.
+A candidate-aware query mechanism lets the decoder jointly consider all neighbor candidates in context before scoring.
+
+\paragraph{Anti-loop decoding.}
+Corridor commitment resolves global direction, but local decoding can still produce short-range loops (oscillating between two or three adjacent ways).
+At inference time, a log-penalty of $\alpha\!=\!2.0$ is applied to any way that appeared in the most recent $k\!=\!4$ steps.
+This correction requires no training modification and no additional parameters; it improves arrival rate from 70.2\% to 78.3\% (Section~\ref{sec:ablation-antiloop}).
+
+\subsection{Inference Pipeline}
+\label{sec:inference}
+
+Given conditioning $c$, inference proceeds in three steps:
+(1)~the flow model samples $K\!=\!16$ corridor commitments $\{\boldsymbol{\mu}_k\}$;
+(2)~the decoder generates a candidate route for each $\boldsymbol{\mu}_k$ using graph-constrained autoregressive decoding with anti-loop;
+(3)~among successful candidates (those reaching~$d$), the shortest route is selected for deployment, or all $K$ routes are retained for coverage and diversity evaluation.

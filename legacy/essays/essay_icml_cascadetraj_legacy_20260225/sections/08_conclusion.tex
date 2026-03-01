@@ -1,0 +1,14 @@
+% Conclusion - ICML style, elevation not repetition
+
+Corridor-level multi-modality is a structural property of urban route choice, not an artifact of noisy data or insufficient model capacity.
+Sequence-level autoregressive models fail under this multi-modality not because they are too weak, but because they operate at the wrong granularity---step-level decisions cannot substitute for corridor-level commitments.
+CascadeTraj resolves this by factoring route generation into an explicit corridor commitment stage and a graph-constrained execution stage, connected through an information-bottlenecked latent space whose dimensionality is matched to the intrinsic complexity of the corridor distribution.
+
+The capacity-matching principle that emerges from this work---that the latent bottleneck dimension must align with the number of meaningful modes in the target distribution---may extend beyond route generation.
+Any conditional generation task where the target distribution exhibits discrete, well-separated modes (molecular conformations, floor plan layouts, program synthesis) faces the same tension between latent expressiveness and flow model tractability.
+The asymmetric degradation pattern observed here (graceful under-capacity vs.\ catastrophic over-capacity) provides a practical diagnostic for identifying the matched dimension in new domains.
+
+\paragraph{Limitations.}
+The current evaluation is limited to a single city (Porto).
+The theoretical relationship between $\beta$, $D$, and the optimal capacity match remains empirical; a formal characterization would strengthen the capacity-matching claim.
+GPS-level trajectory refinement within decoded corridors is not addressed and would be necessary for applications requiring sub-road-segment fidelity.

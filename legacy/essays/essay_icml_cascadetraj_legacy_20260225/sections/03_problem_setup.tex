@@ -1,0 +1,44 @@
+% Problem Setup - ICML style
+
+\paragraph{Road graph and way-level routes.}
+The environment is a directed road graph $G=(V,E)$ extracted from OpenStreetMap, where each node $v \in V$ has geographic coordinates and each edge $e \in E$ carries a road type (motorway, primary, secondary, residential, service) and length.
+An OSM \emph{way} is a maximal sequence of edges forming a single named, typed road segment---the semantic atom of road network topology.
+A ground-truth route is a way sequence $\mathbf{w} = (w_1, \dots, w_M)$ obtained by map-matching a GPS trajectory to $G$ and performing consecutive deduplication.
+Way-level tokenization compresses route length from $L \sim$ hundreds of nodes to $M \sim$ tens of ways, while preserving topological adjacency: consecutive ways share at least one node.
+
+\paragraph{Conditioning.}
+Each route is conditioned on $c = (o, d, t, x)$: origin~$o$, destination~$d$, departure time~$t$ (from which cyclical features such as hour-of-day and day-of-week are derived), and optional spatial context~$x$.
+
+\paragraph{Desiderata.}
+A route generator $p_\theta(\mathbf{w} \mid c)$ should satisfy three properties:
+\begin{enumerate}
+  \item \textbf{Intent consistency}: the generated route reaches the destination~$d$.
+  \item \textbf{Graph feasibility}: consecutive ways share a node, so the output is a valid path on $G$.
+  \item \textbf{Corridor multi-modality}: for OD pairs with structurally distinct alternatives, the generator should cover the empirical distribution of corridors.
+\end{enumerate}
+
+\paragraph{Evaluation metrics.}
+Let $\mathbf{w}$ be a ground-truth route and $\{\hat{\mathbf{w}}^{(k)}\}_{k=1}^K$ be $K$ generated routes for the same conditioning~$c$.
+We evaluate four complementary aspects:
+
+\textit{Arrival Rate} is the fraction of generated routes that successfully reach~$d$ within a maximum step budget.
+
+\textit{MeanMaxJaccard} measures how well the best generated route matches the ground truth.
+Let $W(\mathbf{w})$ denote the set of ways traversed by route~$\mathbf{w}$.
+For each ground-truth route, we compute the best Jaccard match among $K$ candidates:
+\begin{equation}
+  J_{\max} = \max_{k \in \{1,\dots,K\}} \frac{|W(\hat{\mathbf{w}}^{(k)}) \cap W(\mathbf{w})|}{|W(\hat{\mathbf{w}}^{(k)}) \cup W(\mathbf{w})|}.
+\end{equation}
+MeanMaxJaccard is the average of $J_{\max}$ across all test routes.
+
+\textit{Coverage-$\tau$ AUC} captures how many distinct ground-truth corridor patterns are covered by the generated set, without committing to a single similarity threshold.
+For a given OD group with multiple ground-truth routes, Coverage@$K(\tau)$ is the fraction of ground-truth routes for which at least one of the $K$ generated routes achieves $J \geq \tau$.
+The threshold-free aggregate is:
+\begin{equation}
+  \mathrm{CovAUC} = \frac{1}{\tau_{\max} - \tau_{\min}} \int_{\tau_{\min}}^{\tau_{\max}} \mathrm{Coverage}@K(\tau) \, d\tau,
+  \label{eq:covauc}
+\end{equation}
+averaged across OD groups.
+This metric penalizes methods that cover only a single corridor mode regardless of how well they match it.
+
+\textit{Self-Diversity@$K$} is the average pairwise dissimilarity (1 $-$ Jaccard) among the $K$ generated routes for the same conditioning, measuring how distinct the generated alternatives are.

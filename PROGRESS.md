@@ -3,11 +3,11 @@ Implementation Plan, Task List and Thought in Chinese
 # 开发进度追踪（当前优先级：ICML 2026 Route Generation）
 
 > [!IMPORTANT]
-> **协议真相源**：`docs/TASK_DEFINITION.md` + `docs/DATA_CONTRACT.md`。  
-> **新 PI 快速对齐**：先读 `docs/PI_BRIEF_ROUTEGEN_ICML2026.md`。  
-> 本仓库同时保留两条写作线：  
-> - ICML 2026 routegen：`essay_icml_cascadetraj/main.tex`（当前主线）  
-> - Paper-2 rupture/avoidance：`essay/main.tex`（非当前 ICML 交付物）
+> **协议真相源**：`docs/TASK_DEFINITION.md`。  
+> **新 PI 快速对齐**：先读 `docs/WAYCASD_EXPERIMENT_LOG.md`。  
+> 写作入口口径：  
+> - ICML 2026 routegen（当前主线）：`Essay/main.tex`  
+> - 历史稿封存：`legacy/essays/`
 
 ---
 
@@ -31,7 +31,7 @@ route generation 的 corridor-level 多模态在连续坐标空间里会诱发�
 | Road graph（combo） | ✅ | `T3_combo_detroit_columbus_seed0/road_graph_combo.npz` |
 | GT graph paths（combo） | ✅ | `T3_combo_detroit_columbus_seed0/paths_graph_combo.npz` |
 | Waypoints graph NPZ | ✅ | `T4_wp_ar_astar_combo_seed0/T1_dump_waypoints/waypoints_graph.npz` |
-| CASD segment graph & route segments | ✅（本地验证已跑通） | 入口脚本 `run_casd_prep.sh`，产物见 `CASD0_segdata_combo_seed0/`（新目录，不覆盖旧实验） |
+| CASD segment graph & route segments | ✅（本地验证已跑通） | 入口脚本 `scripts/data_prep/run_casd_prep.sh`，产物见 `CASD0_segdata_combo_seed0/`（新目录，不覆盖旧实验） |
 
 ---
 
@@ -69,7 +69,7 @@ route generation 的 corridor-level 多模态在连续坐标空间里会诱发�
 - 处理：
   - `build_segment_graph_from_road_graph_npz.py`：把 raster road graph 的 directed edges 折叠成 “segment graph”（degree-2 chain collapse）
   - `dump_segment_sequences_from_paths_graph_npz.py`：把每条 GT node path 映射成 segment-id 序列
-- 入口：`run_casd_prep.sh`
+- 入口：`scripts/data_prep/run_casd_prep.sh`
 - 产物：`CASD0_segdata_combo_seed0/S1_segment_graph/segment_graph.npz` + `S2_segment_routes/segments_graph_routes.npz`（均带 `report.json`）
 
 **CASD1｜数据一致性 Gate（必须先过）**

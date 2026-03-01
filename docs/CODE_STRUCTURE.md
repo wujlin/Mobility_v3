@@ -15,11 +15,11 @@
 本仓库目前同时保留两条“可运行但目的不同”的代码主线：
 
 1) **ICML 2026 Route Generation（当前优先级最高）**  
-   - 写作入口：`essay_icml_cascadetraj/main.tex`（当前主线；`essay_population/main.tex` 为备份/对照稿）  
+   - 写作入口：`Essay/main.tex`（当前主线；旧稿已封存到 `legacy/essays/`）  
    - 技术主线：segment-level route generation + road-graph 上的结构化决策（waypoint AR）+ A\* 连接（可选再接 continuous execution）。
 
 2) **Paper-2：Rupture/Avoidance field（非当前 ICML 交付物）**  
-   - 写作入口：`essay/main.tex`  
+   - 写作入口：已封存（参考 `legacy/` 与 `docs/archive/legacy_20260225/`）  
    - 这部分文档与脚本仍保留，但不应与 routegen 的实验口径/指标混用。
 
 下面先给 routegen 这条线一个“能直接跑”的代码地图；原先 Phase D（avoidance）内容后移保留。
@@ -38,7 +38,7 @@
 - multimodal OD 可视化 sanity：`src/evaluation/plot_worldtrace_multimodal_od_bins.py`
 - multimodal OD 可视化缓存导出（避免反复读 Trajectory.zip）：`src/data/worldtrace/dump_multimodal_viz_cache.py`
 - 从 multimodal scan 抽取训练 routes：`src/data/way_graph/build_way_routes_from_multimodal_scan.py`
-- way token 数据准备（routes / graph / features / corridor label）：`src/data/way_graph/*` + `run_way_casd_prep.sh` / `run_way_casd_prep_rustbelt.sh`
+- way token 数据准备（routes / graph / features / corridor label）：`src/data/way_graph/*` + `scripts/data_prep/run_way_casd_prep.sh` / `scripts/data_prep/run_way_casd_prep_rustbelt.sh`
 - 训练入口：
   - AE（Step A）：`src/training/train_way_casd_autoencoder.py`
   - Flow（Step B）：`src/training/train_way_casd_flow.py`
@@ -64,7 +64,7 @@
   `src/data/road_graph/build_segment_graph_from_road_graph_npz.py`
 - 将 GT node 序列映射为 per-route segment 序列（并计算 `corridor_type`）：  
   `src/data/road_graph/dump_segment_sequences_from_paths_graph_npz.py`
-- 工作站一键脚本（推荐）：`run_casd_prep.sh`
+- 工作站一键脚本（推荐）：`scripts/data_prep/run_casd_prep.sh`
 
 > 补充：`build_segment_graph_from_road_graph_npz.py` 支持两种口径（向后兼容）：
 > - `--mode collapse`：degree-2 chain collapse（推荐；native OSM 的 edge 仍然偏细，需要先 collapse 才接近文献里的 road segment 粒度）

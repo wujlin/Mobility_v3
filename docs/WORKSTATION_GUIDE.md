@@ -335,7 +335,7 @@ export SEG_COLLAPSE_DEGREE_MODE=undir
 export SEG_COLLAPSE_TIER_MAX=1
 
 # 3) 数据准备（Step 0）
-bash run_casd_prep.sh
+bash scripts/data_prep/run_casd_prep.sh
 
 # 4) 训练 AE（Step A）
 python -m src.training.train_casd_autoencoder \
@@ -475,7 +475,7 @@ export SEMANTIC_DIR="$RAW_ROOT/worldtrace/detroit_core_v1"         # 提供 bbox
 export OSM_PBF="$RAW_ROOT/osm/michigan-latest.osm.pbf"
 export OUT_BASE="$EXP_ROOT/WAYCASD0_waydata_detroit_seed0"
 
-bash run_way_casd_prep.sh
+bash scripts/data_prep/run_way_casd_prep.sh
 ```
 
 **(多城市) Rust Belt（Detroit+Columbus）合并数据准备**
@@ -489,7 +489,7 @@ export OUT_BASE="$EXP_ROOT/WAYCASD1_waydata_rustbelt_seed0"
 # 可选：把 transition adjacency 做成无向（增加候选；KISS debug 用）
 # export WAY_GRAPH_UNDIR=1
 
-bash run_way_casd_prep_rustbelt.sh
+bash scripts/data_prep/run_way_casd_prep_rustbelt.sh
 ```
 
 **(推荐) Strict v1 + 语义 features：目录口径（避免路径写错）**
@@ -595,7 +595,7 @@ PYTHONUNBUFFERED=1 python -u -m src.data.way_graph.scan_multimodal_od_bin_region
 ```
 
 > [!NOTE]
-> 如果你跑的是 `bash run_way_casd_prep.sh`（单城市），目录命名是 `W1/W2/W3/W4`；
+> 如果你跑的是 `bash scripts/data_prep/run_way_casd_prep.sh`（单城市），目录命名是 `W1/W2/W3/W4`；
 > 训练命令里把 `W5_way_routes_labeled/W3_way_graph/W4_way_features` 分别替换为
 > `W4_way_routes_labeled/W2_way_graph/W3_way_features`，并将 `W6_train_ae/W7_train_flow` 相应替换为 `W5_train_ae/W6_train_flow`。
 

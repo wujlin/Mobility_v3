@@ -12,9 +12,9 @@
 # 3) 口径统一（city_grid_meta、decode candidates、out_per_route_json）
 #
 # 用法：
-#   bash run_nL8_pureAE_flowz_probe.sh
+#   bash scripts/workflows/nlatent/run_nL8_pureAE_flowz_probe.sh
 # 可选覆盖：
-#   PYTHON_BIN=python N_ROUTES=5000 EVAL_BATCH_SIZE=128 bash run_nL8_pureAE_flowz_probe.sh
+#   PYTHON_BIN=python N_ROUTES=5000 EVAL_BATCH_SIZE=128 bash scripts/workflows/nlatent/run_nL8_pureAE_flowz_probe.sh
 # ============================================================================
 
 set -u

@@ -5,7 +5,7 @@
 #
 # 两阶段：
 #   Phase 0: CSV → segments_with_wayid.parquet (Valhalla map matching)
-#   Phase 1: 复用 run_way_casd_prep.sh 走标准 pipeline
+#   Phase 1: 复用 scripts/data_prep/run_way_casd_prep.sh 走标准 pipeline
 #
 # 前置条件：
 #   1. train.csv 已存在于 $RAW_ROOT/porto_taxi/raw/
@@ -98,7 +98,7 @@ echo "======================================"
 echo "Phase 1: 标准 Way-CASD 数据 pipeline"
 echo "======================================"
 
-# 复用 run_way_casd_prep.sh，只需覆盖环境变量
+# 复用 scripts/data_prep/run_way_casd_prep.sh，只需覆盖环境变量
 export RAW_ROOT
 export SEGMENTS_PARQUET="${PORTO_PARQUET}"
 export SEMANTIC_DIR="${PORTO_SEMANTIC_DIR}"
@@ -107,7 +107,7 @@ export OUT_BASE="${RAW_ROOT}/experiments/icml2026_routegen/WAYCASD0_waydata_port
 export ROUTE_CITY=0
 
 cd "${PROJ_ROOT}"
-bash run_way_casd_prep.sh
+bash scripts/data_prep/run_way_casd_prep.sh
 
 echo ""
 echo "======================================"

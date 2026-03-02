@@ -1,0 +1,92 @@
+{
+  "ok": true,
+  "task": "beta_vae64_multiseed_summary",
+  "seeds": {
+    "0": {
+      "seed": 0,
+      "success": 0.7834,
+      "hit_wall": 0.2086,
+      "loop": 0.4126,
+      "len_ratio_mean": 3.2142983464366384,
+      "succ_len_ratio_p50_weighted": null,
+      "arrival_phasec": 0.7834,
+      "coverage": 0.13656266172499937,
+      "diversity": 0.5316290293772025,
+      "meanmaxj": 0.0,
+      "covtau_auc": 0.0
+    },
+    "1": {
+      "seed": 1,
+      "success": 0.6878,
+      "hit_wall": 0.2976,
+      "loop": 0.4946,
+      "len_ratio_mean": 3.9188899698245,
+      "succ_len_ratio_p50_weighted": null,
+      "arrival_phasec": 0.6878,
+      "coverage": 0.30860967857678384,
+      "diversity": 0.5457045781651569,
+      "meanmaxj": 0.27454846817503165,
+      "covtau_auc": 0.1872368043115713
+    },
+    "2": {
+      "seed": 2,
+      "success": 0.7008,
+      "hit_wall": 0.2854,
+      "loop": 0.489,
+      "len_ratio_mean": 3.792002574672579,
+      "succ_len_ratio_p50_weighted": null,
+      "arrival_phasec": 0.7008,
+      "coverage": 0.31610830403400064,
+      "diversity": 0.5169933226792511,
+      "meanmaxj": 0.27865977376138645,
+      "covtau_auc": 0.1928266758832478
+    }
+  },
+  "aggregate_mean_std": {
+    "success": {
+      "mean": 0.724,
+      "std": 0.04233611539414861,
+      "n": 3
+    },
+    "hit_wall": {
+      "mean": 0.26386666666666664,
+      "std": 0.039395544023263444,
+      "n": 3
+    },
+    "loop": {
+      "mean": 0.4654,
+      "std": 0.03740516898326574,
+      "n": 3
+    },
+    "len_ratio_mean": {
+      "mean": 3.6417302969779057,
+      "std": 0.30664709033865434,
+      "n": 3
+    },
+    "arrival_phasec": {
+      "mean": 0.724,
+      "std": 0.04233611539414861,
+      "n": 3
+    },
+    "coverage": {
+      "mean": 0.2537602147785946,
+      "std": 0.08292770818509983,
+      "n": 3
+    },
+    "diversity": {
+      "mean": 0.5314423100738702,
+      "std": 0.011722064549896681,
+      "n": 3
+    },
+    "meanmaxj": {
+      "mean": 0.18440274731213938,
+      "std": 0.13040323518636246,
+      "n": 3
+    },
+    "covtau_auc": {
+      "mean": 0.12668782673160636,
+      "std": 0.08961088381638359,
+      "n": 3
+    }
+  }
+}

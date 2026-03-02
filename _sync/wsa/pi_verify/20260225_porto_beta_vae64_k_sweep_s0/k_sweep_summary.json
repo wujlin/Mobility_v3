@@ -1,0 +1,39 @@
+{
+  "ok": true,
+  "task": "beta_vae64_k_sweep_summary",
+  "rows": [
+    {
+      "k": 1,
+      "success": 0.3548,
+      "hit_wall": 0.6118,
+      "loop": 0.76,
+      "len_ratio_mean": 6.055122540025551,
+      "coverage": 0.15677617836708746,
+      "diversity": NaN,
+      "meanmaxj": 0.16930520598742888,
+      "covtau_auc": 0.09689364454989455
+    },
+    {
+      "k": 4,
+      "success": 0.6126,
+      "hit_wall": 0.37,
+      "loop": 0.581,
+      "len_ratio_mean": 4.494139561548351,
+      "coverage": 0.26099852528423956,
+      "diversity": 0.581601046919887,
+      "meanmaxj": 0.23496644772254552,
+      "covtau_auc": 0.1631826855954291
+    },
+    {
+      "k": 32,
+      "success": 0.8432,
+      "hit_wall": 0.1504,
+      "loop": 0.3464,
+      "len_ratio_mean": 2.7443331026472557,
+      "coverage": 0.3850369868227011,
+      "diversity": 0.4840825492192181,
+      "meanmaxj": 0.2922195251456403,
+      "covtau_auc": 0.22387901150076475
+    }
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "ok": true,
+  "task": "train_way_casd_autoencoder",
+  "created_at": "2026-03-01T14:08:50.521184+08:00",
+  "epoch": 100,
+  "train_loss": 0.8817863371635054,
+  "train_acc": 0.7093181205712724,
+  "val_loss": 0.8039623686468154,
+  "val_acc": 0.7361649400880204,
+  "train_ce_loss": 0.8217225824422486,
+  "train_kl_loss": 6.00637548825873,
+  "val_ce_loss": 0.7451437576136919,
+  "val_kl_loss": 5.881861118247752,
+  "vae_beta": 0.01,
+  "best_val_loss": 0.8039623686468154,
+  "best_epoch": 100,
+  "save_every": 10,
+  "early_stop_patience": 20
+}

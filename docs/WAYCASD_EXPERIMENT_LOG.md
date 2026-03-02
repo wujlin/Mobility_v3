@@ -1072,3 +1072,91 @@ B3 训练端（供定位）：
   - Coverage-τ AUC: **0.0517**
   - Coverage@τ=0.3: **0.0807**
   - Coverage@τ=0.5: **0.0200**
+
+##### 7.14.8 P0：β-VAE64 多 seed 复现实验（seed=1/2，2026-03-02）
+
+执行脚本：
+- `scripts/workflows/beta_vae/run_beta_vae_p0_multiseed_seed12.sh`
+
+计算逻辑（每个 seed 一致）：
+1. `A1`：训练 AE（`vae_dim=64, vae_beta=0.01, warmup=30`）
+2. `A2`：训练 Flow on `mu64`（`flow_target=vae_mu, cond_inject=xattn, n_layers=6`）
+3. `A3`：`K=16 + dest_efficient + anti-loop(k=4, penalty=2.0)` 评估
+4. `A4`：Phase-C（`k=16, jaccard_threshold=0.3, tau=0.1..0.9`）
+
+结果目录：
+- seed1：`_sync/wsa/pi_verify/20260225_porto_beta_vae64_flowmu_s1/`
+- seed2：`_sync/wsa/pi_verify/20260225_porto_beta_vae64_flowmu_s2/`
+- seed0 Phase-C 补齐：`_sync/wsa/pi_verify/20260225_porto_beta_vae64_flowmu_s0_phasec_fix/`
+- 修复后聚合：`_sync/wsa/pi_verify/20260225_porto_beta_vae64_multiseed_summary_fixed_taucurve.json`
+
+seed 级结果（K16+AL）：
+
+| seed | binned success | hit_wall | loop | len_ratio_mean | succ_len_ratio_p50(w) | Phase-C coverage | Phase-C diversity | MeanMaxJ | CovTauAUC | n_OD |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| s0 | 0.7834 | 0.2086 | 0.4126 | 3.2143 | 1.2788 | 0.3854 | 0.5316 | 0.2821 | 0.2162 | 154 |
+| s1 | 0.6878 | 0.2976 | 0.4946 | 3.9189 | 1.4143 | 0.3086 | 0.5457 | 0.2745 | 0.1872 | 144 |
+| s2 | 0.7008 | 0.2854 | 0.4890 | 3.7920 | 1.4072 | 0.3161 | 0.5170 | 0.2787 | 0.1928 | 132 |
+
+修复后聚合（seed=0/1/2）：
+- `success`: mean=**0.7240**, std=**0.0423**
+- `hit_wall`: mean=**0.2639**, std=**0.0394**
+- `loop`: mean=**0.4654**, std=**0.0374**
+- `len_ratio_mean`: mean=**3.6417**, std=**0.3066**
+- `succ_len_ratio_p50_weighted`: mean=**1.3668**, std=**0.0623**
+- `coverage`(τ=0.3): mean=**0.3367**, std=**0.0346**
+- `diversity`: mean=**0.5314**, std=**0.0117**
+- `meanmaxj`: mean=**0.2784**, std=**0.0031**
+- `covtau_auc`: mean=**0.1988**, std=**0.0126**
+
+##### 7.14.9 P1：K sweep（K=1/4/8/32，2026-03-02）
+
+执行脚本：
+- `scripts/workflows/beta_vae/run_beta_vae_p1_k_sweep.sh`
+
+输入口径：
+- 固定 ckpt：`_sync/wsa/pi_verify/20260223_porto_beta_vae_flowmu_s0/A1_beta_vae_ae/ckpt_best.pt`
+- 固定 Flow：`_sync/wsa/pi_verify/20260223_porto_beta_vae_flowmu_s0/A2_flow_on_mu/ckpt_best.pt`
+- 评测：`anti-loop(k=4, penalty=2.0)`
+
+输出：
+- `K=1/4/32` 的 binned + per_route + Phase-C（汇总在 `k_sweep_summary.json`）
+- `K=8` 补点（binned + per_route + Phase-C）
+- 汇总：`_sync/wsa/pi_verify/20260225_porto_beta_vae64_k_sweep_s0/k_sweep_summary.json`
+- K8 结果：
+  - `_sync/wsa/pi_verify/20260225_porto_beta_vae64_k_sweep_s0/K8/binned_betaVAE64_flowmu_k8_dest_efficient_antiloop_n5000.json`
+  - `_sync/wsa/pi_verify/20260225_porto_beta_vae64_k_sweep_s0/K8_phaseC/od_coverage_diversity_k8_tau03_n5000.json`
+
+关键结果：
+
+| K | success | hit_wall | loop | len_ratio_mean | coverage@τ=0.3 | diversity | MeanMaxJ | CovTauAUC |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| 1  | 0.3548 | 0.6118 | 0.7600 | 6.0551 | 0.1568 | NaN (K=1) | 0.1693 | 0.0969 |
+| 4  | 0.6126 | 0.3700 | 0.5810 | 4.4941 | 0.2610 | 0.5816 | 0.2350 | 0.1632 |
+| 8  | 0.7068 | 0.2814 | 0.4932 | 3.8295 | 0.3111 | 0.5564 | 0.2608 | 0.1887 |
+| 32 | 0.8432 | 0.1504 | 0.3464 | 2.7443 | 0.3850 | 0.4841 | 0.2922 | 0.2239 |
+
+结论（事实）：
+- 从 `K=1 → 4 → 8 → 32`，到达率持续提升（0.355 → 0.613 → 0.707 → 0.843），`hit_wall/loop/len_ratio` 持续下降。
+- `K=32` 在当前配置下达到本轮最高 SR 与最低 loop/hit_wall。
+
+##### 7.14.10 P2：d=128 覆盖度补齐（2026-03-02）
+
+执行脚本：
+- `scripts/workflows/beta_vae/run_beta_vae_p2_d128_phasec.sh`
+
+计算逻辑：
+- 不重训模型，仅对 `d=128` 现有 per-route 跑 Phase-C。
+- 优先使用修复后的 `C3(l6)` 产物：
+  - `per_route`: `_sync/wsa/pi_verify/20260224_porto_beta_vae128_flowmu_s0/C3_eval_k16_l6_fix/per_route_betaVAE128_flowmu_l6_k16_dest_efficient_n5000.json`
+
+输出：
+- `_sync/wsa/pi_verify/20260225_porto_beta_vae128_phasec_s0/od_coverage_diversity_betaVAE128_k16_n5000_tau03.json`
+
+结果（K16）：
+- `arrival_rate`: **0.5348**
+- `gt_coverage_at_k_mean`: **0.3725**
+- `self_diversity_at_k_mean`: **0.6900**
+- `mean_max_jaccard_at_k_mean`: **0.2811**
+- `coverage_vs_tau_auc`: **0.2222**
+- `n_od_groups_kept`: **154**

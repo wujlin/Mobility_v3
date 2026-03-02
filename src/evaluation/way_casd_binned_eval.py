@@ -1055,6 +1055,7 @@ def main() -> None:
             d_model=int(flow_cfg.d_model),
             n_route_cities=int(n_route_cities_flow),
             coord_scale=float(ae.decoder.cond_enc.cfg.coord_scale),
+            use_time=not bool(flow_cfg_dict.get("flow_disable_time_cond", False)),
         )
         flow = LatentFlowMatching(cfg=flow_cfg, cond_cfg=flow_cond_cfg).to(device)
         flow.load_state_dict(f_state, strict=False)

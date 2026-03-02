@@ -70,7 +70,11 @@ def _build_flow(*, flow_ckpt: Path, device: torch.device) -> Tuple[LatentFlowMat
             n_regions=int(cfg_in.get("n_regions", 154)),
             region_max_len=int(cfg_in.get("region_max_len", 16)),
         ),
-        cond_cfg=ConditionEncoderCfg(d_model=int(cfg_in.get("d_model", 256)), coord_scale=1024.0),
+        cond_cfg=ConditionEncoderCfg(
+            d_model=int(cfg_in.get("d_model", 256)),
+            coord_scale=1024.0,
+            use_time=not bool(cfg_in.get("flow_disable_time_cond", False)),
+        ),
     ).to(device)
     missing, unexpected = flow.load_state_dict(state, strict=False)
     if missing or unexpected:

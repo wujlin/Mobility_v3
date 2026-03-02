@@ -11,6 +11,7 @@ class ConditionEncoderCfg:
     d_model: int = 256
     n_route_cities: int = 4
     coord_scale: float = 1024.0
+    use_time: bool = True
 
 
 class ConditionEncoder(nn.Module):
@@ -63,7 +64,10 @@ class ConditionEncoder(nn.Module):
         hr = hour.float() * (2.0 * 3.141592653589793 / 24.0)
         dw = dow.float() * (2.0 * 3.141592653589793 / 7.0)
         time_feat = torch.stack([torch.sin(hr), torch.cos(hr), torch.sin(dw), torch.cos(dw)], dim=-1)
-        time_emb = self.time_fc(time_feat)
+        if bool(self.cfg.use_time):
+            time_emb = self.time_fc(time_feat)
+        else:
+            time_emb = torch.zeros_like(pos_emb)
 
         city = torch.clamp(route_city, 0, self.route_city_embed.num_embeddings - 1)
         city_emb = self.route_city_embed(city)

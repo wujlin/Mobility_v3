@@ -32,6 +32,7 @@ from torch.utils.data import DataLoader, Subset
 
 from src.data.way_graph.way_sequence_dataset import WayRouteDataset, load_way_routes_npz, make_way_casd_collate_fn
 from src.evaluation.shortest_path_baseline import dijkstra_way_path
+from src.models.way_casd.conditions import ConditionEncoderCfg
 from src.models.way_casd.latent_flow import LatentFlowCfg, LatentFlowMatching
 from src.models.way_casd.way_casd import WayCASDAECfg, WayCASDAutoEncoder
 from src.models.way_casd.way_encoder import load_way_features_from_npz
@@ -549,7 +550,13 @@ def _load_flow(*, flow_ckpt: Path, ae: WayCASDAutoEncoder, device: torch.device)
             f"[FATAL] AE/Flow mismatch: AE(d_model={int(ae.cfg.d_model)}, n_latent={int(ae.cfg.n_latent)}) "
             f"vs Flow(d_model={int(cfg.d_model)}, n_latent={int(cfg.n_latent)})."
         )
-    flow = LatentFlowMatching(cfg=cfg, cond_cfg=ae.decoder.cond_enc.cfg).to(device)
+    flow_cond_cfg = ConditionEncoderCfg(
+        d_model=int(cfg.d_model),
+        n_route_cities=int(ae.decoder.cond_enc.route_city_embed.num_embeddings),
+        coord_scale=float(ae.decoder.cond_enc.cfg.coord_scale),
+        use_time=not bool(cfg_dict.get("flow_disable_time_cond", False)),
+    )
+    flow = LatentFlowMatching(cfg=cfg, cond_cfg=flow_cond_cfg).to(device)
     flow.load_state_dict(state, strict=False)
     return flow
 

@@ -609,7 +609,14 @@ def main() -> None:
             noise_sigma=float(flow_cfg_dict.get("noise_sigma", 1.0)),
             solver_steps=int(flow_cfg_dict.get("solver_steps", 20)),
         )
-        flow = LatentFlowMatching(cfg=flow_cfg, cond_cfg=ConditionEncoderCfg(d_model=int(flow_cfg.d_model), coord_scale=1024.0)).to(device)
+        flow = LatentFlowMatching(
+            cfg=flow_cfg,
+            cond_cfg=ConditionEncoderCfg(
+                d_model=int(flow_cfg.d_model),
+                coord_scale=1024.0,
+                use_time=not bool(flow_cfg_dict.get("flow_disable_time_cond", False)),
+            ),
+        ).to(device)
         flow.load_state_dict(flow_state, strict=True)
         flow.eval()
 

@@ -56,6 +56,7 @@ class TrainCfg:
     solver_steps: int
     cond_dropout_p: float
     cond_inject: str
+    flow_disable_time_cond: bool
     use_region_seq: bool
     n_regions: int
     region_max_len: int
@@ -547,6 +548,7 @@ def build_argparser() -> argparse.ArgumentParser:
     p.add_argument("--solver_steps", type=int, default=20)
     p.add_argument("--cond_dropout_p", type=float, default=0.0, help="CFG training: probability to drop conditions (0=disable).")
     p.add_argument("--cond_inject", type=str, default="add", choices=["add", "xattn"], help="How to inject conditions into latent tokens.")
+    p.add_argument("--flow_disable_time_cond", action="store_true", help="Ablation: disable hour/dow condition features in Flow condition encoder.")
     p.add_argument("--use_region_seq", action="store_true", help="If set, condition Flow on coarse region_seq (from --region_seq_npz).")
     p.add_argument("--region_seq_npz", type=Path, default=None, help="region_seq_min*.npz from extract_region_seq_stats.py (required when --use_region_seq).")
     p.add_argument("--way_regions_npz", type=Path, default=None, help="way_regions_louvain_per_city*.npz (to infer n_regions; recommended).")
@@ -645,6 +647,7 @@ def main() -> None:
         solver_steps=int(args.solver_steps),
         cond_dropout_p=float(args.cond_dropout_p),
         cond_inject=str(cond_inject),
+        flow_disable_time_cond=bool(args.flow_disable_time_cond),
         use_region_seq=bool(use_region_seq),
         n_regions=int(n_regions),
         region_max_len=int(region_max_len),
@@ -878,13 +881,18 @@ def main() -> None:
             n_regions=int(cfg.n_regions),
             region_max_len=int(cfg.region_max_len),
         ),
-        cond_cfg=ConditionEncoderCfg(d_model=int(flow_d_model), coord_scale=1024.0),
+        cond_cfg=ConditionEncoderCfg(
+            d_model=int(flow_d_model),
+            coord_scale=1024.0,
+            use_time=not bool(cfg.flow_disable_time_cond),
+        ),
     ).to(device)
     cfg_save = asdict(cfg)
     cfg_save["d_model"] = int(flow_d_model)
     cfg_save["n_latent"] = int(flow_n_latent)
     cfg_save["flow_target"] = str(flow_target)
     cfg_save["ae_vae_dim"] = int(ae.cfg.vae_dim)
+    cfg_save["flow_disable_time_cond"] = bool(cfg.flow_disable_time_cond)
 
     opt = torch.optim.AdamW(flow.parameters(), lr=float(cfg.lr), weight_decay=float(cfg.weight_decay))
 

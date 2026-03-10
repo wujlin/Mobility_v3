@@ -46,9 +46,28 @@ run_step() {
   fi
 }
 
-tag_from_beta() {
+canonical_tag_from_beta() {
+  local b="$1"
+  echo "b${b}"
+}
+
+legacy_tag_from_beta() {
   local b="$1"
   echo "b$(echo "$b" | sed 's/-/m/g; s/\\./p/g')"
+}
+
+resolve_tag_from_beta() {
+  local b="$1"
+  local canonical legacy
+  canonical="$(canonical_tag_from_beta "$b")"
+  legacy="$(legacy_tag_from_beta "$b")"
+  if [ -d "${OUT_ROOT}/${canonical}" ]; then
+    echo "${canonical}"
+  elif [ -d "${OUT_ROOT}/${legacy}" ]; then
+    echo "${legacy}"
+  else
+    echo "${canonical}"
+  fi
 }
 
 echo ">>> [Preflight] 检查关键输入"
@@ -63,7 +82,7 @@ done
 BETAS=("0.001" "0.005" "0.02" "0.05")
 
 for BETA in "${BETAS[@]}"; do
-  TAG="$(tag_from_beta "${BETA}")"
+  TAG="$(resolve_tag_from_beta "${BETA}")"
   EXP_DIR="${OUT_ROOT}/${TAG}"
   OUT_A1="${EXP_DIR}/A1_beta_vae64_ae"
   OUT_A2="${EXP_DIR}/A2_flow_on_mu64"
@@ -211,13 +230,30 @@ import numpy as np
 root = Path("_sync/wsa/pi_verify/20260302_porto_beta_vae64_beta_sweep_s0")
 betas = [0.001, 0.005, 0.02, 0.05]
 
+def candidate_tags(beta):
+    s = str(beta)
+    yield f"b{s}"
+    yield f"b{s.replace('-', 'm').replace('.', 'p')}"
+
 rows = []
 for b in betas:
-    tag = f"b{str(b).replace('-', 'm').replace('.', 'p')}"
-    p_bin = root / tag / "A3_eval_k16_antiloop" / f"binned_betaVAE64_{tag}_k16_dest_efficient_antiloop_n5000.json"
-    p_cov = root / tag / "A4_phaseC_covdiv" / f"od_coverage_diversity_betaVAE64_{tag}_k16_AL_n5000_tau03.json"
+    tag = None
+    p_bin = None
+    p_cov = None
+    for cand in candidate_tags(b):
+        cand_bin = root / cand / "A3_eval_k16_antiloop" / f"binned_betaVAE64_{cand}_k16_dest_efficient_antiloop_n5000.json"
+        cand_cov = root / cand / "A4_phaseC_covdiv" / f"od_coverage_diversity_betaVAE64_{cand}_k16_AL_n5000_tau03.json"
+        if cand_bin.exists() or cand_cov.exists() or (root / cand).exists():
+            tag = cand
+            p_bin = cand_bin
+            p_cov = cand_cov
+            break
+    if tag is None:
+        tag = f"b{b}"
+        p_bin = root / tag / "A3_eval_k16_antiloop" / f"binned_betaVAE64_{tag}_k16_dest_efficient_antiloop_n5000.json"
+        p_cov = root / tag / "A4_phaseC_covdiv" / f"od_coverage_diversity_betaVAE64_{tag}_k16_AL_n5000_tau03.json"
     if (not p_bin.exists()) or (not p_cov.exists()):
-        rows.append({"beta": float(b), "ok": False, "missing": [str(p_bin), str(p_cov)]})
+        rows.append({"beta": float(b), "tag": tag, "ok": False, "missing": [str(p_bin), str(p_cov)]})
         continue
     bj = json.loads(p_bin.read_text(encoding="utf-8"))
     cj = json.loads(p_cov.read_text(encoding="utf-8"))
@@ -227,6 +263,7 @@ for b in betas:
     rows.append(
         {
             "beta": float(b),
+            "tag": tag,
             "ok": True,
             "success": float(br.get("success_rate", np.nan)),
             "hit_wall": float(br.get("hit_wall_rate", np.nan)),

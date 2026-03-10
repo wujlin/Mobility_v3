@@ -1160,3 +1160,72 @@ seed 级结果（K16+AL）：
 - `mean_max_jaccard_at_k_mean`: **0.2811**
 - `coverage_vs_tau_auc`: **0.2222**
 - `n_od_groups_kept`: **154**
+
+##### 7.14.11 Appendix 扩展实验（进行中，2026-03-02）
+
+> 状态：`RUNNING`（尚未写入最终结果数值）。  
+> 目的：补齐 reviewer 常问的 appendix 证据链（β 交互、oracle 上界曲线、time 条件消融、速度表）。
+
+代码改动（用于保证“time 条件消融”口径一致）：
+- `src/models/way_casd/conditions.py`
+  - `ConditionEncoderCfg` 新增 `use_time: bool=True`
+  - 当 `use_time=False` 时，`time_emb` 置零
+- `src/training/train_way_casd_flow.py`
+  - 新增 CLI：`--flow_disable_time_cond`
+  - 训练时把该开关写入 flow ckpt `config.flow_disable_time_cond`
+- 以下模块统一读取 ckpt 的 `flow_disable_time_cond`，避免 train/eval/probe 口径错位：
+  - `src/evaluation/way_casd_binned_eval.py`
+  - `src/training/train_way_casd_decoder_joint.py`
+  - `tools/flow_z_alignment_probe.py`
+  - `tools/flow_z_multimodality_probe.py`
+  - `src/evaluation/way_casd_flow_corridor_residual_probe.py`
+  - `src/evaluation/way_casd_sample_viz.py`
+
+本轮新增工作流脚本（全量版本）：
+- 总入口：
+  - `scripts/workflows/beta_vae/run_beta_vae_appendix_full.sh`
+- 子任务：
+  - `scripts/workflows/beta_vae/run_beta_vae_p3_beta_sweep.sh`
+  - `scripts/workflows/beta_vae/run_beta_vae_p4_gtmu_k_sweep.sh`
+  - `scripts/workflows/beta_vae/run_beta_vae_p5_flow_notime_ablation.sh`
+  - `scripts/workflows/beta_vae/run_beta_vae_p6_speed_benchmark.sh`
+
+进行中实验定义与预期输出路径：
+
+1) **P3 β sweep（d=64 固定）**
+- 设计：`beta in {0.001, 0.005, 0.02, 0.05}`
+- 每个 beta 路径：
+  - AE：`.../b*/A1_beta_vae64_ae/`
+  - Flow：`.../b*/A2_flow_on_mu64/`
+  - Eval(K16+AL)：`.../b*/A3_eval_k16_antiloop/`
+  - Phase-C：`.../b*/A4_phaseC_covdiv/`
+- 汇总：`_sync/wsa/pi_verify/20260302_porto_beta_vae64_beta_sweep_s0/beta_sweep_summary.json`
+
+2) **P4 GT μ oracle K sweep**
+- 设计：`K in {4,8,16}`，`latent_source=gt`，`dest_efficient + anti-loop`
+- 输出根目录：`_sync/wsa/pi_verify/20260302_porto_beta_vae64_gtmu_k_sweep_s0/`
+- 汇总：`.../gtmu_k_sweep_summary.json`
+
+3) **P5 时间条件消融（Flow no-time）**
+- 设计：复用 AE64，不重训 AE，仅重训 Flow(mu64)：
+  - `--flow_disable_time_cond`
+- 输出根目录：`_sync/wsa/pi_verify/20260302_porto_beta_vae64_flow_notime_s0/`
+- 汇总：`.../notime_ablation_summary.json`
+
+4) **P6 速度对比表**
+- 对比对象：
+  - `CascadeTraj(K16+AL)`（`way_casd_binned_eval`）
+  - `RNN_AR_b10`（`unified_binned_eval`）
+  - `Transformer_AR_b10`（`unified_binned_eval`）
+- 输出根目录：`_sync/wsa/pi_verify/20260302_porto_speed_benchmark_s0/`
+- 汇总：`.../speed_benchmark_summary.json`
+
+运行记录根目录（总入口日志）：
+- `_sync/wsa/pi_verify/20260302_porto_beta_vae_appendix_full_s0/`
+- 子日志：`P3_beta_sweep.log` / `P4_gtmu_k_sweep.log` / `P5_flow_notime_ablation.log` / `P6_speed_benchmark.log`
+
+判读口径（本轮固定）：
+- success/hit_wall/loop/len_ratio：取各 `binned*.json -> global`
+- 覆盖度：`jaccard_threshold=0.3`
+- threshold-free：`mean_max_jaccard_at_k`
+- 曲线积分：`coverage_vs_tau_auc`（`tau=0.1..0.9`）

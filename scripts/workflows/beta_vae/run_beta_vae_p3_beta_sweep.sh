@@ -111,6 +111,11 @@ for BETA in "${BETAS[@]}"; do
   fi
 
   if [ ! -f "${OUT_A2}/ckpt_best.pt" ]; then
+    FLOW_RESUME_ARGS=()
+    if [ -f "${OUT_A2}/ckpt_last.pt" ]; then
+      echo ">>> [${TAG}_A2_train_flow_mu64] RESUME from ${OUT_A2}/ckpt_last.pt"
+      FLOW_RESUME_ARGS+=(--resume_ckpt "${OUT_A2}/ckpt_last.pt")
+    fi
     run_step "${TAG}_A2_train_flow_mu64" "${OUT_A2}/run_train_flow_mu64.log" \
       conda run -n dpl python -u -m src.training.train_way_casd_flow \
         --way_routes_npz "${WAY_ROUTES}" \
@@ -136,12 +141,15 @@ for BETA in "${BETAS[@]}"; do
         --save_every 10 \
         --early_stop_patience 15 \
         --device cuda \
-        --seed 0
+        --seed 0 \
+        "${FLOW_RESUME_ARGS[@]}"
   else
     echo ">>> [${TAG}_A2_train_flow_mu64] SKIP (ckpt_best.pt exists)"
   fi
 
-  if [ ! -f "${OUT_A3}/binned_betaVAE64_${TAG}_k16_dest_efficient_antiloop_n5000.json" ]; then
+  if [ ! -f "${OUT_A2}/ckpt_best.pt" ]; then
+    echo ">>> [${TAG}_A3_eval_k16_AL] SKIP (A2 ckpt_best.pt missing)"
+  elif [ ! -f "${OUT_A3}/binned_betaVAE64_${TAG}_k16_dest_efficient_antiloop_n5000.json" ]; then
     run_step "${TAG}_A3_eval_k16_AL" "${OUT_A3}/run_eval_k16_AL_n5000.log" \
       conda run -n dpl python -u -m src.evaluation.way_casd_binned_eval \
         --way_routes_npz "${WAY_ROUTES}" \
@@ -176,7 +184,9 @@ for BETA in "${BETAS[@]}"; do
     echo ">>> [${TAG}_A3_eval_k16_AL] SKIP (binned json exists)"
   fi
 
-  if [ ! -f "${OUT_A4}/od_coverage_diversity_betaVAE64_${TAG}_k16_AL_n5000_tau03.json" ]; then
+  if [ ! -f "${OUT_A3}/per_route_betaVAE64_${TAG}_k16_dest_efficient_antiloop_n5000.json" ]; then
+    echo ">>> [${TAG}_A4_phaseC_covdiv] SKIP (A3 per_route json missing)"
+  elif [ ! -f "${OUT_A4}/od_coverage_diversity_betaVAE64_${TAG}_k16_AL_n5000_tau03.json" ]; then
     run_step "${TAG}_A4_phaseC_covdiv" "${OUT_A4}/run_od_coverage_diversity_k16_tau03.log" \
       conda run -n dpl python -u -m src.evaluation.od_coverage_diversity_eval \
         --method "BetaVAE64_${TAG}_K16_AL|greedy=${OUT_A3}/per_route_betaVAE64_${TAG}_k16_dest_efficient_antiloop_n5000.json" \

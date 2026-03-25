@@ -23,6 +23,8 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
+from matplotlib.colors import to_hex, to_rgb
+from matplotlib.transforms import ScaledTranslation
 
 from src.plot_style import OKABE_ITO, add_panel_label, paper_style, save_figure
 
@@ -48,6 +50,8 @@ class RouteRec:
 
 def _pretty_method_label(label: str) -> str:
     s = str(label).lower()
+    if "cascadetraj" in s or "betavae" in s or "flowmu" in s:
+        return "CascadeTraj"
     if "way-casd" in s or "waycasd" in s:
         return "Way-CASD"
     if "oracle" in s:
@@ -293,6 +297,8 @@ def _pick_od_from_phasec(
 
 def _method_rank_for_hero(label: str) -> int:
     s = str(label).lower()
+    if "cascadetraj" in s or "betavae" in s or "flowmu" in s:
+        return 0
     if "way-casd" in s or "waycasd" in s:
         return 0
     if "rnn" in s:
@@ -332,6 +338,88 @@ def _dedup_keep_order(seqs: List[List[int]], limit: int) -> List[List[int]]:
     return out
 
 
+def _jaccard_set(a: Sequence[int], b: Sequence[int]) -> float:
+    sa = {int(x) for x in a}
+    sb = {int(x) for x in b}
+    union = sa | sb
+    if not union:
+        return 0.0
+    return float(len(sa & sb)) / float(len(union))
+
+
+def _corridor_palette(n: int) -> List[str]:
+    base = [
+        OKABE_ITO["vermillion"],
+        OKABE_ITO["blue"],
+        OKABE_ITO["bluish_green"],
+        OKABE_ITO["orange"],
+        OKABE_ITO["reddish_purple"],
+        OKABE_ITO["sky_blue"],
+    ]
+    if n <= len(base):
+        return base[:n]
+    out: List[str] = []
+    for i in range(int(n)):
+        out.append(base[i % len(base)])
+    return out
+
+
+def _mix_with_white(color: str, frac: float) -> str:
+    rgb = np.asarray(to_rgb(color), dtype=np.float64)
+    out = (1.0 - float(frac)) * rgb + float(frac) * np.ones(3, dtype=np.float64)
+    return to_hex(np.clip(out, 0.0, 1.0))
+
+
+def _cluster_sequences_by_jaccard(seqs: Sequence[Sequence[int]], thr: float = 0.3) -> List[List[int]]:
+    uniq = _dedup_keep_order([[int(x) for x in s] for s in seqs], limit=10**9)
+    n = len(uniq)
+    vis = [False] * n
+    comps: List[List[int]] = []
+    for i in range(n):
+        if vis[i]:
+            continue
+        stack = [i]
+        vis[i] = True
+        comp: List[int] = []
+        while stack:
+            u = stack.pop()
+            comp.append(u)
+            for v in range(n):
+                if vis[v]:
+                    continue
+                if _jaccard_set(uniq[u], uniq[v]) >= float(thr):
+                    vis[v] = True
+                    stack.append(v)
+        comps.append(comp)
+    return comps
+
+
+def _representative_display_offsets(n: int, mag_pt: float = 2.4) -> List[Tuple[float, float]]:
+    if n <= 1:
+        return [(0.0, 0.0)]
+    if n == 2:
+        return [(-mag_pt, 0.78 * mag_pt), (mag_pt, -0.78 * mag_pt)]
+    if n == 3:
+        return [(-mag_pt, 0.78 * mag_pt), (0.0, 0.0), (mag_pt, -0.78 * mag_pt)]
+    if n == 4:
+        return [
+            (-mag_pt, 0.78 * mag_pt),
+            (mag_pt, -0.78 * mag_pt),
+            (-0.52 * mag_pt, -0.90 * mag_pt),
+            (0.52 * mag_pt, 0.90 * mag_pt),
+        ]
+    base = [
+        (-mag_pt, 0.78 * mag_pt),
+        (mag_pt, -0.78 * mag_pt),
+        (-0.52 * mag_pt, -0.90 * mag_pt),
+        (0.52 * mag_pt, 0.90 * mag_pt),
+    ]
+    out: List[Tuple[float, float]] = []
+    for i in range(int(n)):
+        out.append(base[i % len(base)])
+    return out
+
+
 def build_argparser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(description="Figure A hero: same OD, GT vs multiple methods at way-level.")
     ap.add_argument("--phasec_json", type=Path, required=True, help="Phase C json with per_od (must run with --save_per_od).")
@@ -358,17 +446,40 @@ def build_argparser() -> argparse.ArgumentParser:
     ap.add_argument("--k_pred_per_method", type=int, default=10, help="Max successful predicted routes shown per method panel.")
     ap.add_argument("--max_gt_draw", type=int, default=80)
     ap.add_argument("--pad_frac", type=float, default=0.18)
+    ap.add_argument("--pad_frac_x", type=float, default=None, help="Optional x-direction padding override.")
+    ap.add_argument("--pad_frac_y", type=float, default=None, help="Optional y-direction padding override.")
     ap.add_argument("--bg_alpha", type=float, default=0.16)
     ap.add_argument("--bg_s", type=float, default=0.6)
+    ap.add_argument(
+        "--ours_panel_mode",
+        choices=["match_gt", "single_color", "cluster_representatives"],
+        default="match_gt",
+        help="How to render the CascadeTraj panel.",
+    )
+    ap.add_argument(
+        "--ours_color",
+        type=str,
+        default=OKABE_ITO["vermillion"],
+        help="Main color used when --ours_panel_mode=single_color.",
+    )
+    ap.add_argument("--corridor_cluster_thr", type=float, default=0.3)
     ap.add_argument("--od_start_way", type=int, default=None, help="Manual override start_way.")
     ap.add_argument("--od_dest_way", type=int, default=None, help="Manual override dest_way.")
     ap.add_argument("--keep_method_order", action="store_true", help="Keep --method order; default auto: Way-CASD, RNN, Transformer.")
     ap.add_argument(
         "--figure_title",
         type=str,
-        default="Route Diversity for a Representative Origin-Destination Pair",
+        default="",
         help="Figure-level title. Use empty string to suppress.",
     )
+    ap.add_argument(
+        "--figure_mode",
+        choices=["gt_vs_ours", "overlay_only"],
+        default="gt_vs_ours",
+        help="gt_vs_ours renders the original 2-panel figure; overlay_only renders only the CascadeTraj overlay panel.",
+    )
+    ap.add_argument("--fig_w", type=float, default=None, help="Optional figure width override.")
+    ap.add_argument("--fig_h", type=float, default=None, help="Optional figure height override.")
     ap.add_argument("--no_panel_labels", action="store_true", help="Disable a/b/c/d panel labels.")
     return ap
 
@@ -501,22 +612,55 @@ def main() -> None:
             x, y = _seq_to_xy(s, plot_x_all, plot_y_all)
             xs.append(x)
             ys.append(y)
-    xmin, xmax, ymin, ymax = _bbox(xs, ys, float(args.pad_frac))
+    base_pad = float(args.pad_frac)
+    pad_x = base_pad if args.pad_frac_x is None else float(args.pad_frac_x)
+    pad_y = base_pad if args.pad_frac_y is None else float(args.pad_frac_y)
+    xmin, xmax, ymin, ymax = _bbox(xs, ys, base_pad)
+    xx = np.concatenate([a.reshape(-1) for a in xs if a.size > 0], axis=0)
+    yy = np.concatenate([a.reshape(-1) for a in ys if a.size > 0], axis=0)
+    xmin0, xmax0 = float(np.min(xx)), float(np.max(xx))
+    ymin0, ymax0 = float(np.min(yy)), float(np.max(yy))
+    dx0 = max(1e-6, xmax0 - xmin0)
+    dy0 = max(1e-6, ymax0 - ymin0)
+    xmin = xmin0 - pad_x * dx0
+    xmax = xmax0 + pad_x * dx0
+    ymin = ymin0 - pad_y * dy0
+    ymax = ymax0 + pad_y * dy0
 
     # Start/dest marker from GT first route.
     sxy = _seq_to_xy(gt_rows[0].gt_way_ids, plot_x_all, plot_y_all)
     sx, sy = float(sxy[0][0]), float(sxy[1][0])
     dx, dy = float(sxy[0][-1]), float(sxy[1][-1])
 
-    # Plot 2x2
-    method_colors = {
-        methods[0].label: OKABE_ITO["vermillion"],
-        methods[1].label: OKABE_ITO["bluish_green"],
-        methods[2].label: OKABE_ITO["blue"],
-    }
+    corridor_colors = _corridor_palette(len(gt_seqs))
+    ours_method = methods[0]
+    ours_pred = method_pred[ours_method.label]
+    ours_matched: List[Tuple[List[int], int, float]] = []
+    for seq in ours_pred:
+        if not gt_seqs:
+            ours_matched.append((seq, 0, 0.0))
+            continue
+        scores = np.asarray([_jaccard_set(seq, gt) for gt in gt_seqs], dtype=np.float64)
+        best_idx = int(np.argmax(scores))
+        ours_matched.append((seq, best_idx, float(scores[best_idx])))
+    gt_clusters = _cluster_sequences_by_jaccard(gt_seqs, thr=float(args.corridor_cluster_thr))
+
     with paper_style():
-        fig, axes = plt.subplots(2, 2, figsize=(12.8, 9.2), constrained_layout=True)
-        axs = [axes[0, 0], axes[0, 1], axes[1, 0], axes[1, 1]]
+        fig_mode = str(args.figure_mode)
+        default_w, default_h = ((12.8, 4.4) if fig_mode == "gt_vs_ours" else (8.6, 5.2))
+        fig_w = float(args.fig_w) if args.fig_w is not None else default_w
+        fig_h = float(args.fig_h) if args.fig_h is not None else default_h
+        fig = plt.figure(figsize=(fig_w, fig_h), constrained_layout=True)
+        if fig_mode == "overlay_only":
+            gs = fig.add_gridspec(1, 1)
+            ax_ours = fig.add_subplot(gs[0, 0])
+            ax_gt = None
+            axs = [ax_ours]
+        else:
+            gs = fig.add_gridspec(1, 2)
+            ax_gt = fig.add_subplot(gs[0, 0])
+            ax_ours = fig.add_subplot(gs[0, 1])
+            axs = [ax_gt, ax_ours]
         basemap_active = bool(use_basemap)
         basemap_warned = False
 
@@ -573,59 +717,105 @@ def main() -> None:
                         s=float(args.bg_s), c="#DADADA", alpha=float(args.bg_alpha), linewidths=0, zorder=1
                     )
 
-        # (a) all GT routes
-        ax = axs[0]
-        for s in gt_seqs:
-            x, y = _seq_to_xy(s, plot_x_all, plot_y_all)
-            ax.plot(x, y, color=OKABE_ITO["black"], lw=1.2, alpha=0.35, zorder=3)
-        ax.scatter([sx], [sy], s=80, c="#000000", marker="o", edgecolors="white", linewidths=0.8, zorder=4)
-        ax.scatter([dx], [dy], s=90, c="#000000", marker="*", edgecolors="white", linewidths=0.8, zorder=4)
-        ax.set_title(f"Ground Truth ({len(gt_seqs)} routes)")
-        if not bool(args.no_panel_labels):
-            add_panel_label(ax, "a")
+        if fig_mode != "overlay_only":
+            # (a) ground-truth corridors
+            ax = ax_gt
+            for idx, s in enumerate(gt_seqs):
+                x, y = _seq_to_xy(s, plot_x_all, plot_y_all)
+                color = corridor_colors[idx]
+                ax.plot(x, y, color="white", lw=3.8, alpha=0.90, zorder=2)
+                ax.plot(x, y, color=color, lw=2.2, alpha=0.92, zorder=3)
+            ax.scatter([sx], [sy], s=80, c="#000000", marker="o", edgecolors="white", linewidths=0.8, zorder=4)
+            ax.scatter([dx], [dy], s=90, c="#000000", marker="*", edgecolors="white", linewidths=0.8, zorder=4)
+            ax.set_title(f"Ground-truth corridors ({len(gt_seqs)} routes)")
+            if not bool(args.no_panel_labels):
+                add_panel_label(ax, "a")
 
-        # (b,c,d) methods
-        for i, m in enumerate(methods, start=1):
-            ax = axs[i]
-            # Faint GT context
+        # (b) ours
+        ax = ax_ours
+        if str(args.ours_panel_mode) == "single_color":
+            for idx, s in enumerate(gt_seqs):
+                x, y = _seq_to_xy(s, plot_x_all, plot_y_all)
+                ref_color = _mix_with_white(corridor_colors[idx], 0.40)
+                ax.plot(x, y, color=ref_color, lw=1.6, alpha=0.42, zorder=2)
+            for seq, _gt_idx, _score in ours_matched:
+                x, y = _seq_to_xy(seq, plot_x_all, plot_y_all)
+                ax.plot(x, y, color="white", lw=4.2, alpha=0.92, zorder=3)
+                ax.plot(x, y, color=str(args.ours_color), lw=2.5, alpha=0.96, zorder=4)
+        elif str(args.ours_panel_mode) == "cluster_representatives":
+            for idx, s in enumerate(gt_seqs):
+                x, y = _seq_to_xy(s, plot_x_all, plot_y_all)
+                ref_color = _mix_with_white(corridor_colors[idx], 0.32)
+                ax.plot(x, y, color="white", lw=2.8, alpha=0.58, zorder=2)
+                ax.plot(x, y, color=ref_color, lw=1.85, alpha=0.58, zorder=2.1)
+            # First show the full successful route support as a translucent band:
+            # overlap then reads as evidence concentration rather than clutter.
+            for seq, _gt_idx, _score in ours_matched:
+                x, y = _seq_to_xy(seq, plot_x_all, plot_y_all)
+                ax.plot(x, y, color="white", lw=3.8, alpha=0.12, zorder=2.6)
+                ax.plot(x, y, color=str(args.ours_color), lw=2.0, alpha=0.10, zorder=2.8)
+            best_by_cluster: Dict[int, Tuple[List[int], float]] = {}
+            for seq, gt_idx, score in ours_matched:
+                cluster_idx = 0
+                for ci, comp in enumerate(gt_clusters):
+                    if int(gt_idx) in comp:
+                        cluster_idx = ci
+                        break
+                cur = best_by_cluster.get(cluster_idx)
+                if cur is None or float(score) > float(cur[1]):
+                    best_by_cluster[cluster_idx] = (seq, float(score))
+            rep_cluster_ids = sorted(best_by_cluster.keys())
+            rep_offsets = _representative_display_offsets(len(rep_cluster_ids), mag_pt=2.6)
+            rep_colors: List[str] = [
+                str(args.ours_color),
+                _mix_with_white(str(args.ours_color), 0.22),
+                _mix_with_white(str(args.ours_color), 0.38),
+            ]
+            rep_dash = (0, (7.0, 2.4))
+            for rep_ord, cluster_idx in enumerate(rep_cluster_ids):
+                seq, _score = best_by_cluster[cluster_idx]
+                x, y = _seq_to_xy(seq, plot_x_all, plot_y_all)
+                dx_pt, dy_pt = rep_offsets[rep_ord]
+                rep_trans = ax.transData + ScaledTranslation(
+                    float(dx_pt) / 72.0,
+                    float(dy_pt) / 72.0,
+                    fig.dpi_scale_trans,
+                )
+                ax.plot(
+                    x, y,
+                    color="white",
+                    lw=4.6,
+                    alpha=0.96,
+                    zorder=3,
+                    transform=rep_trans,
+                )
+                ax.plot(
+                    x, y,
+                    color=rep_colors[rep_ord % len(rep_colors)],
+                    lw=3.0,
+                    alpha=0.98,
+                    linestyle=rep_dash,
+                    zorder=4,
+                    transform=rep_trans,
+                )
+        else:
             for s in gt_seqs:
                 x, y = _seq_to_xy(s, plot_x_all, plot_y_all)
-                ax.plot(x, y, color=OKABE_ITO["gray"], lw=0.9, alpha=0.16, zorder=2)
-            color = method_colors.get(m.label, OKABE_ITO["vermillion"])
-            for s in method_pred[m.label]:
-                x, y = _seq_to_xy(s, plot_x_all, plot_y_all)
-                ax.plot(x, y, color=color, lw=2.1, alpha=0.9, zorder=4)
-            ax.scatter([sx], [sy], s=80, c="#000000", marker="o", edgecolors="white", linewidths=0.8, zorder=5)
-            ax.scatter([dx], [dy], s=90, c="#000000", marker="*", edgecolors="white", linewidths=0.8, zorder=5)
-            mm = method_meta[m.label]
-            pretty = _pretty_method_label(m.label)
-            shown = int(mm["n_unique_drawn"])
-            if shown <= 0:
-                t = f"{pretty} (0 routes arrived)"
+                ax.plot(x, y, color=OKABE_ITO["gray"], lw=1.0, alpha=0.18, zorder=2)
+            for seq, gt_idx, _score in ours_matched:
+                x, y = _seq_to_xy(seq, plot_x_all, plot_y_all)
+                color = corridor_colors[gt_idx]
+                ax.plot(x, y, color="white", lw=4.0, alpha=0.90, zorder=3)
+                ax.plot(x, y, color=color, lw=2.4, alpha=0.96, zorder=4)
+        ax.scatter([sx], [sy], s=80, c="#000000", marker="o", edgecolors="white", linewidths=0.8, zorder=5)
+        ax.scatter([dx], [dy], s=90, c="#000000", marker="*", edgecolors="white", linewidths=0.8, zorder=5)
+        if fig_mode != "overlay_only":
+            if str(args.ours_panel_mode) == "cluster_representatives":
+                ax.set_title("CascadeTraj recovered corridors")
             else:
-                t = f"{pretty} ({shown} routes)"
-            ax.set_title(t)
+                ax.set_title("CascadeTraj route set")
             if not bool(args.no_panel_labels):
-                add_panel_label(ax, chr(ord("a") + i))
-
-        legend_handles: List[Any] = [
-            Line2D([0], [0], color=OKABE_ITO["black"], lw=1.6, alpha=0.6, label="GT routes"),
-            Line2D([0], [0], color=method_colors.get(methods[0].label, OKABE_ITO["vermillion"]), lw=2.4, label=_pretty_method_label(methods[0].label)),
-            Line2D([0], [0], color=method_colors.get(methods[1].label, OKABE_ITO["bluish_green"]), lw=2.4, label=_pretty_method_label(methods[1].label)),
-            Line2D([0], [0], color=method_colors.get(methods[2].label, OKABE_ITO["blue"]), lw=2.4, label=_pretty_method_label(methods[2].label)),
-            Line2D([0], [0], marker="o", color="none", markerfacecolor="#000000", markeredgecolor="white", markersize=8, label="Origin"),
-            Line2D([0], [0], marker="*", color="none", markerfacecolor="#000000", markeredgecolor="white", markersize=10, label="Destination"),
-        ]
-        fig.legend(
-            handles=legend_handles,
-            labels=[h.get_label() for h in legend_handles],
-            loc="lower center",
-            ncol=3,
-            frameon=True,
-            framealpha=0.9,
-            fontsize=9,
-            bbox_to_anchor=(0.5, 0.01),
-        )
+                add_panel_label(ax, "b")
 
         fig_title = str(args.figure_title).strip()
         if fig_title:
@@ -638,7 +828,7 @@ def main() -> None:
         save_figure(fig, out_pdf)
         plt.close(fig)
 
-    meta = {
+        meta = {
         "ok": True,
         "task": "waycasd_plot_od_hero_figure",
         "selected_od": {
@@ -658,6 +848,7 @@ def main() -> None:
             "use_basemap": bool(use_basemap),
             "basemap_active_final": bool(basemap_active),
             "city_grid_meta": {str(k): str(v) for k, v in sorted(city_meta_src.items(), key=lambda kv: kv[0])},
+            "figure_mode": fig_mode,
         },
         "outputs": {
             "png": str(out_png),
